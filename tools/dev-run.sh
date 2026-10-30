@@ -17,7 +17,7 @@ cmake --build "$BUILD"
 # Aplikacje z katalogu budowania widoczne w systemie (dok, Start, „Otwórz za pomocą”)
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
-for app in files browser webapps; do
+for app in files browser webapps store; do
     sed "s|^Exec=aster-$app|Exec=$BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
 done
 kbuildsycoca6 >/dev/null 2>&1 || true

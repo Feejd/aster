@@ -44,7 +44,7 @@ Window {
             "applications:org.aster.browser.desktop",
             "applications:org.kde.kate.desktop",
             "applications:org.kde.konsole.desktop",
-            "applications:org.kde.discover.desktop",
+            "applications:org.aster.store.desktop",
             "applications:systemsettings.desktop"
         ]
     }
@@ -56,7 +56,7 @@ Window {
         running: Platform.preview
         interval: 10
         onTriggered: {
-            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.konsole", "org.kde.discover", "systemsettings"];
+            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.aster.store", "org.kde.konsole", "systemsettings"];
             ids.forEach((id, i) => {
                 const a = Platform.appInfo(id);
                 if (!a.valid) return;

@@ -24,7 +24,7 @@ Window {
     property string category: "ulubione"
     readonly property var pinned: [
         "org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.kate", "org.kde.konsole",
-        "org.kde.discover", "systemsettings", "org.kde.okular", "org.kde.gwenview",
+        "org.aster.store", "systemsettings", "org.kde.okular", "org.kde.gwenview",
         "org.kde.elisa", "org.kde.spectacle", "org.kde.kcalc"
     ]
     readonly property var pinnedApps: pinned.map(id => Object.assign({ id: id }, Platform.appInfo(id))).filter(a => a.valid)

@@ -20,6 +20,7 @@ Item {
         "org.aster.files": ["#5AB4FF", "#2563EB", "folder"],
         "org.aster.browser": ["#4FD1C5", "#3B5BDB", "globe"],
         "org.aster.webapps": ["#C084FC", "#6D28D9", "webapp"],
+        "org.aster.store": ["#60C8FF", "#1D6CF2", "bag"],
         "systemsettings": ["#A3A9B5", "#4B5262", "sliders"],
         "kdesystemsettings": ["#A3A9B5", "#4B5262", "sliders"],
         "org.kde.konsole": ["#3F3F46", "#111114", "code"],
