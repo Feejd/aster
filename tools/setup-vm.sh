@@ -6,8 +6,13 @@ if [ -d /run/initramfs/live ] || [ "$(id -un)" = "liveuser" ]; then
     echo "   zrestartuj, zaloguj się na swoje konto i uruchom ten skrypt ponownie."
     exit 1
 fi
-echo "==> Instaluję narzędzia do budowania (poprosi o hasło)…"
-sudo dnf install -y --skip-unavailable \
+echo "==> Aktualizuję system (poprosi o hasło)…"
+# Pakiety -devel wymagają najnowszych bibliotek KDE, więc najpierw pełna aktualizacja.
+# --allowerasing pozwala dnf zamieniać przemianowane pakiety (np. kmime → kf6-kmime).
+sudo dnf upgrade -y --refresh --allowerasing
+
+echo "==> Instaluję narzędzia do budowania…"
+sudo dnf install -y --skip-unavailable --allowerasing \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
     layer-shell-qt-devel kf6-kwindowsystem-devel \
