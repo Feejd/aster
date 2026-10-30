@@ -1,4 +1,5 @@
 import QtQuick
+import Aster.Shell
 
 // Korzeń powłoki: tworzy jej okna-warstwy. Na razie jeden ekran (główny).
 QtObject {

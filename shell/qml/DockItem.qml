@@ -1,5 +1,6 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
+import Aster.Shell
 
 // Jedna ikona w doku: przypięta aplikacja albo działające okno (dane z TaskManager).
 Item {

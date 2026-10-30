@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import Aster.Shell
 
 // „Horyzont”: szklana wyspa u góry ekranu. Na razie pokazuje datę i godzinę;
 // powiadomienia i panel „Dziś” z prototypu dojdą w kolejnych krokach.

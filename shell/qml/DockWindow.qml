@@ -1,7 +1,9 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
+import Aster.Shell
 
 // Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
 //  lewa    — wyszukiwanie (na razie KRunner; własny Start dojdzie później)

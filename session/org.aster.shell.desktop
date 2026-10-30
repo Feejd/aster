@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Aster Shell
+Comment=Pulpit Aster
+Exec=aster-shell
+Icon=user-desktop
+NoDisplay=true
+X-KDE-StartupNotify=false
