@@ -11,6 +11,8 @@ command -v cmake >/dev/null || sh "$ROOT/tools/setup-vm.sh"
 cmake -S "$ROOT/shell" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Debug >/dev/null
 cmake --build "$BUILD"
 
+# Poprzednia kopia powłoki (np. z innej Konsoli) — zamknij, żeby nie działały dwie naraz
+pkill -x aster-shell || true
 systemctl --user stop plasma-plasmashell.service || true
 trap 'systemctl --user start plasma-plasmashell.service' EXIT INT TERM
 ASTER_DATA_DIR="$ROOT/data" "$BUILD/aster-shell"
