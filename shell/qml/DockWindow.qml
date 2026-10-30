@@ -7,14 +7,16 @@ import Aster.Shell
 
 // Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
 //  lewa    — wyszukiwanie (na razie KRunner; własny Start dojdzie później)
-//  środek  — dok: przypięte aplikacje + działające okna, z efektem lupy
+//  środek  — dok: przypięte aplikacje + działające okna
 //  prawa   — zegar i skrót do ustawień
 Window {
     id: dock
     color: "transparent"
     visible: false
     width: Screen.width
-    height: 96
+    // Okno jest wyższe niż wyspy, żeby zmieściły się podpowiedzi nad ikonami.
+    // Kliknięcia trafiają tylko w wyspy (Platform.setInputRegion), resztę przepuszcza do okien.
+    height: 150
 
     readonly property int reserved: 84
 
@@ -69,8 +71,6 @@ Window {
         onWidthChanged: blurTimer.restart()
         onXChanged: blurTimer.restart()
 
-        HoverHandler { id: dockHover }
-
         Row {
             id: row
             x: 12
@@ -81,7 +81,6 @@ Window {
                 model: tasks
                 delegate: DockItem {
                     id: di
-                    pointerX: dockHover.hovered ? dockHover.point.position.x - row.x : -1000
                     onActivated: {
                         const idx = tasks.makeModelIndex(di.index);
                         if (di.model.IsWindow && di.model.IsActive) tasks.requestToggleMinimized(idx);
@@ -163,6 +162,7 @@ Window {
             for (const it of [left, center, right])
                 r.push({ x: it.x, y: it.y, w: it.width, h: it.height, r: it.radius });
             Platform.setBlur(dock, r);
+            Platform.setInputRegion(dock, r);
         }
     }
 }

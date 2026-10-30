@@ -26,11 +26,7 @@ aster-shell (nasz pulpit)  ←  tapeta, dok, wyspa, Start, centrum sterowania…
 
 ## Plan
 
-1. **Powłoka w maszynie wirtualnej** — tapeta, dok z prawdziwymi oknami, górna wyspa z zegarem. ← *teraz*
-2. Start z wyszukiwaniem, centrum sterowania (dźwięk, Wi‑Fi, jasność), powiadomienia w wyspie.
-3. Wygląd okien: własne dekoracje KWin (okrągłe przyciski), styl Qt, ikony, kursor, ekran logowania.
-4. Obraz systemu (`image/`), instalator, aktualizacje w tle.
-5. Własne aplikacje: Pliki, Ustawienia, Sklep — przeniesione z prototypu.
+Szczegóły etapów: [docs/PLAN.md](docs/PLAN.md).
 
 Prototyp uruchamiasz na Macu: `cd prototype && python main.py` (z PySide6).
 Praca nad prawdziwą powłoką: zobacz [docs/MASZYNA-WIRTUALNA.md](docs/MASZYNA-WIRTUALNA.md).

@@ -29,5 +29,8 @@ public:
     // Rozmycie tła pod podanymi prostokątami: [{x, y, w, h, r}, ...] (r = promień zaokrąglenia)
     Q_INVOKABLE void setBlur(QQuickWindow *window, const QVariantList &rects);
 
+    // Obszar przyjmujący kliknięcia (reszta okna jest „przezroczysta” dla myszy). Format jak w setBlur().
+    Q_INVOKABLE void setInputRegion(QQuickWindow *window, const QVariantList &rects);
+
     Q_INVOKABLE void run(const QString &program, const QStringList &args = {});
 };

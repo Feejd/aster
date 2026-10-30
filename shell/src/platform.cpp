@@ -55,10 +55,8 @@ void Platform::makeLayer(QQuickWindow *window, const QString &layer, int anchors
     lw->setScope(scope);
 }
 
-void Platform::setBlur(QQuickWindow *window, const QVariantList &rects)
+static QRegion roundedRegion(const QVariantList &rects)
 {
-    if (!window)
-        return;
     QRegion region;
     for (const QVariant &v : rects) {
         const QVariantMap m = v.toMap();
@@ -69,7 +67,23 @@ void Platform::setBlur(QQuickWindow *window, const QVariantList &rects)
         path.addRoundedRect(r, radius, radius);
         region += QRegion(path.toFillPolygon().toPolygon());
     }
+    return region;
+}
+
+void Platform::setBlur(QQuickWindow *window, const QVariantList &rects)
+{
+    if (!window)
+        return;
+    const QRegion region = roundedRegion(rects);
     KWindowEffects::enableBlurBehind(window, !region.isEmpty(), region);
+}
+
+void Platform::setInputRegion(QQuickWindow *window, const QVariantList &rects)
+{
+    if (!window)
+        return;
+    // Na Waylandzie maska okna Qt staje się regionem wejścia powierzchni
+    window->setMask(roundedRegion(rects));
 }
 
 void Platform::run(const QString &program, const QStringList &args)

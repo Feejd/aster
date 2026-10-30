@@ -7,16 +7,11 @@ Item {
     id: item
     required property var model
     required property int index
-    property real pointerX: -1000            // pozycja kursora w doku (do efektu lupy)
     signal activated()
     signal newInstance()
 
-    readonly property real centerX: x + width / 2
-    readonly property real near: Math.max(0, 1 - Math.abs(pointerX - centerX) / 120)
-    readonly property real mag: 1 + 0.45 * near * near
-    width: 52 * mag
+    width: 52
     height: 52
-    Behavior on width { NumberAnimation { duration: 90 } }
 
     Item {
         id: tile
@@ -24,9 +19,9 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 2
-        scale: (area.pressed ? 0.92 : 1) * item.mag
+        scale: area.pressed ? 0.92 : 1
         transformOrigin: Item.Bottom
-        Behavior on scale { SpringAnimation { spring: 10; damping: 0.6; epsilon: 0.002 } }
+        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
 
         Kirigami.Icon {
             anchors.fill: parent
@@ -53,7 +48,7 @@ Item {
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: tile.top
-        anchors.bottomMargin: 18 * item.mag
+        anchors.bottomMargin: 22
         width: tipText.implicitWidth + 20; height: 28; radius: 9
         color: Theme.dark ? "#2A2C33" : "#FFFFFF"
         border.width: 1; border.color: Theme.edge
