@@ -251,6 +251,11 @@
     var observer = null;
     function update() {
         if (!document.body) return;
+        // Aplikacja z natywną nakładką (Adapters.js): nic nie wykrywamy, tylko czcionka systemu
+        if (window.__asterAdapter) {
+            document.documentElement.classList.toggle("aster-font", A.font);
+            return;
+        }
         if (observer) observer.disconnect();
         var root = document.documentElement;
         root.classList.remove("aster-sidebar", "aster-topnav", "aster-controls", "aster-search", "aster-font");
@@ -363,6 +368,17 @@
         if (!handled && el.form) { try { el.form.requestSubmit(); } catch (e) { el.form.submit(); } }
         schedule();
     };
+    // Przejście do adresu w serwisie bez przeładowania (aplikacje jednostronicowe słuchają popstate);
+    // gdy strona nie zareaguje, zwykłe przejście
+    A.go = function (url) {
+        var target = new URL(url, location.href);
+        if (target.origin !== location.origin) { location.assign(target.href); return; }
+        history.pushState({}, "", target.href);
+        dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+        setTimeout(function () {
+            if (location.href !== target.href) location.assign(target.href);
+        }, 1500);
+    };
     A.setFont = function (on) { A.font = on; A.last = ""; update(); };
     A.setEnabled = function (on) { A.enabled = on; A.last = ""; update(); };
     A.refresh = function () { A.last = ""; update(); };
@@ -371,8 +387,8 @@
     function inDragZone(e) {
         if (e.button !== 0) return false;
         if (e.target.closest && e.target.closest(INTERACTIVE)) return false;
-        var limit = A.topbarBottom || 40;
-        return e.clientY <= limit;
+        if (window.__asterAdapter || !A.topbarBottom) return false;
+        return e.clientY <= A.topbarBottom;
     }
     document.addEventListener("mousedown", function (e) { if (inDragZone(e)) post({ type: "drag" }); }, true);
     document.addEventListener("dblclick", function (e) { if (inDragZone(e)) post({ type: "maximize" }); }, true);

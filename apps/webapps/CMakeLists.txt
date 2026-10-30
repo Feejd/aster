@@ -14,6 +14,7 @@ set(WEBAPPS_QML
     qml/Manager.qml
     qml/WebAppWindow.qml
     qml/Catalog.js
+    qml/Adapters.js
 )
 set_source_files_properties(qml/native.js PROPERTIES QT_RESOURCE_ALIAS native.js)
 foreach(f ${WEBAPPS_QML})
