@@ -39,6 +39,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Przeglądarka: blokowanie reklam, tryb prywatny, przywracanie kart po restarcie, import zakładek z Chrome/Edge
 - [x] Aplikacje webowe — strony jako programy: własne okno w kolorze aplikacji, ikona-kafelek, ekran powitalny, powiadomienia systemowe, liczniki w doku, osobne logowanie, katalog polecanych, instalacja z przeglądarki
 - [x] Aplikacje webowe: nawigacja strony w oknie Aster — boczne menu jako natywny pasek boczny, górne zakładki w pasku tytułu, pasek strony jako pasek tytułu (przeciąganie)
+- [x] Aplikacje webowe: sekcje i liczniki menu, główny przycisk strony, natywna wyszukiwarka, kolory okna z kolorów strony (też ciemnych), czcionka Inter i akcent Aster w treści, natywne dymki i okna alert/confirm/prompt
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [ ] Sklep
 - [ ] Asystent pod klawiszem.

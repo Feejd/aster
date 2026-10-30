@@ -37,9 +37,10 @@ Window {
     property string pageTheme: ""
     readonly property color barColor: {
         const c = pageTheme || app.themeColor || "";
-        return /^#|^rgb/i.test(c) ? c : Theme.windowGlass;
+        if (/^#/i.test(c)) return c;
+        return topbarBgCss ? cssColor(topbarBgCss) : Theme.windowGlass;
     }
-    readonly property bool barTinted: (pageTheme || app.themeColor || "") !== ""
+    readonly property bool barTinted: (pageTheme || app.themeColor || topbarBgCss || "") !== ""
     readonly property real barLuma: 0.299 * barColor.r + 0.587 * barColor.g + 0.114 * barColor.b
     readonly property color barText: !barTinted ? Theme.text : (barLuma > 0.62 ? "#16181D" : "white")
     readonly property color barHover: barLuma > 0.62 || !barTinted ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.16)
@@ -51,12 +52,36 @@ Window {
         property int h: 760
         property bool nativeNav: true       // nawigacja strony w pasku bocznym / pasku tytułu Aster
         property bool integrated: true      // górny pasek strony jest paskiem tytułu okna
+        property bool systemFont: true      // czcionka systemu (Inter) w treści strony
     }
 
     // ——— Nawigacja strony przeniesiona do okna (z native.js) ———
     property var navSidebar: []
     property var navTop: []
     property int pageTopbar: 0
+    property var navPrimary: null           // wyróżniony przycisk menu („Napisz”)
+    property var navSearch: null            // pole wyszukiwania strony
+    property string pageBgCss: ""
+    property string sideBgCss: ""
+    property string topbarBgCss: ""
+
+    // ——— Kolory strony → kolory okna ———
+    function cssColor(c) {
+        const mm = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/.exec(c || "");
+        return mm ? Qt.rgba(mm[1] / 255, mm[2] / 255, mm[3] / 255, mm[4] === undefined ? 1 : parseFloat(mm[4])) : "transparent";
+    }
+    function luma(c) { return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b; }
+    readonly property color pageColor: pageBgCss ? cssColor(pageBgCss) : (app.backgroundColor || Theme.pane)
+    readonly property bool pageDark: luma(pageColor) < 0.45
+    readonly property color sideBase: sideBgCss ? cssColor(sideBgCss) : pageColor
+    readonly property bool sideDark: luma(sideBase) < 0.45
+    readonly property color sideFill: Qt.alpha(sideBase, 0.9)
+    readonly property color sideText: sideDark ? "#ECEEF3" : "#16181D"
+    readonly property color sideText2: sideDark ? "#A2A9B6" : "#5B6270"
+    readonly property color sideHover: sideDark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.055)
+    readonly property color sideActive: Qt.rgba(52 / 255, 86 / 255, 232 / 255, sideDark ? 0.32 : 0.13)
+    readonly property color sideActiveText: sideDark ? Qt.lighter(Theme.accent, 1.6) : Theme.accent
+    readonly property color sideLine: sideDark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.07)
     readonly property bool showSidebar: store.nativeNav && navSidebar.length >= 3 && !pageFullScreen
     readonly property bool showTopnav: store.nativeNav && !showSidebar && navTop.length >= 3 && !pageFullScreen
     readonly property bool integratedBar: store.integrated && !showTopnav && !pageFullScreen && (pageTopbar > 0 || showSidebar)
@@ -64,6 +89,12 @@ Window {
 
     function navClick(id) {
         web.runJavaScript("window.__aster && window.__aster.click('" + id + "')");
+    }
+    function searchPage(text) {
+        if (navSearch) web.runJavaScript("window.__aster && window.__aster.search('" + navSearch.id + "', " + JSON.stringify(text) + ")");
+    }
+    function submitSearch() {
+        if (navSearch) web.runJavaScript("window.__aster && window.__aster.submit('" + navSearch.id + "')");
     }
     function setNativeNav(on) {
         store.nativeNav = on;
@@ -87,6 +118,7 @@ Window {
             { separator: true },
             { label: "Nawigacja strony w oknie Aster", icon: store.nativeNav ? "check" : "", action: "nativeNav" },
             { label: "Pasek strony jako pasek tytułu", icon: store.integrated ? "check" : "", action: "integrated" },
+            { label: "Czcionka systemu w treści", icon: store.systemFont ? "check" : "", action: "systemFont" },
             { separator: true },
             { label: "Powiększ", icon: "plus", shortcut: "Ctrl +", action: "zoomIn" },
             { label: "Pomniejsz", shortcut: "Ctrl −", action: "zoomOut" },
@@ -242,7 +274,14 @@ Window {
             visible: width > 0
             clip: true
             Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+            // Tło w kolorze menu strony (lekko przezroczyste — prześwituje szkło okna)
+            Rectangle {
+                anchors.fill: parent
+                topLeftRadius: win.r; bottomLeftRadius: win.r
+                color: win.sideFill
+                Behavior on color { ColorAnimation { duration: 250 } }
+            }
+            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: win.sideLine }
 
             Item {
                 id: sideHeader
@@ -258,9 +297,9 @@ Window {
                         height: 28; radius: 8
                         clip: true
                         anchors.verticalCenter: parent.verticalCenter
-                        color: sideBack.containsMouse ? Theme.hover : "transparent"
+                        color: sideBack.containsMouse ? win.sideHover : "transparent"
                         Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
-                        Icon { anchors.centerIn: parent; d: Icons.back; size: 16; color: Theme.text }
+                        Icon { anchors.centerIn: parent; d: Icons.back; size: 16; color: win.sideText }
                         MouseArea { id: sideBack; anchors.fill: parent; hoverEnabled: true; onClicked: web.goBack() }
                     }
                     Image {
@@ -275,15 +314,55 @@ Window {
                         width: 232 - 90 - (web.canGoBack ? 38 : 0)
                         elide: Text.ElideRight
                         text: win.app.name
-                        color: Theme.text
+                        color: win.sideText
                         font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
                     }
                 }
             }
 
+            // Główny przycisk strony („Napisz”, „Nowy czat”) jako przycisk Aster
+            Rectangle {
+                id: primaryBtn
+                x: 12; y: sideHeader.height
+                width: 232 - 24
+                height: win.navPrimary ? 40 : 0
+                visible: height > 0
+                radius: 12
+                color: primaryArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 18; height: 18
+                        visible: !!win.navPrimary && !!win.navPrimary.icon
+                        source: win.navPrimary && win.navPrimary.icon ? win.svgUrl(win.navPrimary.icon, "#FFFFFF") : ""
+                        sourceSize: Qt.size(36, 36)
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: win.navPrimary ? win.navPrimary.label : ""
+                        color: "white"
+                        font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                    }
+                }
+                MouseArea { id: primaryArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.navClick(win.navPrimary.id) }
+            }
+
+            // Wyszukiwarka strony jako pole Aster
+            NativeSearch {
+                id: sideSearch
+                x: 12
+                y: primaryBtn.y + primaryBtn.height + (primaryBtn.visible ? 10 : 0)
+                width: 232 - 24
+                height: win.navSearch ? 34 : 0
+                visible: height > 0
+                dark: win.sideDark
+            }
+
             ListView {
                 id: sideList
-                x: 10; y: sideHeader.height + 2
+                x: 10; y: sideSearch.y + sideSearch.height + (sideSearch.visible ? 10 : 2)
                 width: 232 - 20
                 height: parent.height - y - 10
                 clip: true
@@ -294,21 +373,34 @@ Window {
                     id: navItem
                     required property var modelData
                     required property int index
-                    width: sideList.width; height: 36
+                    readonly property bool isSection: !!modelData.section
+                    width: sideList.width; height: isSection ? 30 : 36
                     radius: 9
-                    color: modelData.active ? Theme.accentSoft : (navArea.containsMouse ? Theme.hover : "transparent")
+                    color: isSection ? "transparent" : (modelData.active ? win.sideActive : (navArea.containsMouse ? win.sideHover : "transparent"))
                     Behavior on color { ColorAnimation { duration: 120 } }
                     opacity: 0
                     Component.onCompleted: navIn.start()
                     NumberAnimation { id: navIn; target: navItem; property: "opacity"; to: 1; duration: 160; easing.type: Easing.OutQuad }
+                    // Nagłówek grupy („Kanały”, „Etykiety”)
+                    Text {
+                        visible: navItem.isSection
+                        x: 10; anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                        width: parent.width - 20
+                        elide: Text.ElideRight
+                        text: navItem.modelData.label
+                        color: win.sideText2
+                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                        font.letterSpacing: 0.3
+                    }
                     Item {
                         id: navIcon
+                        visible: !navItem.isSection
                         x: 10; anchors.verticalCenter: parent.verticalCenter
                         width: 20; height: 20
                         Image {
                             id: navSvg
                             anchors.fill: parent
-                            source: navItem.modelData.icon ? win.svgUrl(navItem.modelData.icon, navItem.modelData.active ? Theme.accentText.toString() : Theme.text.toString())
+                            source: navItem.modelData.icon ? win.svgUrl(navItem.modelData.icon, navItem.modelData.active ? win.sideActiveText.toString() : win.sideText.toString())
                                                            : navItem.modelData.img
                             sourceSize: Qt.size(40, 40)
                             smooth: true
@@ -318,28 +410,46 @@ Window {
                             anchors.centerIn: parent
                             visible: navSvg.status !== Image.Ready
                             width: 20; height: 20; radius: 6
-                            color: navItem.modelData.active ? Theme.accent : Theme.fill
+                            color: navItem.modelData.active ? Theme.accent : win.sideHover
                             Text {
                                 anchors.centerIn: parent
                                 text: navItem.modelData.label.charAt(0).toUpperCase()
-                                color: navItem.modelData.active ? "white" : Theme.text2
+                                color: navItem.modelData.active ? "white" : win.sideText2
                                 font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold
                             }
                         }
                     }
-                    Text {
-                        anchors.left: navIcon.right; anchors.leftMargin: 12
+                    // Licznik („12” nieprzeczytanych)
+                    Rectangle {
+                        id: countPill
+                        visible: !navItem.isSection && !!navItem.modelData.count
                         anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.max(22, countText.implicitWidth + 12); height: 20; radius: 10
+                        color: navItem.modelData.active ? Theme.accent : win.sideHover
+                        Text {
+                            id: countText
+                            anchors.centerIn: parent
+                            text: navItem.modelData.count || ""
+                            color: navItem.modelData.active ? "white" : win.sideText2
+                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                        }
+                    }
+                    Text {
+                        visible: !navItem.isSection
+                        anchors.left: navIcon.right; anchors.leftMargin: 12
+                        anchors.right: countPill.visible ? countPill.left : parent.right; anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         text: navItem.modelData.label
                         elide: Text.ElideRight
-                        color: navItem.modelData.active ? Theme.accentText : Theme.text
+                        color: navItem.modelData.active ? win.sideActiveText : win.sideText
                         font.family: Theme.font; font.pixelSize: 13
                         font.weight: navItem.modelData.active ? Font.DemiBold : Font.Normal
                     }
                     MouseArea {
                         id: navArea
                         anchors.fill: parent
+                        enabled: !navItem.isSection
                         hoverEnabled: true
                         onClicked: {
                             // od razu zaznacz kliknięte (strona potwierdzi przy następnym odczycie)
@@ -397,6 +507,7 @@ Window {
             }
 
             Row {
+                id: barTools
                 anchors.right: winButtons.left; anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
@@ -451,6 +562,13 @@ Window {
                         }
                     }
                 }
+            }
+            NativeSearch {
+                anchors.right: barTools.left; anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                width: 220; height: 30
+                visible: !!win.navSearch && !win.showSidebar && !win.showTopnav
+                dark: win.barTinted && win.barText.r > 0.5
             }
             WindowButtons {
                 id: winButtons
@@ -532,7 +650,7 @@ Window {
             WebEngineView {
                 id: web
                 anchors.fill: parent
-                backgroundColor: win.app.backgroundColor || "white"
+                backgroundColor: win.pageBgCss ? win.pageColor : (win.app.backgroundColor || "white")
                 settings.fullScreenSupportEnabled: true
                 settings.scrollAnimatorEnabled: true
                 settings.focusOnNavigationEnabled: true
@@ -547,6 +665,11 @@ Window {
                         win.navSidebar = o.sidebar || [];
                         win.navTop = o.topnav || [];
                         win.pageTopbar = o.topbar || 0;
+                        win.navPrimary = o.primary || null;
+                        win.navSearch = o.search || null;
+                        win.pageBgCss = o.pageBg || "";
+                        win.sideBgCss = o.sideBg || "";
+                        win.topbarBgCss = o.topbarBg || "";
                     } else if (o.type === "drag") {
                         win.startSystemMove();
                     } else if (o.type === "maximize") {
@@ -556,6 +679,7 @@ Window {
                 onLoadingChanged: (info) => {
                     if (info.status === WebEngineView.LoadSucceededStatus) {
                         if (win.debug) explainTimer.restart();
+                        if (!store.systemFont) web.runJavaScript("window.__aster && window.__aster.setFont(false)");
                         win.failed = false;
                         if (!win.everLoaded) splashOut.start();
                         win.everLoaded = true;
@@ -597,6 +721,24 @@ Window {
                     request.accept();
                     win.pageFullScreen = request.toggleOn;
                     if (request.toggleOn) win.showFullScreen(); else win.showNormal();
+                }
+                onTooltipRequested: (request) => {
+                    request.accepted = true;
+                    if (request.type === TooltipRequest.Show && request.text) {
+                        tip.text = request.text;
+                        tip.x = Math.min(frame.width - tip.width - 8, content.x + request.x + 12);
+                        tip.y = Math.min(frame.height - tip.height - 8, content.y + request.y + 20);
+                        tipDelay.restart();
+                    } else {
+                        tipDelay.stop();
+                        tip.shown = false;
+                    }
+                }
+                onJavaScriptDialogRequested: (request) => {
+                    request.accepted = true;
+                    dlgInput.text = request.defaultText || "";
+                    win.dialog = request;
+                    if (request.type === JavaScriptDialogRequest.DialogTypePrompt) dlgInput.forceActiveFocus();
                 }
                 onContextMenuRequested: (request) => {
                     request.accepted = true;
@@ -703,17 +845,123 @@ Window {
             z: 20
             height: 34; radius: 12
             width: floatRow.implicitWidth + 12
-            color: Qt.alpha(Theme.surface, 0.9)
-            border.width: 1; border.color: Theme.line
+            color: win.pageDark ? Qt.rgba(0.17, 0.17, 0.2, 0.9) : Qt.rgba(1, 1, 1, 0.9)
+            border.width: 1; border.color: win.pageDark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.08)
             Row {
                 id: floatRow
                 anchors.centerIn: parent
                 spacing: 2
+                NativeSearch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 200; height: 28
+                    visible: !!win.navSearch && !win.showSidebar
+                    dark: win.pageDark
+                }
                 FloatButton { icon: "back"; visible: web.canGoBack && !win.showSidebar; onClicked: web.goBack() }
                 FloatButton { icon: web.loading ? "close" : "reload"; onClicked: if (web.loading) web.stop(); else web.reload() }
                 FloatButton { id: floatMore; icon: "more"; onClicked: win.openMoreMenu(floatMore) }
                 Item { width: 4; height: 1 }
-                WindowButtons { window: win; anchors.verticalCenter: parent.verticalCenter; scale: 0.82; spacing: 4 }
+                WindowButtons {
+                    window: win; anchors.verticalCenter: parent.verticalCenter; scale: 0.82; spacing: 4
+                    idleColor: win.pageDark ? Qt.rgba(1, 1, 1, 0.1) : Theme.fill
+                    idleIconColor: win.pageDark ? "#C9CDD6" : Theme.text2
+                }
+            }
+        }
+
+        // ——— Dymek podpowiedzi (zamiast przeglądarkowego) ———
+        Rectangle {
+            id: tip
+            property string text
+            property bool shown: false
+            z: 60
+            visible: opacity > 0
+            opacity: shown ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+            width: Math.min(360, tipText.implicitWidth + 20)
+            height: tipText.implicitHeight + 12
+            radius: 8
+            color: Theme.dark ? "#2A2C33" : "#16181D"
+            Text {
+                id: tipText
+                x: 10; y: 6
+                width: Math.min(340, implicitWidth)
+                text: tip.text
+                wrapMode: Text.Wrap
+                color: "white"
+                font.family: Theme.font; font.pixelSize: 12
+            }
+            Timer { id: tipDelay; interval: 450; onTriggered: tip.shown = true }
+        }
+
+        // ——— Okna strony (alert / confirm / prompt) w stylu Aster ———
+        Rectangle {
+            anchors.fill: parent
+            z: 80
+            color: Qt.rgba(0, 0, 0, 0.3)
+            radius: win.r
+            visible: !!win.dialog
+            MouseArea { anchors.fill: parent }
+            Rectangle {
+                anchors.centerIn: parent
+                width: 420
+                height: dlgCol.implicitHeight + 48
+                radius: 16
+                color: Theme.surface
+                border.width: 1; border.color: Theme.edge
+                Column {
+                    id: dlgCol
+                    x: 24; y: 24
+                    width: parent.width - 48
+                    spacing: 12
+                    Row {
+                        spacing: 10
+                        Image { width: 28; height: 28; source: win.app.icon; sourceSize: Qt.size(56, 56); anchors.verticalCenter: parent.verticalCenter }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: win.app.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold }
+                    }
+                    Text {
+                        width: parent.width
+                        text: win.dialog ? win.dialog.message : ""
+                        wrapMode: Text.Wrap
+                        color: Theme.text
+                        font.family: Theme.font; font.pixelSize: 14
+                    }
+                    Rectangle {
+                        visible: !!win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypePrompt
+                        width: parent.width; height: 38; radius: 10
+                        color: Theme.fill
+                        border.width: 1.5; border.color: Theme.accent
+                        TextInput {
+                            id: dlgInput
+                            x: 12; width: parent.width - 24
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                            clip: true
+                            Keys.onReturnPressed: win.closeDialog(true)
+                        }
+                    }
+                    Row {
+                        anchors.right: parent.right
+                        spacing: 8
+                        HoverButton {
+                            visible: !!win.dialog && win.dialog.type !== JavaScriptDialogRequest.DialogTypeAlert
+                            width: 96; height: 38; radius: 10; baseColor: Theme.fill
+                            onClicked: win.closeDialog(false)
+                            Text { anchors.centerIn: parent; text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Zostań" : "Anuluj"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+                        }
+                        Rectangle {
+                            width: okText.implicitWidth + 32; height: 38; radius: 10
+                            color: okArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
+                            Text {
+                                id: okText
+                                anchors.centerIn: parent
+                                text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Opuść stronę" : "OK"
+                                color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                            }
+                            MouseArea { id: okArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.closeDialog(true) }
+                        }
+                    }
+                }
             }
         }
 
@@ -725,6 +973,16 @@ Window {
 
     // ——— Menu strony ———
     property var menuRequest: null
+    property var dialog: null
+    function closeDialog(ok) {
+        const d = dialog;
+        dialog = null;
+        if (!d) return;
+        if (!ok) d.dialogReject();
+        else if (d.type === JavaScriptDialogRequest.DialogTypePrompt) d.dialogAccept(dlgInput.text);
+        else d.dialogAccept();
+        web.forceActiveFocus();
+    }
     function showPageMenu(request) {
         menuRequest = request;
         const p = content.mapToItem(frame, request.position.x, request.position.y);
@@ -760,6 +1018,7 @@ Window {
         else if (a === "copyUrl") { copyHelper.text = web.url.toString(); copyHelper.selectAll(); copyHelper.copy(); toast("Skopiowano adres"); }
         else if (a === "nativeNav") setNativeNav(!store.nativeNav);
         else if (a === "integrated") store.integrated = !store.integrated;
+        else if (a === "systemFont") { store.systemFont = !store.systemFont; web.runJavaScript("window.__aster && window.__aster.setFont(" + store.systemFont + ")"); }
         else if (a === "zoomIn") zoom(0.1);
         else if (a === "zoomOut") zoom(-0.1);
         else if (a === "zoomReset") zoom(0);
@@ -778,13 +1037,48 @@ Window {
         onTriggered: web.runJavaScript("window.__aster ? window.__aster.explain() : 'brak __aster'", (r) => console.log("[aster] kandydaci:\n" + r))
     }
 
+    // Pole wyszukiwania Aster połączone z polem strony
+    component NativeSearch: Rectangle {
+        id: ns
+        property bool dark: Theme.dark
+        radius: 10
+        color: ns.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)
+        border.width: nsField.activeFocus ? 1.5 : 0
+        border.color: Theme.accent
+        clip: true
+        Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 14; color: ns.dark ? "#A2A9B6" : "#5B6270" }
+        TextInput {
+            id: nsField
+            anchors.left: parent.left; anchors.leftMargin: 32
+            anchors.right: parent.right; anchors.rightMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            clip: true
+            color: ns.dark ? "#ECEEF3" : "#16181D"
+            selectionColor: Theme.accentSoft
+            font.family: Theme.font; font.pixelSize: 13
+            onTextEdited: win.searchPage(text)
+            Keys.onReturnPressed: win.submitSearch()
+            Keys.onEnterPressed: win.submitSearch()
+            Keys.onEscapePressed: { text = ""; win.searchPage(""); web.forceActiveFocus(); }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                elide: Text.ElideRight
+                visible: !nsField.text
+                text: win.navSearch ? win.navSearch.placeholder : "Szukaj"
+                color: ns.dark ? "#A2A9B6" : "#5B6270"
+                font: nsField.font
+            }
+        }
+    }
+
     component FloatButton: Rectangle {
         id: fbtn
         property string icon
         signal clicked()
         width: 28; height: 28; radius: 8
-        color: fArea.containsMouse ? Theme.hover : "transparent"
-        Icon { anchors.centerIn: parent; d: Icons[fbtn.icon] || ""; size: 15; color: Theme.text2 }
+        color: fArea.containsMouse ? (win.pageDark ? Qt.rgba(1, 1, 1, 0.1) : Theme.hover) : "transparent"
+        Icon { anchors.centerIn: parent; d: Icons[fbtn.icon] || ""; size: 15; color: win.pageDark ? "#C9CDD6" : Theme.text2 }
         MouseArea { id: fArea; anchors.fill: parent; hoverEnabled: true; onClicked: fbtn.clicked() }
     }
 
