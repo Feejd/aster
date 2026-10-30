@@ -13,13 +13,14 @@ import Aster.Ui
 Window {
     id: dock
     color: "transparent"
+    title: "Dok"
     visible: false
     width: Screen.width
     // Okno jest wyższe niż wyspy, żeby zmieściły się podpowiedzi nad ikonami.
     // Kliknięcia trafiają tylko w wyspy (Platform.setInputRegion), resztę przepuszcza do okien.
     height: 150
 
-    readonly property int reserved: 84
+    readonly property int reserved: 96
     property bool startOpen: false
     signal startRequested()
 
@@ -48,32 +49,42 @@ Window {
         ]
     }
 
+    // Podgląd (ASTER_PREVIEW): przypięte programy z bazy KDE, bez okien
+    ListModel { id: previewModel }
+    Component.onDestruction: {}
+    Timer {
+        running: Platform.preview
+        interval: 10
+        onTriggered: {
+            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.konsole", "org.kde.discover", "systemsettings"];
+            ids.forEach((id, i) => {
+                const a = Platform.appInfo(id);
+                if (!a.valid) return;
+                previewModel.append({ decoration: a.icon, display: a.name, IsWindow: i < 2, IsActive: i === 0, IsStartup: false,
+                                      LauncherUrlWithoutIcon: "applications:" + id + ".desktop" });
+            });
+        }
+    }
+
     property date now: new Date()
     Timer { interval: 1000; repeat: true; running: true; onTriggered: dock.now = new Date() }
 
-    // ——— Lewa wyspa: wyszukiwanie ———
+    // ——— Lewa wyspa: logo Aster (kolorowy kafelek) — otwiera Start ———
     Island {
         id: left
-        x: 16
-        y: dock.height - height - 12
-        width: 64; height: 64
-        // Logo Aster — otwiera Start
-        Rectangle {
+        x: 18
+        y: dock.height - height - 14
+        width: 76; height: 76
+        radius: 26
+        AppIcon {
             id: logoBtn
             anchors.centerIn: parent
-            width: 44; height: 44; radius: 14
-            color: dock.startOpen ? Theme.accentSoft : (logoArea.containsMouse ? Theme.hover : "transparent")
-            scale: logoArea.pressed ? 0.92 : 1
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Behavior on scale { NumberAnimation { duration: 100 } }
-            Icon {
-                anchors.centerIn: parent
-                d: Icons.aster
-                size: 24; stroke: 2.6
-                color: Theme.accentText
-                rotation: dock.startOpen ? 60 : 0
-                Behavior on rotation { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
-            }
+            size: 52
+            desktopId: "aster-start"
+            scale: logoArea.pressed ? 0.9 : (logoArea.containsMouse ? 1.04 : 1)
+            rotation: dock.startOpen ? 90 : 0
+            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+            Behavior on rotation { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
             MouseArea { id: logoArea; anchors.fill: parent; hoverEnabled: true; onClicked: dock.startRequested() }
         }
     }
@@ -82,20 +93,21 @@ Window {
     Island {
         id: center
         anchors.horizontalCenter: parent.horizontalCenter
-        y: dock.height - height - 12
-        width: row.width + 24
-        height: 64
+        y: dock.height - height - 14
+        width: row.width + 20
+        height: 76
+        radius: 26
         onWidthChanged: blurTimer.restart()
         onXChanged: blurTimer.restart()
 
         Row {
             id: row
-            x: 12
+            x: 10
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 8
-            spacing: 4
+            spacing: 2
             Repeater {
-                model: tasks
+                model: Platform.preview ? previewModel : tasks
                 delegate: DockItem {
                     id: di
                     onActivated: {
@@ -120,10 +132,11 @@ Window {
     Island {
         id: right
         anchors.right: parent.right
-        anchors.rightMargin: 16
-        y: dock.height - height - 12
-        width: tray.width + 28
-        height: 64
+        anchors.rightMargin: 18
+        y: dock.height - height - 14
+        width: tray.width + 36
+        height: 76
+        radius: 26
 
         Row {
             id: tray
@@ -131,7 +144,7 @@ Window {
             spacing: 14
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter
-                icon: "configure"
+                icon: "sliders"
                 onClicked: Platform.run("systemsettings")
             }
             Column {
@@ -140,13 +153,14 @@ Window {
                     anchors.right: parent.right
                     text: dock.now.toLocaleTimeString(Qt.locale("pl_PL"), "HH:mm")
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
                 }
                 Text {
                     anchors.right: parent.right
                     text: dock.now.toLocaleDateString(Qt.locale("pl_PL"), "ddd, d MMM")
                     color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 11
+                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                 }
             }
         }
@@ -162,12 +176,11 @@ Window {
         scale: hbArea.pressed ? 0.92 : 1
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on scale { NumberAnimation { duration: 100 } }
-        Kirigami.Icon {
+        Icon {
             anchors.centerIn: parent
-            width: 22; height: 22
-            source: hb.icon
+            d: Icons[hb.icon] || ""
+            size: 22
             color: hb.active ? Theme.accentText : Theme.text
-            isMask: true
         }
         MouseArea { id: hbArea; anchors.fill: parent; hoverEnabled: true; onClicked: hb.clicked() }
     }

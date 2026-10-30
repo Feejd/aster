@@ -16,6 +16,7 @@ set(ASTER_QML
     qml/DockItem.qml
     qml/HorizonWindow.qml
     qml/StartWindow.qml
+    qml/ClockWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform

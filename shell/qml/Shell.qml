@@ -5,6 +5,7 @@ import Aster.Shell
 QtObject {
     id: shell
     property var wallpaper: WallpaperWindow {}
+    property var clock: ClockWindow {}
     property var start: StartWindow { id: startWin }
     property var dock: DockWindow {
         startOpen: startWin.open

@@ -17,7 +17,7 @@ Window {
     color: "transparent"
     visible: false
     width: Screen.width
-    height: Screen.height - 84
+    height: Screen.height - 96
     title: "Start"
 
     property bool open: false

@@ -19,6 +19,8 @@ class Platform : public QObject
     Q_PROPERTY(QVariantList applications READ applications NOTIFY applicationsChanged)
     // Liczby na ikonach w doku: {"aster-webapp-whatsapp": 3, …} (z sygnału com.canonical.Unity.LauncherEntry)
     Q_PROPERTY(QVariantMap badges READ badges NOTIFY badgesChanged)
+    // Do testów (ASTER_PREVIEW=1): dok pokazuje przypięte programy bez listy okien KDE
+    Q_PROPERTY(bool preview READ preview CONSTANT)
 
 public:
     explicit Platform(QObject *parent = nullptr);
@@ -54,6 +56,7 @@ public:
     Q_INVOKABLE void openUrl(const QString &url);
 
     QVariantMap badges() const { return m_badges; }
+    bool preview() const { return qEnvironmentVariableIsSet("ASTER_PREVIEW"); }
 
     // Powiadomienia: powłoka jest serwerem org.freedesktop.Notifications (zamiast plasmashell)
     Q_INVOKABLE void activateNotification(uint id);
@@ -76,6 +79,10 @@ Q_SIGNALS:
 
 private Q_SLOTS:
     void onLauncherEntry(const QString &uri, const QVariantMap &properties);
+
+public:
+    // Ostatnio zgłoszone obszary rozmycia każdego okna (do podglądu pulpitu w testach)
+    QHash<QQuickWindow *, QVariantList> blurRegions;
 
 private:
     QVariantMap m_badges;

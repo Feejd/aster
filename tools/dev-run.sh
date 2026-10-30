@@ -22,6 +22,12 @@ for app in files browser webapps; do
 done
 kbuildsycoca6 >/dev/null 2>&1 || true
 
+# Szkło jak w Aster: mocniejsze rozmycie KWin z odrobiną szumu (ustawienie KWin tego użytkownika)
+kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Effect-blur --key BlurStrength 12 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Effect-blur --key NoiseStrength 2 2>/dev/null || true
+dbus-send --session --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/null || true
+
 # Poprzednia kopia powłoki (np. z innej Konsoli) — zamknij, żeby nie działały dwie naraz
 pkill -x aster-shell || true
 systemctl --user stop plasma-plasmashell.service || true

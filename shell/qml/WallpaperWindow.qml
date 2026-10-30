@@ -7,10 +7,11 @@ import Aster.Ui
 Window {
     id: wp
     color: "black"
+    title: "Tapeta"
     visible: false
     width: Screen.width
     height: Screen.height
-    property string variant: "szczyty"
+    property string variant: "bloom"
 
     Component.onCompleted: {
         Platform.makeLayer(wp, "background", 1 | 2 | 4 | 8, -1, "none", "aster-wallpaper");

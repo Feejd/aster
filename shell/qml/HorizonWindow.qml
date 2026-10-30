@@ -11,6 +11,7 @@ import Aster.Ui
 Window {
     id: hz
     color: "transparent"
+    title: "Horyzont"
     visible: false
     width: 480
     height: 190
@@ -50,29 +51,44 @@ Window {
     }
     Timer { id: showTimer; interval: 5500; onTriggered: if (cardHover.hovered) restart(); else hz.next() }
 
+    // Czarna pigułka (jak „Dynamic Island”): data i mała kropka Aster; rozszerza się, gdy przychodzi powiadomienie
     Island {
         id: pill
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 12
-        width: label.implicitWidth + 40
-        height: 40
-        radius: 20
+        y: 10
+        solid: true
+        width: (hz.current ? 200 : 0) + pillRow.implicitWidth + 36
+        height: 36
+        radius: 18
+        Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
         onWidthChanged: regionTimer.restart()
 
-        Text {
-            id: label
+        Row {
+            id: pillRow
             anchors.centerIn: parent
-            text: hz.now.toLocaleDateString(Qt.locale("pl_PL"), "dddd, d MMMM") + "  ·  " + hz.now.toLocaleTimeString(Qt.locale("pl_PL"), "HH:mm")
-            color: Theme.text
-            font.family: Theme.font
-            font.pixelSize: 13
-            font.weight: Font.Medium
+            spacing: 10
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 8; height: 8; radius: 4
+                color: hz.current ? "#34D399" : Theme.accent
+                Behavior on color { ColorAnimation { duration: 200 } }
+            }
+            Text {
+                id: label
+                anchors.verticalCenter: parent.verticalCenter
+                text: hz.now.toLocaleDateString(Qt.locale("pl_PL"), "dddd, d MMMM")
+                color: "white"
+                font.family: Theme.font
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
         }
     }
 
     // ——— Karta powiadomienia ———
     Island {
         id: card
+        solid: true
         readonly property var n: hz.current
         anchors.horizontalCenter: parent.horizontalCenter
         width: 440
@@ -119,14 +135,14 @@ Window {
                 text: card.n ? card.n.appName : ""
                 visible: text !== ""
                 elide: Text.ElideRight
-                color: Theme.text2
+                color: Qt.rgba(1, 1, 1, 0.6)
                 font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
             }
             Text {
                 width: parent.width
                 text: card.n ? card.n.summary : ""
                 elide: Text.ElideRight
-                color: Theme.text
+                color: "white"
                 font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
             }
             Text {
@@ -137,7 +153,7 @@ Window {
                 maximumLineCount: 2
                 wrapMode: Text.Wrap
                 elide: Text.ElideRight
-                color: Theme.text2
+                color: Qt.rgba(1, 1, 1, 0.72)
                 font.family: Theme.font; font.pixelSize: 12
             }
         }
@@ -147,8 +163,8 @@ Window {
             y: 12
             width: 24; height: 24; radius: 12
             visible: cardHover.hovered
-            color: closeArea.containsMouse ? Theme.hover : "transparent"
-            Icon { anchors.centerIn: parent; d: Icons.close; size: 11; stroke: 2; color: Theme.text2 }
+            color: closeArea.containsMouse ? Qt.rgba(1, 1, 1, 0.14) : "transparent"
+            Icon { anchors.centerIn: parent; d: Icons.close; size: 11; stroke: 2; color: Qt.rgba(1, 1, 1, 0.7) }
             MouseArea {
                 id: closeArea; anchors.fill: parent; hoverEnabled: true
                 onClicked: { if (card.n) Platform.dismissNotification(card.n.id); hz.next(); }

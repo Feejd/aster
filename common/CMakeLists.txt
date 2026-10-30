@@ -14,6 +14,7 @@ qt_add_qml_module(aster-ui
         ContextMenu.qml
         HoverButton.qml
         ToolBtn.qml
+        AppIcon.qml
     SOURCES
         windoweffects.cpp
         windoweffects.h

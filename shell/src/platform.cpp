@@ -309,6 +309,7 @@ void Platform::setBlur(QQuickWindow *window, const QVariantList &rects)
 {
     if (!window)
         return;
+    blurRegions[window] = rects;
     const QRegion region = roundedRegion(rects);
     KWindowEffects::enableBlurBehind(window, !region.isEmpty(), region);
 }

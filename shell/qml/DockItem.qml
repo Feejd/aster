@@ -11,24 +11,28 @@ Item {
     signal activated()
     signal newInstance()
 
-    width: 52
-    height: 52
+    width: 60
+    height: 60
 
-    Item {
+    // Ikona w kształcie squircle; po najechaniu lekko się unosi, po wciśnięciu przyciemnia i zmniejsza
+    AppIcon {
         id: tile
-        width: 48; height: 48
+        size: 52
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 2
-        scale: area.pressed ? 0.92 : 1
+        anchors.bottomMargin: 4 + (area.containsMouse && !area.pressed ? 3 : 0)
+        desktopId: item.desktopId
+        source: item.model.decoration
+        scale: area.pressed ? 0.9 : 1
         transformOrigin: Item.Bottom
-        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
-
-        Kirigami.Icon {
+        Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
+        Behavior on anchors.bottomMargin { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+        Rectangle {
             anchors.fill: parent
-            anchors.margins: 2
-            source: item.model.decoration
-            active: area.containsMouse
+            radius: width * 0.26
+            color: "black"
+            opacity: area.pressed ? 0.18 : 0
+            Behavior on opacity { NumberAnimation { duration: 90 } }
         }
     }
 
@@ -60,27 +64,26 @@ Item {
         }
     }
 
-    // Kropka pod działającą aplikacją; dłuższa kreska — aktywne okno
+    // Kropka pod działającą aplikacją (jaśniejsza przy aktywnym oknie)
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: -7
-        height: 4; radius: 2
-        width: item.model.IsActive ? 14 : 4
+        anchors.bottomMargin: -5
+        width: 5; height: 5; radius: 2.5
         visible: item.model.IsWindow === true || item.model.IsStartup === true
-        color: item.model.IsActive ? Theme.accent : Theme.text
-        opacity: item.model.IsActive ? 1 : 0.55
-        Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+        color: Theme.text
+        opacity: item.model.IsActive ? 0.9 : 0.45
+        Behavior on opacity { NumberAnimation { duration: 180 } }
     }
 
-    // Podpowiedź z nazwą
+    // Podpowiedź z nazwą (ciemna pigułka nad ikoną)
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: tile.top
-        anchors.bottomMargin: 22
-        width: tipText.implicitWidth + 20; height: 28; radius: 9
-        color: Theme.dark ? "#2A2C33" : "#FFFFFF"
-        border.width: 1; border.color: Theme.edge
+        anchors.bottomMargin: 16
+        width: tipText.implicitWidth + 20; height: 26; radius: 8
+        color: Qt.rgba(0.09, 0.09, 0.1, 0.9)
+        border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.08)
         opacity: area.containsMouse && !area.pressed ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -88,7 +91,7 @@ Item {
             id: tipText
             anchors.centerIn: parent
             text: item.model.display || ""
-            color: Theme.text
+            color: "white"
             font.family: Theme.font
             font.pixelSize: 12
             font.weight: Font.Medium
