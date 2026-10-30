@@ -16,7 +16,7 @@ sudo dnf install -y --skip-unavailable --allowerasing \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
     layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel qt6-qtwebengine-devel plasma-workspace-devel \
-    rsms-inter-fonts open-vm-tools-desktop
+    rsms-inter-fonts google-roboto-fonts open-vm-tools-desktop
 
 # Folder udostępniony z Maca montowany przy każdym starcie
 # (VMware: Ustawienia maszyny → Sharing → folder „Aster”)

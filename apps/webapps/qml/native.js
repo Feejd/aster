@@ -248,12 +248,103 @@
         for (var i = 0; i < old.length; ++i) old[i].removeAttribute(attr);
     }
 
+    // ——— Tryb nakładki: tożsamość aplikacji prosto ze strony ———
+    var conf = window.__asterAdapterConf || {};
+    var guideOpened = false;
+    function svgOf(el) {
+        if (!el) return "";
+        var svg = el.tagName && el.tagName.toLowerCase() === "svg" ? el : el.querySelector("svg");
+        if (!svg) return "";
+        var c = svg.cloneNode(true);
+        // wymiary z viewBox, żeby obraz miał proporcje logo
+        if (!c.getAttribute("viewBox")) {
+            var r = svg.getBoundingClientRect();
+            if (r.width && r.height) c.setAttribute("viewBox", "0 0 " + r.width + " " + r.height);
+        }
+        c.removeAttribute("style");
+        c.removeAttribute("class");
+        var out = c.outerHTML;
+        return out.length < 20000 ? out : "";
+    }
+    function fontUrls() {
+        var seen = {}, out = [];
+        performance.getEntriesByType("resource").forEach(function (e) {
+            if (/\.(woff2?|ttf|otf)(\?|$)/i.test(e.name) && !seen[e.name]) { seen[e.name] = true; out.push(e.name); }
+        });
+        return out.slice(0, 12);
+    }
+    function families(el) {
+        if (!el) return [];
+        return getComputedStyle(el).fontFamily.split(",").map(function (f) { return f.trim().replace(/^["']|["']$/g, ""); });
+    }
+    function readAdapter() {
+        var g = conf.guide || {};
+        var sections = [];
+        if (g.section) {
+            var secs = document.querySelectorAll(g.section);
+            for (var i = 0; i < secs.length; ++i) {
+                var titleEl = g.sectionTitle ? secs[i].querySelector(g.sectionTitle) : null;
+                var title = titleEl ? (titleEl.innerText || titleEl.textContent || "").trim() : "";
+                var items = [];
+                var entries = secs[i].querySelectorAll(g.entry);
+                for (var k = 0; k < entries.length; ++k) {
+                    var en = entries[k];
+                    // pozycje schowane przez samą stronę (np. „Pokaż mniej”, gdy lista jest zwinięta):
+                    // sprawdzamy własny styl elementów aż do sekcji (całe menu jest schowane przez nas)
+                    var hiddenByPage = false;
+                    for (var up = en; up && up !== secs[i]; up = up.parentElement)
+                        if (up.hasAttribute("hidden") || getComputedStyle(up).display === "none") { hiddenByPage = true; break; }
+                    if (hiddenByPage) continue;
+                    var link = g.link ? en.querySelector(g.link) : en;
+                    if (!link) continue;
+                    var lab = (link.getAttribute("title") || "").trim();
+                    if (!lab && g.label) { var le = en.querySelector(g.label); lab = le ? (le.innerText || le.textContent || "").trim() : ""; }
+                    if (!lab || lab.length > 40) continue;
+                    if (!link.dataset.asterId) link.dataset.asterId = String(A.nextId++);
+                    var img = g.img ? en.querySelector(g.img) : null;
+                    items.push({
+                        id: link.dataset.asterId,
+                        label: lab,
+                        active: g.active ? en.matches(g.active) : false,
+                        icon: g.icon ? svgOf(en.querySelector(g.icon)) : "",
+                        img: img && img.src && img.src.indexOf("http") === 0 ? img.src : ""
+                    });
+                }
+                if (items.length) sections.push({ title: title, items: items });
+            }
+        }
+        // Pełne menu YouTube powstaje dopiero po pierwszym otwarciu — otwieramy je raz (niewidocznie) i zamykamy
+        if (!sections.length && g.opener && !guideOpened) {
+            var op = document.querySelector(g.opener);
+            if (op) {
+                guideOpened = true;
+                op.click();
+                setTimeout(function () { op.click(); schedule(); }, 900);
+            }
+        }
+        var titleEl2 = conf.titleFontFrom ? document.querySelector(conf.titleFontFrom) : null;
+        var state = JSON.stringify({
+            type: "adapter",
+            logo: conf.logo ? svgOf(document.querySelector(conf.logo)) : "",
+            sections: sections,
+            fonts: fontUrls(),
+            bodyFont: families(document.body),
+            titleFont: families(titleEl2)
+        });
+        if (state !== A.last) {
+            A.last = state;
+            console.debug("aster:" + state);
+        }
+    }
+
     var observer = null;
     function update() {
         if (!document.body) return;
-        // Aplikacja z natywną nakładką (Adapters.js): nic nie wykrywamy, tylko czcionka systemu
+        // Aplikacja z natywną nakładką (Adapters.js): strona zostaje sobą (jej czcionki),
+        // a okno dostaje jej logo, menu, ikony i czcionki
         if (window.__asterAdapter) {
-            document.documentElement.classList.toggle("aster-font", A.font);
+            document.documentElement.classList.remove("aster-font");
+            readAdapter();
             return;
         }
         if (observer) observer.disconnect();

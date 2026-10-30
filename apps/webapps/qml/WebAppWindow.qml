@@ -3,6 +3,7 @@ import QtCore
 import QtQuick
 import QtQuick.Window
 import QtQuick.Effects
+import QtQml.Models
 import QtWebEngine
 import Aster.Ui
 import Aster.WebApps
@@ -37,8 +38,39 @@ Window {
     readonly property var adapter: Adapters.find(hostOf(app.url))
     readonly property string currentUrl: web.url.toString()
     readonly property color brand: adapter ? adapter.accent : Theme.accent
+    // Tożsamość ze strony: logo, menu (sekcje, ikony, awatary kanałów), czcionki
+    property string pageLogo: ""
+    property var pageSections: []
+    property var pageFontUrls: []
+    property var bodyFonts: []
+    property int fontsVersion: 0
+    function firstFont(list) {
+        fontsVersion;
+        const fams = Qt.fontFamilies();
+        for (const f of (list || []))
+            if (fams.indexOf(f) >= 0) return f;
+        return Theme.font;
+    }
+    readonly property string uiFont: adapter ? firstFont((adapter.fonts ? adapter.fonts.body : []).concat(bodyFonts)) : Theme.font
+    readonly property string titleFont: adapter && adapter.fonts ? firstFont(adapter.fonts.title) : uiFont
+    Instantiator {
+        model: win.pageFontUrls
+        delegate: FontLoader {
+            required property string modelData
+            source: modelData
+            onStatusChanged: if (status === FontLoader.Ready) win.fontsVersion++
+        }
+    }
     readonly property var adapterNav: {
         if (!adapter) return [];
+        if (pageSections.length) {
+            const out = [];
+            pageSections.forEach(s => {
+                if (s.title) out.push({ section: true, label: s.title });
+                s.items.forEach(it => out.push({ id: it.id, label: it.label, icon: it.icon, img: it.img, active: it.active, fromPage: true }));
+            });
+            return out;
+        }
         const active = Adapters.activeUrl(adapter, currentUrl);
         const out = [];
         adapter.nav.forEach(s => {
@@ -122,16 +154,17 @@ Window {
     readonly property color sideText: sideDark ? "#ECEEF3" : "#16181D"
     readonly property color sideText2: sideDark ? "#A2A9B6" : "#5B6270"
     readonly property color sideHover: sideDark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.055)
-    readonly property color sideActive: Qt.alpha(brand, sideDark ? 0.3 : 0.12)
-    readonly property color sideActiveText: sideDark ? Qt.lighter(brand, 1.5) : brand
+    readonly property bool neutralActive: !!adapter && adapter.activeStyle === "neutral"
+    readonly property color sideActive: neutralActive ? (sideDark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(0, 0, 0, 0.06)) : Qt.alpha(brand, sideDark ? 0.3 : 0.12)
+    readonly property color sideActiveText: neutralActive ? sideText : (sideDark ? Qt.lighter(brand, 1.5) : brand)
     readonly property color sideLine: sideDark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.07)
     readonly property bool showSidebar: !pageFullScreen && (!!adapter || (store.nativeNav && navSidebar.length >= 3))
     readonly property bool showTopnav: !adapter && store.nativeNav && !showSidebar && navTop.length >= 3 && !pageFullScreen
     readonly property bool integratedBar: !adapter && store.integrated && !showTopnav && !pageFullScreen && (pageTopbar > 0 || showSidebar)
     readonly property int sideWidth: showSidebar ? 232 : 0
 
-    function navClick(id) {
-        if (adapter) { adapterGo(id); return; }
+    function navClick(id, fromPage) {
+        if (adapter && !fromPage) { adapterGo(id); return; }
         web.runJavaScript("window.__aster && window.__aster.click('" + id + "')");
     }
     function fetchSuggestions(text) {
@@ -259,7 +292,8 @@ Window {
             a.injectionPoint = WebEngineScript.DocumentCreation;
             a.worldId = WebEngineScript.MainWorld;
             a.runsOnSubFrames = false;
-            a.sourceCode = "(function(){window.__asterAdapter=true;var css=" + JSON.stringify(adapter.css) + ";"
+            a.sourceCode = "(function(){window.__asterAdapter=true;window.__asterAdapterConf="
+                + JSON.stringify({ guide: adapter.guide || null, logo: adapter.logo || "" }) + ";var css=" + JSON.stringify(adapter.css) + ";"
                 + "function add(){var r=document.documentElement;if(!r){return setTimeout(add,0);}"
                 + "var st=document.createElement('style');st.id='aster-adapter';st.textContent=css;r.appendChild(st);"
                 + (adapter.dark ? adapter.dark.replace("%d", Theme.dark ? "true" : "false").replace(/^document\.documentElement/, "r") : "")
@@ -343,7 +377,8 @@ Window {
         width: win.width - 2 * win.m
         height: win.height - 2 * win.m
         radius: win.r
-        color: Theme.windowGlass
+        // Nakładki: czysta biel albo czerń, prześwitująca rozmytym pulpitem
+        color: win.adapter ? (Theme.dark ? Qt.rgba(0.04, 0.04, 0.045, 0.82) : Qt.rgba(1, 1, 1, 0.84)) : Theme.windowGlass
         border.width: win.m ? 1 : 0
         border.color: Theme.edge
 
@@ -383,8 +418,22 @@ Window {
                         Icon { anchors.centerIn: parent; d: Icons.back; size: 16; color: win.sideText }
                         MouseArea { id: sideBack; anchors.fill: parent; hoverEnabled: true; onClicked: web.goBack() }
                     }
+                    // Logo serwisu prosto ze strony (np. pełne logo YouTube)
+                    Image {
+                        id: brandLogo
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !!win.pageLogo
+                        height: 22
+                        width: Math.min(140, implicitWidth * height / Math.max(1, implicitHeight))
+                        source: win.pageLogo ? win.svgUrl(win.pageLogo, win.sideText.toString()) : ""
+                        sourceSize.height: 44
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        MouseArea { anchors.fill: parent; onClicked: win.adapterGo(win.adapter.home) }
+                    }
                     Image {
                         anchors.verticalCenter: parent.verticalCenter
+                        visible: !win.pageLogo
                         width: 24; height: 24
                         source: win.app.icon
                         sourceSize: Qt.size(48, 48)
@@ -392,11 +441,12 @@ Window {
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
+                        visible: !win.pageLogo
                         width: 232 - 90 - (web.canGoBack ? 38 : 0)
                         elide: Text.ElideRight
                         text: win.app.name
                         color: win.sideText
-                        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
+                        font.family: win.uiFont; font.pixelSize: 15; font.weight: Font.DemiBold
                     }
                 }
             }
@@ -424,7 +474,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         text: win.navPrimary ? win.navPrimary.label : ""
                         color: "white"
-                        font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
                     }
                 }
                 MouseArea { id: primaryArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.navClick(win.navPrimary.id) }
@@ -455,8 +505,8 @@ Window {
                     required property var modelData
                     required property int index
                     readonly property bool isSection: !!modelData.section
-                    width: sideList.width; height: isSection ? 30 : 36
-                    radius: 9
+                    width: sideList.width; height: isSection ? (win.adapter ? 38 : 30) : (win.adapter ? 40 : 36)
+                    radius: win.adapter ? 10 : 9
                     color: isSection ? "transparent" : (modelData.active ? win.sideActive : (navArea.containsMouse ? win.sideHover : "transparent"))
                     Behavior on color { ColorAnimation { duration: 120 } }
                     opacity: 0
@@ -469,15 +519,17 @@ Window {
                         width: parent.width - 20
                         elide: Text.ElideRight
                         text: navItem.modelData.label
-                        color: win.sideText2
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
-                        font.letterSpacing: 0.3
+                        color: win.adapter ? win.sideText : win.sideText2
+                        font.family: win.adapter ? win.titleFont : Theme.font
+                        font.pixelSize: win.adapter ? 16 : 11
+                        font.weight: win.adapter ? Font.Bold : Font.DemiBold
+                        font.letterSpacing: win.adapter ? 0 : 0.3
                     }
                     Item {
                         id: navIcon
                         visible: !navItem.isSection
-                        x: 10; anchors.verticalCenter: parent.verticalCenter
-                        width: 20; height: 20
+                        x: win.adapter ? 12 : 10; anchors.verticalCenter: parent.verticalCenter
+                        width: win.adapter ? 24 : 20; height: width
                         Icon {
                             anchors.centerIn: parent
                             visible: !!navItem.modelData.iconName
@@ -488,23 +540,39 @@ Window {
                         }
                         Image {
                             id: navSvg
-                            visible: !navItem.modelData.iconName && status === Image.Ready
+                            visible: !navItem.modelData.iconName && status === Image.Ready && !navItem.modelData.img
                             anchors.fill: parent
                             source: navItem.modelData.icon ? win.svgUrl(navItem.modelData.icon, navItem.modelData.active ? win.sideActiveText.toString() : win.sideText.toString())
                                                            : navItem.modelData.img
                             sourceSize: Qt.size(40, 40)
                             smooth: true
                         }
+                        // Awatar kanału (okrągły)
+                        Image {
+                            id: navAvatar
+                            anchors.fill: parent
+                            visible: false
+                            source: navItem.modelData.img || ""
+                            sourceSize: Qt.size(48, 48)
+                        }
+                        Rectangle { id: navAvatarMask; anchors.fill: parent; radius: 10; visible: false; layer.enabled: true }
+                        MultiEffect {
+                            anchors.fill: parent
+                            visible: !!navItem.modelData.img && navAvatar.status === Image.Ready
+                            source: navAvatar
+                            maskEnabled: true
+                            maskSource: navAvatarMask
+                        }
                         Rectangle {
                             anchors.centerIn: parent
-                            visible: !navItem.modelData.iconName && navSvg.status !== Image.Ready
+                            visible: !navItem.modelData.iconName && navSvg.status !== Image.Ready && !(navItem.modelData.img && navAvatar.status === Image.Ready)
                             width: 20; height: 20; radius: 6
                             color: navItem.modelData.active ? Theme.accent : win.sideHover
                             Text {
                                 anchors.centerIn: parent
                                 text: navItem.modelData.label.charAt(0).toUpperCase()
                                 color: navItem.modelData.active ? "white" : win.sideText2
-                                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold
+                                font.family: win.uiFont; font.pixelSize: 11; font.weight: Font.Bold
                             }
                         }
                     }
@@ -521,19 +589,19 @@ Window {
                             anchors.centerIn: parent
                             text: navItem.modelData.count || ""
                             color: navItem.modelData.active ? "white" : win.sideText2
-                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                            font.family: win.uiFont; font.pixelSize: 11; font.weight: Font.DemiBold
                         }
                     }
                     Text {
                         visible: !navItem.isSection
-                        anchors.left: navIcon.right; anchors.leftMargin: 12
+                        anchors.left: navIcon.right; anchors.leftMargin: win.adapter ? 20 : 12
                         anchors.right: countPill.visible ? countPill.left : parent.right; anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         text: navItem.modelData.label
                         elide: Text.ElideRight
                         color: navItem.modelData.active ? win.sideActiveText : win.sideText
-                        font.family: Theme.font; font.pixelSize: 13
-                        font.weight: navItem.modelData.active ? Font.DemiBold : Font.Normal
+                        font.family: win.uiFont; font.pixelSize: win.adapter ? 14 : 13
+                        font.weight: navItem.modelData.active ? (win.adapter ? Font.Medium : Font.DemiBold) : Font.Normal
                     }
                     MouseArea {
                         id: navArea
@@ -542,8 +610,11 @@ Window {
                         hoverEnabled: true
                         onClicked: {
                             // od razu zaznacz kliknięte (strona potwierdzi przy następnym odczycie)
-                            win.navSidebar = win.navSidebar.map(x => Object.assign({}, x, { active: x.id === navItem.modelData.id }));
-                            win.navClick(navItem.modelData.id);
+                            if (win.adapter)
+                                win.pageSections = win.pageSections.map(s => Object.assign({}, s, { items: s.items.map(x => Object.assign({}, x, { active: x.id === navItem.modelData.id })) }));
+                            else
+                                win.navSidebar = win.navSidebar.map(x => Object.assign({}, x, { active: x.id === navItem.modelData.id }));
+                            win.navClick(navItem.modelData.id, !!navItem.modelData.fromPage);
                         }
                     }
                 }
@@ -594,7 +665,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: win.avatarSrc ? "Twoje konto" : "Zaloguj się"
                     color: win.sideText
-                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                    font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.Medium
                 }
                 MouseArea {
                     id: accArea; anchors.fill: parent; hoverEnabled: true
@@ -667,7 +738,7 @@ Window {
                     elide: Text.ElideRight
                     text: win.adapter ? win.viewTitle : win.app.name
                     color: win.barText
-                    font.family: Theme.font
+                    font.family: win.adapter ? win.titleFont : Theme.font
                     font.pixelSize: win.adapter ? 17 : 13
                     font.weight: win.adapter ? Font.Bold : Font.DemiBold
                 }
@@ -683,7 +754,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: win.zoomShown > 0
                     color: win.barHover
-                    Text { id: zoomLabel; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: win.barText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                    Text { id: zoomLabel; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: win.barText; font.family: win.uiFont; font.pixelSize: 12; font.weight: Font.DemiBold }
                 }
                 BarButton { icon: web.loading ? "close" : "reload"; onClicked: if (web.loading) web.stop(); else web.reload() }
                 BarButton {
@@ -716,7 +787,7 @@ Window {
                                 anchors.centerIn: parent
                                 text: tabBtn.modelData.label
                                 color: tabBtn.modelData.active ? Theme.text : win.barText
-                                font.family: Theme.font; font.pixelSize: 13
+                                font.family: win.uiFont; font.pixelSize: 13
                                 font.weight: tabBtn.modelData.active ? Font.DemiBold : Font.Medium
                             }
                             MouseArea {
@@ -735,23 +806,34 @@ Window {
                 id: adapterSearch
                 visible: !!win.adapter && !!win.adapter.search
                 anchors.centerIn: parent
-                width: Math.min(480, bar.width - 420)
-                height: 36; radius: 12
-                color: adField.activeFocus ? Theme.surface : (Theme.dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.055))
-                border.width: adField.activeFocus ? 1.5 : 0
-                border.color: win.brand
-                Behavior on color { ColorAnimation { duration: 120 } }
-                Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 16; color: Theme.text2 }
+                width: Math.min(560, bar.width - 400)
+                height: 40; radius: 20
+                color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.75)
+                border.width: 1
+                border.color: adField.activeFocus ? "#1C62B9" : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14))
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+                // Ikona lupy po lewej przy wpisywaniu (jak w YouTube)
+                Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; visible: adField.activeFocus; d: Icons.search; size: 16; color: Theme.text2 }
+                // Przycisk szukania po prawej
+                Rectangle {
+                    anchors.right: parent.right
+                    width: 64; height: parent.height
+                    topRightRadius: 20; bottomRightRadius: 20
+                    color: searchBtn.containsMouse ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(0, 0, 0, 0.08)) : (Theme.dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.035))
+                    Rectangle { width: 1; height: parent.height; color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.12) }
+                    Icon { anchors.centerIn: parent; d: Icons.search; size: 19; stroke: 1.9; color: Theme.text }
+                    MouseArea { id: searchBtn; anchors.fill: parent; hoverEnabled: true; onClicked: win.runAdapterSearch(adField.text) }
+                }
                 TextInput {
                     id: adField
-                    anchors.left: parent.left; anchors.leftMargin: 38
-                    anchors.right: parent.right; anchors.rightMargin: 12
+                    anchors.left: parent.left; anchors.leftMargin: activeFocus ? 42 : 18
+                    anchors.right: parent.right; anchors.rightMargin: 76
                     anchors.verticalCenter: parent.verticalCenter
                     clip: true
                     color: Theme.text
                     selectionColor: Theme.accentSoft
                     selectedTextColor: Theme.text
-                    font.family: Theme.font; font.pixelSize: 14
+                    font.family: win.uiFont; font.pixelSize: 15
                     onTextEdited: suggestTimer.restart()
                     onActiveFocusChanged: if (!activeFocus) suggestBox.items = []
                     Keys.onDownPressed: suggestBox.index = Math.min(suggestBox.items.length - 1, suggestBox.index + 1)
@@ -821,7 +903,7 @@ Window {
             Text {
                 x: 16; anchors.verticalCenter: parent.verticalCenter
                 text: permBar.request ? win.app.name + " prosi o dostęp do " + permBar.names[permBar.request.permissionType] : ""
-                color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+                color: Theme.text; font.family: win.uiFont; font.pixelSize: 13
             }
             Row {
                 anchors.right: parent.right; anchors.rightMargin: 12
@@ -830,12 +912,12 @@ Window {
                 HoverButton {
                     width: noText.implicitWidth + 24; height: 30; baseColor: Theme.fill
                     onClicked: permBar.answer(false)
-                    Text { id: noText; anchors.centerIn: parent; text: "Nie zezwalaj"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+                    Text { id: noText; anchors.centerIn: parent; text: "Nie zezwalaj"; color: Theme.text; font.family: win.uiFont; font.pixelSize: 13 }
                 }
                 Rectangle {
                     width: yesText.implicitWidth + 26; height: 30; radius: 8
                     color: Theme.accent
-                    Text { id: yesText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Text { id: yesText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold }
                     MouseArea { anchors.fill: parent; onClicked: permBar.answer(true) }
                 }
             }
@@ -880,6 +962,11 @@ Window {
                         win.pageBgCss = o.pageBg || "";
                         win.sideBgCss = o.sideBg || "";
                         win.topbarBgCss = o.topbarBg || "";
+                    } else if (o.type === "adapter") {
+                        win.pageLogo = o.logo || "";
+                        win.pageSections = o.sections || [];
+                        win.bodyFonts = o.bodyFont || [];
+                        if (JSON.stringify(o.fonts || []) !== JSON.stringify(win.pageFontUrls)) win.pageFontUrls = o.fonts || [];
                     } else if (o.type === "drag" && win.integratedBar) {
                         win.startSystemMove();
                     } else if (o.type === "maximize") {
@@ -981,7 +1068,7 @@ Window {
                     anchors.top: splashIcon.bottom; anchors.topMargin: 18
                     text: win.app.name
                     color: Qt.colorEqual(splash.color, "white") || (0.299 * splash.color.r + 0.587 * splash.color.g + 0.114 * splash.color.b) > 0.6 ? "#16181D" : "white"
-                    font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                    font.family: win.uiFont; font.pixelSize: 17; font.weight: Font.DemiBold
                     opacity: 0.85
                 }
                 ParallelAnimation {
@@ -1010,18 +1097,18 @@ Window {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Nie udało się połączyć"
-                        color: Theme.text; font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold
+                        color: Theme.text; font.family: win.uiFont; font.pixelSize: 19; font.weight: Font.DemiBold
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Sprawdź połączenie z internetem — " + win.app.name + " spróbuje ponownie."
-                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                        color: Theme.text2; font.family: win.uiFont; font.pixelSize: 13
                     }
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
                         width: retryText.implicitWidth + 32; height: 38; radius: 10
                         color: retryArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
-                        Text { id: retryText; anchors.centerIn: parent; text: "Spróbuj ponownie"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { id: retryText; anchors.centerIn: parent; text: "Spróbuj ponownie"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold }
                         MouseArea { id: retryArea; anchors.fill: parent; hoverEnabled: true; onClicked: web.reload() }
                     }
                 }
@@ -1035,7 +1122,7 @@ Window {
                 Behavior on anchors.bottomMargin { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
                 width: toastText.implicitWidth + 32; height: 40; radius: 20
                 color: Theme.text
-                Text { id: toastText; anchors.centerIn: parent; color: Theme.surface; font.family: Theme.font; font.pixelSize: 13 }
+                Text { id: toastText; anchors.centerIn: parent; color: Theme.surface; font.family: win.uiFont; font.pixelSize: 13 }
             }
             Timer { id: toastTimer; interval: 3500 }
         }
@@ -1116,7 +1203,7 @@ Window {
                             elide: Text.ElideRight
                             text: sug.modelData
                             color: Theme.text
-                            font.family: Theme.font; font.pixelSize: 13
+                            font.family: win.uiFont; font.pixelSize: 13
                             font.weight: suggestBox.index === sug.index ? Font.DemiBold : Font.Normal
                         }
                         MouseArea { id: sugArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.runAdapterSearch(sug.modelData) }
@@ -1145,7 +1232,7 @@ Window {
                 text: tip.text
                 wrapMode: Text.Wrap
                 color: "white"
-                font.family: Theme.font; font.pixelSize: 12
+                font.family: win.uiFont; font.pixelSize: 12
             }
             Timer { id: tipDelay; interval: 450; onTriggered: tip.shown = true }
         }
@@ -1173,14 +1260,14 @@ Window {
                     Row {
                         spacing: 10
                         Image { width: 28; height: 28; source: win.app.icon; sourceSize: Qt.size(56, 56); anchors.verticalCenter: parent.verticalCenter }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: win.app.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: win.app.name; color: Theme.text; font.family: win.uiFont; font.pixelSize: 16; font.weight: Font.DemiBold }
                     }
                     Text {
                         width: parent.width
                         text: win.dialog ? win.dialog.message : ""
                         wrapMode: Text.Wrap
                         color: Theme.text
-                        font.family: Theme.font; font.pixelSize: 14
+                        font.family: win.uiFont; font.pixelSize: 14
                     }
                     Rectangle {
                         visible: !!win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypePrompt
@@ -1191,7 +1278,7 @@ Window {
                             id: dlgInput
                             x: 12; width: parent.width - 24
                             anchors.verticalCenter: parent.verticalCenter
-                            color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                            color: Theme.text; font.family: win.uiFont; font.pixelSize: 14
                             clip: true
                             Keys.onReturnPressed: win.closeDialog(true)
                         }
@@ -1203,7 +1290,7 @@ Window {
                             visible: !!win.dialog && win.dialog.type !== JavaScriptDialogRequest.DialogTypeAlert
                             width: 96; height: 38; radius: 10; baseColor: Theme.fill
                             onClicked: win.closeDialog(false)
-                            Text { anchors.centerIn: parent; text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Zostań" : "Anuluj"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+                            Text { anchors.centerIn: parent; text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Zostań" : "Anuluj"; color: Theme.text; font.family: win.uiFont; font.pixelSize: 13 }
                         }
                         Rectangle {
                             width: okText.implicitWidth + 32; height: 38; radius: 10
@@ -1212,7 +1299,7 @@ Window {
                                 id: okText
                                 anchors.centerIn: parent
                                 text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Opuść stronę" : "OK"
-                                color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                                color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
                             }
                             MouseArea { id: okArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.closeDialog(true) }
                         }
@@ -1311,7 +1398,7 @@ Window {
             clip: true
             color: ns.dark ? "#ECEEF3" : "#16181D"
             selectionColor: Theme.accentSoft
-            font.family: Theme.font; font.pixelSize: 13
+            font.family: win.uiFont; font.pixelSize: 13
             onTextEdited: win.searchPage(text)
             Keys.onReturnPressed: win.submitSearch()
             Keys.onEnterPressed: win.submitSearch()

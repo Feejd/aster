@@ -14,6 +14,22 @@ var youtube = {
     hosts: ["www.youtube.com", "youtube.com", "m.youtube.com"],
     accent: "#FF0033",
     glass: true,
+    // Pozycje menu wyglądają jak w YouTube: neutralne podświetlenie, nie kolor marki
+    activeStyle: "neutral",
+    // Skąd brać prawdziwe menu, logo i czcionki YouTube (czytane na żywo ze strony)
+    guide: {
+        section: "ytd-guide-section-renderer",
+        sectionTitle: "#guide-section-title",
+        entry: "ytd-guide-entry-renderer",
+        link: "a#endpoint",
+        label: "yt-formatted-string.title, .title",
+        icon: "yt-icon",
+        img: "yt-img-shadow img, img#img",
+        active: "[active]",
+        opener: "#guide-button button, #guide-button"
+    },
+    logo: "ytd-topbar-logo-renderer #logo-icon, #logo-icon, ytd-logo",
+    fonts: { body: ["Roboto", "Arial"], title: ["YouTube Sans", "Roboto"] },
     home: "https://www.youtube.com/",
     nav: [
         { items: [

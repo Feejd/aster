@@ -3,7 +3,7 @@ import QtQuick
 
 // Kolory i czcionka Aster (powłoka i aplikacje) — te same co w prototypie. Jasny/ciemny motyw idzie za ustawieniem systemu.
 QtObject {
-    readonly property bool dark: Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+    readonly property bool dark: WindowEffects.forceDark || Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
     readonly property color accent: "#3456E8"
     readonly property string font: "Inter"
 
