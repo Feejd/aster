@@ -14,5 +14,10 @@ QtObject {
     readonly property color shadow: dark ? Qt.rgba(0, 0, 0, 0.45) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.22)
     readonly property color text: dark ? "#ECEEF3" : "#16181D"
     readonly property color text2: dark ? "#A2A9B6" : "#5B6270"
+    readonly property color glass: dark ? Qt.rgba(32 / 255, 32 / 255, 38 / 255, 0.72) : Qt.rgba(246 / 255, 246 / 255, 250 / 255, 0.74)
+    readonly property color surface: dark ? "#23262F" : "#FFFFFF"
+    readonly property color line: dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.08)
+    readonly property color accentSoft: Qt.rgba(52 / 255, 86 / 255, 232 / 255, dark ? 0.32 : 0.14)
+    readonly property color accentText: dark ? Qt.lighter(accent, 1.55) : accent
     readonly property color hover: dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.07)
 }

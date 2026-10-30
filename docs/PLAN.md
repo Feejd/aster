@@ -9,13 +9,14 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Kilka monitorów (dok i tapeta na każdym ekranie)
 
 ## Etap 2 — Start, centrum sterowania, powiadomienia
-- [ ] **Start** z prototypu: wyszukiwanie aplikacji, plików i ustawień, przypięte, ostatnie pliki,
+- [x] **Start** z prototypu (pierwsza wersja): wyszukiwanie aplikacji, plików i ustawień, przypięte, ostatnie pliki,
       blokada/wyłączanie. Dane z KDE (lista aplikacji, ostatnie dokumenty), uruchamianie przez KIO.
 - [ ] **Centrum sterowania**: głośność i wyjście dźwięku (plasma-pa), Wi‑Fi i Bluetooth (plasma-nm,
       bluedevil), jasność i bateria (PowerDevil), tryb ciemny jednym kliknięciem.
 - [ ] **Górna wyspa**: chowanie i wysuwanie jak w prototypie, prawdziwe powiadomienia
       (serwer powiadomień z plasma-workspace), panel „Dziś” z kalendarzem i odtwarzaczem (MPRIS).
-- [ ] Skróty klawiszowe: Super = Start, Super+A = centrum sterowania.
+- [x] Super = Start
+- [ ] Super+A = centrum sterowania
 
 ## Etap 3 — spójny wygląd całego systemu
 - [ ] **Ramki okien** (dekoracja KWin): okrągłe kolorowe przyciski, pasek tytułu jak w prototypie.

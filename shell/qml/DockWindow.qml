@@ -6,7 +6,7 @@ import org.kde.taskmanager as TaskManager
 import Aster.Shell
 
 // Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
-//  lewa    — wyszukiwanie (na razie KRunner; własny Start dojdzie później)
+//  lewa    — wyszukiwanie: otwiera Start (to samo robi klawisz Super)
 //  środek  — dok: przypięte aplikacje + działające okna
 //  prawa   — zegar i skrót do ustawień
 Window {
@@ -19,6 +19,8 @@ Window {
     height: 150
 
     readonly property int reserved: 84
+    property bool startOpen: false
+    signal startRequested()
 
     Component.onCompleted: {
         Platform.makeLayer(dock, "top", 2 | 4 | 8, dock.reserved, "none", "aster-dock");
@@ -56,8 +58,9 @@ Window {
         width: 64; height: 64
         HoverButton {
             anchors.centerIn: parent
-            icon: "system-search"
-            onClicked: Platform.run("krunner")
+            icon: "search"
+            active: dock.startOpen
+            onClicked: dock.startRequested()
         }
     }
 
@@ -138,9 +141,10 @@ Window {
     component HoverButton: Rectangle {
         id: hb
         property string icon
+        property bool active: false
         signal clicked()
         width: 44; height: 44; radius: 14
-        color: hbArea.containsMouse ? Theme.hover : "transparent"
+        color: active ? Theme.accentSoft : (hbArea.containsMouse ? Theme.hover : "transparent")
         scale: hbArea.pressed ? 0.92 : 1
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on scale { NumberAnimation { duration: 100 } }
@@ -148,7 +152,7 @@ Window {
             anchors.centerIn: parent
             width: 22; height: 22
             source: hb.icon
-            color: Theme.text
+            color: hb.active ? Theme.accentText : Theme.text
             isMask: true
         }
         MouseArea { id: hbArea; anchors.fill: parent; hoverEnabled: true; onClicked: hb.clicked() }

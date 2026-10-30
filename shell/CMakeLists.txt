@@ -5,9 +5,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Quick Qml)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Quick Qml DBus)
 find_package(LayerShellQt REQUIRED)
 find_package(KF6WindowSystem REQUIRED)
+find_package(KF6Service REQUIRED)
+find_package(KF6KIO REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.6)
 
@@ -27,6 +29,7 @@ set(ASTER_QML
     qml/DockWindow.qml
     qml/DockItem.qml
     qml/HorizonWindow.qml
+    qml/StartWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletonów (Theme, Platform)
@@ -50,8 +53,11 @@ target_link_libraries(aster-shell PRIVATE
     Qt6::Gui
     Qt6::Quick
     Qt6::Qml
+    Qt6::DBus
     LayerShellQt::Interface
     KF6::WindowSystem
+    KF6::Service
+    KF6::KIOGui
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
