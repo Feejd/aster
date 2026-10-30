@@ -35,5 +35,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Ustawienia Aster (proste, jak w prototypie), oparte na modułach KDE.
 - [x] Pliki — pierwsza wersja (KIO: kosz, kopiowanie, cofanie, wyszukiwanie, podgląd)
 - [ ] Pliki: dyski USB i sieciowe, „Otwórz za pomocą”, właściwości, przeciąganie do innych aplikacji
+- [x] Przeglądarka — pierwsza wersja (Qt WebEngine/Chromium: karty, ulubione, historia, pobieranie, uprawnienia, szukanie na stronie)
+- [ ] Przeglądarka: blokowanie reklam, tryb prywatny, przywracanie kart po restarcie, import zakładek z Chrome/Edge
 - [ ] Sklep
 - [ ] Asystent pod klawiszem.

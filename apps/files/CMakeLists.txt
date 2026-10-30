@@ -12,10 +12,7 @@ target_include_directories(aster-files PRIVATE src)
 set(FILES_QML
     qml/Main.qml
     qml/FileItem.qml
-    qml/ContextMenu.qml
     qml/SidebarPlace.qml
-    qml/ToolBtn.qml
-    qml/HoverButton.qml
     qml/FileKinds.js
 )
 foreach(f ${FILES_QML})

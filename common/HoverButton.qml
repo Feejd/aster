@@ -1,5 +1,4 @@
 import QtQuick
-import Aster.Ui
 
 // Prostokąt reagujący na najechanie i wciśnięcie
 Rectangle {

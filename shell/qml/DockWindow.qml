@@ -40,7 +40,7 @@ Window {
         filterByScreen: false
         launcherList: [
             "applications:org.aster.files.desktop",
-            "applications:org.mozilla.firefox.desktop",
+            "applications:org.aster.browser.desktop",
             "applications:org.kde.kate.desktop",
             "applications:org.kde.konsole.desktop",
             "applications:org.kde.discover.desktop",
@@ -129,7 +129,7 @@ Window {
             id: tray
             anchors.centerIn: parent
             spacing: 14
-            HoverButton {
+            IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "configure"
                 onClicked: Platform.run("systemsettings")
@@ -152,7 +152,7 @@ Window {
         }
     }
 
-    component HoverButton: Rectangle {
+    component IconButton: Rectangle {
         id: hb
         property string icon
         property bool active: false

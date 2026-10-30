@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
-import Aster.Ui
 
 // Menu podręczne. items: [{ label, icon, shortcut, action, enabled, danger }] albo { separator: true }
 Item {

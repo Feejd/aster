@@ -8,7 +8,6 @@
 #include <KIO/OpenUrlJob>
 #include <KIO/RestoreJob>
 #include <KIO/StoredTransferJob>
-#include <KWindowEffects>
 
 #include <QClipboard>
 #include <QDir>
@@ -18,8 +17,6 @@
 #include <QLocale>
 #include <QMimeData>
 #include <QMimeDatabase>
-#include <QPainterPath>
-#include <QRegion>
 #include <QStandardPaths>
 #include <QStorageInfo>
 
@@ -354,21 +351,6 @@ QString Files::previewText(const QString &urlString) const
     if (!f.open(QIODevice::ReadOnly))
         return {};
     return QString::fromUtf8(f.read(6000));
-}
-
-void Files::setBlur(QQuickWindow *window, const QRectF &rect, qreal radius)
-{
-    if (!window)
-        return;
-    QPainterPath path;
-    path.addRoundedRect(rect, radius, radius);
-    KWindowEffects::enableBlurBehind(window, true, QRegion(path.toFillPolygon().toPolygon()));
-}
-
-void Files::setInputRegion(QQuickWindow *window, const QRectF &rect)
-{
-    if (window)
-        window->setMask(QRegion(rect.toAlignedRect()));
 }
 
 void Files::watch(KJob *job)

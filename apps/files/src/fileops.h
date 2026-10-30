@@ -5,7 +5,6 @@
 #include <QFileSystemWatcher>
 #include <QObject>
 #include <QQmlEngine>
-#include <QQuickWindow>
 #include <QUrl>
 
 class KJob;
@@ -70,10 +69,6 @@ public:
     Q_INVOKABLE void open(const QString &url);
     // Początek pliku tekstowego do podglądu (pusty, jeśli to nie tekst)
     Q_INVOKABLE QString previewText(const QString &url) const;
-
-    // Wygląd okna: rozmycie tła KWin i obszar przyjmujący kliknięcia (cień wokół okna ich nie łapie)
-    Q_INVOKABLE void setBlur(QQuickWindow *window, const QRectF &rect, qreal radius);
-    Q_INVOKABLE void setInputRegion(QQuickWindow *window, const QRectF &rect);
 
 Q_SIGNALS:
     void undoChanged();

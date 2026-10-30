@@ -1,5 +1,4 @@
 import QtQuick
-import Aster.Ui
 
 // Mały przycisk z ikoną na pasku narzędzi; wyszarzony, gdy nieaktywny
 HoverButton {

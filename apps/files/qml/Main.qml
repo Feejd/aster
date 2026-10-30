@@ -415,8 +415,8 @@ Window {
 
     // ——— Okno: rozmycie i obszar kliknięć po każdej zmianie rozmiaru ———
     function updateEffects() {
-        Files.setBlur(win, Qt.rect(m, m, frame.width, frame.height), r);
-        Files.setInputRegion(win, Qt.rect(Math.max(0, m - 6), Math.max(0, m - 6), frame.width + (maxed ? 0 : 12), frame.height + (maxed ? 0 : 12)));
+        WindowEffects.setBlur(win, Qt.rect(m, m, frame.width, frame.height), r);
+        WindowEffects.setInputRegion(win, Qt.rect(Math.max(0, m - 6), Math.max(0, m - 6), frame.width + (maxed ? 0 : 12), frame.height + (maxed ? 0 : 12)));
     }
     onWidthChanged: effectsTimer.restart()
     onHeightChanged: effectsTimer.restart()
