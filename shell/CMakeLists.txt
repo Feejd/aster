@@ -44,6 +44,7 @@ target_link_libraries(aster-shell PRIVATE
     KF6::Service
     KF6::KIOGui
     aster-uiplugin
+    AsterNotificationManager
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

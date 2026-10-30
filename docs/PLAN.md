@@ -13,8 +13,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       blokada/wyłączanie. Dane z KDE (lista aplikacji, ostatnie dokumenty), uruchamianie przez KIO.
 - [ ] **Centrum sterowania**: głośność i wyjście dźwięku (plasma-pa), Wi‑Fi i Bluetooth (plasma-nm,
       bluedevil), jasność i bateria (PowerDevil), tryb ciemny jednym kliknięciem.
-- [ ] **Górna wyspa**: chowanie i wysuwanie jak w prototypie, prawdziwe powiadomienia
-      (serwer powiadomień z plasma-workspace), panel „Dziś” z kalendarzem i odtwarzaczem (MPRIS).
+- [x] Powiadomienia systemowe pod górną wyspą (powłoka jest serwerem powiadomień)
+- [ ] **Górna wyspa**: chowanie i wysuwanie jak w prototypie, panel „Dziś” z kalendarzem i odtwarzaczem (MPRIS).
 - [x] Super = Start
 - [ ] Super+A = centrum sterowania
 
@@ -37,5 +37,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Pliki: dyski USB i sieciowe, „Otwórz za pomocą”, właściwości, przeciąganie do innych aplikacji
 - [x] Przeglądarka — pierwsza wersja (Qt WebEngine/Chromium: karty, ulubione, historia, pobieranie, uprawnienia, szukanie na stronie)
 - [ ] Przeglądarka: blokowanie reklam, tryb prywatny, przywracanie kart po restarcie, import zakładek z Chrome/Edge
+- [x] Aplikacje webowe — strony jako programy: własne okno w kolorze aplikacji, ikona-kafelek, ekran powitalny, powiadomienia systemowe, liczniki w doku, osobne logowanie, katalog polecanych, instalacja z przeglądarki
+- [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [ ] Sklep
 - [ ] Asystent pod klawiszem.

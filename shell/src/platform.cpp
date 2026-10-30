@@ -7,6 +7,9 @@
 #include <KSycoca>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
+#include <notificationmanager/notification.h>
+#include <notificationmanager/notifications.h>
+#include <notificationmanager/server.h>
 
 #include <QCollator>
 #include <QDBusConnection>
@@ -15,6 +18,8 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QTemporaryDir>
 #include <QHash>
 #include <QMimeDatabase>
 #include <QPainterPath>
@@ -42,6 +47,60 @@ Platform::Platform(QObject *parent)
 
     // Nowo zainstalowane / usunięte programy (baza KDE się przebudowuje)
     connect(KSycoca::self(), &KSycoca::databaseChanged, this, &Platform::applicationsChanged);
+
+    // Liczby nieprzeczytanych od programów (komunikatory, poczta, aplikacje webowe Aster)
+    bus.connect(QString(), QString(), QStringLiteral("com.canonical.Unity.LauncherEntry"), QStringLiteral("Update"), this,
+                SLOT(onLauncherEntry(QString, QVariantMap)));
+
+    // Serwer powiadomień (w zwykłej sesji KDE ma go plasmashell — wtedy init() się nie uda i nic nie robimy)
+    using NotificationManager::Server;
+    if (Server::self().init()) {
+        connect(&Server::self(), &Server::notificationAdded, this, [this](const NotificationManager::Notification &n) {
+            QString image;
+            if (!n.image().isNull()) {
+                static QTemporaryDir dir;
+                image = dir.path() + QStringLiteral("/n-%1.png").arg(n.id());
+                n.image().save(image);
+                image = QUrl::fromLocalFile(image).toString();
+            } else if (n.icon().startsWith(QLatin1Char('/'))) {
+                image = QUrl::fromLocalFile(n.icon()).toString();
+            }
+            Q_EMIT notificationPosted({
+                {QStringLiteral("id"), n.id()},
+                {QStringLiteral("appName"), n.applicationName()},
+                {QStringLiteral("icon"), n.icon().startsWith(QLatin1Char('/')) ? QString() : (n.icon().isEmpty() ? n.applicationIconName() : n.icon())},
+                {QStringLiteral("image"), image},
+                {QStringLiteral("summary"), n.summary()},
+                {QStringLiteral("body"), n.body()},
+            });
+        });
+        connect(&Server::self(), &Server::notificationRemoved, this, [this](uint id) { Q_EMIT notificationClosed(id); });
+    }
+}
+
+void Platform::onLauncherEntry(const QString &uri, const QVariantMap &properties)
+{
+    // „application://firefox.desktop” → „firefox”
+    QString id = uri.section(QLatin1Char('/'), -1);
+    if (id.endsWith(QLatin1String(".desktop")))
+        id.chop(8);
+    const bool visible = properties.value(QStringLiteral("count-visible"), true).toBool();
+    const qint64 count = properties.value(QStringLiteral("count")).toLongLong();
+    if (visible && count > 0)
+        m_badges.insert(id, count);
+    else
+        m_badges.remove(id);
+    Q_EMIT badgesChanged();
+}
+
+void Platform::activateNotification(uint id)
+{
+    NotificationManager::Server::self().invokeAction(id, QStringLiteral("default"), QString(), NotificationManager::Notifications::Close);
+}
+
+void Platform::dismissNotification(uint id)
+{
+    NotificationManager::Server::self().closeNotification(id, NotificationManager::Server::CloseReason::DismissedByUser);
 }
 
 // Kategoria Aster z kategorii freedesktop programu (pierwsze dopasowanie wygrywa)

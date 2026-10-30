@@ -17,6 +17,8 @@ class Platform : public QObject
     Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
     Q_PROPERTY(QString userName READ userName CONSTANT)
     Q_PROPERTY(QVariantList applications READ applications NOTIFY applicationsChanged)
+    // Liczby na ikonach w doku: {"aster-webapp-whatsapp": 3, …} (z sygnału com.canonical.Unity.LauncherEntry)
+    Q_PROPERTY(QVariantMap badges READ badges NOTIFY badgesChanged)
 
 public:
     explicit Platform(QObject *parent = nullptr);
@@ -51,6 +53,12 @@ public:
     Q_INVOKABLE QVariantList recentFiles(int count) const;
     Q_INVOKABLE void openUrl(const QString &url);
 
+    QVariantMap badges() const { return m_badges; }
+
+    // Powiadomienia: powłoka jest serwerem org.freedesktop.Notifications (zamiast plasmashell)
+    Q_INVOKABLE void activateNotification(uint id);
+    Q_INVOKABLE void dismissNotification(uint id);
+
     Q_INVOKABLE void lockScreen();
     Q_INVOKABLE void shutdownPrompt();
     Q_INVOKABLE void run(const QString &program, const QStringList &args = {});
@@ -61,4 +69,14 @@ public:
 Q_SIGNALS:
     void launcherRequested();
     void applicationsChanged();
+    void badgesChanged();
+    // {id, appName, icon, summary, body, image}
+    void notificationPosted(const QVariantMap &notification);
+    void notificationClosed(uint id);
+
+private Q_SLOTS:
+    void onLauncherEntry(const QString &uri, const QVariantMap &properties);
+
+private:
+    QVariantMap m_badges;
 };

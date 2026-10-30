@@ -32,6 +32,34 @@ Item {
         }
     }
 
+    // Liczba nieprzeczytanych (komunikatory, poczta, aplikacje webowe)
+    readonly property string desktopId: {
+        const u = (item.model.LauncherUrlWithoutIcon || "").toString();
+        return u.replace(/^.*[\/:]/, "").replace(/\.desktop$/, "");
+    }
+    readonly property int badge: Platform.badges[desktopId] || 0
+    Rectangle {
+        x: tile.x + tile.width - width + 6
+        y: tile.y - 4
+        z: 2
+        height: 20
+        width: Math.max(20, badgeText.implicitWidth + 12)
+        radius: 10
+        color: "#F0524F"
+        border.width: 2
+        border.color: Theme.dark ? "#2A2C33" : "white"
+        scale: item.badge > 0 ? 1 : 0
+        visible: scale > 0.01
+        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
+        Text {
+            id: badgeText
+            anchors.centerIn: parent
+            text: item.badge > 99 ? "99+" : String(item.badge)
+            color: "white"
+            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold
+        }
+    }
+
     // Kropka pod działającą aplikacją; dłuższa kreska — aktywne okno
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter

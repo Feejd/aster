@@ -62,3 +62,5 @@ var tool = "M14.5 6.5a4 4 0 0 0 4.9 4.9L21 13l-8 8-2-2 1.6-1.6a4 4 0 0 1-4.9-4.9
 var book = "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21V5M8 7h7";
 var apps = "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z";
 var reload = "M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5";
+var more = "M5.5 12h1M11.5 12h1M17.5 12h1";
+var webapp = "M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 9h16M7 6.5h.01M9.5 6.5h.01";

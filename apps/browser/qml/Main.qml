@@ -352,6 +352,13 @@ Window {
                                 }
                             }
                         }
+                        // Zainstaluj stronę jako aplikację (otwiera menedżer Aplikacji webowych z gotowym podglądem)
+                        HoverButton {
+                            width: 30; height: 30
+                            visible: !!win.cur && !win.cur.blank && !field.activeFocus
+                            onClicked: win.installAsApp()
+                            Icon { anchors.centerIn: parent; d: Icons.webapp; size: 15; color: Theme.text2 }
+                        }
                         // Odśwież / zatrzymaj
                         HoverButton {
                             width: 30; height: 30
@@ -868,6 +875,7 @@ Window {
             items.push({ separator: true });
             items.push({ label: isFavorite(cur.pageUrl) ? "Usuń z ulubionych" : "Dodaj do ulubionych", icon: "star", shortcut: "Ctrl+D", action: "favorite" });
             items.push({ label: "Szukaj na stronie", icon: "search", shortcut: "Ctrl+F", action: "find" });
+            items.push({ label: "Zainstaluj jako aplikację…", icon: "webapp", action: "installApp" });
         }
         menu.openAt(p.x, p.y, items);
     }
@@ -888,5 +896,9 @@ Window {
         else if (a === "reload") v.reload();
         else if (a === "favorite") toggleFavorite();
         else if (a === "find") findBar.openBar();
+        else if (a === "installApp") installAsApp();
+    }
+    function installAsApp() {
+        if (cur && !cur.blank) Qt.openUrlExternally("aster-webapp:install?url=" + encodeURIComponent(cur.pageUrl));
     }
 }

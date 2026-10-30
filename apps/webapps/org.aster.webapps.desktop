@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Aplikacje webowe
+GenericName=Strony jako aplikacje
+Comment=Zamień dowolną stronę w aplikację z własnym oknem, ikoną i powiadomieniami
+Exec=aster-webapps %u
+Icon=applications-internet
+Terminal=false
+Categories=Network;Utility;
+MimeType=x-scheme-handler/aster-webapp;
+Keywords=pwa;webapp;aplikacja;strona;whatsapp;messenger;
+StartupWMClass=aster-webapps

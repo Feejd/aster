@@ -5,6 +5,9 @@ import QtQuick
 Row {
     id: wb
     required property Window window
+    // Kolory w spoczynku — na kolorowym pasku (np. aplikacji webowej) podajemy jaśniejsze/ciemniejsze
+    property color idleColor: Theme.fill
+    property color idleIconColor: Theme.text2
     spacing: 8
     readonly property bool maxed: window.visibility === Window.Maximized || window.visibility === Window.FullScreen
 
@@ -18,11 +21,11 @@ Row {
             id: wc
             required property var modelData
             width: 28; height: 28; radius: 14
-            color: wcArea.containsMouse ? modelData.hover : Theme.fill
+            color: wcArea.containsMouse ? modelData.hover : wb.idleColor
             scale: wcArea.pressed ? 0.9 : 1
             Behavior on color { ColorAnimation { duration: 140 } }
             Behavior on scale { NumberAnimation { duration: 100 } }
-            Icon { anchors.centerIn: parent; d: Icons[wc.modelData.icon]; size: 13; stroke: 2; color: wcArea.containsMouse ? "white" : Theme.text2 }
+            Icon { anchors.centerIn: parent; d: Icons[wc.modelData.icon]; size: 13; stroke: 2; color: wcArea.containsMouse ? "white" : wb.idleIconColor }
             MouseArea {
                 id: wcArea
                 anchors.fill: parent
