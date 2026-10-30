@@ -5,6 +5,9 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD:-$HOME/aster-build}"
 
+# Pierwsze uruchomienie: brak narzędzi → najpierw przygotowanie maszyny
+command -v cmake >/dev/null || sh "$ROOT/tools/setup-vm.sh"
+
 cmake -S "$ROOT/shell" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Debug >/dev/null
 cmake --build "$BUILD"
 

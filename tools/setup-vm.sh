@@ -1,17 +1,22 @@
 #!/bin/sh
 # Jednorazowe przygotowanie maszyny wirtualnej Fedora KDE do pracy nad Aster.
 set -e
-sudo dnf install -y \
+echo "==> Instaluję narzędzia do budowania (poprosi o hasło)…"
+sudo dnf install -y --skip-unavailable \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
     layer-shell-qt-devel kf6-kwindowsystem-devel \
     rsms-inter-fonts open-vm-tools-desktop
 
-# Folder udostępniony z Maca (VMware: Ustawienia maszyny → Sharing → folder „Aster”)
+# Folder udostępniony z Maca montowany przy każdym starcie
+# (VMware: Ustawienia maszyny → Sharing → folder „Aster”)
 sudo mkdir -p /mnt/hgfs
-if ! grep -q hgfs /etc/fstab; then
-    echo "vmhgfs-fuse /mnt/hgfs fuse defaults,allow_other,_netdev 0 0" | sudo tee -a /etc/fstab
+if ! grep -q "/mnt/hgfs" /etc/fstab; then
+    echo ".host:/ /mnt/hgfs fuse.vmhgfs-fuse defaults,allow_other,nofail 0 0" | sudo tee -a /etc/fstab >/dev/null
+    sudo systemctl daemon-reload
 fi
-sudo systemctl daemon-reload
-sudo mount /mnt/hgfs || true
-echo "Gotowe. Kod jest w /mnt/hgfs/Aster — uruchom: sh /mnt/hgfs/Aster/tools/dev-run.sh"
+
+for tool in cmake ninja g++; do
+    command -v "$tool" >/dev/null || { echo "!! Brakuje: $tool — przewiń w górę i sprawdź błąd dnf."; exit 1; }
+done
+echo "==> Gotowe. Teraz uruchom: sh /mnt/hgfs/Aster/tools/dev-run.sh"
