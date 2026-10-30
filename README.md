@@ -15,7 +15,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
 | `session/` | Sesja logowania „Aster”: KWin i usługi Plasmy, ale zamiast plasmashell działa aster-shell. |
 | `image/` | Szkic obrazu systemu (Fedora Kinoite + Aster), do zbudowania i instalacji jako atomowy system. |
-| `data/wallpapers/` | Tapety: „Aster Bloom” (`tools/make_bloom.py`, domyślna) i krajobrazy (`tools/make_wallpapers.py`). |
+| `data/wallpapers/` | Tapety: „Aura” z projektu UI (`tools/make_aura.py`, domyślna), „Aster Bloom” (`tools/make_bloom.py`) i krajobrazy (`tools/make_wallpapers.py`). |
 | `tools/` | Skrypty: przygotowanie maszyny wirtualnej, uruchamianie powłoki w trakcie pracy, tapety. |
 | `docs/` | Architektura i instrukcja maszyny wirtualnej. |
 
