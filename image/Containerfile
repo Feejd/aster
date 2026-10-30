@@ -6,10 +6,13 @@ ARG FEDORA=44
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules \
         qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel
+COPY CMakeLists.txt /src/
+COPY common /src/common
 COPY shell /src/shell
+COPY apps /src/apps
 COPY session /src/session
 COPY data /src/data
-RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  && cmake --build /build \
  && DESTDIR=/out cmake --install /build
 

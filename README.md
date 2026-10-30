@@ -8,7 +8,9 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | Folder | Zawartość |
 |---|---|
 | `prototype/` | Interaktywny prototyp całego pulpitu (QML + PySide6, działa na Macu). Wzór wyglądu i zachowania. |
-| `shell/` | Prawdziwa powłoka: C++/Qt 6 + QML. Tapeta, dok, górna wyspa jako warstwy Wayland. |
+| `shell/` | Prawdziwa powłoka: C++/Qt 6 + QML. Tapeta, dok, Start, górna wyspa jako warstwy Wayland. |
+| `apps/files/` | Pliki — menedżer plików (KIO: kosz, kopiowanie w tle, cofanie, wyszukiwanie). |
+| `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
 | `session/` | Sesja logowania „Aster”: KWin i usługi Plasmy, ale zamiast plasmashell działa aster-shell. |
 | `image/` | Szkic obrazu systemu (Fedora Kinoite + Aster), do zbudowania i instalacji jako atomowy system. |
 | `data/wallpapers/` | Tapety (generowane przez `tools/make_wallpapers.py`). |

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import Aster.Shell
+import Aster.Ui
 
 // Tapeta na warstwie tła, pod wszystkimi oknami. Dzień i noc przenikają się przy zmianie motywu.
 Window {

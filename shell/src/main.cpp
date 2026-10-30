@@ -4,6 +4,9 @@
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QtQml/qqmlextensionplugin.h>
+
+Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {

@@ -33,5 +33,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 
 ## Etap 5 — własne aplikacje
 - [ ] Ustawienia Aster (proste, jak w prototypie), oparte na modułach KDE.
-- [ ] Pliki (menedżer plików z prototypu) i Sklep.
+- [x] Pliki — pierwsza wersja (KIO: kosz, kopiowanie, cofanie, wyszukiwanie, podgląd)
+- [ ] Pliki: dyski USB i sieciowe, „Otwórz za pomocą”, właściwości, przeciąganie do innych aplikacji
+- [ ] Sklep
 - [ ] Asystent pod klawiszem.

@@ -1,17 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
-project(aster-shell VERSION 0.1.0 LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-include(GNUInstallDirs)
-
-find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Quick Qml DBus)
-find_package(LayerShellQt REQUIRED)
-find_package(KF6WindowSystem REQUIRED)
-find_package(KF6Service REQUIRED)
-find_package(KF6KIO REQUIRED)
-
-qt_standard_project_setup(REQUIRES 6.6)
+# Powłoka Aster — budowana z głównego CMakeLists.txt repozytorium.
 
 qt_add_executable(aster-shell
     src/main.cpp
@@ -23,7 +10,6 @@ target_include_directories(aster-shell PRIVATE src)
 
 set(ASTER_QML
     qml/Shell.qml
-    qml/Theme.qml
     qml/Island.qml
     qml/WallpaperWindow.qml
     qml/DockWindow.qml
@@ -32,12 +18,11 @@ set(ASTER_QML
     qml/StartWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
-# się nawzajem ani singletonów (Theme, Platform)
+# się nawzajem ani singletona Platform
 foreach(f ${ASTER_QML})
     get_filename_component(name ${f} NAME)
     set_source_files_properties(${f} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(aster-shell
     URI Aster.Shell
@@ -58,6 +43,7 @@ target_link_libraries(aster-shell PRIVATE
     KF6::WindowSystem
     KF6::Service
     KF6::KIOGui
+    aster-uiplugin
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

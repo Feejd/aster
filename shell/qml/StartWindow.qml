@@ -5,6 +5,7 @@ import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import org.kde.milou as Milou
 import Aster.Shell
+import Aster.Ui
 
 // Start = wyszukiwarka. Puste pole: przypięte aplikacje i ostatnie pliki.
 // Po wpisaniu tekstu: wyniki z KRunnera (aplikacje, pliki, ustawienia, kalkulator…).
@@ -19,7 +20,7 @@ Window {
 
     property bool open: false
     readonly property var pinned: [
-        "org.kde.dolphin", "org.mozilla.firefox", "org.kde.kate", "org.kde.konsole",
+        "org.aster.files", "org.mozilla.firefox", "org.kde.kate", "org.kde.konsole",
         "org.kde.discover", "systemsettings", "org.kde.okular", "org.kde.gwenview",
         "org.kde.elisa", "org.kde.spectacle", "org.kde.kcalc", "org.kde.ark"
     ]

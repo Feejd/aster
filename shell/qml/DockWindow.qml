@@ -4,6 +4,7 @@ import QtQuick.Window
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
 import Aster.Shell
+import Aster.Ui
 
 // Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
 //  lewa    — wyszukiwanie: otwiera Start (to samo robi klawisz Super)
@@ -38,7 +39,7 @@ Window {
         filterByActivity: false
         filterByScreen: false
         launcherList: [
-            "applications:org.kde.dolphin.desktop",
+            "applications:org.aster.files.desktop",
             "applications:org.mozilla.firefox.desktop",
             "applications:org.kde.kate.desktop",
             "applications:org.kde.konsole.desktop",

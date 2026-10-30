@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import Aster.Shell
+import Aster.Ui
 
 // Szklana wyspa: cień, półprzezroczysty odcień, cienka krawędź i jasny „rant” od środka.
 // Samo rozmycie tła robi KWin — okno zgłasza obszary wysp przez Platform.setBlur().
