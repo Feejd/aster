@@ -7,7 +7,7 @@ import Aster.Shell
 import Aster.Ui
 
 // Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
-//  lewa    — wyszukiwanie: otwiera Start (to samo robi klawisz Super)
+//  lewa    — logo Aster: otwiera Start (to samo robi klawisz Super)
 //  środek  — dok: przypięte aplikacje + działające okna
 //  prawa   — zegar i skrót do ustawień
 Window {
@@ -57,11 +57,24 @@ Window {
         x: 16
         y: dock.height - height - 12
         width: 64; height: 64
-        HoverButton {
+        // Logo Aster — otwiera Start
+        Rectangle {
+            id: logoBtn
             anchors.centerIn: parent
-            icon: "search"
-            active: dock.startOpen
-            onClicked: dock.startRequested()
+            width: 44; height: 44; radius: 14
+            color: dock.startOpen ? Theme.accentSoft : (logoArea.containsMouse ? Theme.hover : "transparent")
+            scale: logoArea.pressed ? 0.92 : 1
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on scale { NumberAnimation { duration: 100 } }
+            Icon {
+                anchors.centerIn: parent
+                d: Icons.aster
+                size: 24; stroke: 2.6
+                color: Theme.accentText
+                rotation: dock.startOpen ? 60 : 0
+                Behavior on rotation { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+            }
+            MouseArea { id: logoArea; anchors.fill: parent; hoverEnabled: true; onClicked: dock.startRequested() }
         }
     }
 

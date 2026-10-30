@@ -16,6 +16,7 @@ class Platform : public QObject
     QML_SINGLETON
     Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
     Q_PROPERTY(QString userName READ userName CONSTANT)
+    Q_PROPERTY(QVariantList applications READ applications NOTIFY applicationsChanged)
 
 public:
     explicit Platform(QObject *parent = nullptr);
@@ -38,6 +39,10 @@ public:
     // Obszar przyjmujący kliknięcia (reszta okna jest „przezroczysta” dla myszy). Format jak w setBlur().
     Q_INVOKABLE void setInputRegion(QQuickWindow *window, const QVariantList &rects);
 
+    // Wszystkie programy z menu, alfabetycznie: [{id, name, icon, generic, category}]
+    // category: internet | biuro | grafika | multimedia | gry | programowanie | edukacja | narzedzia | system | inne
+    QVariantList applications() const;
+
     // Aplikacja po nazwie pliku .desktop (np. "org.kde.dolphin"): {name, icon, valid}
     Q_INVOKABLE QVariantMap appInfo(const QString &desktopId) const;
     Q_INVOKABLE void launchApp(const QString &desktopId);
@@ -55,4 +60,5 @@ public:
 
 Q_SIGNALS:
     void launcherRequested();
+    void applicationsChanged();
 };

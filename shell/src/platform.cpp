@@ -2,10 +2,13 @@
 
 #include <KIO/ApplicationLauncherJob>
 #include <KIO/OpenUrlJob>
+#include <KApplicationTrader>
 #include <KService>
+#include <KSycoca>
 #include <KWindowEffects>
 #include <LayerShellQt/Window>
 
+#include <QCollator>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
@@ -36,6 +39,55 @@ Platform::Platform(QObject *parent)
     QDBusConnection bus = QDBusConnection::sessionBus();
     bus.registerObject(QStringLiteral("/PlasmaShell"), this, QDBusConnection::ExportScriptableSlots);
     bus.registerService(QStringLiteral("org.kde.plasmashell"));
+
+    // Nowo zainstalowane / usunięte programy (baza KDE się przebudowuje)
+    connect(KSycoca::self(), &KSycoca::databaseChanged, this, &Platform::applicationsChanged);
+}
+
+// Kategoria Aster z kategorii freedesktop programu (pierwsze dopasowanie wygrywa)
+static QString asterCategory(const QStringList &cats)
+{
+    static const QList<QPair<QString, QStringList>> map{
+        {QStringLiteral("gry"), {QStringLiteral("Game")}},
+        {QStringLiteral("internet"), {QStringLiteral("Network"), QStringLiteral("WebBrowser"), QStringLiteral("Email"), QStringLiteral("Chat"), QStringLiteral("InstantMessaging")}},
+        {QStringLiteral("biuro"), {QStringLiteral("Office"), QStringLiteral("WordProcessor"), QStringLiteral("Spreadsheet"), QStringLiteral("Presentation"), QStringLiteral("Calendar")}},
+        {QStringLiteral("grafika"), {QStringLiteral("Graphics"), QStringLiteral("Photography")}},
+        {QStringLiteral("multimedia"), {QStringLiteral("AudioVideo"), QStringLiteral("Audio"), QStringLiteral("Video"), QStringLiteral("Music")}},
+        {QStringLiteral("programowanie"), {QStringLiteral("Development"), QStringLiteral("IDE")}},
+        {QStringLiteral("edukacja"), {QStringLiteral("Education"), QStringLiteral("Science")}},
+        {QStringLiteral("system"), {QStringLiteral("Settings"), QStringLiteral("System"), QStringLiteral("PackageManager")}},
+        {QStringLiteral("narzedzia"), {QStringLiteral("Utility"), QStringLiteral("Accessories"), QStringLiteral("FileManager")}},
+    };
+    for (const auto &[id, keys] : map)
+        for (const QString &k : keys)
+            if (cats.contains(k))
+                return id;
+    return QStringLiteral("inne");
+}
+
+QVariantList Platform::applications() const
+{
+    const KService::List services = KApplicationTrader::query([](const KService::Ptr &s) {
+        return !s->noDisplay() && s->showInCurrentDesktop() && s->showOnCurrentPlatform();
+    });
+    QList<KService::Ptr> list(services.cbegin(), services.cend());
+    QCollator collator;
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    collator.setNumericMode(true);
+    std::sort(list.begin(), list.end(), [&](const KService::Ptr &a, const KService::Ptr &b) {
+        return collator.compare(a->name(), b->name()) < 0;
+    });
+    QVariantList out;
+    for (const KService::Ptr &s : std::as_const(list)) {
+        out.append(QVariantMap{
+            {QStringLiteral("id"), s->desktopEntryName()},
+            {QStringLiteral("name"), s->name()},
+            {QStringLiteral("icon"), s->icon()},
+            {QStringLiteral("generic"), s->genericName()},
+            {QStringLiteral("category"), asterCategory(s->categories())},
+        });
+    }
+    return out;
 }
 
 QString Platform::userName() const
