@@ -1,0 +1,39 @@
+import QtQuick
+import QtQuick.Window
+
+// Tapeta na warstwie tła, pod wszystkimi oknami. Dzień i noc przenikają się przy zmianie motywu.
+Window {
+    id: wp
+    color: "black"
+    visible: false
+    width: Screen.width
+    height: Screen.height
+    property string variant: "szczyty"
+
+    Component.onCompleted: {
+        Platform.makeLayer(wp, "background", 1 | 2 | 4 | 8, -1, "none", "aster-wallpaper");
+        visible = true;
+    }
+
+    function src(mode) {
+        return "file://" + Platform.dataDir + "/wallpapers/" + wp.variant + "-" + mode + ".jpg";
+    }
+
+    Image {
+        anchors.fill: parent
+        source: wp.src("light")
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        smooth: true
+    }
+    Image {
+        anchors.fill: parent
+        source: wp.src("dark")
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        smooth: true
+        opacity: Theme.dark ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+    }
+}

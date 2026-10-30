@@ -1,0 +1,21 @@
+# Obraz systemu Aster: Fedora Kinoite (atomowa Fedora z KDE) + powłoka Aster.
+# Szkic — budowanie i instalację obrazu sprawdzimy po tym, jak powłoka będzie działać w maszynie wirtualnej.
+#   podman build -f image/Containerfile -t aster:latest .
+ARG FEDORA=44
+
+FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
+RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules \
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel
+COPY shell /src/shell
+COPY session /src/session
+COPY data /src/data
+RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+ && cmake --build /build \
+ && DESTDIR=/out cmake --install /build
+
+FROM quay.io/fedora/fedora-kinoite:${FEDORA}
+COPY --from=build /out/ /
+RUN dnf install -y rsms-inter-fonts layer-shell-qt \
+ && systemctl --global enable aster-shell.service \
+ && dnf clean all
+RUN bootc container lint || true

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Aster
+Comment=Pulpit Aster (KWin + aster-shell)
+Exec=/usr/bin/startaster
+TryExec=/usr/bin/startaster
+DesktopNames=KDE

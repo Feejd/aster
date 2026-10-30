@@ -1,0 +1,13 @@
+[Unit]
+Description=Aster Shell
+PartOf=graphical-session.target
+After=plasma-kwin_wayland.service
+ConditionEnvironment=ASTER_SESSION=1
+
+[Service]
+ExecStart=/usr/bin/aster-shell
+Restart=on-failure
+Slice=session.slice
+
+[Install]
+WantedBy=plasma-workspace.target

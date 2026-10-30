@@ -1,0 +1,6 @@
+#!/bin/sh
+# Sesja Aster: cała Plasma (KWin, usługi, ustawienia), ale zamiast plasmashell
+# działa aster-shell. Maska „--runtime” obowiązuje tylko do wylogowania.
+export ASTER_SESSION=1
+systemctl --user mask --runtime plasma-plasmashell.service
+exec /usr/bin/startplasma-wayland
