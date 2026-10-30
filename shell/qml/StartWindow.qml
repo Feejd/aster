@@ -7,8 +7,8 @@ import org.kde.milou as Milou
 import Aster.Shell
 import Aster.Ui
 
-// Start w dwóch panelach (jak szuflada Smart Launchera):
-//  lewy  — logo Aster, kategorie programów, na dole konto, blokada i wyłączanie
+// Start w dwóch panelach (jak szuflada Smart Launchera) na ciekłym szkle doku:
+//  lewy  — pływający pasek: logo Aster z powitaniem, kolorowe kategorie, na dole konto, blokada i wyłączanie
 //  prawy — wyszukiwarka i programy wybranej kategorii („Ulubione” mają też ostatnie pliki).
 // Po wpisaniu tekstu prawy panel pokazuje wyniki z KRunnera (programy, pliki, ustawienia, kalkulator…).
 // Okno-warstwa przykrywa cały ekran nad dokiem: klik obok panelu zamyka Start.
@@ -29,21 +29,29 @@ Window {
     ]
     readonly property var pinnedApps: pinned.map(id => Object.assign({ id: id }, Platform.appInfo(id))).filter(a => a.valid)
     property var recents: []
+    property string greeting: ""
+
+    // „Dzień dobry, Ania” / „Dobry wieczór, Ania”
+    function makeGreeting() {
+        const h = new Date().getHours();
+        const first = Platform.userName.split(" ")[0];
+        return (h >= 5 && h < 18 ? "Dzień dobry" : "Dobry wieczór") + (first ? ", " + first : "");
+    }
 
     // Kategorie; puste (poza Ulubionymi i Wszystkimi) są ukrywane
     readonly property var allCategories: [
-        { id: "ulubione", name: "Ulubione", icon: "star" },
-        { id: "wszystkie", name: "Wszystkie", icon: "apps" },
-        { id: "internet", name: "Internet", icon: "globe" },
-        { id: "biuro", name: "Biuro", icon: "doc" },
-        { id: "grafika", name: "Grafika", icon: "image" },
-        { id: "multimedia", name: "Multimedia", icon: "music" },
-        { id: "gry", name: "Gry", icon: "game" },
-        { id: "programowanie", name: "Programowanie", icon: "code" },
-        { id: "edukacja", name: "Edukacja", icon: "book" },
-        { id: "narzedzia", name: "Narzędzia", icon: "tool" },
-        { id: "system", name: "System", icon: "sliders" },
-        { id: "inne", name: "Inne", icon: "folder" }
+        { id: "ulubione", name: "Ulubione", icon: "star", colors: ["#FFD166", "#F59E0B"] },
+        { id: "wszystkie", name: "Wszystkie", icon: "apps", colors: ["#8EA2FF", "#5B5BD6"] },
+        { id: "internet", name: "Internet", icon: "globe", colors: ["#4FD1C5", "#3B82F6"] },
+        { id: "biuro", name: "Biuro", icon: "doc", colors: ["#60A5FA", "#2563EB"] },
+        { id: "grafika", name: "Grafika", icon: "image", colors: ["#F9A8D4", "#C026D3"] },
+        { id: "multimedia", name: "Multimedia", icon: "music", colors: ["#FF8A8A", "#E11D48"] },
+        { id: "gry", name: "Gry", icon: "game", colors: ["#86EFAC", "#16A34A"] },
+        { id: "programowanie", name: "Programowanie", icon: "code", colors: ["#71717A", "#27272A"] },
+        { id: "edukacja", name: "Edukacja", icon: "book", colors: ["#FDBA74", "#EA580C"] },
+        { id: "narzedzia", name: "Narzędzia", icon: "tool", colors: ["#94A3B8", "#475569"] },
+        { id: "system", name: "System", icon: "sliders", colors: ["#A3A9B5", "#4B5262"] },
+        { id: "inne", name: "Inne", icon: "folder", colors: ["#67E8F9", "#0891B2"] }
     ]
     readonly property var categories: allCategories.filter(c => c.id === "ulubione" || c.id === "wszystkie"
                                                                 || Platform.applications.some(a => a.category === c.id))
@@ -57,6 +65,7 @@ Window {
     function toggle() { if (open) close(); else show(); }
     function show() {
         recents = Platform.recentFiles(4);
+        greeting = makeGreeting();
         category = "ulubione";
         field.text = "";
         hideTimer.stop();
@@ -110,12 +119,12 @@ Window {
     // ——— Panel ———
     Item {
         id: panel
-        x: 16
+        x: 18
         y: start.height - height - 12
-        width: Math.min(780, start.width - 32)
-        height: Math.min(600, start.height - 70)
+        width: Math.min(880, start.width - 36)
+        height: Math.min(640, start.height - 70)
 
-        // Wejście: sprężyste wyrośnięcie od lewego dolnego rogu, wyjście: szybkie zgaśnięcie
+        // Wejście: sprężyste wyrośnięcie od lewego dolnego rogu (spod przycisku Start), wyjście: szybkie zgaśnięcie
         property real s: 0.92
         property real offset: 14
         property real reveal: 0
@@ -152,87 +161,107 @@ Window {
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają Startu
 
-        RectangularShadow {
-            anchors.fill: parent
-            radius: 22; blur: 70; offset.y: 24
-            color: Theme.shadow
-        }
+        // To samo ciekłe szkło co wyspy doku
+        Island { anchors.fill: parent; radius: 30 }
+        // Gęstsze szkło niż w doku: Start leży na oknach, tekst musi być czytelny
         Rectangle {
             anchors.fill: parent
-            radius: 22
-            color: Theme.glass
-            border.width: 1; border.color: Theme.edge
-            Rectangle {
-                anchors.fill: parent; anchors.margins: 1
-                radius: 21
-                color: "transparent"
-                border.width: 1; border.color: Theme.rim
-            }
+            radius: 30
+            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.38) : Qt.rgba(1, 1, 1, 0.34)
         }
 
-        // ——— Lewy panel: logo, kategorie, konto ———
+        // ——— Lewy panel: pływający pasek boczny z logo, kategoriami i kontem ———
         Rectangle {
             id: side
-            width: 220; height: parent.height
-            topLeftRadius: 22; bottomLeftRadius: 22
-            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.035)
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+            x: 10; y: 10
+            width: 236; height: parent.height - 20
+            radius: 22
+            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.45)
+            border.width: 1
+            border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.8)
 
-            // Logo
+            // Logo i powitanie
             Row {
-                x: 20; y: 22
+                x: 16; y: 18
                 spacing: 12
                 opacity: panel.stagger(0)
-                Rectangle {
-                    width: 40; height: 40; radius: 12
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: Theme.accent }
-                        GradientStop { position: 1; color: "#8B5CF6" }
-                    }
-                    Icon { anchors.centerIn: parent; d: Icons.aster; size: 22; stroke: 2.4; color: "white" }
-                }
-                Text {
+                AppIcon { desktopId: "aster-start"; size: 44 }
+                Column {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Aster"
-                    color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 21; font.weight: Font.DemiBold
-                    font.letterSpacing: -0.3
+                    spacing: 1
+                    Text {
+                        text: "Aster"
+                        color: Theme.text
+                        font.family: Theme.font; font.pixelSize: 20; font.weight: Font.Bold
+                        font.letterSpacing: -0.4
+                    }
+                    Text {
+                        text: start.greeting
+                        color: Theme.text2
+                        font.family: Theme.font; font.pixelSize: 12
+                    }
                 }
             }
 
-            // Kategorie
+            // Kategorie: podświetlenie przesuwa się płynnie między wierszami
             ListView {
                 id: catList
-                x: 10; y: 86
-                width: parent.width - 20
-                height: sideFooter.y - y - 8
+                x: 8; y: 84
+                width: parent.width - 16
+                height: sideFooter.y - y - 6
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 spacing: 2
                 model: start.categories
-                delegate: Rectangle {
+                currentIndex: start.categories.findIndex(c => c.id === start.category)
+                highlightFollowsCurrentItem: true
+                highlightMoveDuration: 180
+                highlightMoveVelocity: -1
+                highlightResizeDuration: 0
+                highlight: Item {
+                    RectangularShadow {
+                        anchors.fill: parent
+                        radius: 11; blur: 8; offset.y: 1
+                        color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08)
+                    }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 11
+                        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.13) : "white"
+                    }
+                }
+                delegate: Item {
                     id: cat
                     required property var modelData
                     required property int index
                     readonly property bool active: start.category === modelData.id
                     readonly property real k: panel.stagger(1 + index)
                     width: catList.width; height: 38
-                    radius: 10
-                    color: active ? Theme.accentSoft : (catArea.containsMouse ? Theme.hover : "transparent")
                     opacity: k
                     transform: Translate { x: (1 - cat.k) * -10 }
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Icon {
-                        x: 12; anchors.verticalCenter: parent.verticalCenter
-                        d: Icons[cat.modelData.icon] || ""
-                        size: 18
-                        color: cat.active ? Theme.accentText : Theme.text2
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 11
+                        color: Theme.hover
+                        opacity: catArea.containsMouse && !cat.active ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
+                    }
+                    // Kolorowa plakietka kategorii (jak w Ustawieniach macOS)
+                    Rectangle {
+                        id: badge
+                        x: 8; anchors.verticalCenter: parent.verticalCenter
+                        width: 26; height: 26; radius: 8
+                        gradient: Gradient {
+                            GradientStop { position: 0; color: cat.modelData.colors[0] }
+                            GradientStop { position: 1; color: cat.modelData.colors[1] }
+                        }
+                        Icon { anchors.centerIn: parent; d: Icons[cat.modelData.icon] || ""; size: 15; stroke: 2; color: "white" }
                     }
                     Text {
-                        x: 42; anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: badge.right; anchors.leftMargin: 11
+                        anchors.verticalCenter: parent.verticalCenter
                         text: cat.modelData.name
-                        color: cat.active ? Theme.accentText : Theme.text
+                        color: Theme.text
                         font.family: Theme.font; font.pixelSize: 14
                         font.weight: cat.active ? Font.DemiBold : Font.Normal
                     }
@@ -248,19 +277,23 @@ Window {
             // Konto, blokada, wyłączanie
             Item {
                 id: sideFooter
-                width: parent.width; height: 64
+                width: parent.width; height: 62
                 y: parent.height - height
-                Rectangle { x: 16; width: parent.width - 32; height: 1; color: Theme.line }
+                opacity: panel.stagger(4)
+                Rectangle { x: 14; width: parent.width - 28; height: 1; color: Theme.line }
                 Rectangle {
                     id: avatar
-                    x: 18; anchors.verticalCenter: parent.verticalCenter
-                    width: 32; height: 32; radius: 16
-                    color: Theme.accent
+                    x: 14; anchors.verticalCenter: parent.verticalCenter
+                    width: 34; height: 34; radius: 17
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "#7C9BFF" }
+                        GradientStop { position: 1; color: "#8B5CF6" }
+                    }
                     Text {
                         anchors.centerIn: parent
                         text: Platform.userName.charAt(0).toUpperCase()
                         color: "white"
-                        font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
                     }
                 }
                 Text {
@@ -270,15 +303,15 @@ Window {
                     text: Platform.userName
                     elide: Text.ElideRight
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
                 }
                 Row {
                     id: footerButtons
-                    anchors.right: parent.right; anchors.rightMargin: 10
+                    anchors.right: parent.right; anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
-                    FooterButton { icon: "lock"; onClicked: { start.close(); Platform.lockScreen(); } }
-                    FooterButton { icon: "power"; onClicked: { start.close(); Platform.shutdownPrompt(); } }
+                    FooterButton { icon: "lock"; tip: "Zablokuj"; onClicked: { start.close(); Platform.lockScreen(); } }
+                    FooterButton { icon: "power"; tip: "Wyłącz"; onClicked: { start.close(); Platform.shutdownPrompt(); } }
                 }
             }
         }
@@ -286,33 +319,34 @@ Window {
         // ——— Prawy panel ———
         Item {
             id: main
-            x: side.width; width: parent.width - side.width; height: parent.height
+            x: side.x + side.width; width: parent.width - x; height: parent.height
 
-            // Pole wyszukiwania
+            // Pole wyszukiwania — pigułka, przy pisaniu jaśnieje i dostaje niebieską obwódkę
             Rectangle {
                 id: searchBox
-                x: 22; y: 22
-                width: main.width - 44; height: 44
-                radius: 12
-                color: Theme.surface
-                border.width: field.activeFocus ? 1.5 : 1
-                border.color: field.activeFocus ? Theme.accent : Theme.line
+                x: 24; y: 20
+                width: main.width - 48; height: 44
+                radius: 22
+                color: field.activeFocus ? Theme.surface : Theme.fill
+                border.width: 1
+                border.color: field.activeFocus ? Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.55) : "transparent"
+                Behavior on color { ColorAnimation { duration: 140 } }
                 Rectangle {
                     anchors.fill: parent; anchors.margins: -4
-                    radius: 15
+                    radius: 26
                     color: "transparent"
-                    border.width: 4; border.color: Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.14)
+                    border.width: 4; border.color: Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.12)
                     visible: field.activeFocus
                 }
                 Icon {
-                    x: 14; anchors.verticalCenter: parent.verticalCenter
+                    x: 16; anchors.verticalCenter: parent.verticalCenter
                     d: Icons.search; size: 18
                     color: field.activeFocus ? Theme.accentText : Theme.text2
                 }
                 TextInput {
                     id: field
-                    anchors.left: parent.left; anchors.leftMargin: 44
-                    anchors.right: parent.right; anchors.rightMargin: 14
+                    anchors.left: parent.left; anchors.leftMargin: 46
+                    anchors.right: parent.right; anchors.rightMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
                     color: Theme.text
                     font.family: Theme.font; font.pixelSize: 15
@@ -339,7 +373,7 @@ Window {
             // ——— Programy wybranej kategorii ———
             Item {
                 id: browse
-                x: 0; y: searchBox.y + searchBox.height + 14
+                x: 0; y: searchBox.y + searchBox.height + 18
                 width: main.width; height: main.height - y
                 visible: field.text.trim() === ""
                 clip: true
@@ -354,65 +388,71 @@ Window {
 
                 Flickable {
                     id: catContent
-                    x: 22 + browse.shift
-                    width: browse.width - 44; height: browse.height
-                    contentHeight: catColumn.height + 16
+                    x: 16 + browse.shift
+                    width: browse.width - 32; height: browse.height
+                    contentHeight: catColumn.height + 20
                     boundsBehavior: Flickable.StopAtBounds
                     clip: true
 
                     Column {
                         id: catColumn
                         width: parent.width
-                        spacing: 10
+                        spacing: 8
 
                         Row {
+                            x: 8
                             spacing: 10
                             Text {
                                 id: catTitle
                                 text: start.currentCategory.name
                                 color: Theme.text
-                                font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold
+                                font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold
+                                font.letterSpacing: -0.4
                             }
                             Text {
                                 anchors.baseline: catTitle.baseline
-                                text: start.categoryApps.length + ""
-                                visible: start.category !== "ulubione"
+                                text: start.category === "ulubione" ? "Przypięte" : start.categoryApps.length + (start.categoryApps.length === 1 ? " program" : " programów")
                                 color: Theme.text2
-                                font.family: Theme.font; font.pixelSize: 14
+                                font.family: Theme.font; font.pixelSize: 13
                             }
                         }
 
                         Grid {
-                            columns: 5
+                            columns: 6
                             Repeater {
                                 model: start.categoryApps
-                                delegate: Rectangle {
+                                delegate: Item {
                                     id: tile
                                     required property var modelData
                                     required property int index
                                     readonly property real k: panel.stagger(3 + Math.min(index, 14))
-                                    width: catColumn.width / 5; height: 100
-                                    radius: 14
-                                    color: tileArea.containsMouse ? Theme.hover : "transparent"
+                                    width: catColumn.width / 6; height: 104
                                     opacity: k
                                     transform: Translate { y: (1 - tile.k) * 12 }
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-                                    Kirigami.Icon {
+                                    Rectangle {
+                                        anchors.fill: parent; anchors.margins: 2
+                                        radius: 16
+                                        color: Theme.hover
+                                        opacity: tileArea.containsMouse ? 1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 120 } }
+                                    }
+                                    AppIcon {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         y: 12
-                                        width: 50; height: 50
+                                        size: 56
+                                        desktopId: tile.modelData.id
                                         source: tile.modelData.icon
-                                        scale: tileArea.pressed ? 0.92 : 1
-                                        Behavior on scale { NumberAnimation { duration: 100 } }
+                                        scale: tileArea.pressed ? 0.9 : (tileArea.containsMouse ? 1.05 : 1)
+                                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                                     }
                                     Text {
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        y: 70
+                                        y: 76
                                         width: parent.width - 10
                                         horizontalAlignment: Text.AlignHCenter
                                         text: tile.modelData.name
                                         color: Theme.text
-                                        font.family: Theme.font; font.pixelSize: 12
+                                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                                         elide: Text.ElideRight
                                     }
                                     MouseArea { id: tileArea; anchors.fill: parent; hoverEnabled: true; onClicked: start.launch(tile.modelData.id) }
@@ -421,15 +461,18 @@ Window {
                         }
 
                         // Ulubione: ostatnie pliki pod programami
-                        Item { width: 1; height: 4; visible: recentsTitle.visible }
+                        Item { width: 1; height: 6; visible: recentsTitle.visible }
                         Text {
                             id: recentsTitle
+                            x: 8
                             visible: start.category === "ulubione" && start.recents.length > 0
                             text: "Ostatnie pliki"
-                            color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.Bold
                         }
                         Grid {
+                            x: 4
                             columns: 2
+                            spacing: 8
                             visible: recentsTitle.visible
                             Repeater {
                                 model: start.category === "ulubione" ? start.recents : []
@@ -437,17 +480,19 @@ Window {
                                     id: rec
                                     required property var modelData
                                     required property int index
-                                    width: catColumn.width / 2; height: 54
-                                    radius: 12
-                                    color: recArea.containsMouse ? Theme.hover : "transparent"
+                                    width: (catColumn.width - 16) / 2; height: 56
+                                    radius: 14
+                                    color: recArea.containsMouse ? Theme.hover : Theme.fill
+                                    Behavior on color { ColorAnimation { duration: 120 } }
                                     Kirigami.Icon {
-                                        x: 10; anchors.verticalCenter: parent.verticalCenter
-                                        width: 30; height: 30
+                                        x: 12; anchors.verticalCenter: parent.verticalCenter
+                                        width: 32; height: 32
                                         source: rec.modelData.icon
                                     }
                                     Column {
-                                        x: 50; anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 60
+                                        x: 54; anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - 66
+                                        spacing: 1
                                         Text { width: parent.width; text: rec.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; elide: Text.ElideMiddle }
                                         Text { text: start.when(rec.modelData.modified); color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
                                     }
@@ -465,10 +510,10 @@ Window {
             // ——— Wyniki wyszukiwania ———
             ListView {
                 id: list
-                x: 14
-                y: searchBox.y + searchBox.height + 10
-                width: main.width - 28
-                height: main.height - y - 12
+                x: 16
+                y: searchBox.y + searchBox.height + 12
+                width: main.width - 32
+                height: main.height - y - 14
                 visible: !browse.visible
                 clip: true
                 model: results
@@ -478,28 +523,30 @@ Window {
                 section.property: "category"
                 section.delegate: Text {
                     required property string section
-                    leftPadding: 10; topPadding: 10; bottomPadding: 4
-                    text: section
+                    leftPadding: 12; topPadding: 12; bottomPadding: 4
+                    text: section.toUpperCase()
                     color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.6
                 }
                 delegate: Rectangle {
                     id: res
                     required property int index
                     required property var model
-                    width: list.width; height: 52
-                    radius: 12
-                    color: ListView.isCurrentItem ? Theme.accentSoft : (resArea.containsMouse ? Theme.hover : "transparent")
+                    readonly property bool current: ListView.isCurrentItem
+                    width: list.width; height: 54
+                    radius: 14
+                    color: current ? Theme.accent : (resArea.containsMouse ? Theme.hover : "transparent")
                     Kirigami.Icon {
                         x: 12; anchors.verticalCenter: parent.verticalCenter
-                        width: 30; height: 30
+                        width: 32; height: 32
                         source: res.model.decoration
                     }
                     Column {
-                        x: 54; anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 66
-                        Text { width: parent.width; text: res.model.display || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight }
-                        Text { width: parent.width; visible: text !== ""; text: res.model.subtext || ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; elide: Text.ElideMiddle }
+                        x: 56; anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 68
+                        spacing: 1
+                        Text { width: parent.width; text: res.model.display || ""; color: res.current ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight }
+                        Text { width: parent.width; visible: text !== ""; text: res.model.subtext || ""; color: res.current ? Qt.rgba(1, 1, 1, 0.75) : Theme.text2; font.family: Theme.font; font.pixelSize: 11; elide: Text.ElideMiddle }
                     }
                     MouseArea {
                         id: resArea; anchors.fill: parent; hoverEnabled: true
@@ -520,18 +567,29 @@ Window {
     component FooterButton: Rectangle {
         id: fb
         property string icon
+        property string tip
         signal clicked()
-        width: 34; height: 34; radius: 10
+        width: 34; height: 34; radius: 17
         color: fbArea.containsMouse ? Theme.hover : "transparent"
-        scale: fbArea.pressed ? 0.92 : 1
+        scale: fbArea.pressed ? 0.9 : 1
         Behavior on scale { NumberAnimation { duration: 100 } }
         Icon { anchors.centerIn: parent; d: Icons[fb.icon] || ""; size: 17; color: Theme.text2 }
         MouseArea { id: fbArea; anchors.fill: parent; hoverEnabled: true; onClicked: fb.clicked() }
+        // Podpis nad przyciskiem
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: -height - 8
+            width: tipText.implicitWidth + 16; height: 24; radius: 12
+            color: Qt.rgba(0.08, 0.08, 0.1, 0.92)
+            opacity: fbArea.containsMouse ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+            Text { id: tipText; anchors.centerIn: parent; text: fb.tip; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+        }
     }
 
     Timer {
         id: blurTimer
         interval: 20
-        onTriggered: Platform.setBlur(start, [{ x: panel.x, y: panel.y, w: panel.width, h: panel.height, r: 22 }])
+        onTriggered: Platform.setBlur(start, [{ x: panel.x, y: panel.y, w: panel.width, h: panel.height, r: 30 }])
     }
 }

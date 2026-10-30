@@ -89,13 +89,15 @@ int main(int argc, char *argv[])
             if (auto *platform = engine.singletonInstance<Platform *>("Aster.Shell", "Platform"))
                 platform->activateLauncherMenu();
         });
-        QTimer::singleShot(2200, &app, [shot] {
-            for (QWindow *w : QGuiApplication::topLevelWindows())
-                if (w->title() == QLatin1String("Start"))
-                    if (auto *qw = qobject_cast<QQuickWindow *>(w))
-                        qw->grabWindow().save(shot);
-            QCoreApplication::quit();
-        });
+        // razem z ASTER_SHOT_DESKTOP: tylko otwórz Start, zrzut zrobi podgląd pulpitu
+        if (desktopShot.isEmpty())
+            QTimer::singleShot(2200, &app, [shot] {
+                for (QWindow *w : QGuiApplication::topLevelWindows())
+                    if (w->title() == QLatin1String("Start"))
+                        if (auto *qw = qobject_cast<QQuickWindow *>(w))
+                            qw->grabWindow().save(shot);
+                QCoreApplication::quit();
+            });
     }
 
     return app.exec();
