@@ -1,6 +1,11 @@
 #!/bin/sh
 # Jednorazowe przygotowanie maszyny wirtualnej Fedora KDE do pracy nad Aster.
 set -e
+if [ -d /run/initramfs/live ] || [ "$(id -un)" = "liveuser" ]; then
+    echo "!! To jest wersja Live z płyty — najpierw zainstaluj Fedorę (ikona „Install to Hard Drive”),"
+    echo "   zrestartuj, zaloguj się na swoje konto i uruchom ten skrypt ponownie."
+    exit 1
+fi
 echo "==> Instaluję narzędzia do budowania (poprosi o hasło)…"
 sudo dnf install -y --skip-unavailable \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
