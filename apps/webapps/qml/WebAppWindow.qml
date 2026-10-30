@@ -31,6 +31,7 @@ Window {
     readonly property int m: maxed || pageFullScreen ? 0 : 26
     readonly property real r: maxed || pageFullScreen ? 0 : 14
     property bool pageFullScreen: false
+    readonly property bool debug: Qt.application.arguments.indexOf("--debug") >= 0
 
     // ——— Kolor aplikacji i czytelny tekst na nim ———
     property string pageTheme: ""
@@ -48,6 +49,49 @@ Window {
         category: "window"
         property int w: 1100
         property int h: 760
+        property bool nativeNav: true       // nawigacja strony w pasku bocznym / pasku tytułu Aster
+        property bool integrated: true      // górny pasek strony jest paskiem tytułu okna
+    }
+
+    // ——— Nawigacja strony przeniesiona do okna (z native.js) ———
+    property var navSidebar: []
+    property var navTop: []
+    property int pageTopbar: 0
+    readonly property bool showSidebar: store.nativeNav && navSidebar.length >= 3 && !pageFullScreen
+    readonly property bool showTopnav: store.nativeNav && !showSidebar && navTop.length >= 3 && !pageFullScreen
+    readonly property bool integratedBar: store.integrated && !showTopnav && !pageFullScreen && (pageTopbar > 0 || showSidebar)
+    readonly property int sideWidth: showSidebar ? 232 : 0
+
+    function navClick(id) {
+        web.runJavaScript("window.__aster && window.__aster.click('" + id + "')");
+    }
+    function setNativeNav(on) {
+        store.nativeNav = on;
+        web.runJavaScript("window.__aster && window.__aster.setEnabled(" + on + ")");
+        if (!on) { navSidebar = []; navTop = []; }
+    }
+    // Ikona pozycji menu: SVG ze strony w kolorze Aster (data: URL)
+    function svgUrl(svg, color) {
+        if (!svg) return "";
+        let t = svg.replace(/currentColor/g, color);
+        if (!/xmlns=/.test(t)) t = t.replace("<svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"");
+        if (!/<svg[^>]*\sfill=/.test(t)) t = t.replace("<svg", "<svg fill=\"" + color + "\"");
+        return "data:image/svg+xml;utf8," + encodeURIComponent(t);
+    }
+    function openMoreMenu(button) {
+        const p = button.mapToItem(frame, 0, button.height + 4);
+        menu.openAt(Math.max(8, p.x - 220), p.y, [
+            { label: "Odśwież", icon: "reload", shortcut: "Ctrl+R", action: "reload" },
+            { label: "Otwórz w przeglądarce", icon: "globe", action: "browser" },
+            { label: "Kopiuj adres strony", icon: "copy", action: "copyUrl" },
+            { separator: true },
+            { label: "Nawigacja strony w oknie Aster", icon: store.nativeNav ? "check" : "", action: "nativeNav" },
+            { label: "Pasek strony jako pasek tytułu", icon: store.integrated ? "check" : "", action: "integrated" },
+            { separator: true },
+            { label: "Powiększ", icon: "plus", shortcut: "Ctrl +", action: "zoomIn" },
+            { label: "Pomniejsz", shortcut: "Ctrl −", action: "zoomOut" },
+            { label: "Rzeczywisty rozmiar", shortcut: "Ctrl 0", action: "zoomReset" }
+        ]);
     }
     onWidthChanged: if (!maxed && !pageFullScreen) store.w = width - 2 * m
     onHeightChanged: if (!maxed && !pageFullScreen) store.h = height - 2 * m
@@ -109,6 +153,15 @@ Window {
             + "::-webkit-scrollbar-thumb:hover{background-color:rgba(127,127,127,.55)}::-webkit-scrollbar-corner{background:transparent}';"
             + "(document.head||document.documentElement).appendChild(st);})();";
         web.userScripts.insert(s);
+        // Przenoszenie nawigacji strony do okna i przeciąganie okna za pasek strony
+        const n = WebEngine.script();
+        n.name = "aster-native";
+        n.sourceCode = win.runtime.resource("native.js");
+        if (win.debug) console.log("[aster] native.js:", n.sourceCode.length, "znaków");
+        n.injectionPoint = WebEngineScript.DocumentReady;
+        n.worldId = WebEngineScript.MainWorld;
+        n.runsOnSubFrames = false;
+        web.userScripts.insert(n);
         web.url = app.url;
         effectsTimer.restart();
     }
@@ -177,17 +230,135 @@ Window {
         width: win.width - 2 * win.m
         height: win.height - 2 * win.m
         radius: win.r
-        color: Theme.pane
+        color: Theme.windowGlass
         border.width: win.m ? 1 : 0
         border.color: Theme.edge
+
+        // ——— Natywny pasek boczny z menu strony ———
+        Item {
+            id: side
+            width: win.sideWidth
+            height: parent.height
+            visible: width > 0
+            clip: true
+            Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
+            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+
+            Item {
+                id: sideHeader
+                width: 232; height: 54
+                DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
+                TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
+                Row {
+                    x: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+                    Rectangle {
+                        width: web.canGoBack ? 28 : 0
+                        height: 28; radius: 8
+                        clip: true
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: sideBack.containsMouse ? Theme.hover : "transparent"
+                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                        Icon { anchors.centerIn: parent; d: Icons.back; size: 16; color: Theme.text }
+                        MouseArea { id: sideBack; anchors.fill: parent; hoverEnabled: true; onClicked: web.goBack() }
+                    }
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 24; height: 24
+                        source: win.app.icon
+                        sourceSize: Qt.size(48, 48)
+                        smooth: true; mipmap: true
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 232 - 90 - (web.canGoBack ? 38 : 0)
+                        elide: Text.ElideRight
+                        text: win.app.name
+                        color: Theme.text
+                        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
+                    }
+                }
+            }
+
+            ListView {
+                id: sideList
+                x: 10; y: sideHeader.height + 2
+                width: 232 - 20
+                height: parent.height - y - 10
+                clip: true
+                spacing: 2
+                boundsBehavior: Flickable.StopAtBounds
+                model: win.navSidebar
+                delegate: Rectangle {
+                    id: navItem
+                    required property var modelData
+                    required property int index
+                    width: sideList.width; height: 36
+                    radius: 9
+                    color: modelData.active ? Theme.accentSoft : (navArea.containsMouse ? Theme.hover : "transparent")
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    opacity: 0
+                    Component.onCompleted: navIn.start()
+                    NumberAnimation { id: navIn; target: navItem; property: "opacity"; to: 1; duration: 160; easing.type: Easing.OutQuad }
+                    Item {
+                        id: navIcon
+                        x: 10; anchors.verticalCenter: parent.verticalCenter
+                        width: 20; height: 20
+                        Image {
+                            id: navSvg
+                            anchors.fill: parent
+                            source: navItem.modelData.icon ? win.svgUrl(navItem.modelData.icon, navItem.modelData.active ? Theme.accentText.toString() : Theme.text.toString())
+                                                           : navItem.modelData.img
+                            sourceSize: Qt.size(40, 40)
+                            smooth: true
+                            visible: status === Image.Ready
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            visible: navSvg.status !== Image.Ready
+                            width: 20; height: 20; radius: 6
+                            color: navItem.modelData.active ? Theme.accent : Theme.fill
+                            Text {
+                                anchors.centerIn: parent
+                                text: navItem.modelData.label.charAt(0).toUpperCase()
+                                color: navItem.modelData.active ? "white" : Theme.text2
+                                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold
+                            }
+                        }
+                    }
+                    Text {
+                        anchors.left: navIcon.right; anchors.leftMargin: 12
+                        anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: navItem.modelData.label
+                        elide: Text.ElideRight
+                        color: navItem.modelData.active ? Theme.accentText : Theme.text
+                        font.family: Theme.font; font.pixelSize: 13
+                        font.weight: navItem.modelData.active ? Font.DemiBold : Font.Normal
+                    }
+                    MouseArea {
+                        id: navArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            // od razu zaznacz kliknięte (strona potwierdzi przy następnym odczycie)
+                            win.navSidebar = win.navSidebar.map(x => Object.assign({}, x, { active: x.id === navItem.modelData.id }));
+                            win.navClick(navItem.modelData.id);
+                        }
+                    }
+                }
+            }
+        }
 
         // ——— Pasek tytułu w kolorze aplikacji ———
         Rectangle {
             id: bar
-            width: parent.width
-            height: win.pageFullScreen ? 0 : 42
+            x: win.sideWidth
+            width: parent.width - x
+            height: win.pageFullScreen || win.integratedBar ? 0 : (win.showTopnav ? 50 : 42)
             visible: height > 0
-            topLeftRadius: win.r; topRightRadius: win.r
+            topLeftRadius: win.sideWidth ? 0 : win.r; topRightRadius: win.r
             color: win.barColor
             Behavior on color { ColorAnimation { duration: 300 } }
 
@@ -240,17 +411,44 @@ Window {
                 BarButton {
                     id: moreBtn
                     icon: "more"
-                    onClicked: {
-                        const p = moreBtn.mapToItem(frame, 0, moreBtn.height + 4);
-                        menu.openAt(p.x - 200, p.y, [
-                            { label: "Odśwież", icon: "reload", shortcut: "Ctrl+R", action: "reload" },
-                            { label: "Otwórz w przeglądarce", icon: "globe", action: "browser" },
-                            { label: "Kopiuj adres strony", icon: "copy", action: "copyUrl" },
-                            { separator: true },
-                            { label: "Powiększ", icon: "plus", shortcut: "Ctrl +", action: "zoomIn" },
-                            { label: "Pomniejsz", shortcut: "Ctrl −", action: "zoomOut" },
-                            { label: "Rzeczywisty rozmiar", shortcut: "Ctrl 0", action: "zoomReset" }
-                        ]);
+                    onClicked: win.openMoreMenu(moreBtn)
+                }
+            }
+            // Zakładki strony (górna nawigacja) jako przełącznik w pasku tytułu
+            Rectangle {
+                anchors.centerIn: parent
+                visible: win.showTopnav
+                height: 34; radius: 10
+                width: tabsRow.implicitWidth + 8
+                color: win.barTinted ? win.barHover : Theme.fill
+                Row {
+                    id: tabsRow
+                    anchors.centerIn: parent
+                    spacing: 2
+                    Repeater {
+                        model: win.showTopnav ? win.navTop : []
+                        delegate: Rectangle {
+                            id: tabBtn
+                            required property var modelData
+                            width: tabLabel.implicitWidth + 26; height: 28; radius: 8
+                            color: modelData.active ? Theme.surface : (tabArea.containsMouse ? win.barHover : "transparent")
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Text {
+                                id: tabLabel
+                                anchors.centerIn: parent
+                                text: tabBtn.modelData.label
+                                color: tabBtn.modelData.active ? Theme.text : win.barText
+                                font.family: Theme.font; font.pixelSize: 13
+                                font.weight: tabBtn.modelData.active ? Font.DemiBold : Font.Medium
+                            }
+                            MouseArea {
+                                id: tabArea; anchors.fill: parent; hoverEnabled: true
+                                onClicked: {
+                                    win.navTop = win.navTop.map(x => Object.assign({}, x, { active: x.id === tabBtn.modelData.id }));
+                                    win.navClick(tabBtn.modelData.id);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -281,8 +479,9 @@ Window {
         Rectangle {
             id: permBar
             property var request: null
+            x: win.sideWidth
             y: bar.height
-            width: parent.width
+            width: parent.width - x
             height: request ? 46 : 0
             visible: height > 0
             clip: true
@@ -317,8 +516,9 @@ Window {
         // ——— Strona ———
         Item {
             id: content
+            x: win.sideWidth
             y: bar.height + permBar.height
-            width: parent.width
+            width: parent.width - x
             height: parent.height - y
             clip: true
             layer.enabled: win.r > 0 && GraphicsInfo.api !== GraphicsInfo.Software
@@ -338,8 +538,24 @@ Window {
                 settings.focusOnNavigationEnabled: true
 
                 onTitleChanged: win.updateBadge()
+                onJavaScriptConsoleMessage: (level, message, line, source) => {
+                    if (win.debug) console.log("[strona]", message.slice(0, 600), source + ":" + line);
+                    if (message.indexOf("aster:") !== 0) return;
+                    let o;
+                    try { o = JSON.parse(message.slice(6)); } catch (e) { return; }
+                    if (o.type === "layout") {
+                        win.navSidebar = o.sidebar || [];
+                        win.navTop = o.topnav || [];
+                        win.pageTopbar = o.topbar || 0;
+                    } else if (o.type === "drag") {
+                        win.startSystemMove();
+                    } else if (o.type === "maximize") {
+                        if (win.maxed) win.showNormal(); else win.showMaximized();
+                    }
+                }
                 onLoadingChanged: (info) => {
                     if (info.status === WebEngineView.LoadSucceededStatus) {
+                        if (win.debug) explainTimer.restart();
                         win.failed = false;
                         if (!win.everLoaded) splashOut.start();
                         win.everLoaded = true;
@@ -478,6 +694,29 @@ Window {
             color: "black"
         }
 
+        // Przyciski okna nad paskiem strony (tryb zintegrowany)
+        Rectangle {
+            id: floatControls
+            visible: win.integratedBar
+            anchors.right: parent.right; anchors.rightMargin: 8
+            y: 7
+            z: 20
+            height: 34; radius: 12
+            width: floatRow.implicitWidth + 12
+            color: Qt.alpha(Theme.surface, 0.9)
+            border.width: 1; border.color: Theme.line
+            Row {
+                id: floatRow
+                anchors.centerIn: parent
+                spacing: 2
+                FloatButton { icon: "back"; visible: web.canGoBack && !win.showSidebar; onClicked: web.goBack() }
+                FloatButton { icon: web.loading ? "close" : "reload"; onClicked: if (web.loading) web.stop(); else web.reload() }
+                FloatButton { id: floatMore; icon: "more"; onClicked: win.openMoreMenu(floatMore) }
+                Item { width: 4; height: 1 }
+                WindowButtons { window: win; anchors.verticalCenter: parent.verticalCenter; scale: 0.82; spacing: 4 }
+            }
+        }
+
         ContextMenu {
             id: menu
             onTriggered: (a) => win.runAction(a)
@@ -519,6 +758,8 @@ Window {
         else if (a === "back") web.goBack();
         else if (a === "browser") Qt.openUrlExternally(web.url);
         else if (a === "copyUrl") { copyHelper.text = web.url.toString(); copyHelper.selectAll(); copyHelper.copy(); toast("Skopiowano adres"); }
+        else if (a === "nativeNav") setNativeNav(!store.nativeNav);
+        else if (a === "integrated") store.integrated = !store.integrated;
         else if (a === "zoomIn") zoom(0.1);
         else if (a === "zoomOut") zoom(-0.1);
         else if (a === "zoomReset") zoom(0);
@@ -531,6 +772,21 @@ Window {
         else if (a === "paste") web.triggerWebAction(WebEngineView.Paste);
     }
     TextInput { id: copyHelper; visible: false }
+    Timer {
+        id: explainTimer
+        interval: 4000
+        onTriggered: web.runJavaScript("window.__aster ? window.__aster.explain() : 'brak __aster'", (r) => console.log("[aster] kandydaci:\n" + r))
+    }
+
+    component FloatButton: Rectangle {
+        id: fbtn
+        property string icon
+        signal clicked()
+        width: 28; height: 28; radius: 8
+        color: fArea.containsMouse ? Theme.hover : "transparent"
+        Icon { anchors.centerIn: parent; d: Icons[fbtn.icon] || ""; size: 15; color: Theme.text2 }
+        MouseArea { id: fArea; anchors.fill: parent; hoverEnabled: true; onClicked: fbtn.clicked() }
+    }
 
     component BarButton: Rectangle {
         id: bb

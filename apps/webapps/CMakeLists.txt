@@ -15,6 +15,7 @@ set(WEBAPPS_QML
     qml/WebAppWindow.qml
     qml/Catalog.js
 )
+set_source_files_properties(qml/native.js PROPERTIES QT_RESOURCE_ALIAS native.js)
 foreach(f ${WEBAPPS_QML})
     get_filename_component(name ${f} NAME)
     set_source_files_properties(${f} PROPERTIES QT_RESOURCE_ALIAS ${name})
@@ -24,6 +25,7 @@ qt_add_qml_module(aster-webapps
     URI Aster.WebApps
     VERSION 1.0
     QML_FILES ${WEBAPPS_QML}
+    RESOURCES qml/native.js
 )
 
 target_link_libraries(aster-webapps PRIVATE

@@ -3,6 +3,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusReply>
+#include <QFile>
 #include <QLocalSocket>
 
 #include <unistd.h>
@@ -89,4 +90,10 @@ void Runtime::setBadge(int count)
     signal << QStringLiteral("application://aster-webapp-%1.desktop").arg(m_id)
            << QVariantMap{{QStringLiteral("count"), qint64(qMax(0, count))}, {QStringLiteral("count-visible"), count > 0}};
     QDBusConnection::sessionBus().send(signal);
+}
+
+QString Runtime::resource(const QString &name) const
+{
+    QFile f(QStringLiteral(":/qt/qml/Aster/WebApps/") + name);
+    return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
 }

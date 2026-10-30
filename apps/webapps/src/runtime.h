@@ -26,6 +26,8 @@ public:
     Q_INVOKABLE uint notify(const QString &title, const QString &body, const QString &iconPath);
     Q_INVOKABLE void closeNotification(uint id);
     Q_INVOKABLE void setBadge(int count);
+    // Treść pliku z zasobów programu (skrypty wstrzykiwane do stron)
+    Q_INVOKABLE QString resource(const QString &name) const;
 
 Q_SIGNALS:
     void activateRequested();
