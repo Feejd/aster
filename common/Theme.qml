@@ -5,7 +5,7 @@ import QtQuick
 QtObject {
     readonly property bool dark: WindowEffects.forceDark || Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
     readonly property color accent: "#3456E8"
-    readonly property string font: "Inter"
+    readonly property string font: "Geist"      // data/fonts/geist (OFL), instalowana razem z systemem
 
     // Szkło: półprzezroczysty odcień nad rozmyciem z KWin
     readonly property color bar: dark ? Qt.rgba(24 / 255, 24 / 255, 30 / 255, 0.58) : Qt.rgba(250 / 255, 250 / 255, 252 / 255, 0.56)

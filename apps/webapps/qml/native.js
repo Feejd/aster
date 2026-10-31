@@ -39,7 +39,7 @@
         "html.aster-font body,html.aster-font body *:not(i):not(code):not(pre):not(kbd):not(samp):not(tt):not(var):not(svg):not(svg *)" +
         ":not([class*=icon]):not([class*=Icon]):not([class*=material]):not([class*=symbol]):not([class*=fa-]):not([class^=fa])" +
         ":not([class*=mono]):not([class*=code]):not([class*=Code]):not([class*=editor]):not([class*=cm-]):not([aria-hidden=true])" +
-        "{font-family:Inter,'Inter Variable',system-ui,sans-serif!important}" +
+        "{font-family:Geist,system-ui,sans-serif!important}" +
         "html.aster-font{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}" +
         "html{accent-color:#3456E8}" +
         "*:focus-visible{outline-color:rgba(52,86,232,.75)!important}" +

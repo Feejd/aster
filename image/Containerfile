@@ -18,7 +18,7 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
 
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
-RUN dnf install -y rsms-inter-fonts google-roboto-fonts layer-shell-qt \
+RUN dnf install -y google-roboto-fonts layer-shell-qt \
  && systemctl --global enable aster-shell.service \
  && dnf clean all
 RUN bootc container lint || true
