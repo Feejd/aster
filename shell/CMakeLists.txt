@@ -4,6 +4,8 @@ qt_add_executable(aster-shell
     src/main.cpp
     src/platform.cpp
     src/platform.h
+    src/controlcenter.cpp
+    src/controlcenter.h
 )
 
 target_include_directories(aster-shell PRIVATE src)
@@ -17,6 +19,7 @@ set(ASTER_QML
     qml/HorizonWindow.qml
     qml/StartWindow.qml
     qml/ClockWindow.qml
+    qml/ControlCenterWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform

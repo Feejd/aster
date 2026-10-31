@@ -8,6 +8,7 @@ Item {
     property color color: "black"
     property real size: 18
     property real stroke: 1.75
+    property color fill: "transparent"     // wypełnienie (np. pełny trójkąt „odtwórz”)
 
     width: size
     height: size
@@ -22,7 +23,7 @@ Item {
         ShapePath {
             strokeColor: ic.color
             strokeWidth: ic.stroke
-            fillColor: "transparent"
+            fillColor: ic.fill
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
             PathSvg { path: ic.d }

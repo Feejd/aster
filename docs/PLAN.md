@@ -11,8 +11,9 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 ## Etap 2 — Start, centrum sterowania, powiadomienia
 - [x] **Start** z prototypu (pierwsza wersja): wyszukiwanie aplikacji, plików i ustawień, przypięte, ostatnie pliki,
       blokada/wyłączanie. Dane z KDE (lista aplikacji, ostatnie dokumenty), uruchamianie przez KIO.
-- [ ] **Centrum sterowania**: głośność i wyjście dźwięku (plasma-pa), Wi‑Fi i Bluetooth (plasma-nm,
-      bluedevil), jasność i bateria (PowerDevil), tryb ciemny jednym kliknięciem.
+- [x] **Centrum sterowania** (prawa wyspa doku): Wi‑Fi/sieć (nmcli), Bluetooth (bluetoothctl), „Nie przeszkadzać”,
+      ciemny motyw, jasność (PowerDevil), głośność (PipeWire), odtwarzacz (MPRIS), zrzut ekranu, ustawienia, bateria
+- [ ] Centrum sterowania: lista sieci Wi‑Fi i urządzeń Bluetooth do wyboru, wybór wyjścia dźwięku
 - [x] Powiadomienia systemowe pod górną wyspą (powłoka jest serwerem powiadomień)
 - [ ] **Górna wyspa**: chowanie i wysuwanie jak w prototypie, panel „Dziś” z kalendarzem i odtwarzaczem (MPRIS).
 - [x] Super = Start

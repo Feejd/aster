@@ -55,7 +55,8 @@ int main(int argc, char *argv[])
             p.setRenderHint(QPainter::Antialiasing);
             // kolejność: pulpit (zegar) → wyspa → dok → Start
             std::sort(windows.begin(), windows.end(), [](QQuickWindow *a, QQuickWindow *b) {
-                static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start")};
+                static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start"),
+                                                QStringLiteral("Centrum sterowania")};
                 return order.indexOf(a->title()) < order.indexOf(b->title());
             });
             for (QQuickWindow *w : windows) {
@@ -99,6 +100,14 @@ int main(int argc, char *argv[])
                 QCoreApplication::quit();
             });
     }
+
+    // Do testów: ASTER_OPEN_CONTROL=1 otwiera centrum sterowania (np. razem z ASTER_SHOT_DESKTOP)
+    if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_CONTROL"))
+        QTimer::singleShot(1000, &app, [] {
+            for (QWindow *w : QGuiApplication::topLevelWindows())
+                if (w->title() == QLatin1String("Centrum sterowania"))
+                    QMetaObject::invokeMethod(w, "toggle");
+        });
 
     return app.exec();
 }

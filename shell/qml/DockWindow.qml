@@ -22,7 +22,9 @@ Window {
 
     readonly property int reserved: 96
     property bool startOpen: false
+    property bool controlOpen: false
     signal startRequested()
+    signal controlRequested()
 
     Component.onCompleted: {
         Platform.makeLayer(dock, "top", 2 | 4 | 8, dock.reserved, "none", "aster-dock");
@@ -128,13 +130,13 @@ Window {
         }
     }
 
-    // ——— Prawa wyspa: zegar ———
+    // ——— Prawa wyspa: stan systemu (centrum sterowania) i zegar ———
     Island {
         id: right
         anchors.right: parent.right
         anchors.rightMargin: 18
         y: dock.height - height - 14
-        width: tray.width + 36
+        width: tray.width + 28
         height: 76
         radius: 26
 
@@ -142,10 +144,56 @@ Window {
             id: tray
             anchors.centerIn: parent
             spacing: 14
-            IconButton {
+            // Stan sieci, dźwięku i baterii — otwiera centrum sterowania
+            Rectangle {
+                id: status
                 anchors.verticalCenter: parent.verticalCenter
-                icon: "sliders"
-                onClicked: Platform.run("systemsettings")
+                width: statusRow.width + 22; height: 44; radius: 14
+                color: dock.controlOpen ? Theme.accentSoft : (statusArea.containsMouse ? Theme.hover : "transparent")
+                scale: statusArea.pressed ? 0.94 : 1
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on scale { NumberAnimation { duration: 100 } }
+                readonly property color ink: dock.controlOpen ? Theme.accentText : Theme.text
+                Row {
+                    id: statusRow
+                    anchors.centerIn: parent
+                    spacing: 9
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        d: !ControlCenter.wifiAvailable && ControlCenter.wired ? Icons.ethernet : Icons.wifi
+                        size: 19; stroke: 2
+                        color: status.ink
+                        opacity: ControlCenter.networkName !== "" ? 1 : 0.4
+                    }
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: ControlCenter.audioAvailable
+                        d: ControlCenter.muted || ControlCenter.volume === 0 ? Icons.volumeOff : ControlCenter.volume < 0.5 ? Icons.volumeLow : Icons.volume
+                        size: 19; stroke: 2
+                        color: status.ink
+                    }
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: ControlCenter.batteryAvailable
+                        spacing: 3
+                        Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.battery; size: 20; stroke: 1.8; color: status.ink }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: ControlCenter.battery + "%"
+                            color: status.ink
+                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: ControlCenter.doNotDisturb
+                        d: Icons.moon
+                        size: 17; stroke: 2
+                        color: status.ink
+                    }
+                }
+                MouseArea { id: statusArea; anchors.fill: parent; hoverEnabled: true; onClicked: dock.controlRequested() }
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
@@ -164,25 +212,6 @@ Window {
                 }
             }
         }
-    }
-
-    component IconButton: Rectangle {
-        id: hb
-        property string icon
-        property bool active: false
-        signal clicked()
-        width: 44; height: 44; radius: 14
-        color: active ? Theme.accentSoft : (hbArea.containsMouse ? Theme.hover : "transparent")
-        scale: hbArea.pressed ? 0.92 : 1
-        Behavior on color { ColorAnimation { duration: 120 } }
-        Behavior on scale { NumberAnimation { duration: 100 } }
-        Icon {
-            anchors.centerIn: parent
-            d: Icons[hb.icon] || ""
-            size: 22
-            color: hb.active ? Theme.accentText : Theme.text
-        }
-        MouseArea { id: hbArea; anchors.fill: parent; hoverEnabled: true; onClicked: hb.clicked() }
     }
 
     Timer {
