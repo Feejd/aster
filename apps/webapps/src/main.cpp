@@ -17,6 +17,7 @@
 #include <QUrlQuery>
 #include <QtQml/qqmlextensionplugin.h>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
+#include "typography.h"
 
 Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
@@ -26,6 +27,8 @@ int main(int argc, char *argv[])
     QtWebEngineQuick::initialize();
 
     QGuiApplication app(argc, argv);
+
+    asterTypography();
     app.setOrganizationName(QStringLiteral("Aster"));
     app.setOrganizationDomain(QStringLiteral("aster.local"));
 

@@ -133,7 +133,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             text: fi.file ? (fi.showWhere ? fi.file.where : fi.dateText) : ""
             color: Theme.text2
-            font.family: Theme.font; font.pixelSize: 11
+            font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1
             elide: Text.ElideMiddle
         }
     }

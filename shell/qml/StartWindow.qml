@@ -263,7 +263,7 @@ Window {
                         text: cat.modelData.name
                         color: Theme.text
                         font.family: Theme.font; font.pixelSize: 14
-                        font.weight: cat.active ? Font.DemiBold : Font.Normal
+                        font.weight: cat.active ? Font.Medium : Font.Normal
                     }
                     MouseArea {
                         id: catArea
@@ -303,7 +303,7 @@ Window {
                     text: Platform.userName
                     elide: Text.ElideRight
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
                 }
                 Row {
                     id: footerButtons
@@ -494,7 +494,7 @@ Window {
                                         width: parent.width - 66
                                         spacing: 1
                                         Text { width: parent.width; text: rec.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; elide: Text.ElideMiddle }
-                                        Text { text: start.when(rec.modelData.modified); color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                                        Text { text: start.when(rec.modelData.modified); color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
                                     }
                                     MouseArea {
                                         id: recArea; anchors.fill: parent; hoverEnabled: true
@@ -526,7 +526,7 @@ Window {
                     leftPadding: 12; topPadding: 12; bottomPadding: 4
                     text: section.toUpperCase()
                     color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.6
+                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.6
                 }
                 delegate: Rectangle {
                     id: res
@@ -546,7 +546,7 @@ Window {
                         width: parent.width - 68
                         spacing: 1
                         Text { width: parent.width; text: res.model.display || ""; color: res.current ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium; elide: Text.ElideRight }
-                        Text { width: parent.width; visible: text !== ""; text: res.model.subtext || ""; color: res.current ? Qt.rgba(1, 1, 1, 0.75) : Theme.text2; font.family: Theme.font; font.pixelSize: 11; elide: Text.ElideMiddle }
+                        Text { width: parent.width; visible: text !== ""; text: res.model.subtext || ""; color: res.current ? Qt.rgba(1, 1, 1, 0.75) : Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; elide: Text.ElideMiddle }
                     }
                     MouseArea {
                         id: resArea; anchors.fill: parent; hoverEnabled: true
@@ -583,7 +583,7 @@ Window {
             color: Qt.rgba(0.08, 0.08, 0.1, 0.92)
             opacity: fbArea.containsMouse ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 120 } }
-            Text { id: tipText; anchors.centerIn: parent; text: fb.tip; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+            Text { id: tipText; anchors.centerIn: parent; text: fb.tip; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium }
         }
     }
 

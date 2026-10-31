@@ -474,7 +474,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         text: win.navPrimary ? win.navPrimary.label : ""
                         color: "white"
-                        font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
+                        font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.Medium
                     }
                 }
                 MouseArea { id: primaryArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.navClick(win.navPrimary.id) }
@@ -572,7 +572,7 @@ Window {
                                 anchors.centerIn: parent
                                 text: navItem.modelData.label.charAt(0).toUpperCase()
                                 color: navItem.modelData.active ? "white" : win.sideText2
-                                font.family: win.uiFont; font.pixelSize: 11; font.weight: Font.Bold
+                                font.family: win.uiFont; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.DemiBold
                             }
                         }
                     }
@@ -589,7 +589,7 @@ Window {
                             anchors.centerIn: parent
                             text: navItem.modelData.count || ""
                             color: navItem.modelData.active ? "white" : win.sideText2
-                            font.family: win.uiFont; font.pixelSize: 11; font.weight: Font.DemiBold
+                            font.family: win.uiFont; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
                         }
                     }
                     Text {
@@ -754,7 +754,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: win.zoomShown > 0
                     color: win.barHover
-                    Text { id: zoomLabel; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: win.barText; font.family: win.uiFont; font.pixelSize: 12; font.weight: Font.DemiBold }
+                    Text { id: zoomLabel; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: win.barText; font.family: win.uiFont; font.pixelSize: 12; font.weight: Font.Medium }
                 }
                 BarButton { icon: web.loading ? "close" : "reload"; onClicked: if (web.loading) web.stop(); else web.reload() }
                 BarButton {
@@ -788,7 +788,7 @@ Window {
                                 text: tabBtn.modelData.label
                                 color: tabBtn.modelData.active ? Theme.text : win.barText
                                 font.family: win.uiFont; font.pixelSize: 13
-                                font.weight: tabBtn.modelData.active ? Font.DemiBold : Font.Medium
+                                font.weight: tabBtn.modelData.active ? Font.Medium : Font.Medium
                             }
                             MouseArea {
                                 id: tabArea; anchors.fill: parent; hoverEnabled: true
@@ -917,7 +917,7 @@ Window {
                 Rectangle {
                     width: yesText.implicitWidth + 26; height: 30; radius: 8
                     color: Theme.accent
-                    Text { id: yesText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Text { id: yesText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.Medium }
                     MouseArea { anchors.fill: parent; onClicked: permBar.answer(true) }
                 }
             }
@@ -1068,7 +1068,7 @@ Window {
                     anchors.top: splashIcon.bottom; anchors.topMargin: 18
                     text: win.app.name
                     color: Qt.colorEqual(splash.color, "white") || (0.299 * splash.color.r + 0.587 * splash.color.g + 0.114 * splash.color.b) > 0.6 ? "#16181D" : "white"
-                    font.family: win.uiFont; font.pixelSize: 17; font.weight: Font.DemiBold
+                    font.family: win.uiFont; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold
                     opacity: 0.85
                 }
                 ParallelAnimation {
@@ -1097,7 +1097,7 @@ Window {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Nie udało się połączyć"
-                        color: Theme.text; font.family: win.uiFont; font.pixelSize: 19; font.weight: Font.DemiBold
+                        color: Theme.text; font.family: win.uiFont; font.pixelSize: 19; font.letterSpacing: -0.2; font.weight: Font.DemiBold
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -1108,7 +1108,7 @@ Window {
                         anchors.horizontalCenter: parent.horizontalCenter
                         width: retryText.implicitWidth + 32; height: 38; radius: 10
                         color: retryArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
-                        Text { id: retryText; anchors.centerIn: parent; text: "Spróbuj ponownie"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { id: retryText; anchors.centerIn: parent; text: "Spróbuj ponownie"; color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.Medium }
                         MouseArea { id: retryArea; anchors.fill: parent; hoverEnabled: true; onClicked: web.reload() }
                     }
                 }
@@ -1204,7 +1204,7 @@ Window {
                             text: sug.modelData
                             color: Theme.text
                             font.family: win.uiFont; font.pixelSize: 13
-                            font.weight: suggestBox.index === sug.index ? Font.DemiBold : Font.Normal
+                            font.weight: suggestBox.index === sug.index ? Font.Medium : Font.Normal
                         }
                         MouseArea { id: sugArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.runAdapterSearch(sug.modelData) }
                     }
@@ -1299,7 +1299,7 @@ Window {
                                 id: okText
                                 anchors.centerIn: parent
                                 text: win.dialog && win.dialog.type === JavaScriptDialogRequest.DialogTypeBeforeUnload ? "Opuść stronę" : "OK"
-                                color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
+                                color: "white"; font.family: win.uiFont; font.pixelSize: 13; font.weight: Font.Medium
                             }
                             MouseArea { id: okArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.closeDialog(true) }
                         }

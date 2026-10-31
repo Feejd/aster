@@ -140,7 +140,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Aplikacje webowe"
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
                 }
             }
             WindowButtons {
@@ -173,7 +173,7 @@ Window {
                         text: "Każda strona może być aplikacją"
                         color: Theme.text
                         font.family: Theme.font; font.pixelSize: 28; font.weight: Font.DemiBold
-                        font.letterSpacing: -0.5
+                        font.letterSpacing: -0.6
                     }
                     Text {
                         width: parent.width
@@ -217,7 +217,7 @@ Window {
                             anchors.centerIn: parent
                             spacing: 8
                             Spinner { anchors.verticalCenter: parent.verticalCenter; visible: WebApps.busy && !win.pending; color: "white" }
-                            Text { anchors.verticalCenter: parent.verticalCenter; text: "Utwórz aplikację"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: "Utwórz aplikację"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                         }
                         MouseArea { id: checkArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.check() }
                     }
@@ -258,7 +258,7 @@ Window {
                                         const c = miniBar.color;
                                         return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 0.62 || c.a < 0.5 ? "#16181D" : "white";
                                     }
-                                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                                    font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
                                 }
                             }
                         }
@@ -285,7 +285,7 @@ Window {
                                 x: 12; width: parent.width - 24
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: Theme.text
-                                font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                                font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold
                                 selectionColor: Theme.accentSoft
                                 clip: true
                             }
@@ -317,7 +317,7 @@ Window {
                             Rectangle {
                                 width: instText.implicitWidth + 30; height: 38; radius: 10
                                 color: instArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
-                                Text { id: instText; anchors.centerIn: parent; text: "Zainstaluj"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                                Text { id: instText; anchors.centerIn: parent; text: "Zainstaluj"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                                 MouseArea { id: instArea; anchors.fill: parent; hoverEnabled: true; onClicked: WebApps.install(Object.assign({}, win.preview, { name: nameEdit.text })) }
                             }
                             HoverButton {
@@ -334,7 +334,7 @@ Window {
                     width: parent.width
                     spacing: 12
                     visible: WebApps.installed.length > 0
-                    Text { text: "Twoje aplikacje"; color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold }
+                    Text { text: "Twoje aplikacje"; color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.letterSpacing: -0.2; font.weight: Font.DemiBold }
                     Flow {
                         width: parent.width
                         spacing: 6
@@ -386,7 +386,7 @@ Window {
                 Column {
                     width: parent.width
                     spacing: 12
-                    Text { text: "Polecane"; color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold }
+                    Text { text: "Polecane"; color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.letterSpacing: -0.2; font.weight: Font.DemiBold }
                     Grid {
                         id: recGrid
                         columns: Math.max(2, Math.floor(col.width / 280))
@@ -430,7 +430,7 @@ Window {
                                     x: 76; anchors.verticalCenter: parent.verticalCenter
                                     width: parent.width - x - getBtn.width - 22
                                     spacing: 2
-                                    Text { width: parent.width; text: rec.modelData.name; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    Text { width: parent.width; text: rec.modelData.name; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
                                     Text { width: parent.width; text: rec.modelData.desc; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                                 }
                                 // „Pobierz” → kółko → „Otwórz” (jak w sklepie)
@@ -448,7 +448,7 @@ Window {
                                         visible: !rec.busy
                                         text: rec.installed ? "OTWÓRZ" : "DODAJ"
                                         color: rec.installed ? Theme.text : Theme.accentText
-                                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold
+                                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
                                     }
                                     Spinner { anchors.centerIn: parent; visible: rec.busy; color: Theme.accent }
                                     MouseArea {

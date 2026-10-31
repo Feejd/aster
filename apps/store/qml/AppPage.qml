@@ -98,7 +98,7 @@ Rectangle {
                         elide: Text.ElideRight
                         color: Theme.text
                         font.family: Theme.font; font.pixelSize: 30; font.weight: Font.Bold
-                        font.letterSpacing: -0.4
+                        font.letterSpacing: -0.8
                     }
                     Text {
                         width: parent.width
@@ -121,7 +121,7 @@ Rectangle {
                             width: rmText.implicitWidth + 28; height: 36; radius: 18
                             baseColor: Theme.fill
                             onClicked: Flatpak.uninstall(page.appId)
-                            Text { id: rmText; anchors.centerIn: parent; text: "Usuń"; color: Theme.danger; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { id: rmText; anchors.centerIn: parent; text: "Usuń"; color: Theme.danger; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                         }
                     }
                 }
@@ -149,8 +149,8 @@ Rectangle {
                             Column {
                                 anchors.centerIn: parent
                                 spacing: 4
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.label; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 0.6 }
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.value; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; elide: Text.ElideRight; width: Math.min(implicitWidth, col.width / 4 - 20) }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.label; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 0.6 }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.value; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.Bold; elide: Text.ElideRight; width: Math.min(implicitWidth, col.width / 4 - 20) }
                             }
                         }
                     }
@@ -215,7 +215,7 @@ Rectangle {
                 width: col.width
                 visible: !!page.release
                 spacing: 8
-                Text { text: "Co nowego"; color: Theme.text; font.family: Theme.font; font.pixelSize: 20; font.weight: Font.Bold }
+                Text { text: "Co nowego"; color: Theme.text; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: -0.4; font.weight: Font.Bold }
                 Text {
                     text: page.release ? "Wersja " + (page.release.version || "") + (page.release.timestamp ? " · " + new Date(page.release.timestamp * 1000).toLocaleDateString(Qt.locale("pl_PL"), "d MMMM yyyy") : "") : ""
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 13

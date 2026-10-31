@@ -181,7 +181,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             text: ControlCenter.battery + "%"
                             color: status.ink
-                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                             font.features: { "tnum": 1 }
                         }
                     }
@@ -201,7 +201,7 @@ Window {
                     anchors.right: parent.right
                     text: dock.now.toLocaleTimeString(Qt.locale("pl_PL"), "HH:mm")
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 18; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 18; font.letterSpacing: -0.2; font.weight: Font.DemiBold
                     font.features: { "tnum": 1 }
                 }
                 Text {

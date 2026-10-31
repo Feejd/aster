@@ -247,7 +247,7 @@ Window {
                             visible: win.section === "discover"
                             text: new Date().toLocaleDateString(Qt.locale("pl_PL"), "dddd, d MMMM").toUpperCase()
                             color: Theme.text2
-                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 0.6
+                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.letterSpacing: 0.6
                         }
                         Text {
                             text: win.section === "discover" ? "Odkrywaj"
@@ -257,7 +257,7 @@ Window {
                                 : (Curated.categories.find(c => c.id === win.section) || { name: "" }).name
                             color: Theme.text
                             font.family: Theme.font; font.pixelSize: 34; font.weight: Font.Bold
-                            font.letterSpacing: -0.6
+                            font.letterSpacing: -0.9
                         }
                     }
 
@@ -306,14 +306,14 @@ Window {
                             x: 34; y: 34
                             width: parent.width * 0.42
                             spacing: 10
-                            Text { text: win.hero.tag; color: Qt.rgba(1, 1, 1, 0.75); font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 0.8 }
+                            Text { text: win.hero.tag; color: Qt.rgba(1, 1, 1, 0.75); font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.letterSpacing: 0.8 }
                             Text {
                                 width: parent.width
                                 text: win.hero.title
                                 wrapMode: Text.Wrap
                                 color: "white"
                                 font.family: Theme.font; font.pixelSize: 32; font.weight: Font.Bold
-                                font.letterSpacing: -0.6
+                                font.letterSpacing: -0.8
                                 lineHeight: 0.95
                             }
                         }
@@ -422,7 +422,7 @@ Window {
                                 Column {
                                     x: 18; y: 96; width: parent.width - 36
                                     spacing: 3
-                                    Text { width: parent.width; text: card.modelData.name; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    Text { width: parent.width; text: card.modelData.name; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
                                     Text { width: parent.width; text: card.modelData.summary; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                                 }
                                 GetButton { x: 18; anchors.bottom: parent.bottom; anchors.bottomMargin: 16; appId: card.modelData.id }
@@ -445,7 +445,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             width: updText.implicitWidth + 30; height: 36; radius: 18
                             color: Theme.accent
-                            Text { id: updText; anchors.centerIn: parent; text: Flatpak.progress["*"] !== undefined ? "Aktualizuję…" : "Aktualizuj wszystko"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { id: updText; anchors.centerIn: parent; text: Flatpak.progress["*"] !== undefined ? "Aktualizuję…" : "Aktualizuj wszystko"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                             MouseArea { anchors.fill: parent; onClicked: Flatpak.updateAll() }
                         }
                     }
@@ -519,7 +519,7 @@ Window {
             y: 14
             width: noFp.implicitWidth + 30; height: 34; radius: 17
             color: "#D93B3B"
-            Text { id: noFp; anchors.centerIn: parent; text: "Brak programu flatpak — instalowanie jest wyłączone"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+            Text { id: noFp; anchors.centerIn: parent; text: "Brak programu flatpak — instalowanie jest wyłączone"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
         }
     }
     function toast(text) { toastText.text = text; toastTimer.restart(); }
@@ -536,14 +536,14 @@ Window {
         color: active ? Theme.accentSoft : (niArea.containsMouse ? Theme.hover : "transparent")
         Behavior on color { ColorAnimation { duration: 120 } }
         Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons[ni.icon] || ""; size: 17; color: ni.active ? Theme.accentText : Theme.text }
-        Text { x: 38; anchors.verticalCenter: parent.verticalCenter; text: ni.label; color: ni.active ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: ni.active ? Font.DemiBold : Font.Normal }
+        Text { x: 38; anchors.verticalCenter: parent.verticalCenter; text: ni.label; color: ni.active ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: ni.active ? Font.Medium : Font.Normal }
         Rectangle {
             visible: ni.badge !== ""
             anchors.right: parent.right; anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             width: Math.max(20, bText.implicitWidth + 12); height: 20; radius: 10
             color: Theme.accent
-            Text { id: bText; anchors.centerIn: parent; text: ni.badge; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold }
+            Text { id: bText; anchors.centerIn: parent; text: ni.badge; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.DemiBold }
         }
         MouseArea { id: niArea; anchors.fill: parent; hoverEnabled: true; onClicked: ni.clicked() }
     }
@@ -556,7 +556,7 @@ Window {
         bottomPadding: 6
         Rectangle { width: pageCol.width; height: 1; color: Theme.line }
         Item { width: 1; height: 10 }
-        Text { text: st.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 21; font.weight: Font.Bold; font.letterSpacing: -0.3 }
+        Text { text: st.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 21; font.weight: Font.Bold; font.letterSpacing: -0.4 }
         Text { visible: st.subtitle !== ""; text: st.subtitle; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
     }
 }

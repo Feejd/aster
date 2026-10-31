@@ -602,7 +602,7 @@ Window {
                 x: 10; y: 14
                 width: parent.width - 20
                 spacing: 2
-                Text { text: "ULUBIONE"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 4 }
+                Text { text: "ULUBIONE"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 4 }
                 Repeater {
                     model: Files.places()
                     delegate: SidebarPlace {
@@ -615,7 +615,7 @@ Window {
                         onDropped: (d) => win.handleDrop(d, modelData.url)
                     }
                 }
-                Text { text: "TEN KOMPUTER"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 16 }
+                Text { text: "TEN KOMPUTER"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 16 }
                 SidebarPlace {
                     id: drivePlace
                     readonly property var info: Files.systemDrive()
@@ -631,7 +631,7 @@ Window {
                         x: 38; y: 2; width: parent.width - 48; height: 4; radius: 2; color: Theme.line
                         Rectangle { width: parent.width * drivePlace.info.usedRatio; height: 4; radius: 2; color: Theme.accent }
                     }
-                    Text { x: 38; y: 9; text: drivePlace.info.freeText; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                    Text { x: 38; y: 9; text: drivePlace.info.freeText; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
                 }
                 Item { width: 1; height: 10 }
                 SidebarPlace {
@@ -792,7 +792,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         text: (modelData.k === "date" && (win.query || win.inTrash) ? "Lokalizacja" : modelData.label) + (folder.sortKey === modelData.k ? listHeader.arrow : "")
                         color: folder.sortKey === modelData.k ? Theme.text : Theme.text2
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                         MouseArea { anchors.fill: parent; anchors.margins: -6; onClicked: win.setSort(hdr.modelData.k) }
                     }
                 }
@@ -996,7 +996,7 @@ Window {
                                 anchors.bottom: parent.bottom; anchors.bottomMargin: 14
                                 text: parent.ext
                                 color: Theme.dark ? Qt.lighter(parent.tint, 1.9) : parent.tint
-                                font.family: Theme.font; font.pixelSize: 20; font.weight: Font.Bold
+                                font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: -0.4; font.weight: Font.Bold
                             }
                         }
                     }
@@ -1005,7 +1005,7 @@ Window {
                     x: 24; y: qlBox.y + qlBox.height + 18
                     width: parent.width - 48
                     spacing: 6
-                    Text { width: parent.width; text: ql.f ? ql.f.name : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold; elide: Text.ElideMiddle }
+                    Text { width: parent.width; text: ql.f ? ql.f.name : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold; elide: Text.ElideMiddle }
                     Text { text: ql.f ? ql.f.kind + (ql.f.sizeText ? " · " + ql.f.sizeText : "") + " · zmieniono " + win.when(ql.f.modified) : ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
                     Text { width: parent.width; text: ql.f ? ql.f.where : ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13; elide: Text.ElideMiddle }
                 }
@@ -1017,7 +1017,7 @@ Window {
                         width: ql.width - 40 - 8 - 120; height: 40; radius: 10
                         color: Theme.accent
                         visible: !win.inTrash
-                        Text { anchors.centerIn: parent; text: "Otwórz"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { anchors.centerIn: parent; text: "Otwórz"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                         MouseArea { anchors.fill: parent; onClicked: { Files.open(ql.f.url); win.quickLook = null; } }
                     }
                     HoverButton {
@@ -1047,7 +1047,7 @@ Window {
                     x: 24; y: 24
                     width: parent.width - 48
                     spacing: 10
-                    Text { width: parent.width; text: win.confirm ? win.confirm.title : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold; wrapMode: Text.Wrap }
+                    Text { width: parent.width; text: win.confirm ? win.confirm.title : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold; wrapMode: Text.Wrap }
                     Text { width: parent.width; text: win.confirm ? win.confirm.text : ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13; wrapMode: Text.Wrap }
                     Item { width: 1; height: 8 }
                     Row {
@@ -1061,7 +1061,7 @@ Window {
                         Rectangle {
                             width: dangerText.implicitWidth + 30; height: 38; radius: 10
                             color: dangerArea.containsMouse ? "#B92E2E" : "#D93B3B"
-                            Text { id: dangerText; anchors.centerIn: parent; text: win.confirm ? win.confirm.button : ""; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { id: dangerText; anchors.centerIn: parent; text: win.confirm ? win.confirm.button : ""; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                             MouseArea { id: dangerArea; anchors.fill: parent; hoverEnabled: true; onClicked: { const c = win.confirm; win.confirm = null; c.run(); keys.forceActiveFocus(); } }
                         }
                     }

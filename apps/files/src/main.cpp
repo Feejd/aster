@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QtQml/qqmlextensionplugin.h>
+#include "typography.h"
 
 Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
@@ -15,6 +16,7 @@ int main(int argc, char *argv[])
 {
     // QApplication (nie QGuiApplication): KIO pokazuje czasem okna dialogowe z widżetów
     QApplication app(argc, argv);
+    asterTypography();
     app.setApplicationName(QStringLiteral("aster-files"));
     app.setApplicationDisplayName(QStringLiteral("Pliki"));
     app.setOrganizationName(QStringLiteral("Aster"));

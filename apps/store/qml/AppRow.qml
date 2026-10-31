@@ -28,7 +28,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: row.rank
         color: Theme.text
-        font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold
+        font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.Bold
     }
     Image {
         id: icon
@@ -50,7 +50,7 @@ Item {
         anchors.right: get.left; anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
-        Text { width: parent.width; text: row.app ? row.app.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+        Text { width: parent.width; text: row.app ? row.app.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
         Text { width: parent.width; text: row.note ? row.note : (row.app ? row.app.summary : ""); elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
     }
     GetButton {

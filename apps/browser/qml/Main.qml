@@ -379,7 +379,7 @@ Window {
                         width: zoomText.implicitWidth + 16; height: 24; radius: 8
                         color: Theme.accentSoft
                         visible: win.zoomShown > 0
-                        Text { id: zoomText; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                        Text { id: zoomText; anchors.centerIn: parent; text: Math.round(win.zoomShown * 100) + "%"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
                     }
                 }
 
@@ -575,7 +575,7 @@ Window {
                 Rectangle {
                     width: allowText.implicitWidth + 26; height: 32; radius: 8
                     color: allowArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
-                    Text { id: allowText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Text { id: allowText; anchors.centerIn: parent; text: "Zezwól"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                     MouseArea { id: allowArea; anchors.fill: parent; hoverEnabled: true; onClicked: permBar.answer(true) }
                 }
             }
@@ -796,7 +796,7 @@ Window {
                 x: 12; y: 12
                 width: parent.width - 24
                 spacing: 4
-                Text { text: "Pobrane"; leftPadding: 6; bottomPadding: 4; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                Text { text: "Pobrane"; leftPadding: 6; bottomPadding: 4; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
                 Repeater {
                     model: win.downloads.slice().reverse().slice(0, 6)
                     delegate: Rectangle {
@@ -827,7 +827,7 @@ Window {
                                 visible: dl.done || dl.failed
                                 text: dl.failed ? "Przerwano" : "Gotowe — kliknij, żeby otworzyć"
                                 color: dl.failed ? Theme.danger : Theme.text2
-                                font.family: Theme.font; font.pixelSize: 11
+                                font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1
                             }
                         }
                         MouseArea {

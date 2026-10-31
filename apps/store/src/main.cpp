@@ -6,12 +6,14 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QtQml/qqmlextensionplugin.h>
+#include "typography.h"
 
 Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    asterTypography();
     app.setApplicationName(QStringLiteral("aster-store"));
     app.setApplicationDisplayName(QStringLiteral("Sklep"));
     app.setOrganizationName(QStringLiteral("Aster"));

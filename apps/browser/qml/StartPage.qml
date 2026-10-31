@@ -31,13 +31,13 @@ Item {
                 text: sp.greetingHour < 5 ? "Dobranoc" : sp.greetingHour < 12 ? "Dzień dobry" : sp.greetingHour < 18 ? "Miłego popołudnia" : "Dobry wieczór"
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 30; font.weight: Font.DemiBold
-                font.letterSpacing: -0.5
+                font.letterSpacing: -0.8
             }
 
             Text {
                 text: "Ulubione"
                 color: Theme.text
-                font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold
             }
             Flow {
                 width: col.width
@@ -81,7 +81,7 @@ Item {
                                 visible: ico.status !== Image.Ready
                                 text: (fav.modelData.title || Urls.host(fav.modelData.url)).charAt(0).toUpperCase()
                                 color: Theme.accentText
-                                font.family: Theme.font; font.pixelSize: 26; font.weight: Font.DemiBold
+                                font.family: Theme.font; font.pixelSize: 26; font.letterSpacing: -0.5; font.weight: Font.DemiBold
                             }
                         }
                         Text {
@@ -115,7 +115,7 @@ Item {
                 visible: sp.recents.length > 0
                 text: "Ostatnio odwiedzane"
                 color: Theme.text
-                font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+                font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold
             }
             Grid {
                 columns: 2
@@ -145,7 +145,7 @@ Item {
                             x: 54; anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - 64
                             Text { width: parent.width; text: rec.modelData.title || Urls.host(rec.modelData.url); elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
-                            Text { width: parent.width; text: Urls.host(rec.modelData.url); elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                            Text { width: parent.width; text: Urls.host(rec.modelData.url); elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
                         }
                         MouseArea { id: recArea; anchors.fill: parent; hoverEnabled: true; onClicked: sp.open(rec.modelData.url) }
                     }

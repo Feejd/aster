@@ -60,7 +60,7 @@ Item {
             anchors.centerIn: parent
             text: item.badge > 99 ? "99+" : String(item.badge)
             color: "white"
-            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold
+            font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.DemiBold
         }
     }
 

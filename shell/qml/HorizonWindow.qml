@@ -81,7 +81,7 @@ Window {
                 color: "white"
                 font.family: Theme.font
                 font.pixelSize: 13
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
             }
         }
     }
@@ -137,14 +137,14 @@ Window {
                 visible: text !== ""
                 elide: Text.ElideRight
                 color: Qt.rgba(1, 1, 1, 0.6)
-                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
             }
             Text {
                 width: parent.width
                 text: card.n ? card.n.summary : ""
                 elide: Text.ElideRight
                 color: "white"
-                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
             }
             Text {
                 width: parent.width

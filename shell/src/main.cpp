@@ -12,12 +12,14 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QtQml/qqmlextensionplugin.h>
+#include "typography.h"
 
 Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    asterTypography();
     app.setApplicationName(QStringLiteral("aster-shell"));
     app.setOrganizationName(QStringLiteral("Aster"));
     app.setDesktopFileName(QStringLiteral("org.aster.shell"));

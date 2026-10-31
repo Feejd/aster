@@ -22,6 +22,8 @@ qt_policy(SET QTP0004 NEW)
 # Wszystkie moduły QML w jednym miejscu — narzędzia (qmllint) widzą wtedy Aster.Ui z każdej aplikacji
 set(QT_QML_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qml)
 
+# Wspólne nagłówki C++ (np. typography.h) dla powłoki i aplikacji
+include_directories(${CMAKE_SOURCE_DIR}/common)
 add_subdirectory(common)
 add_subdirectory(shell)
 add_subdirectory(apps/files)

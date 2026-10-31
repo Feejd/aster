@@ -40,7 +40,7 @@ Window {
             }
             color: Theme.dark ? Qt.rgba(1, 1, 1, 0.92) : Qt.rgba(0.11, 0.12, 0.17, 0.78)
             font.family: Theme.font
-            font.pixelSize: 24
+            font.pixelSize: 24; font.letterSpacing: -0.5
             font.weight: Font.DemiBold
             leftPadding: 6
         }
@@ -50,7 +50,7 @@ Window {
             font.family: Theme.font
             font.pixelSize: 148
             font.weight: Font.Light
-            font.letterSpacing: -4
+            font.letterSpacing: -3
             font.features: { "tnum": 1 }
         }
     }

@@ -242,7 +242,7 @@ Window {
                         text: ControlCenter.playerAvailable ? (ControlCenter.title || ControlCenter.playerName) : "Nic nie gra"
                         elide: Text.ElideRight
                         color: ControlCenter.playerAvailable ? Theme.text : Theme.text2
-                        font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
                     }
                     Text {
                         width: parent.width
@@ -314,7 +314,7 @@ Window {
     component Caption: Text {
         x: 14; y: 11
         color: Theme.text
-        font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+        font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
     }
 
     // Okrągły przełącznik z podpisem i stanem obok
@@ -346,9 +346,9 @@ Window {
                 text: tg.label
                 fontSizeMode: Text.HorizontalFit; minimumPixelSize: 11   // długie polskie nazwy lekko się zmniejszają
                 elide: Text.ElideRight
-                color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
             }
-            Text { width: parent.width; text: tg.status; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+            Text { width: parent.width; text: tg.status; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
         }
         MouseArea { id: tgArea; anchors.fill: parent; onClicked: tg.clicked() }
     }
@@ -451,7 +451,7 @@ Window {
                     visible: qt.value !== ""
                     text: qt.value
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
                     font.features: { "tnum": 1 }
                 }
             }
@@ -459,7 +459,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qt.label
                 color: Theme.text2
-                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
             }
         }
         MouseArea { id: qtArea; anchors.fill: parent; hoverEnabled: true; onClicked: qt.clicked() }
