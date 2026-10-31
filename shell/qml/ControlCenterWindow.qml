@@ -120,7 +120,7 @@ Window {
                             on: ControlCenter.wifiAvailable ? ControlCenter.wifiOn : ControlCenter.wired
                             status: ControlCenter.networkName !== "" ? ControlCenter.networkName
                                   : ControlCenter.wifiAvailable ? (ControlCenter.wifiOn ? "Brak połączenia" : "Wyłączone") : "Brak sieci"
-                            onClicked: if (ControlCenter.wifiAvailable) ControlCenter.setWifi(!ControlCenter.wifiOn); else Platform.run("systemsettings", ["kcm_networkmanagement"])
+                            onClicked: if (ControlCenter.wifiAvailable) ControlCenter.setWifi(!ControlCenter.wifiOn); else Platform.openUrl("aster-settings:wifi")
                         }
                         Toggle {
                             width: parent.width
@@ -145,9 +145,9 @@ Window {
                             x: 12; width: parent.width - 24
                             icon: "moon"
                             label: "Nie przeszkadzać"
-                            on: ControlCenter.doNotDisturb
+                            on: Config.doNotDisturb
                             status: on ? "Włączone" : "Wyłączone"
-                            onClicked: ControlCenter.doNotDisturb = !ControlCenter.doNotDisturb
+                            onClicked: Config.doNotDisturb = !Config.doNotDisturb
                         }
                     }
                     Tile {
@@ -277,7 +277,7 @@ Window {
                 QuickTile {
                     width: parent.w
                     icon: "sliders"; label: "Ustawienia"
-                    onClicked: { cc.close(); Platform.run("systemsettings"); }
+                    onClicked: { cc.close(); Platform.launchApp("org.aster.settings"); }
                 }
                 QuickTile {
                     width: parent.w

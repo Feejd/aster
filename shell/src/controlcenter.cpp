@@ -12,7 +12,6 @@
 #include <QFile>
 #include <QProcess>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QStandardPaths>
 
 static const QString mprisPath = QStringLiteral("/org/mpris/MediaPlayer2");
@@ -44,7 +43,6 @@ ControlCenter::ControlCenter(QObject *parent)
     : QObject(parent)
 {
     m_preview = !qEnvironmentVariableIsEmpty("ASTER_PREVIEW");
-    m_dnd = QSettings().value(QStringLiteral("doNotDisturb"), false).toBool();
 
     m_poll.setInterval(8000);
     connect(&m_poll, &QTimer::timeout, this, &ControlCenter::refresh);
@@ -418,18 +416,9 @@ void ControlCenter::playPause()
 void ControlCenter::next() { playerCall(QStringLiteral("Next")); }
 void ControlCenter::previous() { playerCall(QStringLiteral("Previous")); }
 
-// ——— Motyw i „Nie przeszkadzać” ———
+// ——— Motyw ———
 void ControlCenter::setDarkMode(bool dark)
 {
     if (!m_preview)
         QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("BreezeDark") : QStringLiteral("BreezeLight")});
-}
-
-void ControlCenter::setDoNotDisturb(bool on)
-{
-    if (m_dnd == on)
-        return;
-    m_dnd = on;
-    QSettings().setValue(QStringLiteral("doNotDisturb"), on);
-    Q_EMIT doNotDisturbChanged();
 }

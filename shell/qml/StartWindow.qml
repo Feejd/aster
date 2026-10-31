@@ -24,7 +24,7 @@ Window {
     property string category: "ulubione"
     readonly property var pinned: [
         "org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.kate", "org.kde.konsole",
-        "org.aster.store", "systemsettings", "org.kde.okular", "org.kde.gwenview",
+        "org.aster.store", "org.aster.settings", "org.kde.okular", "org.kde.gwenview",
         "org.kde.elisa", "org.kde.spectacle", "org.kde.kcalc"
     ]
     readonly property var pinnedApps: pinned.map(id => Object.assign({ id: id }, Platform.appInfo(id))).filter(a => a.valid)
@@ -329,13 +329,13 @@ Window {
                 radius: 22
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
-                border.color: field.activeFocus ? Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.55) : "transparent"
+                border.color: field.activeFocus ? Theme.accentAlpha(0.55) : "transparent"
                 Behavior on color { ColorAnimation { duration: 140 } }
                 Rectangle {
                     anchors.fill: parent; anchors.margins: -4
                     radius: 26
                     color: "transparent"
-                    border.width: 4; border.color: Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.12)
+                    border.width: 4; border.color: Theme.accentAlpha(0.12)
                     visible: field.activeFocus
                 }
                 Icon {

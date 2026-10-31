@@ -28,7 +28,7 @@ Item {
         visible: !gb.busy
         color: gb.onDark ? Qt.rgba(1, 1, 1, area.containsMouse ? 1 : 0.92)
              : gb.installed ? (area.containsMouse ? Qt.darker(Theme.fill, 1.4) : Theme.fill)
-             : (area.containsMouse ? Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.2) : Theme.accentSoft)
+             : (area.containsMouse ? Theme.accentAlpha(0.2) : Theme.accentSoft)
         scale: area.pressed ? 0.94 : 1
         Behavior on scale { NumberAnimation { duration: 90 } }
         Text {

@@ -1,0 +1,102 @@
+#pragma once
+
+#include <QObject>
+#include <QQmlEngine>
+#include <QSet>
+#include <QTimer>
+#include <QVariantList>
+#include <functional>
+
+// Zaplecze Ustawień: sieci Wi‑Fi (nmcli), urządzenia Bluetooth (bluetoothctl), wyjścia i wejścia dźwięku (wpctl),
+// nocne światło (KWin), ciemny motyw (plasma-apply-colorscheme) i informacje o komputerze (/proc, /sys, os-release).
+// Polecenia działają w tle; ASTER_PREVIEW podstawia przykładowe dane (zrzuty w kontenerze).
+class System : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+
+    Q_PROPERTY(QVariantMap about READ about CONSTANT)
+    Q_PROPERTY(QString userName READ userName CONSTANT)
+    Q_PROPERTY(QString fullName READ fullName CONSTANT)
+
+    Q_PROPERTY(bool wifiAvailable MEMBER m_wifiAvailable NOTIFY networkChanged)
+    Q_PROPERTY(bool wifiOn MEMBER m_wifiOn NOTIFY networkChanged)
+    Q_PROPERTY(QVariantList networks MEMBER m_networks NOTIFY networkChanged)
+    Q_PROPERTY(QString wiredName MEMBER m_wiredName NOTIFY networkChanged)
+    Q_PROPERTY(bool scanning MEMBER m_scanning NOTIFY networkChanged)
+    Q_PROPERTY(QString connecting MEMBER m_connecting NOTIFY networkChanged)
+
+    Q_PROPERTY(bool bluetoothAvailable MEMBER m_btAvailable NOTIFY bluetoothChanged)
+    Q_PROPERTY(bool bluetoothOn MEMBER m_btOn NOTIFY bluetoothChanged)
+    Q_PROPERTY(QVariantList devices MEMBER m_devices NOTIFY bluetoothChanged)
+    Q_PROPERTY(bool discovering MEMBER m_discovering NOTIFY bluetoothChanged)
+
+    Q_PROPERTY(QVariantList outputs MEMBER m_outputs NOTIFY audioChanged)
+    Q_PROPERTY(QVariantList inputs MEMBER m_inputs NOTIFY audioChanged)
+    Q_PROPERTY(double volume MEMBER m_volume NOTIFY audioChanged)
+    Q_PROPERTY(bool muted MEMBER m_muted NOTIFY audioChanged)
+
+    Q_PROPERTY(bool nightLight MEMBER m_nightLight NOTIFY displayChanged)
+
+public:
+    explicit System(QObject *parent = nullptr);
+
+    QVariantMap about() const;
+    QString userName() const;
+    QString fullName() const;
+
+    Q_INVOKABLE void refresh();
+    Q_INVOKABLE void setWifi(bool on);
+    Q_INVOKABLE void scanWifi();
+    Q_INVOKABLE void connectWifi(const QString &ssid, const QString &password);
+    Q_INVOKABLE void disconnectWifi();
+
+    Q_INVOKABLE void setBluetooth(bool on);
+    Q_INVOKABLE void discover();
+    Q_INVOKABLE void connectDevice(const QString &mac);
+    Q_INVOKABLE void disconnectDevice(const QString &mac);
+    Q_INVOKABLE void forgetDevice(const QString &mac);
+
+    Q_INVOKABLE void setDefaultDevice(int id);
+    Q_INVOKABLE void setVolume(double value);
+    Q_INVOKABLE void toggleMute();
+
+    Q_INVOKABLE void setNightLight(bool on);
+    Q_INVOKABLE void setDarkMode(bool dark);
+    Q_INVOKABLE void openKcm(const QString &module);
+    Q_INVOKABLE void run(const QString &program, const QStringList &args = {});
+    Q_INVOKABLE void testNotification();
+
+Q_SIGNALS:
+    void networkChanged();
+    void bluetoothChanged();
+    void audioChanged();
+    void displayChanged();
+    void message(const QString &text);
+
+private:
+    void query(const QString &key, const QString &program, const QStringList &args,
+               std::function<void(const QString &out, int code)> done);
+    void readNetwork();
+    void readBluetooth();
+    void readAudio();
+    void readDisplay();
+    void fillPreview();
+
+    bool m_preview = false;
+    QSet<QString> m_running;
+    QTimer m_poll;
+    QTimer m_volumeDelay;
+
+    bool m_wifiAvailable = false, m_wifiOn = false, m_scanning = false;
+    QVariantList m_networks;
+    QString m_wiredName, m_connecting;
+    bool m_btAvailable = false, m_btOn = false, m_discovering = false;
+    QVariantList m_devices;
+    QVariantList m_outputs, m_inputs;
+    double m_volume = 0;
+    bool m_muted = false;
+    qint64 m_volumeTouched = 0;
+    bool m_nightLight = false;
+};

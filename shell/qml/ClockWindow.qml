@@ -26,6 +26,9 @@ Window {
     Column {
         x: 72; y: 84
         spacing: -6
+        // Ustawienia → Pulpit i dok → „Zegar na pulpicie”
+        opacity: Config.desktopClock ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 200 } }
         layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
         layer.effect: MultiEffect {
             shadowEnabled: true

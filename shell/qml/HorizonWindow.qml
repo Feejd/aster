@@ -31,7 +31,7 @@ Window {
     Connections {
         target: Platform
         function onNotificationPosted(n) {
-            if (ControlCenter.doNotDisturb) return;      // „Nie przeszkadzać”: bez karty, plakietki w doku zostają
+            if (Config.doNotDisturb) return;      // „Nie przeszkadzać”: bez karty, plakietki w doku zostają
             hz.queue = hz.queue.concat([n]);
             if (!hz.current) hz.next();
         }

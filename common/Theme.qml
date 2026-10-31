@@ -1,10 +1,10 @@
 pragma Singleton
 import QtQuick
 
-// Kolory i czcionka Aster (powłoka i aplikacje) — te same co w prototypie. Jasny/ciemny motyw idzie za ustawieniem systemu.
+// Kolory i czcionka Aster (powłoka i aplikacje). Jasny/ciemny motyw idzie za ustawieniem systemu, akcent — za Ustawieniami Aster.
 QtObject {
     readonly property bool dark: WindowEffects.forceDark || Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
-    readonly property color accent: "#3456E8"
+    readonly property color accent: Config.accent        // wybierany w Ustawieniach → Wygląd
     readonly property string font: "Geist"      // data/fonts/geist (OFL), instalowana razem z systemem
 
     // Szkło: półprzezroczysty odcień nad rozmyciem z KWin
@@ -21,7 +21,8 @@ QtObject {
     readonly property color danger: dark ? "#FF8A80" : "#C62828"
     readonly property color surface: dark ? "#23262F" : "#FFFFFF"
     readonly property color line: dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.08)
-    readonly property color accentSoft: Qt.rgba(52 / 255, 86 / 255, 232 / 255, dark ? 0.32 : 0.14)
+    readonly property color accentSoft: Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.32 : 0.14)
+    function accentAlpha(a) { return Qt.rgba(accent.r, accent.g, accent.b, a); }
     readonly property color accentText: dark ? Qt.lighter(accent, 1.55) : accent
     readonly property color hover: dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.07)
 }

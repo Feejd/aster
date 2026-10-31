@@ -10,7 +10,7 @@ class QProcess;
 
 // Zaplecze centrum sterowania: sieć (nmcli), Bluetooth (bluetoothctl), dźwięk (wpctl / PipeWire),
 // jasność ekranu (D-Bus org.kde.ScreenBrightness z PowerDevil), bateria (/sys), odtwarzacz (MPRIS),
-// ciemny motyw (plasma-apply-colorscheme) i „Nie przeszkadzać” (powłoka sama jest serwerem powiadomień).
+// i ciemny motyw (plasma-apply-colorscheme). „Nie przeszkadzać” jest we wspólnym Config (Aster.Ui).
 // Stan odświeża się co kilka sekund, a gdy centrum jest otwarte (active) — co sekundę.
 // Polecenia idą przez QProcess w tle, więc powłoka nigdy nie czeka na wolny program.
 class ControlCenter : public QObject
@@ -48,13 +48,11 @@ class ControlCenter : public QObject
     Q_PROPERTY(QString artUrl MEMBER m_artUrl NOTIFY playerChanged)
     Q_PROPERTY(bool playing MEMBER m_playing NOTIFY playerChanged)
 
-    Q_PROPERTY(bool doNotDisturb MEMBER m_dnd WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
 
 public:
     explicit ControlCenter(QObject *parent = nullptr);
 
     void setActive(bool active);
-    void setDoNotDisturb(bool on);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setWifi(bool on);
@@ -75,7 +73,6 @@ Q_SIGNALS:
     void brightnessChanged();
     void batteryChanged();
     void playerChanged();
-    void doNotDisturbChanged();
 
 private:
     // Uruchamia program w tle i oddaje jego wyjście (pomija, gdy poprzednie wywołanie tego samego klucza jeszcze trwa)
@@ -109,7 +106,6 @@ private:
     int m_battery = 0;
     bool m_playerAvailable = false, m_playing = false;
     QString m_playerService, m_playerName, m_title, m_artist, m_artUrl;
-    bool m_dnd = false;
     // Chwilę po ruchu suwakiem nie nadpisujemy wartości odczytem (żeby suwak nie „skakał”)
     qint64 m_volumeTouched = 0, m_brightnessTouched = 0;
 };

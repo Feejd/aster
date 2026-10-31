@@ -1088,7 +1088,7 @@ Window {
                     visible: win.toastUndo
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Cofnij"
-                    color: Theme.dark ? "#3456E8" : "#8FA6FF"
+                    color: Theme.dark ? Theme.accent : Qt.lighter(Theme.accent, 1.6)
                     font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Bold
                     MouseArea { anchors.fill: parent; anchors.margins: -8; onClicked: { toastTimer.stop(); win.doUndo(); } }
                 }

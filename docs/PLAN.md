@@ -33,7 +33,10 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Test na prawdziwym laptopie (x86_64).
 
 ## Etap 5 — własne aplikacje
-- [ ] Ustawienia Aster (proste, jak w prototypie), oparte na modułach KDE.
+- [x] Ustawienia Aster (`apps/settings`): Wi‑Fi (lista sieci, hasło), Bluetooth (parowanie), dźwięk (wyjścia i wejścia),
+      powiadomienia, ogólne (o tym komputerze), wygląd (jasny/ciemny, kolor akcentu), tapeta, pulpit i dok, ekran (nocne światło), konto;
+      wspólna konfiguracja `~/.config/aster/aster.conf` (Config w Aster.Ui) zmienia się na żywo we wszystkich programach
+- [ ] Ustawienia: programy przypięte do doku, rozmiar tekstu, data i czas, język, użytkownicy — bez modułów KDE
 - [x] Pliki — pierwsza wersja (KIO: kosz, kopiowanie, cofanie, wyszukiwanie, podgląd)
 - [ ] Pliki: dyski USB i sieciowe, „Otwórz za pomocą”, właściwości, przeciąganie do innych aplikacji
 - [x] Przeglądarka — pierwsza wersja (Qt WebEngine/Chromium: karty, ulubione, historia, pobieranie, uprawnienia, szukanie na stronie)

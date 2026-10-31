@@ -47,7 +47,7 @@ Window {
             "applications:org.kde.kate.desktop",
             "applications:org.kde.konsole.desktop",
             "applications:org.aster.store.desktop",
-            "applications:systemsettings.desktop"
+            "applications:org.aster.settings.desktop"
         ]
     }
 
@@ -58,7 +58,7 @@ Window {
         running: Platform.preview
         interval: 10
         onTriggered: {
-            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.aster.store", "org.kde.konsole", "systemsettings"];
+            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.aster.store", "org.kde.konsole", "org.aster.settings"];
             ids.forEach((id, i) => {
                 const a = Platform.appInfo(id);
                 if (!a.valid) return;
@@ -178,6 +178,7 @@ Window {
                         spacing: 3
                         Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.battery; size: 20; stroke: 1.8; color: status.ink }
                         Text {
+                            visible: Config.batteryPercent
                             anchors.verticalCenter: parent.verticalCenter
                             text: ControlCenter.battery + "%"
                             color: status.ink
@@ -187,7 +188,7 @@ Window {
                     }
                     Icon {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: ControlCenter.doNotDisturb
+                        visible: Config.doNotDisturb
                         d: Icons.moon
                         size: 17; stroke: 2
                         color: status.ink

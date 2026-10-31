@@ -55,7 +55,7 @@ Item {
              : fi.selected ? Theme.accentSoft
              : (area.containsMouse ? Theme.hover : "transparent")
         border.width: fi.dropTarget ? 2 : (fi.selected && !fi.listMode ? 1 : 0)
-        border.color: fi.dropTarget ? Theme.accent : Qt.rgba(52 / 255, 86 / 255, 232 / 255, 0.4)
+        border.color: fi.dropTarget ? Theme.accent : Theme.accentAlpha(0.4)
         Behavior on color { ColorAnimation { duration: 90 } }
     }
 

@@ -17,9 +17,10 @@ cmake --build "$BUILD"
 # Aplikacje z katalogu budowania widoczne w systemie (dok, Start, „Otwórz za pomocą”)
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
-for app in files browser webapps store; do
-    sed "s|^Exec=aster-$app|Exec=$BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
+for app in files browser webapps store settings; do
+    sed "s|^Exec=aster-$app|Exec=env ASTER_DATA_DIR=$ROOT/data $BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
 done
+update-desktop-database "$APPS" >/dev/null 2>&1 || true     # adresy aster-settings:wifi itp.
 kbuildsycoca6 >/dev/null 2>&1 || true
 
 # Czcionka Aster (Geist) dla tego użytkownika — także w programach KDE i na paskach tytułu

@@ -13,6 +13,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/browser/` | Przeglądarka — silnik Qt WebEngine (Chromium), wygląd Aster. |
 | `apps/webapps/` | Aplikacje webowe — strony jako natywne programy (okno, ikona, powiadomienia, liczniki w doku). |
 | `apps/store/` | Sklep — programy z Flathub (flatpak), wygląd jak App Store. |
+| `apps/settings/` | Ustawienia — Wi‑Fi, Bluetooth, dźwięk, wygląd i kolor akcentu, tapeta, pulpit, ekran, informacje o komputerze. |
 | `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
 | `session/` | Sesja logowania „Aster”: KWin i usługi Plasmy, ale zamiast plasmashell działa aster-shell. |
 | `image/` | Szkic obrazu systemu (Fedora Kinoite + Aster), do zbudowania i instalacji jako atomowy system. |

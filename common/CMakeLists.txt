@@ -18,6 +18,8 @@ qt_add_qml_module(aster-ui
     SOURCES
         windoweffects.cpp
         windoweffects.h
+        asterconfig.cpp
+        asterconfig.h
 )
 target_include_directories(aster-ui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(aster-ui PRIVATE Qt6::Quick KF6::WindowSystem)

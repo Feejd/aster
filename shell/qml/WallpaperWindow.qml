@@ -11,7 +11,7 @@ Window {
     visible: false
     width: Screen.width
     height: Screen.height
-    property string variant: "aura"
+    readonly property string variant: Config.wallpaper     // Ustawienia → Tapeta
 
     Component.onCompleted: {
         Platform.makeLayer(wp, "background", 1 | 2 | 4 | 8, -1, "none", "aster-wallpaper");
