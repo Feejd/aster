@@ -30,7 +30,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       kolorowe przyciski okna, sprężyste otwieranie (wspólne WindowShadow / WindowSheen / WindowButtons w Aster.Ui)
 - [x] Okna z materiału widżetów: lżejsze szkło okna, rogi 24 px, treść na pływającym szklanym panelu (GlassPane)
       w Ustawieniach, Plikach, Sklepie, menedżerze aplikacji webowych; strona w Przeglądarce jako karta
-- [ ] Okna aplikacji webowych (pasek w kolorze serwisu) — dopasować do pływających paneli
+- [x] Okna aplikacji webowych: szkło okna w kolorze serwisu, strona na pływającej karcie
 - [ ] **Kolory i styl aplikacji Qt/KDE**: akcent, zaokrąglenia, czcionka Geist w całym systemie.
 - [ ] Ikony i kursor, ekran logowania (SDDM) i ekran blokady w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.

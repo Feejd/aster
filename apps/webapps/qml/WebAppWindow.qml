@@ -162,6 +162,8 @@ Window {
     readonly property bool showTopnav: !adapter && store.nativeNav && !showSidebar && navTop.length >= 3 && !pageFullScreen
     readonly property bool integratedBar: !adapter && store.integrated && !showTopnav && !pageFullScreen && (pageTopbar > 0 || showSidebar)
     readonly property int sideWidth: showSidebar ? 232 : 0
+    // Strona leży na pływającej karcie, wsuniętej o `gap` od krawędzi szkła okna
+    readonly property int gap: pageFullScreen ? 0 : 8
 
     function navClick(id, fromPage) {
         if (adapter && !fromPage) { adapterGo(id); return; }
@@ -393,7 +395,6 @@ Window {
                 color: win.sideFill
                 Behavior on color { ColorAnimation { duration: 250 } }
             }
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: win.sideLine }
 
             Item {
                 id: sideHeader
@@ -679,16 +680,25 @@ Window {
                                            (src) => win.avatarSrc = src || "")
         }
 
-        // ——— Pasek tytułu w kolorze aplikacji ———
+        // ——— Szkło okna w kolorze aplikacji (pod paskiem tytułu i wokół karty strony) ———
         Rectangle {
+            x: win.sideWidth
+            width: parent.width - x
+            height: parent.height
+            visible: win.barTinted && !win.pageFullScreen
+            topLeftRadius: win.sideWidth ? 0 : win.r; bottomLeftRadius: win.sideWidth ? 0 : win.r
+            topRightRadius: win.r; bottomRightRadius: win.r
+            color: Qt.rgba(win.barColor.r, win.barColor.g, win.barColor.b, 0.86)
+            Behavior on color { ColorAnimation { duration: 300 } }
+        }
+
+        // ——— Pasek tytułu ———
+        Item {
             id: bar
             x: win.sideWidth
             width: parent.width - x
             height: win.pageFullScreen || win.integratedBar ? 0 : (win.adapter ? 56 : (win.showTopnav ? 50 : 42))
             visible: height > 0
-            topLeftRadius: win.sideWidth ? 0 : win.r; topRightRadius: win.r
-            color: win.barColor
-            Behavior on color { ColorAnimation { duration: 300 } }
 
             DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
             TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
@@ -878,16 +888,16 @@ Window {
                 Behavior on width { NumberAnimation { duration: 200 } }
                 Behavior on opacity { NumberAnimation { duration: 300 } }
             }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line; visible: !win.barTinted && !win.adapter }
         }
 
         // ——— Prośba o kamerę / mikrofon / lokalizację ———
         Rectangle {
             id: permBar
             property var request: null
-            x: win.sideWidth
-            y: bar.height
-            width: parent.width - x
+            x: win.sideWidth + win.gap
+            y: bar.height + (bar.height ? 0 : win.gap)
+            width: parent.width - x - win.gap
+            radius: Math.max(10, win.r - 8)
             height: request ? 46 : 0
             visible: height > 0
             clip: true
@@ -919,15 +929,21 @@ Window {
             }
         }
 
-        // ——— Strona ———
+        // ——— Strona: pływająca karta ———
+        GlassPane {
+            visible: win.gap > 0
+            x: content.x; y: content.y
+            width: content.width; height: content.height
+            radius: contentMask.radius
+        }
         Item {
             id: content
-            x: win.sideWidth
-            y: bar.height + permBar.height
-            width: parent.width - x
-            height: parent.height - y
+            x: win.sideWidth + win.gap
+            y: (permBar.height ? permBar.y + permBar.height + 6 : bar.height + (bar.height ? 0 : win.gap))
+            width: parent.width - x - win.gap
+            height: parent.height - y - win.gap
             clip: true
-            layer.enabled: win.r > 0 && GraphicsInfo.api !== GraphicsInfo.Software
+            layer.enabled: win.gap > 0 && GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect {
                 maskEnabled: true
                 maskSource: contentMask
@@ -1127,7 +1143,7 @@ Window {
             visible: false
             layer.enabled: true
             width: content.width; height: content.height
-            bottomLeftRadius: win.r; bottomRightRadius: win.r
+            radius: win.gap ? Math.max(10, win.r - 8) : 0
             color: "black"
         }
 
@@ -1135,8 +1151,8 @@ Window {
         Rectangle {
             id: floatControls
             visible: win.integratedBar
-            anchors.right: parent.right; anchors.rightMargin: 8
-            y: 7
+            anchors.right: parent.right; anchors.rightMargin: 8 + win.gap
+            y: 7 + win.gap
             z: 20
             height: 34; radius: 12
             width: floatRow.implicitWidth + 12
