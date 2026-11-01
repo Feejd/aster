@@ -34,7 +34,9 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] **Kolory i styl aplikacji Qt/KDE**: akcent, zaokrąglenia, czcionka Geist w całym systemie.
 - [x] Start jak w macOS: ekran Plymouth ze znakiem Aster i paskiem postępu, bez tekstu jądra i systemd, ukryte menu GRUB,
       nazwa systemu „Aster 1.0”, od razu sesja Aster (`tools/install-vm.sh` w maszynie wirtualnej, `image/` w obrazie)
-- [ ] Ikony i kursor, ekran logowania (SDDM) i ekran blokady w stylu Aster.
+- [x] Ekran logowania Aster (motyw SDDM: rozmyta tapeta, zegar, karta użytkownika, inne osoby, zasilanie);
+      SDDM zamiast Plasma Login Managera z Fedory 44 (ten nie przyjmuje własnych motywów)
+- [ ] Ikony i kursor, ekran blokady w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.
 
 ## Etap 3b — system bez programów Fedory/KDE (najpierw to, potem programy użytkowe)

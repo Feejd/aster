@@ -26,7 +26,11 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
 
 # ——— Start jak w macOS: znak Aster, bez tekstu, od razu do sesji Aster ———
 COPY image/boot/10-aster.toml /usr/lib/bootc/kargs.d/10-aster.toml
-RUN dnf install -y plymouth-plugin-script \
+COPY image/boot/10-aster-sddm.conf /etc/sddm.conf.d/10-aster.conf
+RUN dnf install -y plymouth-plugin-script sddm sddm-wayland-plasma \
+ # Ekran logowania: SDDM z motywem Aster zamiast Plasma Login Manager (tamten nie przyjmuje własnych motywów)
+ && (systemctl disable plasmalogin.service 2>/dev/null || true) \
+ && systemctl enable --force sddm.service \
  && dnf swap -y fedora-logos generic-logos --allowerasing \
  # Nazwa systemu: Aster (ID=fedora zostaje — po nim aktualizacje i Flatpak wiedzą, skąd brać pakiety)
  && sed -i -e 's/^NAME=.*/NAME="Aster"/' -e 's/^PRETTY_NAME=.*/PRETTY_NAME="Aster 1.0"/' \
