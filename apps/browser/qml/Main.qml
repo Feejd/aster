@@ -577,23 +577,23 @@ Window {
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         }
 
-        // ——— Strony: pływająca karta pod paskiem okna ———
+        // ——— Strony ———
         GlassPane {
             visible: !win.pageFullScreen
             x: content.x; y: content.y
             width: content.width; height: content.height
-            radius: contentMask.radius
+            bottomLeftRadius: win.r; bottomRightRadius: win.r
+            leftLine: false
         }
         Item {
             id: content
-            x: win.pageFullScreen ? 0 : 8
             y: chrome.height + permBar.height
-            width: parent.width - 2 * x
-            height: parent.height - y - x
+            width: parent.width
+            height: parent.height - y
             clip: true
 
             // Zaokrąglone dolne rogi strony (maska), gdy okno nie jest zmaksymalizowane
-            layer.enabled: !win.pageFullScreen && GraphicsInfo.api !== GraphicsInfo.Software
+            layer.enabled: !win.maxed && !win.pageFullScreen && GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect {
                 maskEnabled: true
                 maskSource: contentMask
@@ -691,7 +691,7 @@ Window {
             visible: false
             layer.enabled: true
             width: content.width; height: content.height
-            radius: win.pageFullScreen ? 0 : Math.max(10, win.r - 8)
+            bottomLeftRadius: win.r; bottomRightRadius: win.r
             color: "black"
         }
 

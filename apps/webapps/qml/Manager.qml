@@ -148,9 +148,10 @@ Window {
 
         GlassPane {
             id: pane
-            x: 8; y: titlebar.height
-            width: parent.width - 16; height: parent.height - y - 8
-            radius: Math.max(10, win.r - 8)
+            y: titlebar.height
+            width: parent.width; height: parent.height - y
+            bottomLeftRadius: win.r; bottomRightRadius: win.r
+            leftLine: false
         }
 
         Flickable {

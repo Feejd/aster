@@ -162,8 +162,6 @@ Window {
     readonly property bool showTopnav: !adapter && store.nativeNav && !showSidebar && navTop.length >= 3 && !pageFullScreen
     readonly property bool integratedBar: !adapter && store.integrated && !showTopnav && !pageFullScreen && (pageTopbar > 0 || showSidebar)
     readonly property int sideWidth: showSidebar ? 232 : 0
-    // Strona leży na pływającej karcie, wsuniętej o `gap` od krawędzi szkła okna
-    readonly property int gap: pageFullScreen ? 0 : 8
 
     function navClick(id, fromPage) {
         if (adapter && !fromPage) { adapterGo(id); return; }
@@ -894,10 +892,9 @@ Window {
         Rectangle {
             id: permBar
             property var request: null
-            x: win.sideWidth + win.gap
-            y: bar.height + (bar.height ? 0 : win.gap)
-            width: parent.width - x - win.gap
-            radius: Math.max(10, win.r - 8)
+            x: win.sideWidth
+            y: bar.height
+            width: parent.width - x
             height: request ? 46 : 0
             visible: height > 0
             clip: true
@@ -929,21 +926,15 @@ Window {
             }
         }
 
-        // ——— Strona: pływająca karta ———
-        GlassPane {
-            visible: win.gap > 0
-            x: content.x; y: content.y
-            width: content.width; height: content.height
-            radius: contentMask.radius
-        }
+        // ——— Strona ———
         Item {
             id: content
-            x: win.sideWidth + win.gap
-            y: (permBar.height ? permBar.y + permBar.height + 6 : bar.height + (bar.height ? 0 : win.gap))
-            width: parent.width - x - win.gap
-            height: parent.height - y - win.gap
+            x: win.sideWidth
+            y: bar.height + permBar.height
+            width: parent.width - x
+            height: parent.height - y
             clip: true
-            layer.enabled: win.gap > 0 && GraphicsInfo.api !== GraphicsInfo.Software
+            layer.enabled: win.r > 0 && GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect {
                 maskEnabled: true
                 maskSource: contentMask
@@ -1143,7 +1134,7 @@ Window {
             visible: false
             layer.enabled: true
             width: content.width; height: content.height
-            radius: win.gap ? Math.max(10, win.r - 8) : 0
+            bottomLeftRadius: win.sideWidth ? 0 : win.r; bottomRightRadius: win.r
             color: "black"
         }
 
@@ -1151,8 +1142,8 @@ Window {
         Rectangle {
             id: floatControls
             visible: win.integratedBar
-            anchors.right: parent.right; anchors.rightMargin: 8 + win.gap
-            y: 7 + win.gap
+            anchors.right: parent.right; anchors.rightMargin: 8
+            y: 7
             z: 20
             height: 34; radius: 12
             width: floatRow.implicitWidth + 12

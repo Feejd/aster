@@ -11,7 +11,7 @@ Item {
     required property Window window
     property real radius: 14
     property bool animateOpen: true
-    property bool aurora: true
+    property bool aurora: false
     readonly property bool active: window.active || WindowEffects.preview
     readonly property bool maxed: window.visibility === Window.Maximized || window.visibility === Window.FullScreen
     anchors.fill: parent

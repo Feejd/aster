@@ -194,10 +194,10 @@ Window {
         // ——— Strona ———
         GlassPane {
             id: main
-            x: side.width; y: 8
-            width: parent.width - side.width - 8
-            height: parent.height - 16
-            radius: Math.max(10, win.r - 8)
+            x: side.width
+            width: parent.width - side.width
+            height: parent.height
+            topRightRadius: win.r; bottomRightRadius: win.r
 
             Item {
                 id: topBar

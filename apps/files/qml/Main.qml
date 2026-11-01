@@ -610,19 +610,20 @@ Window {
             }
         }
 
-        // ——— Panel treści (pasek narzędzi, folder, pasek stanu) ———
+        // ——— Panel treści (prawa część okna: pasek narzędzi, folder, pasek stanu) ———
         GlassPane {
             id: pane
-            x: sidebar.width; y: titlebar.height
-            width: parent.width - sidebar.width - 8
-            height: parent.height - y - 8
-            radius: Math.max(10, win.r - 8)
+            z: -1                       // pod paskiem tytułu, który biegnie nad całym oknem
+            x: sidebar.width
+            width: parent.width - sidebar.width
+            height: parent.height
+            topRightRadius: win.r; bottomRightRadius: win.r
         }
 
         // ——— Pasek narzędzi ———
         Item {
             id: toolbar
-            x: pane.x; y: pane.y
+            x: pane.x; y: titlebar.height
             width: pane.width; height: 48
 
             Row {
