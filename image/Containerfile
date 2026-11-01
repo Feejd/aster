@@ -5,7 +5,7 @@ ARG FEDORA=44
 
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules \
-        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel qt6-qtwebengine-devel plasma-workspace-devel
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel qt6-qtwebengine-devel plasma-workspace-devel
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
@@ -18,7 +18,9 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
 
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
-RUN dnf install -y google-roboto-fonts layer-shell-qt \
+RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  && systemctl --global enable aster-shell.service \
  && dnf clean all
 RUN bootc container lint || true

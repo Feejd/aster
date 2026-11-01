@@ -67,6 +67,8 @@ public:
     Q_INVOKABLE int paste(const QString &destDir);
 
     Q_INVOKABLE void open(const QString &url);
+    // Terminal w tym folderze
+    Q_INVOKABLE void openTerminal(const QString &dirUrl);
     // Początek pliku tekstowego do podglądu (pusty, jeśli to nie tekst)
     Q_INVOKABLE QString previewText(const QString &url) const;
 

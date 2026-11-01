@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD:-$HOME/aster-build}"
 
 # Brak narzędzi albo nowych bibliotek (doszły w nowszej wersji kodu) → przygotowanie maszyny
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 
 # Stary katalog budowania z czasów, gdy budowała się sama powłoka — zacznij od nowa
 [ -f "$BUILD/CMakeCache.txt" ] && ! grep -q "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT\$" "$BUILD/CMakeCache.txt" && rm -rf "$BUILD"
@@ -20,6 +20,13 @@ mkdir -p "$APPS"
 for app in files browser webapps store settings; do
     sed "s|^Exec=aster-$app|Exec=env ASTER_DATA_DIR=$ROOT/data $BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
 done
+# Terminal: polecenie aster-terminal w ~/.local/bin (wołają je Pliki, KDE i xdg-terminal-exec)
+mkdir -p "$HOME/.local/bin"
+ln -sf "$BUILD/apps/terminal/aster-terminal" "$HOME/.local/bin/aster-terminal"
+cp "$ROOT/apps/terminal/org.aster.terminal.desktop" "$APPS/"
+kwriteconfig6 --file kdeglobals --group General --key TerminalApplication aster-terminal 2>/dev/null || true
+kwriteconfig6 --file kdeglobals --group General --key TerminalService org.aster.terminal.desktop 2>/dev/null || true
+printf 'org.aster.terminal.desktop\n' > "$HOME/.config/xdg-terminals.list"
 update-desktop-database "$APPS" >/dev/null 2>&1 || true     # adresy aster-settings:wifi itp.
 kbuildsycoca6 >/dev/null 2>&1 || true
 

@@ -25,7 +25,7 @@ Window {
     property bool open: false
     property string category: "ulubione"
     readonly property var pinned: [
-        "org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.kate", "org.kde.konsole",
+        "org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.kate", "org.aster.terminal",
         "org.aster.store", "org.aster.settings", "org.kde.okular", "org.kde.gwenview",
         "org.kde.elisa", "org.kde.spectacle", "org.kde.kcalc"
     ]

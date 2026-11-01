@@ -9,7 +9,9 @@
 #include <KSharedConfig>
 #include <QCollator>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QStandardPaths>
 
 struct Category {
     const char *id;
@@ -61,10 +63,11 @@ Apps::Apps(QObject *parent)
                           okular = app(QStringLiteral("org.kde.okular.desktop"), QStringLiteral("Okular")),
                           elisa = app(QStringLiteral("org.kde.elisa.desktop"), QStringLiteral("Elisa")),
                           vlc = app(QStringLiteral("vlc.desktop"), QStringLiteral("VLC")),
+                          terminal = app(QStringLiteral("org.aster.terminal.desktop"), QStringLiteral("Terminal")),
                           konsole = app(QStringLiteral("org.kde.konsole.desktop"), QStringLiteral("Konsole")),
                           thunder = app(QStringLiteral("org.mozilla.Thunderbird.desktop"), QStringLiteral("Thunderbird"));
         m_categories = {cat("browser", browser, {browser, firefox}), cat("mail", thunder, {thunder, browser}), cat("files", files, {files}),
-                        cat("terminal", konsole, {konsole}), cat("text", kate, {kate}), cat("image", gwen, {gwen, browser}),
+                        cat("terminal", terminal, {terminal, konsole}), cat("text", kate, {kate}), cat("image", gwen, {gwen, browser}),
                         cat("music", elisa, {elisa, vlc}), cat("video", vlc, {vlc}), cat("pdf", okular, {okular, browser})};
         m_autostart = {QVariantMap{{QStringLiteral("file"), QStringLiteral("a")}, {QStringLiteral("id"), QStringLiteral("discord")}, {QStringLiteral("name"), QStringLiteral("Discord")},
                                    {QStringLiteral("icon"), QString()}, {QStringLiteral("enabled"), true}},
@@ -86,7 +89,7 @@ void Apps::refresh()
         if (c.mimes.isEmpty()) {
             // Terminal: programy z kategorii TerminalEmulator; wybór w kdeglobals
             choices = KApplicationTrader::query([](const KService::Ptr &s) { return s->categories().contains(QLatin1String("TerminalEmulator")); });
-            const QString id = KSharedConfig::openConfig(QStringLiteral("kdeglobals"))->group(QStringLiteral("General")).readEntry("TerminalService", QStringLiteral("org.kde.konsole.desktop"));
+            const QString id = KSharedConfig::openConfig(QStringLiteral("kdeglobals"))->group(QStringLiteral("General")).readEntry("TerminalService", QStringLiteral("org.aster.terminal.desktop"));
             current = KService::serviceByStorageId(id);
         } else {
             choices = KApplicationTrader::queryByMimeType(c.mimes.first());
@@ -134,6 +137,10 @@ void Apps::setDefault(const QString &category, const QString &appId)
             g.writeEntry("TerminalApplication", service->exec().section(QLatin1Char(' '), 0, 0), KConfig::Notify);
             g.writeEntry("TerminalService", appId, KConfig::Notify);
             g.sync();
+            // xdg-terminal-exec (używają go m.in. programy GTK) czyta listę z ~/.config
+            QFile list(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/xdg-terminals.list"));
+            if (list.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                list.write(appId.toUtf8() + '\n');
         }
         for (const QString &mime : c.mimes)
             KApplicationTrader::setPreferredService(mime, service);

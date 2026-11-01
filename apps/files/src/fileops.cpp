@@ -17,6 +17,7 @@
 #include <QLocale>
 #include <QMimeData>
 #include <QMimeDatabase>
+#include <QProcess>
 #include <QStandardPaths>
 #include <QStorageInfo>
 
@@ -337,6 +338,13 @@ void Files::open(const QString &url)
     auto *job = new KIO::OpenUrlJob(QUrl(url));
     watch(job);
     job->start();
+}
+
+void Files::openTerminal(const QString &dirUrl)
+{
+    const QUrl url(dirUrl);
+    QProcess::startDetached(QStringLiteral("aster-terminal"),
+                            {QStringLiteral("--workdir"), url.isLocalFile() ? url.toLocalFile() : QDir::homePath()});
 }
 
 QString Files::previewText(const QString &urlString) const

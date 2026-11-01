@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+GenericName=Terminal
+Comment=Wpisuj polecenia i uruchamiaj programy tekstowe
+Exec=aster-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;konsola;wiersz poleceń;polecenia;bash;shell;cmd;powershell;
+StartupWMClass=aster-terminal
+X-TerminalArgExec=-e
+X-TerminalArgDir=--workdir
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=Nowe okno
+Exec=aster-terminal

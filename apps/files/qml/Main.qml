@@ -338,6 +338,8 @@ Window {
             { label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" },
             { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: !!f },
             { separator: true },
+            { label: "Otwórz w Terminalu", icon: "terminal", action: "terminalHere", enabled: isDir && f.url.indexOf("file:") === 0 },
+            { separator: true },
             { label: "Przenieś do kosza", icon: "trash", shortcut: "Delete", action: "trash", danger: true }
         ]);
     }
@@ -354,7 +356,9 @@ Window {
             { label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste", enabled: Files.clipboardCount > 0 && !query },
             { label: "Zaznacz wszystko", shortcut: "Ctrl+A", action: "selectAll" },
             { label: folder.showHidden ? "Ukryj ukryte pliki" : "Pokaż ukryte pliki", icon: "eye", shortcut: "Ctrl+H", action: "hidden" },
-            { label: "Cofnij", icon: "undo", shortcut: "Ctrl+Z", action: "undo", enabled: Files.canUndo }
+            { label: "Cofnij", icon: "undo", shortcut: "Ctrl+Z", action: "undo", enabled: Files.canUndo },
+            { separator: true },
+            { label: "Otwórz w Terminalu", icon: "terminal", action: "terminal", enabled: currentUrl.indexOf("file:") === 0 }
         ]);
     }
     function showSortMenu(wx, wy) {
@@ -390,6 +394,8 @@ Window {
         else if (a === "selectAll") selectAll();
         else if (a === "hidden") folder.showHidden = !folder.showHidden;
         else if (a === "undo") doUndo();
+        else if (a === "terminal") Files.openTerminal(currentUrl);
+        else if (a === "terminalHere") Files.openTerminal(selectedFile().url);
         else if (a === "sort:flip") folder.ascending = !folder.ascending;
         else if (a.indexOf("sort:") === 0) setSort(a.slice(5));
         if (!renaming) keys.forceActiveFocus();
