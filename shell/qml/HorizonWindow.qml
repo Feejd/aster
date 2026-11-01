@@ -2,28 +2,56 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import org.kde.kirigami as Kirigami
+import org.kde.taskmanager as TaskManager
 import Aster.Shell
 import Aster.Ui
 
-// „Horyzont”: szklana wyspa u góry ekranu z datą i godziną.
-// Powiadomienia (od każdego programu, także aplikacji webowych) wysuwają się pod nią jako karta:
-// klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
+// „Horyzont”: górny pasek z trzech pływających wysp (warstwa „top”, z rezerwacją miejsca).
+//  lewa    — znak Aster (otwiera Start) i nazwa aktywnego programu z tytułem okna, jak menu w macOS
+//  środek  — dynamiczna wyspa: godzina; gdy gra muzyka — okładka i korektor; po najechaniu — data.
+//            Powiadomienie (od każdego programu, także aplikacji webowych) rozlewa wyspę w kartę:
+//            klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
+//  prawa   — wyszukiwanie, stan sieci, dźwięku i baterii: otwiera centrum sterowania
 Window {
     id: hz
     color: "transparent"
     title: "Horyzont"
     visible: false
-    width: 480
-    height: 190
+    width: Screen.width
+    height: 220
+    readonly property int shotX: 0
+    readonly property int shotY: 0
+
+    readonly property int reserved: 46
+    readonly property int barY: 7
+    readonly property int barH: 32
+    property bool controlOpen: false
+    signal startRequested()
+    signal controlRequested()
 
     Component.onCompleted: {
-        Platform.makeLayer(hz, "top", 1, 0, "none", "aster-horizon");
+        Platform.makeLayer(hz, "top", 1 | 4 | 8, hz.reserved, "none", "aster-horizon");
         visible = true;
-        regionTimer.start();
+        hz.updateRegion();
     }
 
     property date now: new Date()
     Timer { interval: 1000; repeat: true; running: true; onTriggered: hz.now = new Date() }
+    readonly property var loc: Qt.locale("pl_PL")
+
+    // ——— Aktywny program ———
+    TaskManager.TasksModel {
+        id: tasks
+        filterByVirtualDesktop: true
+        filterByActivity: false
+        filterByScreen: false
+        groupMode: TaskManager.TasksModel.GroupDisabled
+    }
+    readonly property bool hasActive: !Platform.preview && tasks.activeTask.valid
+    readonly property string appName: Platform.preview ? "Przeglądarka"
+                                     : hasActive ? (tasks.data(tasks.activeTask, TaskManager.AbstractTasksModel.AppName) || "") : "Aster"
+    readonly property string windowTitle: Platform.preview ? "Nowa karta"
+                                         : hasActive ? (tasks.data(tasks.activeTask, Qt.DisplayRole) || "") : ""
 
     // ——— Kolejka powiadomień: na raz widać jedno, kolejne czekają ———
     property var queue: []
@@ -48,148 +76,366 @@ Window {
         } else {
             current = null;
         }
-        regionTimer.restart();
     }
-    Timer { id: showTimer; interval: 5500; onTriggered: if (cardHover.hovered) restart(); else hz.next() }
+    Timer {
+        id: showTimer
+        interval: Platform.env("ASTER_SHOT_NOTIFY") !== "" ? 60000 : 5500
+        onTriggered: if (islandHover.hovered) restart(); else hz.next()
+    }
 
-    // Czarna pigułka (jak „Dynamic Island”): data i mała kropka Aster; rozszerza się, gdy przychodzi powiadomienie
+    // ——— Lewa wyspa ———
     Island {
-        id: pill
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: 10
-        solid: true
-        width: (hz.current ? 200 : 0) + pillRow.implicitWidth + 36
-        height: 36
-        radius: 18
-        Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
-        onWidthChanged: regionTimer.restart()
+        id: left
+        x: 10; y: hz.barY
+        width: leftRow.width + 12
+        height: hz.barH
+        radius: height / 2
+        onWidthChanged: hz.updateRegion()
+        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
         Row {
-            id: pillRow
-            anchors.centerIn: parent
-            spacing: 10
+            id: leftRow
+            x: 4
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
             Rectangle {
+                id: mark
+                width: 26; height: 26; radius: 13
                 anchors.verticalCenter: parent.verticalCenter
-                width: 8; height: 8; radius: 4
-                color: hz.current ? "#34D399" : Theme.accent
-                Behavior on color { ColorAnimation { duration: 200 } }
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.35) }
+                    GradientStop { position: 1; color: Theme.accent }
+                }
+                scale: markArea.pressed ? 0.88 : (markArea.containsMouse ? 1.06 : 1)
+                rotation: markArea.containsMouse ? 30 : 0
+                Behavior on scale { SpringAnimation { spring: 5; damping: 0.3 } }
+                Behavior on rotation { NumberAnimation { duration: 380; easing.type: Easing.OutBack } }
+                Icon { anchors.centerIn: parent; d: Icons.aster; size: 15; stroke: 2.2; color: "white" }
+                MouseArea { id: markArea; anchors.fill: parent; hoverEnabled: true; onClicked: hz.startRequested() }
             }
             Text {
-                id: label
                 anchors.verticalCenter: parent.verticalCenter
-                text: hz.now.toLocaleDateString(Qt.locale("pl_PL"), "dddd, d MMMM")
-                color: "white"
-                font.family: Theme.font
-                font.pixelSize: 13
-                font.weight: Font.Medium
+                text: hz.appName
+                color: Theme.text
+                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; font.letterSpacing: -0.1
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: text !== "" && text !== hz.appName
+                width: Math.min(implicitWidth, 320)
+                elide: Text.ElideRight
+                text: hz.windowTitle
+                color: Theme.text2
+                font.family: Theme.font; font.pixelSize: 13
+                rightPadding: 4
             }
         }
     }
 
-    // ——— Karta powiadomienia ———
+    // ——— Dynamiczna wyspa ———
+    readonly property bool playing: ControlCenter.playerAvailable && ControlCenter.playing
+    readonly property bool noting: current !== null
+    readonly property bool peek: islandHover.hovered && !noting
     Island {
-        id: card
+        id: island
         solid: true
         readonly property var n: hz.current
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: 440
-        height: 92
-        radius: 22
-        y: n ? pill.y + pill.height + 10 : pill.y
-        opacity: n ? 1 : 0
-        scale: n ? 1 : 0.9
-        visible: opacity > 0.01
-        Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
-        Behavior on opacity { NumberAnimation { duration: 160 } }
-        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 0.9 } }
+        readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
+        width: hz.noting ? 440 : idleW
+        height: hz.noting ? 92 : hz.barH
+        radius: Math.min(height / 2, 28)
+        x: Math.round((hz.width - width) / 2)
+        y: hz.barY
+        onWidthChanged: hz.updateRegion()
+        onHeightChanged: hz.updateRegion()
+        // Sprężyna — wyspa „rozlewa się” jak kropla, a nie przesuwa
+        Behavior on width { SpringAnimation { spring: 3.4; damping: 0.3; epsilon: 0.3 } }
+        Behavior on height { SpringAnimation { spring: 3.4; damping: 0.32; epsilon: 0.3 } }
 
-        HoverHandler { id: cardHover }
+        HoverHandler { id: islandHover }
         TapHandler {
-            onTapped: if (card.n) { Platform.activateNotification(card.n.id); hz.next(); }
+            onTapped: if (island.n) { Platform.activateNotification(island.n.id); hz.next(); }
         }
 
+        // Spoczynek: (okładka) godzina / data (korektor)
         Item {
-            id: iconBox
-            x: 16; anchors.verticalCenter: parent.verticalCenter
-            width: 48; height: 48
-            Image {
-                anchors.fill: parent
-                visible: !!card.n && !!card.n.image
-                source: card.n && card.n.image ? card.n.image : ""
-                sourceSize: Qt.size(96, 96)
-                fillMode: Image.PreserveAspectFit
-                smooth: true; mipmap: true
+            anchors.fill: parent
+            opacity: hz.noting ? 0 : 1
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: hz.noting ? 90 : 260 } }
+
+            Rectangle {
+                id: art
+                x: 6; anchors.verticalCenter: parent.verticalCenter
+                width: 22; height: 22; radius: 7
+                opacity: hz.playing ? 1 : 0
+                scale: hz.playing ? 1 : 0.5
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+                gradient: Gradient {
+                    GradientStop { position: 0; color: "#FF8A65" }
+                    GradientStop { position: 1; color: "#C2185B" }
+                }
+                Image {
+                    anchors.fill: parent
+                    source: ControlCenter.artUrl
+                    fillMode: Image.PreserveAspectCrop
+                    visible: status === Image.Ready
+                    sourceSize: Qt.size(64, 64)
+                }
+                Icon { anchors.centerIn: parent; visible: ControlCenter.artUrl === ""; d: Icons.music; size: 12; stroke: 2; color: "white" }
             }
-            Kirigami.Icon {
-                anchors.fill: parent
-                visible: !!card.n && !card.n.image
-                source: card.n ? (card.n.icon || "preferences-desktop-notification") : ""
+            Row {
+                id: idleRow
+                anchors.centerIn: parent
+                spacing: 8
+                Text {
+                    id: dateText
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: {
+                        const s = hz.now.toLocaleDateString(hz.loc, "dddd, d MMMM");
+                        return s.charAt(0).toUpperCase() + s.slice(1);
+                    }
+                    visible: hz.peek
+                    color: Qt.rgba(1, 1, 1, 0.62)
+                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: hz.now.toLocaleTimeString(hz.loc, "HH:mm")
+                    color: "white"
+                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
+                }
+            }
+            // Korektor: trzy kreski tańczą, gdy gra muzyka
+            Row {
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2.5
+                opacity: hz.playing ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Repeater {
+                    model: [0.55, 1.0, 0.7, 0.85]
+                    delegate: Rectangle {
+                        id: bar
+                        required property real modelData
+                        required property int index
+                        width: 2.5; radius: 1.25
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Qt.lighter(Theme.accent, 1.5)
+                        height: 4 + 10 * bar.modelData * bar.level
+                        property real level: 0.5
+                        SequentialAnimation on level {
+                            running: hz.playing
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 1; duration: 260 + bar.index * 70; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 0.2; duration: 300 + bar.index * 50; easing.type: Easing.InOutSine }
+                        }
+                    }
+                }
             }
         }
-        Column {
-            anchors.left: iconBox.right; anchors.leftMargin: 14
-            anchors.right: closeBtn.left; anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
-            Text {
-                width: parent.width
-                text: card.n ? card.n.appName : ""
-                visible: text !== ""
-                elide: Text.ElideRight
-                color: Qt.rgba(1, 1, 1, 0.6)
-                font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
+
+        // Karta powiadomienia
+        Item {
+            anchors.fill: parent
+            opacity: hz.noting && island.height > 70 ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+
+            Item {
+                id: iconBox
+                x: 18; anchors.verticalCenter: parent.verticalCenter
+                width: 46; height: 46
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 14
+                    visible: !!island.n && !island.n.image
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.4) }
+                        GradientStop { position: 1; color: Theme.accent }
+                    }
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: 26; height: 26
+                        source: island.n ? (island.n.icon || "preferences-desktop-notification") : ""
+                        color: "white"
+                        isMask: true
+                    }
+                }
+                Image {
+                    anchors.fill: parent
+                    visible: !!island.n && !!island.n.image
+                    source: island.n && island.n.image ? island.n.image : ""
+                    sourceSize: Qt.size(96, 96)
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true; mipmap: true
+                }
             }
-            Text {
-                width: parent.width
-                text: card.n ? card.n.summary : ""
-                elide: Text.ElideRight
-                color: "white"
-                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
+            Column {
+                anchors.left: iconBox.right; anchors.leftMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 44
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+                Row {
+                    spacing: 6
+                    Text {
+                        text: island.n ? island.n.appName : ""
+                        visible: text !== ""
+                        color: Qt.rgba(1, 1, 1, 0.55)
+                        font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.Medium
+                    }
+                    Text {
+                        text: "· teraz"
+                        color: Qt.rgba(1, 1, 1, 0.4)
+                        font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1
+                    }
+                }
+                Text {
+                    width: parent.width
+                    text: island.n ? island.n.summary : ""
+                    elide: Text.ElideRight
+                    color: "white"
+                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                }
+                Text {
+                    width: parent.width
+                    text: island.n ? island.n.body : ""
+                    visible: text !== ""
+                    textFormat: Text.StyledText
+                    maximumLineCount: 2
+                    wrapMode: Text.Wrap
+                    elide: Text.ElideRight
+                    color: Qt.rgba(1, 1, 1, 0.74)
+                    font.family: Theme.font; font.pixelSize: 13
+                }
             }
-            Text {
-                width: parent.width
-                text: card.n ? card.n.body : ""
-                visible: text !== ""
-                textFormat: Text.StyledText
-                maximumLineCount: 2
-                wrapMode: Text.Wrap
-                elide: Text.ElideRight
-                color: Qt.rgba(1, 1, 1, 0.72)
-                font.family: Theme.font; font.pixelSize: 12
+            Rectangle {
+                anchors.right: parent.right; anchors.rightMargin: 14
+                y: 14
+                width: 24; height: 24; radius: 12
+                opacity: islandHover.hovered ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+                color: closeArea.containsMouse ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+                Icon { anchors.centerIn: parent; d: Icons.close; size: 10; stroke: 2.2; color: Qt.rgba(1, 1, 1, 0.8) }
+                MouseArea {
+                    id: closeArea; anchors.fill: parent; hoverEnabled: true
+                    onClicked: { if (island.n) Platform.dismissNotification(island.n.id); hz.next(); }
+                }
             }
-        }
-        Rectangle {
-            id: closeBtn
-            anchors.right: parent.right; anchors.rightMargin: 12
-            y: 12
-            width: 24; height: 24; radius: 12
-            visible: cardHover.hovered
-            color: closeArea.containsMouse ? Qt.rgba(1, 1, 1, 0.14) : "transparent"
-            Icon { anchors.centerIn: parent; d: Icons.close; size: 11; stroke: 2; color: Qt.rgba(1, 1, 1, 0.7) }
-            MouseArea {
-                id: closeArea; anchors.fill: parent; hoverEnabled: true
-                onClicked: { if (card.n) Platform.dismissNotification(card.n.id); hz.next(); }
-            }
-        }
-        // Pasek czasu do zniknięcia
-        Rectangle {
-            anchors.bottom: parent.bottom; anchors.bottomMargin: 6
-            anchors.horizontalCenter: parent.horizontalCenter
-            height: 3; radius: 1.5
-            color: Theme.accent
-            opacity: 0.5
-            width: 60
-            visible: !!card.n
         }
     }
 
-    // Rozmycie i kliknięcia tylko tam, gdzie coś jest
+    // ——— Prawa wyspa ———
+    Island {
+        id: right
+        anchors.right: parent.right; anchors.rightMargin: 10
+        y: hz.barY
+        width: rightRow.width + 8
+        height: hz.barH
+        radius: height / 2
+        onWidthChanged: hz.updateRegion()
+
+        Row {
+            id: rightRow
+            x: 4
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 2
+
+            BarButton {
+                onClicked: hz.startRequested()
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 15; stroke: 2; color: Theme.text }
+            }
+            BarButton {
+                id: status
+                highlighted: hz.controlOpen
+                onClicked: hz.controlRequested()
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Config.doNotDisturb
+                    d: Icons.moon; size: 15; stroke: 2
+                    color: status.ink
+                }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    d: !ControlCenter.wifiAvailable && ControlCenter.wired ? Icons.ethernet : Icons.wifi
+                    size: 16; stroke: 2
+                    color: status.ink
+                    opacity: ControlCenter.networkName !== "" ? 1 : 0.4
+                }
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: ControlCenter.audioAvailable
+                    d: ControlCenter.muted || ControlCenter.volume === 0 ? Icons.volumeOff : ControlCenter.volume < 0.5 ? Icons.volumeLow : Icons.volume
+                    size: 16; stroke: 2
+                    color: status.ink
+                }
+                // Bateria rysowana: wypełnienie odpowiada poziomowi naładowania
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: ControlCenter.batteryAvailable
+                    spacing: 5
+                    Text {
+                        visible: Config.batteryPercent
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: ControlCenter.battery + "%"
+                        color: status.ink
+                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                        font.features: { "tnum": 1 }
+                    }
+                    Item {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 25; height: 12
+                        Rectangle {
+                            width: 22; height: 12; radius: 3.5
+                            color: "transparent"
+                            border.width: 1.2
+                            border.color: Qt.rgba(status.ink.r, status.ink.g, status.ink.b, 0.45)
+                            Rectangle {
+                                x: 2; y: 2
+                                height: parent.height - 4; radius: 2
+                                width: Math.max(2, (parent.width - 4) * ControlCenter.battery / 100)
+                                color: ControlCenter.charging ? "#34C759" : ControlCenter.battery <= 20 ? "#FF453A" : status.ink
+                            }
+                        }
+                        Rectangle { x: 23; anchors.verticalCenter: parent.verticalCenter; width: 1.6; height: 4; radius: 0.8; color: Qt.rgba(status.ink.r, status.ink.g, status.ink.b, 0.45) }
+                    }
+                }
+            }
+        }
+    }
+
+    // Przycisk na pasku: pigułka, która podświetla się pod kursorem
+    component BarButton: Rectangle {
+        id: bb
+        default property alias content: inner.data
+        property bool highlighted: false
+        readonly property color ink: highlighted ? "white" : Theme.text
+        signal clicked()
+        width: inner.implicitWidth + 20
+        height: 26
+        radius: 13
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        color: highlighted ? Theme.accent : bbArea.containsMouse ? Theme.hover : "transparent"
+        Behavior on color { ColorAnimation { duration: 140 } }
+        scale: bbArea.pressed ? 0.93 : 1
+        Behavior on scale { NumberAnimation { duration: 100 } }
+        Row {
+            id: inner
+            anchors.centerIn: parent
+            spacing: 10
+        }
+        MouseArea { id: bbArea; anchors.fill: parent; hoverEnabled: true; onClicked: bb.clicked() }
+    }
+
+    // Rozmycie i kliknięcia tylko tam, gdzie są wyspy (odświeżane w rytmie animacji)
+    function updateRegion() { if (!regionTimer.running) regionTimer.start(); }
     Timer {
         id: regionTimer
-        interval: 30
+        interval: 16
         onTriggered: {
-            const r = [{ x: pill.x, y: pill.y, w: pill.width, h: pill.height, r: pill.radius }];
-            if (hz.current) r.push({ x: card.x, y: pill.y + pill.height + 10, w: card.width, h: card.height, r: card.radius });
+            const r = [left, island, right].map(i => ({ x: i.x, y: i.y, w: i.width, h: i.height, r: i.radius }));
             Platform.setBlur(hz, r);
             Platform.setInputRegion(hz, r);
         }

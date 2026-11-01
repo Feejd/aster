@@ -63,9 +63,8 @@ int main(int argc, char *argv[])
             });
             for (QQuickWindow *w : windows) {
                 const QImage img = w->grabWindow();
-                QPoint pos;
-                if (w->title() == QLatin1String("Dok")) pos = QPoint(0, S.height() - img.height());
-                else if (w->title() == QLatin1String("Horyzont")) pos = QPoint((S.width() - img.width()) / 2, 0);
+                // okna przyklejone do krawędzi podają swoje miejsce na ekranie (shotX/shotY)
+                const QPoint pos(w->property("shotX").toInt(), w->property("shotY").toInt());
                 for (const QVariant &v : platform->blurRegions.value(w)) {
                     const QVariantMap r = v.toMap();
                     QPainterPath path;
@@ -109,6 +108,18 @@ int main(int argc, char *argv[])
             for (QWindow *w : QGuiApplication::topLevelWindows())
                 if (w->title() == QLatin1String("Centrum sterowania"))
                     QMetaObject::invokeMethod(w, "toggle");
+        });
+
+    // Do testów: ASTER_SHOT_NOTIFY=1 pokazuje przykładowe powiadomienie (dynamiczna wyspa jako karta)
+    if (!qEnvironmentVariableIsEmpty("ASTER_SHOT_NOTIFY"))
+        QTimer::singleShot(1200, &app, [&engine] {
+            if (auto *platform = engine.singletonInstance<Platform *>("Aster.Shell", "Platform"))
+                Q_EMIT platform->notificationPosted({{QStringLiteral("id"), 1u},
+                                                     {QStringLiteral("appName"), QStringLiteral("Wiadomości")},
+                                                     {QStringLiteral("icon"), QStringLiteral("mail-message")},
+                                                     {QStringLiteral("summary"), QStringLiteral("Ola")},
+                                                     {QStringLiteral("body"), QStringLiteral("Wpadniesz dziś na kawę? Mam nowe zdjęcia z gór ☕")},
+                                                     {QStringLiteral("image"), QString()}});
         });
 
     return app.exec();

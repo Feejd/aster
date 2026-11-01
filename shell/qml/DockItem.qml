@@ -1,55 +1,73 @@
 import QtQuick
-import org.kde.kirigami as Kirigami
 import Aster.Shell
 import Aster.Ui
 
-// Jedna ikona w doku: przypięta aplikacja albo działające okno (dane z TaskManager).
+// Jedna ikona w doku: Start, przypięta aplikacja, działające okno albo Kosz.
+// Rozmiar zależy od odległości kursora (magnify 1…1.5, liczy DockWindow) — jak w macOS.
+// Uruchamiany program podskakuje, działający ma kropkę, aktywny — dłuższą kreskę.
 Item {
     id: item
-    required property var model
-    required property int index
-    signal activated()
-    signal newInstance()
+    property string desktopId: ""
+    property var iconSource
+    property string label: ""
+    property bool running: false
+    property bool active: false
+    property bool starting: false
+    property bool pressedLook: false      // np. otwarty Start
+    property real base: 50
+    property real magnify: 1
+    signal clicked()
+    signal middleClicked()
 
-    width: 60
-    height: 60
+    readonly property real size: base * magnify
+    width: size + 8
+    height: size
+    anchors.bottom: parent ? parent.bottom : undefined     // w rzędzie doku rośnie w górę
 
-    // Ikona w kształcie squircle; po najechaniu lekko się unosi, po wciśnięciu przyciemnia i zmniejsza
+    readonly property int badge: Platform.badges[desktopId] || 0
+    readonly property bool hovered: area.containsMouse
+
+    // Ikona w kształcie squircle; po wciśnięciu przyciemnia się i zmniejsza
     AppIcon {
         id: tile
-        size: 52
+        size: item.size
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4 + (area.containsMouse && !area.pressed ? 3 : 0)
+        anchors.bottomMargin: item.jump
         desktopId: item.desktopId
-        source: item.model.decoration
-        scale: area.pressed ? 0.9 : 1
+        source: item.iconSource
+        scale: area.pressed || item.pressedLook ? 0.88 : 1
         transformOrigin: Item.Bottom
-        Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
-        Behavior on anchors.bottomMargin { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+        Behavior on scale { SpringAnimation { spring: 5; damping: 0.32; epsilon: 0.002 } }
         Rectangle {
             anchors.fill: parent
             radius: width * 0.26
             color: "black"
-            opacity: area.pressed ? 0.18 : 0
+            opacity: area.pressed ? 0.2 : 0
             Behavior on opacity { NumberAnimation { duration: 90 } }
         }
     }
 
-    // Liczba nieprzeczytanych (komunikatory, poczta, aplikacje webowe)
-    readonly property string desktopId: {
-        const u = (item.model.LauncherUrlWithoutIcon || "").toString();
-        return u.replace(/^.*[\/:]/, "").replace(/\.desktop$/, "");
+    // Podskakiwanie przy uruchamianiu
+    property real jump: 0
+    SequentialAnimation on jump {
+        running: item.starting
+        loops: Animation.Infinite
+        alwaysRunToEnd: true
+        NumberAnimation { to: 18; duration: 260; easing.type: Easing.OutQuad }
+        NumberAnimation { to: 0; duration: 300; easing.type: Easing.OutBounce }
+        PauseAnimation { duration: 120 }
     }
-    readonly property int badge: Platform.badges[desktopId] || 0
+
+    // Liczba nieprzeczytanych (komunikatory, poczta, aplikacje webowe)
     Rectangle {
-        x: tile.x + tile.width - width + 6
+        x: tile.x + tile.width - width + 5
         y: tile.y - 4
         z: 2
         height: 20
         width: Math.max(20, badgeText.implicitWidth + 12)
         radius: 10
-        color: "#F0524F"
+        color: "#FF453A"
         border.width: 2
         border.color: Theme.dark ? "#2A2C33" : "white"
         scale: item.badge > 0 ? 1 : 0
@@ -61,40 +79,43 @@ Item {
             text: item.badge > 99 ? "99+" : String(item.badge)
             color: "white"
             font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1; font.weight: Font.DemiBold
+            font.features: { "tnum": 1 }
         }
     }
 
-    // Kropka pod działającą aplikacją (jaśniejsza przy aktywnym oknie)
+    // Kropka pod działającą aplikacją — przy aktywnym oknie rozciąga się w kreskę
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: -5
-        width: 5; height: 5; radius: 2.5
-        visible: item.model.IsWindow === true || item.model.IsStartup === true
-        color: Theme.text
-        opacity: item.model.IsActive ? 0.9 : 0.45
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        anchors.top: parent.bottom
+        anchors.topMargin: 3
+        width: item.active ? 14 : 4
+        height: 4; radius: 2
+        visible: item.running || item.starting
+        color: item.active ? Theme.text : Theme.text2
+        opacity: item.active ? 0.95 : 0.7
+        Behavior on width { SpringAnimation { spring: 4; damping: 0.35 } }
     }
 
-    // Podpowiedź z nazwą (ciemna pigułka nad ikoną)
+    // Podpowiedź z nazwą: szklana pigułka nad ikoną, wjeżdża od dołu
     Rectangle {
+        id: tip
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: tile.top
-        anchors.bottomMargin: 16
-        width: tipText.implicitWidth + 20; height: 26; radius: 8
-        color: Qt.rgba(0.09, 0.09, 0.1, 0.9)
-        border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.08)
-        opacity: area.containsMouse && !area.pressed ? 1 : 0
+        y: tile.y - height - 12 - item.jump + (shown ? 0 : 6)
+        readonly property bool shown: area.containsMouse && !area.pressed && item.label !== ""
+        width: tipText.implicitWidth + 22; height: 28; radius: 14
+        color: Theme.dark ? Qt.rgba(0.16, 0.16, 0.19, 0.94) : Qt.rgba(1, 1, 1, 0.94)
+        border.width: 1
+        border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.08)
+        opacity: shown ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 120 } }
+        Behavior on opacity { NumberAnimation { duration: 140 } }
+        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
         Text {
             id: tipText
             anchors.centerIn: parent
-            text: item.model.display || ""
-            color: "white"
-            font.family: Theme.font
-            font.pixelSize: 12
-            font.weight: Font.Medium
+            text: item.label
+            color: Theme.text
+            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
         }
     }
 
@@ -103,6 +124,6 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        onClicked: (m) => m.button === Qt.MiddleButton ? item.newInstance() : item.activated()
+        onClicked: (m) => m.button === Qt.MiddleButton ? item.middleClicked() : item.clicked()
     }
 }

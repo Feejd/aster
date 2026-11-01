@@ -5,7 +5,7 @@ import QtQuick.Effects
 import Aster.Shell
 import Aster.Ui
 
-// Centrum sterowania (jak w macOS): wyrasta nad prawą wyspą doku.
+// Centrum sterowania (jak w macOS): wysuwa się spod prawej wyspy górnego paska.
 // Kafelki: sieć i Bluetooth, „Nie przeszkadzać”, ciemny motyw, jasność, dźwięk, odtwarzacz
 // i szybkie przyciski. Stan i działania — ControlCenter (C++). Klik obok panelu albo Esc zamyka.
 Window {
@@ -13,7 +13,8 @@ Window {
     color: "transparent"
     visible: false
     width: Screen.width
-    height: Screen.height - 96
+    height: Screen.height - 46 - 84
+    readonly property int shotY: 46
     title: "Centrum sterowania"
 
     property bool open: false
@@ -49,17 +50,17 @@ Window {
         id: panel
         width: 384
         height: content.height + 2 * cc.pad
-        x: cc.width - width - 18
-        y: cc.height - height - 12
+        x: cc.width - width - 10
+        y: 4
         onHeightChanged: blurTimer.restart()
 
-        // Wejście: sprężyste wyrośnięcie od prawego dolnego rogu (spod prawej wyspy)
+        // Wejście: sprężyste wyrośnięcie od prawego górnego rogu (spod prawej wyspy paska)
         property real s: 0.92
-        property real offset: 14
+        property real offset: -14
         property real reveal: 0
         opacity: 0
         transform: [
-            Scale { origin.x: panel.width; origin.y: panel.height; xScale: panel.s; yScale: panel.s },
+            Scale { origin.x: panel.width; origin.y: 0; xScale: panel.s; yScale: panel.s },
             Translate { y: panel.offset }
         ]
         states: State {
@@ -80,12 +81,12 @@ Window {
                 from: "shown"
                 ParallelAnimation {
                     NumberAnimation { target: panel; property: "s"; to: 0.96; duration: 90; easing.type: Easing.InCubic }
-                    NumberAnimation { target: panel; property: "offset"; to: 6; duration: 90; easing.type: Easing.InCubic }
+                    NumberAnimation { target: panel; property: "offset"; to: -6; duration: 90; easing.type: Easing.InCubic }
                     NumberAnimation { target: panel; property: "opacity"; duration: 90; easing.type: Easing.InQuad }
                 }
             }
         ]
-        // Postęp wejścia i-tego kafelka (kaskada od dołu)
+        // Postęp wejścia i-tego kafelka (kaskada od góry)
         function stagger(i) { return Math.max(0, Math.min(1, (reveal - i * 0.04) / 0.45)); }
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają centrum

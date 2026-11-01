@@ -15,7 +15,11 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       ciemny motyw, jasność (PowerDevil), głośność (PipeWire), odtwarzacz (MPRIS), zrzut ekranu, ustawienia, bateria
 - [ ] Centrum sterowania: lista sieci Wi‑Fi i urządzeń Bluetooth do wyboru, wybór wyjścia dźwięku
 - [x] Powiadomienia systemowe pod górną wyspą (powłoka jest serwerem powiadomień)
-- [ ] **Górna wyspa**: chowanie i wysuwanie jak w prototypie, panel „Dziś” z kalendarzem i odtwarzaczem (MPRIS).
+- [x] **Nowy układ powłoki**: górny pasek z trzech wysp (aktywny program z tytułem okna, dynamiczna wyspa, stan systemu),
+      jeden dok z powiększaniem ikon, podskakiwaniem przy uruchamianiu i Koszem, widżety na pulpicie (kalendarz, bateria, teraz gra)
+- [x] Dynamiczna wyspa: godzina, okładka i korektor przy muzyce, data po najechaniu, powiadomienie rozlewa wyspę w kartę
+- [ ] Dynamiczna wyspa: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
+- [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
 - [x] Super = Start
 - [ ] Super+A = centrum sterowania
 

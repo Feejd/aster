@@ -10,11 +10,13 @@ QtObject {
     property var control: ControlCenterWindow { id: controlWin }
     property var dock: DockWindow {
         startOpen: startWin.open
+        onStartRequested: { controlWin.close(); startWin.toggle(); }
+    }
+    property var horizon: HorizonWindow {
         controlOpen: controlWin.open
         onStartRequested: { controlWin.close(); startWin.toggle(); }
         onControlRequested: { startWin.close(); controlWin.toggle(); }
     }
-    property var horizon: HorizonWindow {}
 
     // Klawisz Super (KWin wywołuje org.kde.plasmashell → activateLauncherMenu)
     property var superKey: Connections {

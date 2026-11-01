@@ -57,6 +57,8 @@ public:
 
     QVariantMap badges() const { return m_badges; }
     bool preview() const { return qEnvironmentVariableIsSet("ASTER_PREVIEW"); }
+    // Zmienne środowiska do podglądów w testach (np. ASTER_SHOT_HOVER)
+    Q_INVOKABLE QString env(const QString &name) const { return qEnvironmentVariable(name.toUtf8().constData()); }
 
     // Powiadomienia: powłoka jest serwerem org.freedesktop.Notifications (zamiast plasmashell)
     Q_INVOKABLE void activateNotification(uint id);

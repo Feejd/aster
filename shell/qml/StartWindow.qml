@@ -17,7 +17,9 @@ Window {
     color: "transparent"
     visible: false
     width: Screen.width
-    height: Screen.height - 96
+    // Okno wypełnia miejsce między górnym paskiem a dokiem (ich rezerwacje)
+    height: Screen.height - 46 - 84
+    readonly property int shotY: 46
     title: "Start"
 
     property bool open: false
@@ -119,18 +121,18 @@ Window {
     // ——— Panel ———
     Item {
         id: panel
-        x: 18
-        y: start.height - height - 12
+        x: Math.round((start.width - width) / 2)
+        y: start.height - height - 10
         width: Math.min(880, start.width - 36)
-        height: Math.min(640, start.height - 70)
+        height: Math.min(640, start.height - 40)
 
-        // Wejście: sprężyste wyrośnięcie od lewego dolnego rogu (spod przycisku Start), wyjście: szybkie zgaśnięcie
+        // Wejście: sprężyste wyrośnięcie znad środka doku (spod przycisku Start), wyjście: szybkie zgaśnięcie
         property real s: 0.92
         property real offset: 14
         property real reveal: 0
         opacity: 0
         transform: [
-            Scale { origin.x: 0; origin.y: panel.height; xScale: panel.s; yScale: panel.s },
+            Scale { origin.x: panel.width / 2; origin.y: panel.height; xScale: panel.s; yScale: panel.s },
             Translate { y: panel.offset }
         ]
         states: State {

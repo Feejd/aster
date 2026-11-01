@@ -1,35 +1,40 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
-import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
 import Aster.Shell
 import Aster.Ui
 
-// Dolny pasek: trzy szklane wyspy na warstwie „top”, z rezerwacją miejsca (okna nie wchodzą pod spód).
-//  lewa    — logo Aster: otwiera Start (to samo robi klawisz Super)
-//  środek  — dok: przypięte aplikacje + działające okna
-//  prawa   — zegar i skrót do ustawień
+// Dok: jedna szklana wyspa pośrodku dolnej krawędzi, na warstwie „top”, z rezerwacją miejsca.
+//  Start (logo Aster) │ przypięte aplikacje i działające okna │ Kosz
+// Ikony pod kursorem rosną (jak w macOS), po szkle sunie miękka poświata za kursorem.
+// Stan systemu i zegar są na górnym pasku (HorizonWindow).
 Window {
     id: dock
     color: "transparent"
     title: "Dok"
     visible: false
     width: Screen.width
-    // Okno jest wyższe niż wyspy, żeby zmieściły się podpowiedzi nad ikonami.
-    // Kliknięcia trafiają tylko w wyspy (Platform.setInputRegion), resztę przepuszcza do okien.
-    height: 150
+    // Okno jest wyższe niż wyspa, żeby zmieściły się powiększone ikony i podpowiedzi.
+    // Kliknięcia trafiają tylko w wyspę (Platform.setInputRegion), resztę przepuszcza do okien.
+    height: 190
+    readonly property int shotY: Screen.height - height      // podgląd pulpitu w testach
 
-    readonly property int reserved: 96
+    readonly property int reserved: 84
     property bool startOpen: false
-    property bool controlOpen: false
     signal startRequested()
-    signal controlRequested()
+
+    // Powiększanie: rozmiar bazowy, największe powiększenie i zasięg (px od kursora)
+    readonly property real base: 50
+    readonly property real maxMagnify: 1.48
+    readonly property real reach: 92
+    readonly property real slotW: base + 8
+    readonly property real dividerW: 17
 
     Component.onCompleted: {
         Platform.makeLayer(dock, "top", 2 | 4 | 8, dock.reserved, "none", "aster-dock");
         visible = true;
-        blurTimer.start();
+        regionTimer.start();
     }
 
     TaskManager.TasksModel {
@@ -44,7 +49,7 @@ Window {
         launcherList: [
             "applications:org.aster.files.desktop",
             "applications:org.aster.browser.desktop",
-            "applications:org.kde.kate.desktop",
+            "applications:org.aster.webapps.desktop",
             "applications:org.kde.konsole.desktop",
             "applications:org.aster.store.desktop",
             "applications:org.aster.settings.desktop"
@@ -53,177 +58,152 @@ Window {
 
     // Podgląd (ASTER_PREVIEW): przypięte programy z bazy KDE, bez okien
     ListModel { id: previewModel }
-    Component.onDestruction: {}
     Timer {
         running: Platform.preview
         interval: 10
         onTriggered: {
-            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.aster.store", "org.kde.konsole", "org.aster.settings"];
+            const ids = ["org.aster.files", "org.aster.browser", "org.aster.webapps", "org.kde.konsole", "org.kde.kate", "org.aster.store", "org.aster.settings"];
             ids.forEach((id, i) => {
                 const a = Platform.appInfo(id);
                 if (!a.valid) return;
-                previewModel.append({ decoration: a.icon, display: a.name, IsWindow: i < 2, IsActive: i === 0, IsStartup: false,
+                previewModel.append({ decoration: a.icon, display: a.name, IsWindow: i < 3, IsActive: i === 1, IsStartup: false,
                                       LauncherUrlWithoutIcon: "applications:" + id + ".desktop" });
             });
+            // Zrzuty: kursor nad wybraną ikoną, żeby było widać powiększenie
+            const hx = Platform.env("ASTER_SHOT_HOVER");
+            if (hx !== "") { dock.pointerX = dock.slotCenter(Number(hx)) + 10; dock.pointerY = dock.height - 40; dock.forcedHover = true; }
         }
     }
+    readonly property var model: Platform.preview ? previewModel : tasks
+    readonly property int count: repeater.count
 
-    property date now: new Date()
-    Timer { interval: 1000; repeat: true; running: true; onTriggered: dock.now = new Date() }
-
-    // ——— Lewa wyspa: logo Aster (kolorowy kafelek) — otwiera Start ———
-    Island {
-        id: left
-        x: 18
-        y: dock.height - height - 14
-        width: 76; height: 76
-        radius: 26
-        AppIcon {
-            id: logoBtn
-            anchors.centerIn: parent
-            size: 52
-            desktopId: "aster-start"
-            scale: logoArea.pressed ? 0.9 : (logoArea.containsMouse ? 1.04 : 1)
-            rotation: dock.startOpen ? 90 : 0
-            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
-            Behavior on rotation { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
-            MouseArea { id: logoArea; anchors.fill: parent; hoverEnabled: true; onClicked: dock.startRequested() }
-        }
+    // ——— Położenie „spoczynkowe” (bez powiększenia) — z niego liczymy powiększenie, żeby ikony nie drgały ———
+    readonly property real restWidth: 2 * slotW + count * slotW + 2 * dividerW
+    readonly property real restLeft: (width - restWidth) / 2
+    // slot: 0 = Start, 1…count = programy, count + 1 = Kosz
+    function slotCenter(i) {
+        let x = restLeft + slotW / 2 + i * slotW;
+        if (i >= 1) x += dividerW;
+        if (i >= count + 1) x += dividerW;
+        return x;
+    }
+    function magnifyAt(i) {
+        if (hoverAmt <= 0) return 1;
+        const d = (pointerX - slotCenter(i)) / reach;
+        return 1 + (maxMagnify - 1) * hoverAmt * Math.exp(-d * d * 1.6);
     }
 
-    // ——— Środek: dok ———
+    property real pointerX: -1000
+    property real pointerY: 0
+    property bool forcedHover: false
+    readonly property bool hovering: hover.hovered || forcedHover
+    property real hoverAmt: hovering ? 1 : 0
+    Behavior on hoverAmt { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+
+    // Na korzeniu okna, żeby kursor był śledzony także nad ikonami
+    HoverHandler {
+        id: hover
+        onPointChanged: if (hovered && !dock.forcedHover) { dock.pointerX = point.position.x; dock.pointerY = point.position.y; }
+    }
+
+    // ——— Wyspa ———
     Island {
-        id: center
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: dock.height - height - 14
-        width: row.width + 20
-        height: 76
-        radius: 26
-        onWidthChanged: blurTimer.restart()
-        onXChanged: blurTimer.restart()
+        id: island
+        x: Math.round((dock.width - width) / 2)
+        y: dock.height - height - 10
+        width: row.width + 18
+        height: 66
+        radius: 24
+        spot: dock.hoverAmt * 0.9
+        spotX: dock.pointerX - x
+        spotY: dock.pointerY - y
+        onWidthChanged: dock.updateRegion()
 
         Row {
             id: row
-            x: 10
+            x: 9
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 8
-            spacing: 2
+            spacing: 0
+
+            DockItem {
+                id: startItem
+                base: dock.base
+                magnify: dock.magnifyAt(0)
+                desktopId: "aster-start"
+                label: "Start"
+                pressedLook: dock.startOpen
+                onClicked: dock.startRequested()
+            }
+            Divider {}
             Repeater {
-                model: Platform.preview ? previewModel : tasks
+                id: repeater
+                model: dock.model
                 delegate: DockItem {
                     id: di
-                    onActivated: {
+                    required property var model
+                    required property int index
+                    base: dock.base
+                    magnify: dock.magnifyAt(index + 1)
+                    desktopId: {
+                        const u = (di.model.LauncherUrlWithoutIcon || "").toString();
+                        return u.replace(/^.*[\/:]/, "").replace(/\.desktop$/, "");
+                    }
+                    iconSource: di.model.decoration
+                    label: di.model.display || ""
+                    running: di.model.IsWindow === true
+                    active: di.model.IsActive === true
+                    starting: di.model.IsStartup === true
+                    onClicked: {
                         const idx = tasks.makeModelIndex(di.index);
                         if (di.model.IsWindow && di.model.IsActive) tasks.requestToggleMinimized(idx);
                         else tasks.requestActivate(idx);
                     }
-                    onNewInstance: tasks.requestNewInstance(tasks.makeModelIndex(di.index))
+                    onMiddleClicked: tasks.requestNewInstance(tasks.makeModelIndex(di.index))
                     // KWin animuje minimalizację okna do tego miejsca
                     function publish() {
+                        if (Platform.preview) return;
                         const p = di.mapToGlobal(0, 0);
                         tasks.requestPublishDelegateGeometry(tasks.makeModelIndex(di.index), Qt.rect(p.x, p.y, di.width, di.height), di);
                     }
-                    onXChanged: publish()
+                    onXChanged: publishTimer.restart()
+                    Timer { id: publishTimer; interval: 300; onTriggered: di.publish() }
                     Component.onCompleted: publish()
                 }
             }
+            Divider {}
+            DockItem {
+                base: dock.base
+                magnify: dock.magnifyAt(dock.count + 1)
+                desktopId: "aster-trash"
+                label: "Kosz"
+                onClicked: Platform.openUrl("trash:/")
+            }
         }
     }
 
-    // ——— Prawa wyspa: stan systemu (centrum sterowania) i zegar ———
-    Island {
-        id: right
-        anchors.right: parent.right
-        anchors.rightMargin: 18
-        y: dock.height - height - 14
-        width: tray.width + 28
-        height: 76
-        radius: 26
-
-        Row {
-            id: tray
+    component Divider: Item {
+        anchors.bottom: parent ? parent.bottom : undefined
+        width: dock.dividerW
+        height: dock.base
+        Rectangle {
             anchors.centerIn: parent
-            spacing: 14
-            // Stan sieci, dźwięku i baterii — otwiera centrum sterowania
-            Rectangle {
-                id: status
-                anchors.verticalCenter: parent.verticalCenter
-                width: statusRow.width + 22; height: 44; radius: 14
-                color: dock.controlOpen ? Theme.accentSoft : (statusArea.containsMouse ? Theme.hover : "transparent")
-                scale: statusArea.pressed ? 0.94 : 1
-                Behavior on color { ColorAnimation { duration: 120 } }
-                Behavior on scale { NumberAnimation { duration: 100 } }
-                readonly property color ink: dock.controlOpen ? Theme.accentText : Theme.text
-                Row {
-                    id: statusRow
-                    anchors.centerIn: parent
-                    spacing: 9
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        d: !ControlCenter.wifiAvailable && ControlCenter.wired ? Icons.ethernet : Icons.wifi
-                        size: 19; stroke: 2
-                        color: status.ink
-                        opacity: ControlCenter.networkName !== "" ? 1 : 0.4
-                    }
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: ControlCenter.audioAvailable
-                        d: ControlCenter.muted || ControlCenter.volume === 0 ? Icons.volumeOff : ControlCenter.volume < 0.5 ? Icons.volumeLow : Icons.volume
-                        size: 19; stroke: 2
-                        color: status.ink
-                    }
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: ControlCenter.batteryAvailable
-                        spacing: 3
-                        Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.battery; size: 20; stroke: 1.8; color: status.ink }
-                        Text {
-                            visible: Config.batteryPercent
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: ControlCenter.battery + "%"
-                            color: status.ink
-                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
-                            font.features: { "tnum": 1 }
-                        }
-                    }
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: Config.doNotDisturb
-                        d: Icons.moon
-                        size: 17; stroke: 2
-                        color: status.ink
-                    }
-                }
-                MouseArea { id: statusArea; anchors.fill: parent; hoverEnabled: true; onClicked: dock.controlRequested() }
-            }
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                Text {
-                    anchors.right: parent.right
-                    text: dock.now.toLocaleTimeString(Qt.locale("pl_PL"), "HH:mm")
-                    color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 18; font.letterSpacing: -0.2; font.weight: Font.DemiBold
-                    font.features: { "tnum": 1 }
-                }
-                Text {
-                    anchors.right: parent.right
-                    text: dock.now.toLocaleDateString(Qt.locale("pl_PL"), "ddd, d MMM")
-                    color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
-                }
-            }
+            width: 1; height: 30
+            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.12)
         }
     }
 
+    // Rozmycie pod wyspą; kliknięcia — w wyspę i (gdy kursor jest nad dokiem) w powiększone ikony nad nią
+    function updateRegion() { if (!regionTimer.running) regionTimer.start(); }
+    onHoveringChanged: updateRegion()
     Timer {
-        id: blurTimer
-        interval: 50
+        id: regionTimer
+        interval: 16
         onTriggered: {
-            const r = [];
-            for (const it of [left, center, right])
-                r.push({ x: it.x, y: it.y, w: it.width, h: it.height, r: it.radius });
-            Platform.setBlur(dock, r);
-            Platform.setInputRegion(dock, r);
+            const r = { x: island.x, y: island.y, w: island.width, h: island.height, r: island.radius };
+            Platform.setBlur(dock, [r]);
+            const lift = dock.hovering ? Math.ceil(dock.base * (dock.maxMagnify - 1)) + 6 : 0;
+            Platform.setInputRegion(dock, [{ x: r.x, y: r.y - lift, w: r.w, h: r.h + lift, r: r.r }]);
         }
     }
 }

@@ -11,8 +11,10 @@
 | Okno | Warstwa | Rezerwuje miejsce | Opis |
 |---|---|---|---|
 | `WallpaperWindow` | background | nie | tapeta dzień/noc |
-| `DockWindow` | top | 84 px na dole | trzy wyspy: wyszukiwanie, dok, zegar |
-| `HorizonWindow` | top | nie | górna wyspa |
+| `ClockWindow` | bottom | nie | duża godzina i widżety (kalendarz, bateria, teraz gra) |
+| `DockWindow` | top | 84 px na dole | jeden dok: Start, programy z powiększaniem, Kosz |
+| `HorizonWindow` | top | 46 px u góry | pasek z trzech wysp: aktywny program, dynamiczna wyspa (godzina, muzyka, powiadomienia), stan systemu |
+| `StartWindow`, `ControlCenterWindow` | overlay | nie | Start nad dokiem, centrum sterowania pod prawą wyspą paska |
 
 ## Szkło
 

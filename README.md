@@ -8,7 +8,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | Folder | Zawartość |
 |---|---|
 | `prototype/` | Interaktywny prototyp całego pulpitu (QML + PySide6, działa na Macu). Wzór wyglądu i zachowania. |
-| `shell/` | Prawdziwa powłoka: C++/Qt 6 + QML. Tapeta, dok, Start, górna wyspa jako warstwy Wayland. |
+| `shell/` | Prawdziwa powłoka: C++/Qt 6 + QML. Tapeta z widżetami, dok, górny pasek z dynamiczną wyspą, Start i centrum sterowania jako warstwy Wayland. |
 | `apps/files/` | Pliki — menedżer plików (KIO: kosz, kopiowanie w tle, cofanie, wyszukiwanie). |
 | `apps/browser/` | Przeglądarka — silnik Qt WebEngine (Chromium), wygląd Aster. |
 | `apps/webapps/` | Aplikacje webowe — strony jako natywne programy (okno, ikona, powiadomienia, liczniki w doku). |

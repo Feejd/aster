@@ -17,6 +17,7 @@ Item {
     // Zestaw ikon Aster: [kolor górny, kolor dolny, znak z Icons.js]
     readonly property var designs: ({
         "aster-start": ["#7C9BFF", "#3456E8", "aster"],
+        "aster-trash": ["#EEF0F3", "#A7AEBA", "trash"],
         "org.aster.files": ["#5AB4FF", "#2563EB", "folder"],
         "org.aster.browser": ["#4FD1C5", "#3B5BDB", "globe"],
         "org.aster.webapps": ["#C084FC", "#6D28D9", "webapp"],
