@@ -1,36 +1,61 @@
 .pragma library
 
-// Zamiana tego, co wpisano w pasek adresu, na adres strony albo wyszukiwanie
-var searchUrl = "https://www.google.com/search?q=";
-
-function fixup(text) {
-    var t = text.trim();
-    if (!t) return "";
-    if (/^[a-z][a-z0-9+.-]*:/i.test(t) && !/^localhost:\d/.test(t)) return t;        // ma schemat (https:, file:, about:)
-    var looksLikeHost = /^[^\s]+\.[a-z]{2,}([:/?#].*)?$/i.test(t) || /^localhost(:\d+)?(\/.*)?$/.test(t)
-                        || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/.*)?$/.test(t);
-    if (looksLikeHost && t.indexOf(" ") < 0) return "https://" + t;
-    return searchUrl + encodeURIComponent(t);
-}
+// Drobne pomocniki do adresów (reszta — wyszukiwarka, rozpoznawanie adresu — jest w Browser)
 
 // „pl.wikipedia.org” z pełnego adresu (bez www.)
 function host(url) {
-    var m = /^[a-z]+:\/\/([^/:?#]+)/i.exec(url || "");
+    var m = /^[a-z-]+:\/\/([^/:?#]+)/i.exec(url || "");
     return m ? m[1].replace(/^www\./, "") : (url || "");
 }
 
-function isSearch(url) {
-    return (url || "").indexOf(searchUrl) === 0;
+// Adres bez „https://www.” i końcowego ukośnika — do podpowiedzi i list
+function pretty(url) {
+    return (url || "").replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
 }
 
-function searchQuery(url) {
-    if (!isSearch(url)) return "";
-    var q = url.slice(searchUrl.length).split("&")[0];
-    try { return decodeURIComponent(q.replace(/\+/g, " ")); } catch (e) { return q; }
-}
-
-// Ikona strony z publicznej usługi (gdy strona jeszcze się nie wczytała)
+// Ikona witryny z publicznej usługi (gdy strona nie jest otwarta) — zawsze PNG
 function favicon(url) {
     var h = host(url);
-    return h ? "https://icons.duckduckgo.com/ip3/" + h + ".ico" : "";
+    return h && /^https?:/i.test(url) ? "https://www.google.com/s2/favicons?sz=64&domain=" + h : "";
+}
+
+// Strony wewnętrzne przeglądarki: aster://history, aster://downloads, aster://settings
+var pages = {
+    "history": "Historia",
+    "downloads": "Pobrane",
+    "settings": "Ustawienia"
+};
+function internal(url) {
+    var m = /^aster:(\/\/)?([a-z]+)/i.exec(url || "");
+    return m && pages[m[2].toLowerCase()] ? m[2].toLowerCase() : "";
+}
+
+// 1536000 → „1,5 MB”
+function size(bytes) {
+    if (!(bytes > 0)) return "";
+    var units = ["B", "KB", "MB", "GB", "TB"], i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; ++i; }
+    return (i === 0 ? bytes : bytes.toFixed(bytes < 10 ? 1 : 0)).toString().replace(".", ",") + " " + units[i];
+}
+
+// Pozostały czas pobierania: „jeszcze 2 min”
+function remaining(left, speed) {
+    if (!(speed > 0) || !(left > 0)) return "";
+    var s = Math.round(left / speed);
+    if (s < 60) return "jeszcze " + s + " s";
+    if (s < 3600) return "jeszcze " + Math.round(s / 60) + " min";
+    return "jeszcze " + Math.floor(s / 3600) + " godz. " + Math.round((s % 3600) / 60) + " min";
+}
+
+// Nagłówek dnia w historii: „Dzisiaj”, „Wczoraj”, „wtorek, 28 października”
+function dayLabel(time, locale) {
+    var d = new Date(time), now = new Date();
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (time >= start) return "Dzisiaj";
+    if (time >= start - 86400000) return "Wczoraj";
+    return d.toLocaleDateString(locale, d.getFullYear() === now.getFullYear() ? "dddd, d MMMM" : "d MMMM yyyy");
+}
+function dayKey(time) {
+    var d = new Date(time);
+    return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
 }

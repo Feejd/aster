@@ -1,0 +1,6 @@
+# Przeglądarka Aster jako domyślna w całym systemie (użytkownik może to zmienić w Ustawieniach)
+[Default Applications]
+x-scheme-handler/http=org.aster.browser.desktop
+x-scheme-handler/https=org.aster.browser.desktop
+text/html=org.aster.browser.desktop
+application/xhtml+xml=org.aster.browser.desktop
