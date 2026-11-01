@@ -8,6 +8,7 @@ QtObject {
     property var clock: ClockWindow {}
     property var start: StartWindow { id: startWin }
     property var control: ControlCenterWindow { id: controlWin }
+    property var auth: AuthWindow {}            // hasło administratora (agent polkit)
     property var dock: DockWindow {
         startOpen: startWin.open
         onStartRequested: { controlWin.close(); startWin.toggle(); }

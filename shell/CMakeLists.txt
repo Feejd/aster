@@ -6,6 +6,8 @@ qt_add_executable(aster-shell
     src/platform.h
     src/controlcenter.cpp
     src/controlcenter.h
+    src/polkitagent.cpp
+    src/polkitagent.h
 )
 
 target_include_directories(aster-shell PRIVATE src)
@@ -20,6 +22,7 @@ set(ASTER_QML
     qml/StartWindow.qml
     qml/ClockWindow.qml
     qml/ControlCenterWindow.qml
+    qml/AuthWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform
@@ -49,6 +52,7 @@ target_link_libraries(aster-shell PRIVATE
     KF6::KIOGui
     aster-uiplugin
     AsterNotificationManager
+    PolkitQt6-1::Agent
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

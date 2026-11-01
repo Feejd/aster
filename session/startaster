@@ -8,4 +8,6 @@ export PLASMA_DEFAULT_SHELL=org.aster.shell
 kwriteconfig6 --file ksplashrc --group KSplash --key Engine KSplashQML
 kwriteconfig6 --file ksplashrc --group KSplash --key Theme org.aster.desktop
 systemctl --user mask --runtime plasma-plasmashell.service
+# Hasło administratora pyta powłoka Aster (agent polkit) — agent KDE zostaje wyłączony w tej sesji
+systemctl --user mask --runtime plasma-polkit-agent.service
 exec /usr/bin/startplasma-wayland

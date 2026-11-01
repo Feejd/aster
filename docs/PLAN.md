@@ -45,7 +45,7 @@ Cel: po instalacji użytkownik widzi wyłącznie Aster. Program KDE usuwamy z ob
 
 Okna systemowe (używają ich wszystkie programy, więc najważniejsze):
 - [ ] Okno „Otwórz / Zapisz jako” — własny portal xdg-desktop-portal (FileChooser) w stylu Plików
-- [ ] Prośba o hasło administratora — własny agent polkit (zamiast polkit-kde-agent)
+- [x] Prośba o hasło administratora — agent polkit w powłoce (okno Aster: kto prosi, o co, wybór administratora, ponowna próba)
 - [ ] Hasło Wi‑Fi/VPN i parowanie Bluetooth z powłoki; pęk kluczy (hasło po zalogowaniu) bez okien KWallet
 - [ ] Ekran logowania i blokady, instalator i pierwsze uruchomienie, aktualizacje systemu (bootc) w Ustawieniach
 
