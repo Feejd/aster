@@ -35,6 +35,30 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Ikony i kursor, ekran logowania (SDDM) i ekran blokady w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.
 
+## Etap 3b — system bez programów Fedory/KDE (najpierw to, potem programy użytkowe)
+Cel: po instalacji użytkownik widzi wyłącznie Aster. Program KDE usuwamy z obrazu dopiero wtedy, gdy jego zastępca działa.
+
+Okna systemowe (używają ich wszystkie programy, więc najważniejsze):
+- [ ] Okno „Otwórz / Zapisz jako” — własny portal xdg-desktop-portal (FileChooser) w stylu Plików
+- [ ] Prośba o hasło administratora — własny agent polkit (zamiast polkit-kde-agent)
+- [ ] Hasło Wi‑Fi/VPN i parowanie Bluetooth z powłoki; pęk kluczy (hasło po zalogowaniu) bez okien KWallet
+- [ ] Ekran logowania i blokady, instalator i pierwsze uruchomienie, aktualizacje systemu (bootc) w Ustawieniach
+
+Programy:
+- [x] Pliki (Dolphin), Przeglądarka (Firefox), Terminal (Konsole), Sklep (Discover), Ustawienia (Ustawienia systemowe)
+- [ ] Menedżer zadań (Plasma System Monitor) — Ctrl+Shift+Esc, „Zakończ zadanie”, obciążenie, programy przy starcie
+- [ ] Zdjęcia (Gwenview) i Podgląd PDF (Okular)
+- [ ] Edytor tekstu (Kate, KWrite), Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
+- [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
+- [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
+
+Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):
+- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kcalc, ark, discover,
+      plasma-systemmonitor, kinfocenter, kwalletmanager, ksystemlog, kmail/kontact, akregator, gry KDE, plasma-welcome
+- [ ] Zostaje infrastruktura bez okien: KWin, biblioteki Plasmy (powiadomienia, zadania), KIO, PowerDevil, PipeWire,
+      NetworkManager, BlueZ, kded; KDE-owe okna systemowe znikają dopiero po zrobieniu własnych (portal, polkit)
+- [ ] Ustawienia KDE (systemsettings) ukryte w Starcie, ale zostają dla zaawansowanych
+
 ## Etap 4 — prawdziwy system do zainstalowania
 - [ ] Obraz systemu (`image/Containerfile`) budowany automatycznie przy każdej zmianie.
 - [ ] Instalator z ekranem powitalnym („Przesiadasz się z Windowsa?”: przeniesienie plików, konto).
@@ -74,3 +98,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
 - [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
 - [ ] Asystent pod klawiszem.
+
+## Etap 6 — programy użytkowe Aster (po Etapie 3b)
+- [ ] Aster Code — edytor kodu w stylu Aster
+- [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
