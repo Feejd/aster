@@ -15,7 +15,9 @@ QtObject {
     readonly property color text: dark ? "#ECEEF3" : "#16181D"
     readonly property color text2: dark ? "#A2A9B6" : "#5B6270"
     readonly property color glass: dark ? Qt.rgba(32 / 255, 32 / 255, 38 / 255, 0.72) : Qt.rgba(246 / 255, 246 / 255, 250 / 255, 0.74)
-    readonly property color windowGlass: dark ? Qt.rgba(36 / 255, 36 / 255, 42 / 255, 0.78) : Qt.rgba(240 / 255, 240 / 255, 245 / 255, 0.78)
+    // Okno to szkło jak wyspy powłoki; treść leży na pływającym panelu (GlassPane) z gęstszego szkła
+    readonly property color windowGlass: dark ? Qt.rgba(20 / 255, 21 / 255, 27 / 255, 0.56) : Qt.rgba(236 / 255, 238 / 255, 244 / 255, 0.52)
+    readonly property color paneGlass: dark ? Qt.rgba(26 / 255, 27 / 255, 34 / 255, 0.72) : Qt.rgba(1, 1, 1, 0.70)
     readonly property color pane: dark ? Qt.rgba(30 / 255, 30 / 255, 34 / 255, 0.97) : Qt.rgba(1, 1, 1, 0.97)
     readonly property color fill: dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.06)
     readonly property color danger: dark ? "#FF8A80" : "#C62828"

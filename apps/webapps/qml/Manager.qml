@@ -24,7 +24,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 14
+    readonly property real r: maxed ? 0 : 24
 
     property var preview: null              // wynik WebApps.inspect() do pokazania
     property var pending: null              // instalacja z Polecanych: {name, color, category}
@@ -146,10 +146,17 @@ Window {
             }
         }
 
+        GlassPane {
+            id: pane
+            x: 8; y: titlebar.height
+            width: parent.width - 16; height: parent.height - y - 8
+            radius: Math.max(10, win.r - 8)
+        }
+
         Flickable {
             id: page
-            y: titlebar.height
-            width: parent.width; height: parent.height - y
+            x: pane.x; y: pane.y
+            width: pane.width; height: pane.height
             contentHeight: col.height + 60
             boundsBehavior: Flickable.StopAtBounds
             clip: true

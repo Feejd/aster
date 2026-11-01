@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26           // margines na cień
-    readonly property real r: maxed ? 0 : 14          // zaokrąglenie rogów
+    readonly property real r: maxed ? 0 : 24          // zaokrąglenie rogów
 
     // ——— Stan ———
     property var backStack: []
@@ -555,7 +555,6 @@ Window {
                 anchors.right: parent.right; anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
             }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         }
 
         // ——— Pasek boczny ———
@@ -563,7 +562,6 @@ Window {
             id: sidebar
             y: titlebar.height
             width: 210; height: parent.height - titlebar.height
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
 
             Column {
                 x: 10; y: 14
@@ -612,13 +610,20 @@ Window {
             }
         }
 
+        // ——— Panel treści (pasek narzędzi, folder, pasek stanu) ———
+        GlassPane {
+            id: pane
+            x: sidebar.width; y: titlebar.height
+            width: parent.width - sidebar.width - 8
+            height: parent.height - y - 8
+            radius: Math.max(10, win.r - 8)
+        }
+
         // ——— Pasek narzędzi ———
         Item {
             id: toolbar
-            x: sidebar.width; y: titlebar.height
-            width: parent.width - sidebar.width; height: 48
-
-            Rectangle { anchors.fill: parent; color: Theme.pane }
+            x: pane.x; y: pane.y
+            width: pane.width; height: 48
 
             Row {
                 x: 14
@@ -726,10 +731,11 @@ Window {
         // ——— Zawartość folderu ———
         Rectangle {
             id: content
-            x: sidebar.width; y: titlebar.height + toolbar.height
-            width: parent.width - sidebar.width
-            height: parent.height - y - status.height
-            color: Theme.pane
+            x: pane.x; y: toolbar.y + toolbar.height
+            width: pane.width
+            height: pane.y + pane.height - y - status.height
+            color: "transparent"
+            clip: true
 
             // Upuszczenie na puste miejsce = do bieżącego folderu
             DropArea {
@@ -882,10 +888,9 @@ Window {
         // ——— Pasek stanu ———
         Rectangle {
             id: status
-            x: sidebar.width; anchors.bottom: parent.bottom
-            width: parent.width - sidebar.width; height: 32
-            color: Theme.pane
-            bottomRightRadius: win.r
+            x: pane.x; anchors.bottom: pane.bottom
+            width: pane.width; height: 32
+            color: "transparent"
             Rectangle { width: parent.width; height: 1; color: Theme.line }
             Text {
                 x: 16; anchors.verticalCenter: parent.verticalCenter

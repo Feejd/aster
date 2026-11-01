@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 14
+    readonly property real r: maxed ? 0 : 24
 
     property string section: "discover"          // discover | kategoria Flathub | search | installed | updates
     property var popular: []
@@ -145,7 +145,6 @@ Window {
         Item {
             id: side
             width: 240; height: parent.height
-            Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
             DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
 
             Rectangle {
@@ -202,13 +201,12 @@ Window {
         }
 
         // ——— Treść ———
-        Rectangle {
+        GlassPane {
             id: main
-            x: side.width
-            width: parent.width - side.width
-            height: parent.height
-            color: Theme.pane
-            topRightRadius: win.r; bottomRightRadius: win.r
+            x: side.width; y: 8
+            width: parent.width - side.width - 8
+            height: parent.height - 16
+            radius: Math.max(10, win.r - 8)
 
             Item {
                 id: topBar

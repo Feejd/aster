@@ -30,7 +30,7 @@ Window {
     property bool pageFullScreen: false
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 14
+    readonly property real r: maxed ? 0 : 24
 
     property int current: 0
     readonly property var cur: pages.count > 0 ? pages.itemAt(Math.min(current, pages.count - 1)) : null
@@ -515,7 +515,6 @@ Window {
                     }
                 }
             }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         }
 
         // ——— Prośba strony o uprawnienie ———
@@ -578,16 +577,23 @@ Window {
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         }
 
-        // ——— Strony ———
+        // ——— Strony: pływająca karta pod paskiem okna ———
+        GlassPane {
+            visible: !win.pageFullScreen
+            x: content.x; y: content.y
+            width: content.width; height: content.height
+            radius: contentMask.radius
+        }
         Item {
             id: content
+            x: win.pageFullScreen ? 0 : 8
             y: chrome.height + permBar.height
-            width: parent.width
-            height: parent.height - y
+            width: parent.width - 2 * x
+            height: parent.height - y - x
             clip: true
 
             // Zaokrąglone dolne rogi strony (maska), gdy okno nie jest zmaksymalizowane
-            layer.enabled: !win.maxed && GraphicsInfo.api !== GraphicsInfo.Software
+            layer.enabled: !win.pageFullScreen && GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect {
                 maskEnabled: true
                 maskSource: contentMask
@@ -685,7 +691,7 @@ Window {
             visible: false
             layer.enabled: true
             width: content.width; height: content.height
-            bottomLeftRadius: win.r; bottomRightRadius: win.r
+            radius: win.pageFullScreen ? 0 : Math.max(10, win.r - 8)
             color: "black"
         }
 

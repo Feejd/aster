@@ -13,6 +13,7 @@ qt_add_qml_module(aster-ui
         WindowButtons.qml
         WindowShadow.qml
         WindowSheen.qml
+        GlassPane.qml
         ContextMenu.qml
         HoverButton.qml
         ToolBtn.qml
