@@ -1,0 +1,3 @@
+# Ciche uruchamianie: ekran Aster zamiast komunikatów jądra i systemd
+# (bootc dokłada te opcje do każdego wpisu startowego; Esc na ekranie startowym nadal pokazuje szczegóły)
+kargs = ["rhgb", "quiet", "splash", "loglevel=3", "rd.udev.log_level=3", "systemd.show_status=false", "rd.systemd.show_status=false", "vt.global_cursor_default=0", "plymouth.ignore-serial-consoles"]

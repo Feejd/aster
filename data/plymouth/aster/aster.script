@@ -1,0 +1,159 @@
+# Ekran startowy Aster (Plymouth): czarne tło, znak Aster i cienki pasek postępu — jak w macOS.
+# Bez tekstu: komunikaty startu są ukryte (Esc nadal pokazuje szczegóły).
+# Hasło szyfrowanego dysku: pole z kłódką pod znakiem. Przy wyłączaniu — sam znak.
+
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+mode = Plymouth.GetMode();
+with_bar = (mode == "boot" || mode == "resume" || mode == "updates" || mode == "system-upgrade" || mode == "firmware-upgrade");
+
+logo.source = Image("logo.png");
+track.source = Image("track.png");
+fill.source = Image("bar.png");
+entry.source = Image("entry.png");
+lock.source = Image("lock.png");
+bullet.source = Image("bullet.png");
+
+logo.sprite = Sprite();
+track.sprite = Sprite();
+fill.sprite = Sprite();
+entry.sprite = Sprite();
+lock.sprite = Sprite();
+
+frame = 0;
+shown = 0;               # postęp na ekranie (dogania postęp startu płynnie)
+target = 0;
+asking = 0;              # 1, gdy pytamy o hasło dysku
+bullets = 0;
+
+# Rozmieszczenie liczone od wysokości ekranu — tak samo na laptopie i na 4K
+fun layout()
+{
+    global.u = Math.Max(0.6, Window.GetHeight() / 1080);
+    global.cx = Window.GetX() + Window.GetWidth() / 2;
+    global.cy = Window.GetY() + Window.GetHeight() / 2;
+
+    size = Math.Int(118 * u);
+    logo.sprite.SetImage(logo.source.Scale(size, size));
+    logo.x = Math.Int(cx - size / 2);
+    logo.y = Math.Int(cy - size / 2 - 20 * u);
+    logo.sprite.SetPosition(logo.x, logo.y, 10);
+
+    global.bar_w = Math.Int(220 * u);
+    global.bar_h = Math.Max(4, Math.Int(5 * u));
+    global.bar_x = Math.Int(cx - bar_w / 2);
+    global.bar_y = Math.Int(logo.y + size + 70 * u);
+    track.sprite.SetImage(track.source.Scale(bar_w, bar_h));
+    track.sprite.SetPosition(bar_x, bar_y, 10);
+    fill.sprite.SetPosition(bar_x, bar_y, 11);
+
+    global.entry_w = Math.Int(300 * u);
+    global.entry_h = Math.Int(38 * u);
+    global.entry_x = Math.Int(cx - entry_w / 2);
+    global.entry_y = Math.Int(logo.y + size + 56 * u);
+    entry.sprite.SetImage(entry.source.Scale(entry_w, entry_h));
+    entry.sprite.SetPosition(entry_x, entry_y, 20);
+    lock_size = Math.Int(16 * u);
+    lock.sprite.SetImage(lock.source.Scale(lock_size, lock_size));
+    lock.sprite.SetPosition(Math.Int(entry_x + 14 * u), Math.Int(entry_y + (entry_h - lock_size) / 2), 21);
+    global.bullet_size = Math.Max(6, Math.Int(8 * u));
+    global.bullet_image = bullet.source.Scale(bullet_size, bullet_size);
+}
+
+fun draw_bar()
+{
+    w = Math.Int(bar_w * shown);
+    if (w < bar_h)
+        w = bar_h;
+    fill.sprite.SetImage(fill.source.Scale(w, bar_h));
+}
+
+fun set_visibility()
+{
+    # Znak i pasek pojawiają się łagodnie w pierwszej pół sekundzie
+    fade = Math.Min(1, frame / 25);
+    logo.sprite.SetOpacity(fade);
+    bar_on = 0;
+    if (with_bar && !asking)
+        bar_on = fade;
+    track.sprite.SetOpacity(bar_on);
+    fill.sprite.SetOpacity(bar_on);
+    entry_on = 0;
+    if (asking)
+        entry_on = 1;
+    entry.sprite.SetOpacity(entry_on);
+    lock.sprite.SetOpacity(entry_on);
+    for (i = 0; global.dots[i]; i++)
+    {
+        if (asking && i < bullets)
+            global.dots[i].SetOpacity(1);
+        else
+            global.dots[i].SetOpacity(0);
+    }
+}
+
+fun refresh()
+{
+    frame++;
+    if (shown < target)
+    {
+        shown += (target - shown) * 0.08 + 0.0015;
+        if (shown > target)
+            shown = target;
+        draw_bar();
+    }
+    set_visibility();
+}
+
+fun boot_progress(duration, progress)
+{
+    if (progress > target)
+        target = Math.Min(1, progress);
+}
+
+fun system_update(progress)
+{
+    target = Math.Clamp(progress / 100, 0, 1);
+}
+
+fun password(prompt, count)
+{
+    global.asking = 1;
+    global.bullets = count;
+    gap = Math.Int(bullet_size * 0.9);
+    for (i = 0; i < count; i++)
+    {
+        if (!global.dots[i])
+        {
+            global.dots[i] = Sprite(bullet_image);
+            global.dots[i].SetPosition(Math.Int(entry_x + 40 * u + i * (bullet_size + gap)), Math.Int(entry_y + (entry_h - bullet_size) / 2), 22);
+        }
+    }
+    set_visibility();
+}
+
+fun normal()
+{
+    global.asking = 0;
+    set_visibility();
+}
+
+fun quit()
+{
+    shown = 1;
+    if (with_bar)
+        draw_bar();
+}
+
+layout();
+draw_bar();
+set_visibility();
+
+Plymouth.SetRefreshFunction(refresh);
+Plymouth.SetDisplayHotplugFunction(layout);
+Plymouth.SetBootProgressFunction(boot_progress);
+Plymouth.SetSystemUpdateFunction(system_update);
+Plymouth.SetDisplayPasswordFunction(password);
+Plymouth.SetDisplayNormalFunction(normal);
+Plymouth.SetQuitFunction(quit);

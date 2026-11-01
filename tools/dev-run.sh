@@ -49,6 +49,12 @@ dbus-send --session --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/nu
 
 # Poprzednia kopia powłoki (np. z innej Konsoli) — zamknij, żeby nie działały dwie naraz
 pkill -x aster-shell || true
-systemctl --user stop plasma-plasmashell.service || true
-trap 'systemctl --user start plasma-plasmashell.service' EXIT INT TERM
+# W sesji Aster (tools/install-vm.sh) po Ctrl+C wraca zainstalowana powłoka, w Plasmie — plasmashell
+if [ "$ASTER_SESSION" = 1 ]; then
+    systemctl --user stop aster-shell.service || true
+    trap 'systemctl --user start aster-shell.service' EXIT INT TERM
+else
+    systemctl --user stop plasma-plasmashell.service || true
+    trap 'systemctl --user start plasma-plasmashell.service' EXIT INT TERM
+fi
 ASTER_DATA_DIR="$ROOT/data" "$BUILD/shell/aster-shell"

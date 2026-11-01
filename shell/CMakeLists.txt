@@ -57,4 +57,7 @@ install(DIRECTORY ../data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts
 install(FILES ../session/aster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/wayland-sessions)
 install(FILES ../session/org.aster.shell.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(PROGRAMS ../session/startaster DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Ekran startowy (Plymouth) i znak Aster jako logo systemu (LOGO=aster w os-release)
+install(DIRECTORY ../data/plymouth/aster DESTINATION ${CMAKE_INSTALL_DATADIR}/plymouth/themes)
+install(FILES ../data/branding/aster.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 install(FILES ../session/aster-shell.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)

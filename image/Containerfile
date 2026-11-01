@@ -23,4 +23,22 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  && systemctl --global enable aster-shell.service \
  && dnf clean all
+
+# ——— Start jak w macOS: znak Aster, bez tekstu, od razu do sesji Aster ———
+COPY image/boot/10-aster.toml /usr/lib/bootc/kargs.d/10-aster.toml
+RUN dnf install -y plymouth-plugin-script \
+ && dnf swap -y fedora-logos generic-logos --allowerasing \
+ # Nazwa systemu: Aster (ID=fedora zostaje — po nim aktualizacje i Flatpak wiedzą, skąd brać pakiety)
+ && sed -i -e 's/^NAME=.*/NAME="Aster"/' -e 's/^PRETTY_NAME=.*/PRETTY_NAME="Aster 1.0"/' \
+        -e 's/^VARIANT=.*/VARIANT="Aster"/' -e 's/^LOGO=.*/LOGO=aster/' -e 's/^VERSION=.*/VERSION="1.0 (Fedora 44)"/' \
+        -e '/^HOME_URL=\|^DOCUMENTATION_URL=\|^SUPPORT_URL=\|^BUG_REPORT_URL=\|^ANSI_COLOR=/d' /usr/lib/os-release \
+ && echo 'ANSI_COLOR="0;38;2;124;140;255"' >> /usr/lib/os-release \
+ # Ekran logowania proponuje tylko sesję Aster; Plasma zostaje ukryta (np. do ratunku przez tty)
+ && for s in /usr/share/wayland-sessions/plasma*.desktop /usr/share/xsessions/plasma*.desktop; do \
+        [ -f "$s" ] && sed -i '/^\[Desktop Entry\]/a NoDisplay=true\nHidden=true' "$s"; done; \
+    plymouth-set-default-theme aster \
+ # initramfs z ekranem Aster (ekran startowy działa, zanim zamontuje się dysk)
+ && kver=$(ls /usr/lib/modules | head -n1) \
+ && dracut --no-hostonly --reproducible -f /usr/lib/modules/$kver/initramfs.img $kver \
+ && dnf clean all
 RUN bootc container lint || true
