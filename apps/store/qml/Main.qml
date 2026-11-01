@@ -126,12 +126,7 @@ Window {
     onMaxedChanged: effectsTimer.restart()
     Timer { id: effectsTimer; interval: 16; onTriggered: win.updateEffects() }
 
-    RectangularShadow {
-        anchors.fill: frame
-        visible: !win.maxed
-        radius: win.r; blur: 40; offset.y: 12
-        color: Theme.shadow
-    }
+    WindowShadow { window: win; frame: frame; radius: win.r; visible: !win.maxed }
     ResizeHandles { window: win; frame: frame; margin: win.m }
 
     Rectangle {
@@ -143,6 +138,7 @@ Window {
         color: Theme.windowGlass
         border.width: win.maxed ? 0 : 1
         border.color: Theme.edge
+        WindowSheen { window: win; radius: win.r }
         clip: true
 
         // ——— Pasek boczny ———

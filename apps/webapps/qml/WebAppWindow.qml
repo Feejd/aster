@@ -363,12 +363,7 @@ Window {
         function onHeightChanged() { effectsTimer.restart(); }
     }
 
-    RectangularShadow {
-        anchors.fill: frame
-        visible: win.m > 0
-        radius: win.r; blur: 40; offset.y: 12
-        color: Theme.shadow
-    }
+    WindowShadow { window: win; frame: frame; radius: win.r; visible: win.m > 0 }
     ResizeHandles { window: win; frame: frame; margin: win.m }
 
     Rectangle {
@@ -381,6 +376,7 @@ Window {
         color: win.adapter ? (Theme.dark ? Qt.rgba(0.04, 0.04, 0.045, 0.82) : Qt.rgba(1, 1, 1, 0.84)) : Theme.windowGlass
         border.width: win.m ? 1 : 0
         border.color: Theme.edge
+        WindowSheen { window: win; radius: win.r }
 
         // ——— Natywny pasek boczny z menu strony ———
         Item {

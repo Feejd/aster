@@ -13,10 +13,13 @@ class WindowEffects : public QObject
     QML_SINGLETON
     // Do testów: ASTER_DARK=1 wymusza ciemny motyw we wszystkich aplikacjach Aster
     Q_PROPERTY(bool forceDark READ forceDark CONSTANT)
+    // Do zrzutów (ASTER_PREVIEW=1): okno wygląda jak aktywne, choć bez kompozytora nie ma fokusu
+    Q_PROPERTY(bool preview READ preview CONSTANT)
 
 public:
     explicit WindowEffects(QObject *parent = nullptr);
     bool forceDark() const { return qEnvironmentVariableIsSet("ASTER_DARK"); }
+    bool preview() const { return qEnvironmentVariableIsSet("ASTER_PREVIEW"); }
 
     Q_INVOKABLE void setBlur(QQuickWindow *window, const QRectF &rect, qreal radius);
     Q_INVOKABLE void setInputRegion(QQuickWindow *window, const QRectF &rect);

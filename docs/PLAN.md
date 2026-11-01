@@ -26,6 +26,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 ## Etap 3 — spójny wygląd całego systemu
 - [ ] **Ramki okien** (dekoracja KWin): okrągłe kolorowe przyciski, pasek tytułu jak w prototypie.
 - [ ] **Efekty KWin**: zasysanie do doku (Magic Lamp), szybsze animacje, przyciąganie do krawędzi.
+- [x] Okna aplikacji Aster: trójwarstwowy cień zależny od fokusu, szklany rant i odblask, „zorza” w kolorze akcentu,
+      kolorowe przyciski okna, sprężyste otwieranie (wspólne WindowShadow / WindowSheen / WindowButtons w Aster.Ui)
 - [ ] **Kolory i styl aplikacji Qt/KDE**: akcent, zaokrąglenia, czcionka Geist w całym systemie.
 - [ ] Ikony i kursor, ekran logowania (SDDM) i ekran blokady w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.

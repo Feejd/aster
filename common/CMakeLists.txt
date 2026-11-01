@@ -11,6 +11,8 @@ qt_add_qml_module(aster-ui
         Icons.js
         ResizeHandles.qml
         WindowButtons.qml
+        WindowShadow.qml
+        WindowSheen.qml
         ContextMenu.qml
         HoverButton.qml
         ToolBtn.qml

@@ -7,7 +7,7 @@ import Aster.Shell
 import Aster.Ui
 
 // Pulpit (nad tapetą, pod oknami) — pierwsze, co widać po zalogowaniu:
-//  • duża godzina z cienkiego Geista z delikatnym gradientem, nad nią data,
+//  • duża, półgruba godzina z Geista z delikatnym gradientem, nad nią data,
 //  • pod nią widżety w siatce kafelków (bento): kalendarz miesiąca, bateria, teraz gra.
 // Kliknięcia trafiają tylko w widżety; reszta pulpitu przepuszcza je dalej.
 // Ustawienia → Pulpit i dok → „Zegar na pulpicie” chowa całość.
@@ -60,8 +60,8 @@ Window {
             layer.enabled: hero.fancy
             font.family: Theme.font
             font.pixelSize: 176
-            font.weight: Font.ExtraLight
-            font.letterSpacing: -5
+            font.weight: Font.DemiBold
+            font.letterSpacing: -7
             font.features: { "tnum": 1 }
         }
         Rectangle {

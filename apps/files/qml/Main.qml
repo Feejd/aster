@@ -424,14 +424,7 @@ Window {
     Component.onCompleted: { effectsTimer.restart(); keys.forceActiveFocus(); }
     Timer { id: effectsTimer; interval: 16; onTriggered: win.updateEffects() }
 
-    RectangularShadow {
-        anchors.fill: frame
-        visible: !win.maxed
-        radius: win.r
-        blur: 40
-        offset.y: 12
-        color: Theme.shadow
-    }
+    WindowShadow { window: win; frame: frame; radius: win.r; visible: !win.maxed }
 
     // Uchwyty zmiany rozmiaru (krawędzie i rogi, tuż przy oknie)
     Repeater {
@@ -467,6 +460,7 @@ Window {
         color: Theme.windowGlass
         border.width: win.maxed ? 0 : 1
         border.color: Theme.edge
+        WindowSheen { window: win; radius: win.r }
         clip: true
 
         Item {
@@ -555,38 +549,11 @@ Window {
                 }
             }
 
-            Row {
+            WindowButtons {
                 id: controls
+                window: win
                 anchors.right: parent.right; anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-                Repeater {
-                    model: [
-                        { icon: "minimize", act: "min", hover: "#F2B33D" },
-                        { icon: "maximize", act: "max", hover: "#34C27A" },
-                        { icon: "close", act: "close", hover: "#F0524F" }
-                    ]
-                    delegate: Rectangle {
-                        id: wc
-                        required property var modelData
-                        width: 28; height: 28; radius: 14
-                        color: wcArea.containsMouse ? modelData.hover : Theme.fill
-                        scale: wcArea.pressed ? 0.9 : 1
-                        Behavior on color { ColorAnimation { duration: 140 } }
-                        Behavior on scale { NumberAnimation { duration: 100 } }
-                        Icon { anchors.centerIn: parent; d: Icons[wc.modelData.icon]; size: 13; stroke: 2; color: wcArea.containsMouse ? "white" : Theme.text2 }
-                        MouseArea {
-                            id: wcArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                if (wc.modelData.act === "min") win.showMinimized();
-                                else if (wc.modelData.act === "max") { if (win.maxed) win.showNormal(); else win.showMaximized(); }
-                                else win.close();
-                            }
-                        }
-                    }
-                }
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         }
