@@ -59,6 +59,8 @@ install(FILES ../session/org.aster.shell.desktop DESTINATION ${CMAKE_INSTALL_DAT
 install(PROGRAMS ../session/startaster DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Ekran startowy (Plymouth) i znak Aster jako logo systemu (LOGO=aster w os-release)
 install(DIRECTORY ../data/plymouth/aster DESTINATION ${CMAKE_INSTALL_DATADIR}/plymouth/themes)
+# Przejście z logowania na pulpit (zamiast ekranu ładowania KDE)
+install(DIRECTORY ../data/lookandfeel/org.aster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/plasma/look-and-feel)
 # Ekran logowania (motyw SDDM)
 install(DIRECTORY ../data/sddm/aster DESTINATION ${CMAKE_INSTALL_DATADIR}/sddm/themes)
 install(FILES ../data/branding/aster.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)

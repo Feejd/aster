@@ -13,7 +13,7 @@ AUTOLOGIN=/etc/sddm.conf.d/zz-aster-autologin.conf
 if [ "$1" = "--undo" ]; then
     sudo grubby --update-kernel=ALL --remove-args="splash loglevel=3 rd.udev.log_level=3 systemd.show_status=false rd.systemd.show_status=false vt.global_cursor_default=0"
     sudo grub2-editenv - unset menu_auto_hide
-    sudo rm -f "$AUTOLOGIN" /etc/sddm.conf.d/10-aster.conf
+    sudo rm -f "$AUTOLOGIN" /etc/sddm.conf.d/10-aster.conf /etc/systemd/system/sddm.service.d/10-aster-plymouth.conf
     for s in /usr/share/wayland-sessions/plasma*.desktop; do [ -f "$s" ] && sudo sed -i '/^NoDisplay=true$/d; /^Hidden=true$/d' "$s"; done
     if [ -f /etc/aster-previous-dm ]; then sudo systemctl enable --force "$(cat /etc/aster-previous-dm)"; sudo rm -f /etc/aster-previous-dm; fi
     sudo plymouth-set-default-theme -R bgrt
@@ -48,6 +48,10 @@ rpm -q sddm sddm-wayland-plasma >/dev/null 2>&1 || sudo dnf install -y sddm sddm
 current=$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)
 [ -n "$current" ] && [ "$current" != sddm.service ] && echo "$current" | sudo tee /etc/aster-previous-dm >/dev/null
 sudo systemctl enable --force sddm.service
+# Znak Aster zostaje do pojawienia się ekranu logowania (bez czarnej przerwy)
+sudo mkdir -p /etc/systemd/system/sddm.service.d
+sudo cp "$ROOT/image/boot/10-aster-plymouth.conf" /etc/systemd/system/sddm.service.d/10-aster-plymouth.conf
+sudo systemctl daemon-reload
 sudo mkdir -p /etc/sddm.conf.d
 printf '[Theme]\nCurrent=aster\n' | sudo tee /etc/sddm.conf.d/10-aster.conf >/dev/null
 # Ukryj sesję Plasmy na liście (zostaje w systemie; wraca po aktualizacji pakietu plasma-workspace)

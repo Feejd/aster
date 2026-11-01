@@ -36,8 +36,9 @@ QString AsterConfig::dataDir() const
     const QByteArray env = qgetenv("ASTER_DATA_DIR");
     if (!env.isEmpty())
         return QString::fromLocal8Bit(env);
-    const QString found = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("aster"), QStandardPaths::LocateDirectory);
-    return found.isEmpty() ? QStringLiteral("/usr/share/aster") : found;
+    // Folder z tapetami, nie samo „aster” (w ~/.local/share/aster są też dane aplikacji webowych)
+    const QString found = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("aster/wallpapers"), QStandardPaths::LocateDirectory);
+    return found.isEmpty() ? QStringLiteral("/usr/share/aster") : found.chopped(int(qstrlen("/wallpapers")));
 }
 
 void AsterConfig::load()

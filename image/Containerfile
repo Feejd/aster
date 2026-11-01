@@ -27,6 +27,7 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
 # ——— Start jak w macOS: znak Aster, bez tekstu, od razu do sesji Aster ———
 COPY image/boot/10-aster.toml /usr/lib/bootc/kargs.d/10-aster.toml
 COPY image/boot/10-aster-sddm.conf /etc/sddm.conf.d/10-aster.conf
+COPY image/boot/10-aster-plymouth.conf /usr/lib/systemd/system/sddm.service.d/10-aster-plymouth.conf
 RUN dnf install -y plymouth-plugin-script sddm sddm-wayland-plasma \
  # Ekran logowania: SDDM z motywem Aster zamiast Plasma Login Manager (tamten nie przyjmuje własnych motywów)
  && (systemctl disable plasmalogin.service 2>/dev/null || true) \

@@ -263,9 +263,11 @@ QString Platform::dataDir() const
     const QByteArray env = qgetenv("ASTER_DATA_DIR");
     if (!env.isEmpty())
         return QString::fromLocal8Bit(env);
-    const QString found = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("aster"),
+    // Szukamy folderu z tapetami, nie samego „aster” — ~/.local/share/aster istnieje też dla danych
+    // aplikacji webowych i przesłaniałby zasoby systemu
+    const QString found = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("aster/wallpapers"),
                                                  QStandardPaths::LocateDirectory);
-    return found.isEmpty() ? QStringLiteral(ASTER_INSTALL_DATADIR) : found;
+    return found.isEmpty() ? QStringLiteral(ASTER_INSTALL_DATADIR) : found.chopped(int(qstrlen("/wallpapers")));
 }
 
 void Platform::makeLayer(QQuickWindow *window, const QString &layer, int anchors, int exclusiveZone,

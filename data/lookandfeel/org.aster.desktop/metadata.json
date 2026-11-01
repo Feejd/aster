@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [{ "Name": "Aster" }],
+        "Description": "Przejście z ekranu logowania na pulpit Aster",
+        "Id": "org.aster.desktop",
+        "License": "GPL-3.0-or-later",
+        "Name": "Aster",
+        "Version": "1.0"
+    },
+    "X-Plasma-APIVersion": "2"
+}

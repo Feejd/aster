@@ -2,5 +2,8 @@
 # Sesja Aster: cała Plasma (KWin, usługi, ustawienia), ale zamiast plasmashell
 # działa aster-shell. Maska „--runtime” obowiązuje tylko do wylogowania.
 export ASTER_SESSION=1
+# Zamiast ekranu ładowania KDE — przejście Aster (rozmyta tapeta jak na ekranie logowania)
+kwriteconfig6 --file ksplashrc --group KSplash --key Engine KSplashQML
+kwriteconfig6 --file ksplashrc --group KSplash --key Theme org.aster.desktop
 systemctl --user mask --runtime plasma-plasmashell.service
 exec /usr/bin/startplasma-wayland
