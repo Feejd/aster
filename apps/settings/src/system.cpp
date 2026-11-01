@@ -1,6 +1,10 @@
 #include "system.h"
 
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDateTime>
+#include <QDir>
+#include <QUrl>
 #include <QFile>
 #include <QProcess>
 #include <QRegularExpression>
@@ -87,6 +91,16 @@ void System::fillPreview()
     m_outputs = {out(47, QStringLiteral("Głośniki wbudowane"), false), out(52, QStringLiteral("Słuchawki"), true), out(55, QStringLiteral("Monitor HDMI"), false)};
     m_inputs = {out(48, QStringLiteral("Mikrofon wbudowany"), true)};
     m_volume = 0.62;
+    m_inputVolume = 0.8;
+    m_streams = {QVariantMap{{QStringLiteral("id"), 90}, {QStringLiteral("name"), QStringLiteral("Przeglądarka")}, {QStringLiteral("volume"), 1.0}},
+                 QVariantMap{{QStringLiteral("id"), 91}, {QStringLiteral("name"), QStringLiteral("Spotify")}, {QStringLiteral("volume"), 0.55}}};
+    m_netInfo = {{QStringLiteral("connection"), QStringLiteral("Dom 5G")}, {QStringLiteral("device"), QStringLiteral("wlp2s0")},
+                 {QStringLiteral("ip"), QStringLiteral("192.168.1.24")}, {QStringLiteral("gateway"), QStringLiteral("192.168.1.1")},
+                 {QStringLiteral("dns"), QStringLiteral("192.168.1.1")}, {QStringLiteral("mac"), QStringLiteral("3C:22:FB:41:9A:10")},
+                 {QStringLiteral("customDns"), QString()}};
+    m_vpns = {QVariantMap{{QStringLiteral("name"), QStringLiteral("Praca")}, {QStringLiteral("type"), QStringLiteral("wireguard")}, {QStringLiteral("active"), false}}};
+    m_known = {QStringLiteral("Dom 5G"), QStringLiteral("Dom"), QStringLiteral("Biuro"), QStringLiteral("Hotel Aster")};
+    m_firewall = 1;
 }
 
 void System::refresh()
@@ -319,6 +333,178 @@ void System::disconnectWifi()
     });
 }
 
+// ——— Szczegóły sieci, DNS, VPN, hotspot ———
+void System::refreshNetworkDetails()
+{
+    if (m_preview)
+        return;
+    query(QStringLiteral("conns"), QStringLiteral("nmcli"), {QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("NAME,TYPE,ACTIVE,DEVICE"), QStringLiteral("connection"), QStringLiteral("show")},
+          [this](const QString &out, int) {
+              QVariantList vpns;
+              QStringList known;
+              QString activeConn, activeDev;
+              bool hotspot = false;
+              for (const QString &line : out.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+                  const QStringList f = nmFields(line);
+                  if (f.size() < 4)
+                      continue;
+                  const bool active = f[2] == QLatin1String("yes");
+                  if (f[1] == QLatin1String("vpn") || f[1] == QLatin1String("wireguard"))
+                      vpns << QVariantMap{{QStringLiteral("name"), f[0]}, {QStringLiteral("type"), f[1]}, {QStringLiteral("active"), active}};
+                  else if (f[1] == QLatin1String("802-11-wireless")) {
+                      if (f[0] == QLatin1String("Hotspot"))
+                          hotspot = active;
+                      else
+                          known << f[0];
+                  }
+                  if (active && activeConn.isEmpty() && (f[1] == QLatin1String("802-11-wireless") || f[1] == QLatin1String("802-3-ethernet")) && f[0] != QLatin1String("Hotspot")) {
+                      activeConn = f[0];
+                      activeDev = f[3];
+                  }
+              }
+              m_vpns = vpns;
+              m_known = QVariantList(known.cbegin(), known.cend());
+              m_hotspot = hotspot;
+              if (activeDev.isEmpty()) {
+                  m_netInfo.clear();
+                  Q_EMIT detailsChanged();
+                  return;
+              }
+              query(QStringLiteral("devshow"), QStringLiteral("nmcli"), {QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS"),
+                                                                         QStringLiteral("device"), QStringLiteral("show"), activeDev},
+                    [this, activeConn, activeDev](const QString &d, int) {
+                        QVariantMap info{{QStringLiteral("connection"), activeConn}, {QStringLiteral("device"), activeDev}};
+                        QStringList dns;
+                        for (const QString &line : d.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+                            const QString key = line.section(QLatin1Char(':'), 0, 0), value = line.section(QLatin1Char(':'), 1).remove(QLatin1Char('\\'));
+                            if (key == QLatin1String("GENERAL.HWADDR")) info.insert(QStringLiteral("mac"), value);
+                            else if (key.startsWith(QLatin1String("IP4.ADDRESS")) && !info.contains(QStringLiteral("ip"))) info.insert(QStringLiteral("ip"), value.section(QLatin1Char('/'), 0, 0));
+                            else if (key == QLatin1String("IP4.GATEWAY")) info.insert(QStringLiteral("gateway"), value);
+                            else if (key.startsWith(QLatin1String("IP4.DNS"))) dns << value;
+                        }
+                        info.insert(QStringLiteral("dns"), dns.join(QStringLiteral(", ")));
+                        query(QStringLiteral("conndns"), QStringLiteral("nmcli"), {QStringLiteral("-g"), QStringLiteral("ipv4.ignore-auto-dns,ipv4.dns"), QStringLiteral("connection"),
+                                                                                   QStringLiteral("show"), activeConn},
+                              [this, info](const QString &c, int) mutable {
+                                  const QStringList lines = c.split(QLatin1Char('\n'));
+                                  const bool ignore = lines.value(0).trimmed() == QLatin1String("yes");
+                                  info.insert(QStringLiteral("customDns"), ignore ? lines.value(1).trimmed().replace(QLatin1Char(','), QStringLiteral(", ")) : QString());
+                                  m_netInfo = info;
+                                  Q_EMIT detailsChanged();
+                              });
+                    });
+          });
+}
+
+void System::setDns(const QString &servers)
+{
+    const QString conn = m_netInfo.value(QStringLiteral("connection")).toString();
+    if (m_preview || conn.isEmpty()) {
+        m_netInfo.insert(QStringLiteral("customDns"), servers);
+        Q_EMIT detailsChanged();
+        return;
+    }
+    QString list = servers;
+    list.replace(QLatin1Char(' '), QString());
+    query(QString(), QStringLiteral("nmcli"), {QStringLiteral("connection"), QStringLiteral("modify"), conn, QStringLiteral("ipv4.dns"), list,
+                                               QStringLiteral("ipv4.ignore-auto-dns"), list.isEmpty() ? QStringLiteral("no") : QStringLiteral("yes")},
+          [this, conn](const QString &, int code) {
+              if (code != 0) {
+                  Q_EMIT message(QStringLiteral("Nie udało się zmienić DNS"));
+                  return;
+              }
+              query(QString(), QStringLiteral("nmcli"), {QStringLiteral("connection"), QStringLiteral("up"), conn}, [this](const QString &, int) {
+                  Q_EMIT message(QStringLiteral("Zmieniono serwery DNS"));
+                  refreshNetworkDetails();
+              });
+          });
+}
+
+void System::setVpn(const QString &name, bool on)
+{
+    if (m_preview)
+        return;
+    query(QString(), QStringLiteral("nmcli"), {QStringLiteral("connection"), on ? QStringLiteral("up") : QStringLiteral("down"), QStringLiteral("id"), name},
+          [this, name, on](const QString &, int code) {
+              if (code != 0)
+                  Q_EMIT message(on ? QStringLiteral("Nie udało się połączyć z VPN „%1”").arg(name) : QStringLiteral("Nie udało się rozłączyć VPN"));
+              refreshNetworkDetails();
+          });
+}
+
+void System::importVpn(const QString &fileUrl)
+{
+    const QString file = QUrl(fileUrl).isLocalFile() ? QUrl(fileUrl).toLocalFile() : fileUrl;
+    const QString type = file.endsWith(QLatin1String(".ovpn"), Qt::CaseInsensitive) ? QStringLiteral("openvpn") : QStringLiteral("wireguard");
+    if (m_preview)
+        return;
+    query(QString(), QStringLiteral("nmcli"), {QStringLiteral("connection"), QStringLiteral("import"), QStringLiteral("type"), type, QStringLiteral("file"), file},
+          [this](const QString &, int code) {
+              Q_EMIT message(code == 0 ? QStringLiteral("Dodano VPN") : QStringLiteral("Nie udało się zaimportować pliku VPN (dla OpenVPN potrzebny jest pakiet NetworkManager-openvpn)"));
+              refreshNetworkDetails();
+          });
+}
+
+void System::forgetConnection(const QString &name)
+{
+    m_known.removeAll(name);
+    Q_EMIT detailsChanged();
+    if (m_preview)
+        return;
+    query(QString(), QStringLiteral("nmcli"), {QStringLiteral("connection"), QStringLiteral("delete"), QStringLiteral("id"), name}, [this](const QString &, int) {
+        refreshNetworkDetails();
+        readNetwork();
+    });
+}
+
+void System::setHotspot(bool on, const QString &ssid, const QString &password)
+{
+    m_hotspot = on;
+    Q_EMIT detailsChanged();
+    if (m_preview)
+        return;
+    const QStringList args = on ? QStringList{QStringLiteral("device"), QStringLiteral("wifi"), QStringLiteral("hotspot"), QStringLiteral("ssid"), ssid, QStringLiteral("password"), password}
+                                : QStringList{QStringLiteral("connection"), QStringLiteral("down"), QStringLiteral("Hotspot")};
+    query(QString(), QStringLiteral("nmcli"), args, [this, on](const QString &, int code) {
+        if (code != 0)
+            Q_EMIT message(on ? QStringLiteral("Nie udało się włączyć hotspotu (hasło musi mieć co najmniej 8 znaków)") : QStringLiteral("Nie udało się wyłączyć hotspotu"));
+        refreshNetworkDetails();
+    });
+}
+
+// ——— Zapora i historia plików ———
+void System::refreshSecurity()
+{
+    if (m_preview)
+        return;
+    query(QStringLiteral("fw"), QStringLiteral("firewall-cmd"), {QStringLiteral("--state")}, [this](const QString &out, int code) {
+        m_firewall = code < 0 ? -1 : (out.trimmed() == QLatin1String("running") ? 1 : 0);
+        Q_EMIT securityChanged();
+    });
+}
+
+void System::setFirewall(bool on)
+{
+    m_firewall = on ? 1 : 0;
+    Q_EMIT securityChanged();
+    if (m_preview)
+        return;
+    query(QString(), QStringLiteral("pkexec"), {QStringLiteral("systemctl"), on ? QStringLiteral("enable") : QStringLiteral("disable"), QStringLiteral("--now"), QStringLiteral("firewalld")},
+          [this](const QString &, int) { refreshSecurity(); });
+}
+
+void System::clearRecentFiles()
+{
+    if (!m_preview) {
+        QFile::remove(QDir::homePath() + QStringLiteral("/.local/share/recently-used.xbel"));
+        QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.kde.ActivityManager"), QStringLiteral("/ActivityManager/Resources/Scoring"),
+                                                        QStringLiteral("org.kde.ActivityManager.ResourcesScoring"), QStringLiteral("DeleteRecentStats"));
+        m << QString() << 0 << QStringLiteral("everything");
+        QDBusConnection::sessionBus().send(m);
+    }
+    Q_EMIT message(QStringLiteral("Wyczyszczono historię ostatnio otwieranych plików"));
+}
+
 // ——— Bluetooth ———
 static QString deviceKind(const QString &name)
 {
@@ -481,7 +667,83 @@ void System::readAudio()
             m_muted = v.contains(QLatin1String("MUTED"));
             Q_EMIT audioChanged();
         });
+        query(QStringLiteral("micvol"), QStringLiteral("wpctl"), {QStringLiteral("get-volume"), QStringLiteral("@DEFAULT_AUDIO_SOURCE@")}, [this](const QString &v, int) {
+            static const QRegularExpression re(QStringLiteral("Volume:\\s*([0-9.]+)"));
+            const auto m = re.match(v);
+            if (m.hasMatch() && QDateTime::currentMSecsSinceEpoch() - m_inputTouched > 1500) {
+                m_inputVolume = qBound(0.0, m.captured(1).toDouble(), 1.0);
+                Q_EMIT audioChanged();
+            }
+        });
+        // Programy, które grają: sekcja „Streams:” (bez kanałów „output_FL > …”)
+        QList<QPair<int, QString>> streams;
+        bool audio2 = false, inStreams = false;
+        static const QRegularExpression streamRe(QStringLiteral("^(\\d+)\\.\\s+(.+)$"));
+        for (QString line : out.split(QLatin1Char('\n'))) {
+            if (line.trimmed() == QLatin1String("Audio")) { audio2 = true; continue; }
+            if (line.trimmed() == QLatin1String("Video") || line.trimmed() == QLatin1String("Settings")) { audio2 = false; continue; }
+            if (!audio2)
+                continue;
+            line.remove(QRegularExpression(QStringLiteral("[│├└─*]")));
+            const QString t = line.trimmed();
+            if (t.endsWith(QLatin1Char(':'))) { inStreams = t == QLatin1String("Streams:"); continue; }
+            if (!inStreams)
+                continue;
+            const auto m = streamRe.match(t);
+            if (m.hasMatch() && !m.captured(2).contains(QLatin1Char('>')) && !m.captured(2).startsWith(QLatin1String("output_"))
+                && !m.captured(2).startsWith(QLatin1String("input_")) && !m.captured(2).startsWith(QLatin1String("monitor_")))
+                streams << qMakePair(m.captured(1).toInt(), m.captured(2).trimmed());
+        }
+        if (streams.isEmpty()) {
+            if (!m_streams.isEmpty()) {
+                m_streams.clear();
+                Q_EMIT audioChanged();
+            }
+            return;
+        }
+        auto *list = new QVariantList;
+        auto *left = new int(int(streams.size()));
+        for (const auto &st : streams) {
+            const int id = st.first;
+            const QString name = st.second;
+            query(QStringLiteral("sv%1").arg(id), QStringLiteral("wpctl"), {QStringLiteral("get-volume"), QString::number(id)}, [this, id, name, list, left](const QString &v, int) {
+                static const QRegularExpression re(QStringLiteral("Volume:\\s*([0-9.]+)"));
+                const auto m = re.match(v);
+                *list << QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("name"), name}, {QStringLiteral("volume"), m.hasMatch() ? qBound(0.0, m.captured(1).toDouble(), 1.0) : 1.0}};
+                if (--*left == 0) {
+                    if (QDateTime::currentMSecsSinceEpoch() - m_volumeTouched > 1500)
+                        m_streams = *list;
+                    delete list;
+                    delete left;
+                    Q_EMIT audioChanged();
+                }
+            });
+        }
     });
+}
+
+void System::setInputVolume(double value)
+{
+    m_inputVolume = qBound(0.0, value, 1.0);
+    m_inputTouched = QDateTime::currentMSecsSinceEpoch();
+    Q_EMIT audioChanged();
+    if (!m_preview)
+        QProcess::startDetached(QStringLiteral("wpctl"), {QStringLiteral("set-volume"), QStringLiteral("@DEFAULT_AUDIO_SOURCE@"), QString::number(m_inputVolume, 'f', 3)});
+}
+
+void System::setStreamVolume(int id, double value)
+{
+    for (QVariant &v : m_streams) {
+        QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("id")).toInt() == id) {
+            m.insert(QStringLiteral("volume"), qBound(0.0, value, 1.0));
+            v = m;
+        }
+    }
+    m_volumeTouched = QDateTime::currentMSecsSinceEpoch();
+    Q_EMIT audioChanged();
+    if (!m_preview)
+        QProcess::startDetached(QStringLiteral("wpctl"), {QStringLiteral("set-volume"), QString::number(id), QString::number(qBound(0.0, value, 1.0), 'f', 3)});
 }
 
 void System::setDefaultDevice(int id)
@@ -559,11 +821,6 @@ void System::setDarkMode(bool dark)
 {
     if (!m_preview)
         QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("BreezeDark") : QStringLiteral("BreezeLight")});
-}
-
-void System::openKcm(const QString &module)
-{
-    QProcess::startDetached(QStringLiteral("systemsettings"), module.isEmpty() ? QStringList() : QStringList{module});
 }
 
 void System::run(const QString &program, const QStringList &args)

@@ -4,6 +4,8 @@ import QtQuick
 Flickable {
     id: page
     default property alias content: col.data
+    // Przejście do innego działu (np. Klawiatura → Skróty klawiszowe) — obsługuje okno
+    signal navigate(string id)
     contentHeight: col.y + col.height + 40
     boundsBehavior: Flickable.StopAtBounds
     clip: true

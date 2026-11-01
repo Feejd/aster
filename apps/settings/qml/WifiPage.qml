@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Dialogs
 import Aster.Ui
 import Aster.Settings
 
@@ -16,7 +17,34 @@ Item {
         else System.connectWifi(n.ssid, "");
     }
 
-    Component.onCompleted: System.scanWifi()
+    Component.onCompleted: { System.scanWifi(); System.refreshNetworkDetails(); }
+    Connections { target: System; function onNetworkChanged() { detailsTimer.restart(); } }
+    Timer { id: detailsTimer; interval: 600; onTriggered: System.refreshNetworkDetails() }
+
+    FileDialog {
+        id: vpnFile
+        title: "Plik konfiguracji VPN"
+        nameFilters: ["Konfiguracja VPN (*.ovpn *.conf)"]
+        onAccepted: System.importVpn(selectedFile.toString())
+    }
+    Sheet {
+        id: dnsSheet
+        title: "Własne serwery DNS"
+        subtitle: "Adresy oddzielone przecinkiem, np. 1.1.1.1, 9.9.9.9"
+        acceptEnabled: /^[0-9a-fA-F:., ]+$/.test(dnsField.text)
+        Field { id: dnsField; placeholder: "1.1.1.1, 9.9.9.9" }
+        onAccepted: System.setDns(dnsField.text)
+    }
+    Sheet {
+        id: hsSheet
+        title: "Hotspot Wi‑Fi"
+        subtitle: "Nazwa sieci i hasło (co najmniej 8 znaków) do wpisania w telefonie."
+        acceptText: "Włącz"
+        acceptEnabled: hsName.text.trim().length > 0 && hsPass.text.length >= 8
+        Field { id: hsName; placeholder: "Nazwa sieci" }
+        Field { id: hsPass; placeholder: "Hasło" }
+        onAccepted: System.setHotspot(true, hsName.text.trim(), hsPass.text)
+    }
 
     Page {
         anchors.fill: parent
@@ -81,11 +109,89 @@ Item {
                 subtitle: System.wiredName ? "Połączono · " + System.wiredName : "Kabel nie jest podłączony"
                 icon: "ethernet"; colors: ["#86EFAC", "#16A34A"]
             }
+        }
+
+        // ——— Szczegóły połączenia i DNS ———
+        Section {
+            visible: !!System.netInfo.connection
+            title: "Połączenie „" + (System.netInfo.connection || "") + "”"
+            SettingRow { title: "Adres IP"; value: System.netInfo.ip || "—" }
+            SettingRow { title: "Router"; value: System.netInfo.gateway || "—" }
+            SettingRow { title: "Adres sprzętowy (MAC)"; value: System.netInfo.mac || "—" }
             SettingRow {
-                title: "Zaawansowane ustawienia sieci"
-                subtitle: "VPN, adresy IP, DNS, serwer proxy"
-                chevron: true
-                onClicked: System.openKcm("kcm_networkmanagement")
+                title: "Serwery DNS"
+                subtitle: System.netInfo.customDns ? "Własne: " + System.netInfo.customDns : "Od routera: " + (System.netInfo.dns || "—")
+                Dropdown {
+                    anchors.verticalCenter: parent.verticalCenter
+                    maxWidth: 220
+                    model: [{ label: "Automatycznie", value: "" }, { label: "Cloudflare", detail: "1.1.1.1 — szybki i prywatny", value: "1.1.1.1, 1.0.0.1" },
+                            { label: "Google", detail: "8.8.8.8", value: "8.8.8.8, 8.8.4.4" }, { label: "Quad9", detail: "9.9.9.9 — blokuje złośliwe strony", value: "9.9.9.9, 149.112.112.112" },
+                            { label: "Własne…", value: "custom" }]
+                    value: ["", "1.1.1.1, 1.0.0.1", "8.8.8.8, 8.8.4.4", "9.9.9.9, 149.112.112.112"].indexOf(System.netInfo.customDns || "") >= 0 ? (System.netInfo.customDns || "") : "custom"
+                    onPicked: v => { if (v === "custom") { dnsField.text = System.netInfo.customDns || ""; dnsSheet.open(); } else System.setDns(v); }
+                }
+            }
+        }
+
+        // ——— VPN ———
+        Section {
+            title: "VPN"
+            footer: "Dodaj plik konfiguracji od dostawcy VPN albo z pracy (OpenVPN .ovpn albo WireGuard .conf)."
+            Repeater {
+                model: System.vpns
+                delegate: SettingRow {
+                    id: vpn
+                    required property var modelData
+                    title: modelData.name
+                    subtitle: (modelData.active ? "Połączono · " : "") + (modelData.type === "wireguard" ? "WireGuard" : "OpenVPN")
+                    icon: "vpn"; colors: ["#A5B4FC", "#4F46E5"]
+                    Toggle { anchors.verticalCenter: parent.verticalCenter; checked: vpn.modelData.active; onToggled: on => System.setVpn(vpn.modelData.name, on) }
+                    HoverButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 28; height: 28; radius: 14
+                        onClicked: System.forgetConnection(vpn.modelData.name)
+                        Icon { anchors.centerIn: parent; d: Icons.trash; size: 15; color: Theme.text2 }
+                    }
+                }
+            }
+            SettingRow {
+                title: "Dodaj VPN z pliku…"
+                titleColor: Theme.accentText
+                icon: "plus"
+                clickable: true
+                onClicked: vpnFile.open()
+            }
+        }
+
+        // ——— Hotspot ———
+        Section {
+            visible: System.wifiAvailable
+            title: "Udostępnianie internetu"
+            footer: System.hotspot ? "Telefon albo tablet połączy się z siecią „" + hsName.text + "”." : "Komputer podłączony kablem może stać się siecią Wi‑Fi dla innych urządzeń."
+            SettingRow {
+                title: "Hotspot Wi‑Fi"
+                icon: "wifiTether"; colors: ["#86EFAC", "#16A34A"]
+                Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: System.hotspot
+                    onToggled: on => { if (on) { if (!hsName.text) hsName.text = System.about.host; hsSheet.open(); } else System.setHotspot(false, "", ""); }
+                }
+            }
+        }
+
+        // ——— Znane sieci ———
+        Section {
+            visible: System.knownNetworks.length > 0
+            title: "Zapamiętane sieci"
+            footer: "Z tymi sieciami komputer łączy się sam. Zapomnij sieć, której już nie używasz."
+            Repeater {
+                model: System.knownNetworks
+                delegate: SettingRow {
+                    id: kn
+                    required property var modelData
+                    title: modelData
+                    TextButton { anchors.verticalCenter: parent.verticalCenter; text: "Zapomnij"; onClicked: System.forgetConnection(kn.modelData) }
+                }
             }
         }
     }

@@ -1,5 +1,7 @@
 #include "platform.h"
 
+#include "asterconfig.h"
+
 #include <KIO/ApplicationLauncherJob>
 #include <KIO/OpenUrlJob>
 #include <KApplicationTrader>
@@ -56,6 +58,10 @@ Platform::Platform(QObject *parent)
     using NotificationManager::Server;
     if (Server::self().init()) {
         connect(&Server::self(), &Server::notificationAdded, this, [this](const NotificationManager::Notification &n) {
+            // Program wyciszony w Ustawieniach → Powiadomienia: bez dymka (licznik w doku zostaje)
+            const QString appId = n.desktopEntry().isEmpty() ? n.applicationName() : n.desktopEntry();
+            if (!AsterConfig::notificationAllowed(appId, n.applicationName(), n.applicationIconName()))
+                return;
             QString image;
             if (!n.image().isNull()) {
                 static QTemporaryDir dir;

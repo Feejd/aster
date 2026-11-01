@@ -15,7 +15,8 @@ echo "==> Instaluję narzędzia do budowania…"
 sudo dnf install -y --skip-unavailable --allowerasing \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
-    layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel qt6-qtwebengine-devel plasma-workspace-devel \
+    layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel \
+    qt6-qtwebengine-devel plasma-workspace-devel \
     rsms-inter-fonts google-roboto-fonts open-vm-tools-desktop
 
 # Folder udostępniony z Maca montowany przy każdym starcie

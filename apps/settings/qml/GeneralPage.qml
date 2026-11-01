@@ -33,7 +33,7 @@ Page {
 
     Section {
         title: "O tym komputerze"
-        SettingRow { title: "Nazwa"; value: gp.a.host }
+        SettingRow { title: "Nazwa"; value: Accounts.hostName; chevron: true; onClicked: { hostField.text = Accounts.hostName; hostSheet.open(); } }
         SettingRow { title: "Komputer"; value: gp.a.model }
         SettingRow { title: "Procesor"; value: gp.a.cpu }
         SettingRow { title: "Pamięć"; value: gp.a.memory }
@@ -68,9 +68,18 @@ Page {
 
     Section {
         SettingRow { title: "Aktualizacje oprogramowania"; icon: "download"; chevron: true; onClicked: System.run("aster-store") }
-        SettingRow { title: "Data i czas"; icon: "clock"; chevron: true; onClicked: System.openKcm("kcm_clock") }
-        SettingRow { title: "Język i region"; icon: "globe"; chevron: true; onClicked: System.openKcm("kcm_regionandlang") }
-        SettingRow { title: "Aplikacje domyślne"; icon: "apps"; chevron: true; onClicked: System.openKcm("kcm_componentchooser") }
-        SettingRow { title: "Skróty klawiszowe"; icon: "keyboard"; chevron: true; onClicked: System.openKcm("kcm_keys") }
+        SettingRow { title: "Data i czas"; icon: "clock"; chevron: true; onClicked: gp.navigate("datetime") }
+        SettingRow { title: "Język i region"; icon: "translate"; chevron: true; onClicked: gp.navigate("language") }
+        SettingRow { title: "Aplikacje domyślne"; icon: "apps"; chevron: true; onClicked: gp.navigate("apps") }
+        SettingRow { title: "Skróty klawiszowe"; icon: "keyboard"; chevron: true; onClicked: gp.navigate("shortcuts") }
+    }
+
+    Sheet {
+        id: hostSheet
+        title: "Nazwa komputera"
+        subtitle: "Pod tą nazwą komputer widać w sieci, w Bluetooth i przy udostępnianiu plików."
+        acceptEnabled: hostField.text.trim().length > 0
+        Field { id: hostField; placeholder: "np. Laptop Dominika" }
+        onAccepted: Accounts.setHostName(hostField.text)
     }
 }

@@ -22,7 +22,9 @@ int main(int argc, char *argv[])
 
     static const QStringList pages{QStringLiteral("wifi"), QStringLiteral("bluetooth"), QStringLiteral("notifications"), QStringLiteral("sound"),
                                    QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("wallpaper"), QStringLiteral("desktop"),
-                                   QStringLiteral("display"), QStringLiteral("account")};
+                                   QStringLiteral("display"), QStringLiteral("account"), QStringLiteral("power"), QStringLiteral("mouse"),
+                                   QStringLiteral("keyboard"), QStringLiteral("shortcuts"), QStringLiteral("printers"), QStringLiteral("datetime"),
+                                   QStringLiteral("language"), QStringLiteral("apps"), QStringLiteral("accessibility"), QStringLiteral("privacy")};
     QString page = qEnvironmentVariable("ASTER_PAGE");
     const QStringList args = app.arguments();
     if (args.size() > 1)

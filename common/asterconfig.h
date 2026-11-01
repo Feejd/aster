@@ -19,6 +19,10 @@ class AsterConfig : public QObject
     Q_PROPERTY(bool desktopClock READ desktopClock WRITE setDesktopClock NOTIFY changed)
     Q_PROPERTY(bool batteryPercent READ batteryPercent WRITE setBatteryPercent NOTIFY changed)
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY changed)
+    // Powiadomienia poszczególnych programów: wyciszone (bez dymków) i lista programów, które już coś wysłały
+    // (zapisuje ją powłoka): [{ id, name, icon }]
+    Q_PROPERTY(QStringList mutedApps READ mutedApps WRITE setMutedApps NOTIFY changed)
+    Q_PROPERTY(QVariantList notifyApps READ notifyApps NOTIFY changed)
     // Katalog z zasobami Aster (tapety) — ASTER_DATA_DIR nadpisuje przy pracy nad kodem
     Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
 
@@ -30,6 +34,8 @@ public:
     bool desktopClock() const { return m_values.value(QStringLiteral("desktopClock"), true).toBool(); }
     bool batteryPercent() const { return m_values.value(QStringLiteral("batteryPercent"), true).toBool(); }
     bool doNotDisturb() const { return m_values.value(QStringLiteral("doNotDisturb"), false).toBool(); }
+    QStringList mutedApps() const { return m_values.value(QStringLiteral("notifications/muted")).toStringList(); }
+    QVariantList notifyApps() const;
     QString dataDir() const;
 
     void setAccent(const QColor &c) { write(QStringLiteral("accent"), c.name()); }
@@ -37,6 +43,11 @@ public:
     void setDesktopClock(bool on) { write(QStringLiteral("desktopClock"), on); }
     void setBatteryPercent(bool on) { write(QStringLiteral("batteryPercent"), on); }
     void setDoNotDisturb(bool on) { write(QStringLiteral("doNotDisturb"), on); }
+    void setMutedApps(const QStringList &ids) { write(QStringLiteral("notifications/muted"), ids); }
+    Q_INVOKABLE void setAppMuted(const QString &id, bool muted);
+
+    // Dla powłoki: czy pokazywać dymek programu; zapamiętuje program na liście (bez obiektu — działa wszędzie)
+    static bool notificationAllowed(const QString &id, const QString &name, const QString &icon);
 
 Q_SIGNALS:
     void changed();

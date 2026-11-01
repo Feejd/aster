@@ -28,28 +28,46 @@ Window {
     property string page: startPage
     readonly property var groups: [
         [
-            { id: "wifi", name: "Wi‑Fi i sieć", icon: "wifi", colors: ["#5AB4FF", "#2563EB"], keys: "internet sieć ethernet kabel hasło router" },
+            { id: "wifi", name: "Wi‑Fi i sieć", icon: "wifi", colors: ["#5AB4FF", "#2563EB"], keys: "internet sieć ethernet kabel hasło router vpn dns hotspot udostępnianie" },
             { id: "bluetooth", name: "Bluetooth", icon: "bluetooth", colors: ["#60A5FA", "#1D4ED8"], keys: "słuchawki mysz klawiatura głośnik parowanie" }
         ],
         [
-            { id: "notifications", name: "Powiadomienia", icon: "bell", colors: ["#FF8A8A", "#E11D48"], keys: "nie przeszkadzać skupienie dnd" },
-            { id: "sound", name: "Dźwięk", icon: "volume", colors: ["#F9A8D4", "#DB2777"], keys: "głośność głośniki słuchawki mikrofon wyjście wejście" }
+            { id: "notifications", name: "Powiadomienia", icon: "bell", colors: ["#FF8A8A", "#E11D48"], keys: "nie przeszkadzać skupienie dnd programy dymki" },
+            { id: "sound", name: "Dźwięk", icon: "volume", colors: ["#F9A8D4", "#DB2777"], keys: "głośność głośniki słuchawki mikrofon wyjście wejście programy" }
         ],
         [
-            { id: "general", name: "Ogólne", icon: "gear", colors: ["#A3A9B5", "#4B5262"], keys: "informacje o komputerze wersja aktualizacje data czas język dysk pamięć procesor" },
+            { id: "general", name: "Ogólne", icon: "gear", colors: ["#A3A9B5", "#4B5262"], keys: "informacje o komputerze wersja aktualizacje dysk pamięć procesor nazwa komputera" },
             { id: "appearance", name: "Wygląd", icon: "contrast", colors: ["#52525B", "#18181B"], keys: "ciemny jasny motyw kolor akcent tryb" },
             { id: "wallpaper", name: "Tapeta", icon: "image", colors: ["#67E8F9", "#0891B2"], keys: "tło pulpit obraz" },
-            { id: "desktop", name: "Pulpit i dok", icon: "desktop", colors: ["#8EA2FF", "#5B5BD6"], keys: "zegar bateria dok skróty narożniki" },
-            { id: "display", name: "Ekran", icon: "sun", colors: ["#7DD3FC", "#2563EB"], keys: "nocne światło rozdzielczość skalowanie monitor jasność" }
+            { id: "desktop", name: "Pulpit i okna", icon: "desktop", colors: ["#8EA2FF", "#5B5BD6"], keys: "zegar widżety okna przyciąganie narożniki animacje pulpity minimalizowanie" },
+            { id: "display", name: "Ekran", icon: "sun", colors: ["#7DD3FC", "#2563EB"], keys: "nocne światło rozdzielczość skalowanie monitor jasność odświeżanie obrót" },
+            { id: "power", name: "Zasilanie i bateria", icon: "battery", colors: ["#86EFAC", "#16A34A"], keys: "bateria usypianie wygaszanie pokrywa oszczędzanie wydajność" }
+        ],
+        [
+            { id: "mouse", name: "Mysz i touchpad", icon: "mouse", colors: ["#CBD5E1", "#64748B"], keys: "kursor przewijanie szybkość stukanie leworęczny" },
+            { id: "keyboard", name: "Klawiatura", icon: "keyboard", colors: ["#CBD5E1", "#475569"], keys: "układ język polski programisty skróty powtarzanie num lock" },
+            { id: "printers", name: "Drukarki", icon: "printer", colors: ["#94A3B8", "#475569"], keys: "drukowanie skaner strona testowa" }
+        ],
+        [
+            { id: "datetime", name: "Data i czas", icon: "clock", colors: ["#FDBA74", "#EA580C"], keys: "godzina strefa czasowa zegar" },
+            { id: "language", name: "Język i region", icon: "translate", colors: ["#7DD3FC", "#0284C7"], keys: "język formaty waluta data liczby" },
+            { id: "apps", name: "Aplikacje", icon: "apps", colors: ["#C4B5FD", "#7C3AED"], keys: "domyślne przeglądarka poczta autostart uruchamiane po zalogowaniu" },
+            { id: "accessibility", name: "Dostępność", icon: "access", colors: ["#60A5FA", "#1E40AF"], keys: "lupa czytnik ekranu kursor animacje lepkie klawisze" },
+            { id: "privacy", name: "Prywatność i bezpieczeństwo", icon: "shield", colors: ["#94A3B8", "#334155"], keys: "blokada ekranu hasło zapora historia" }
         ]
     ]
+    // Działy bez miejsca na pasku bocznym (otwierane z innych stron)
+    readonly property var hidden: [
+        { id: "shortcuts", name: "Skróty klawiszowe", icon: "keyboard", colors: ["#A3A9B5", "#4B5262"], keys: "skróty klawisze" }
+    ]
     readonly property var all: {
-        const out = [{ id: "account", name: "Konto", icon: "user", colors: ["#7C9BFF", "#8B5CF6"], keys: "użytkownik hasło zdjęcie" }];
+        const out = [{ id: "account", name: "Konto", icon: "user", colors: ["#7C9BFF", "#8B5CF6"], keys: "użytkownik hasło zdjęcie imię inne osoby konta" }];
         for (let i = 0; i < groups.length; ++i)
             for (let j = 0; j < groups[i].length; ++j)
                 out.push(groups[i][j]);
-        return out;
+        return out.concat(hidden);
     }
+    readonly property string accountName: Accounts.realName || System.fullName
     readonly property var current: all.find(p => p.id === page) || all[0]
 
     function go(id) {
@@ -59,6 +77,11 @@ Window {
     }
     function toast(text) { toastBox.text = text; toastBox.shown = true; toastTimer.restart(); }
     Connections { target: System; function onMessage(text) { win.toast(text); } }
+    Connections { target: Displays; function onMessage(text) { win.toast(text); } }
+    Connections { target: Accounts; function onMessage(text) { win.toast(text); } }
+    Connections { target: DateTime; function onMessage(text) { win.toast(text); } }
+    Connections { target: Shortcuts; function onMessage(text) { win.toast(text); } }
+    Connections { target: Printers; function onMessage(text) { win.toast(text); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -143,14 +166,16 @@ Window {
                                 GradientStop { position: 0; color: "#7C9BFF" }
                                 GradientStop { position: 1; color: "#8B5CF6" }
                             }
-                            Text { anchors.centerIn: parent; text: System.fullName.charAt(0).toUpperCase(); color: "white"; font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold }
+                            clip: true
+                            Text { anchors.centerIn: parent; visible: avatarImg.status !== Image.Ready; text: win.accountName.charAt(0).toUpperCase(); color: "white"; font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold }
+                            Image { id: avatarImg; anchors.fill: parent; source: Accounts.iconUrl; fillMode: Image.PreserveAspectCrop; sourceSize: Qt.size(88, 88); visible: status === Image.Ready }
                         }
                         Column {
                             anchors.left: avatar.right; anchors.leftMargin: 11
                             anchors.right: parent.right; anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 1
-                            Text { width: parent.width; text: System.fullName; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                            Text { width: parent.width; text: win.accountName; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
                             Text { text: "Konto Aster"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                         }
                         MouseArea { id: accArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.go("account") }
@@ -180,13 +205,6 @@ Window {
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
                     }
 
-                    Item { width: 1; height: 10; visible: !field.text }
-                    NavItem {
-                        visible: !field.text
-                        item: ({ id: "", name: "Więcej ustawień", icon: "sliders", colors: ["#CBD5E1", "#64748B"] })
-                        external: true
-                        onActivated: System.openKcm("")
-                    }
                 }
             }
         }
@@ -225,6 +243,11 @@ Window {
                 source: Qt.resolvedUrl(win.page.charAt(0).toUpperCase() + win.page.slice(1) + "Page.qml")
                 property real shift: 0
                 transform: Translate { x: pageLoader.shift }
+                Connections {
+                    target: pageLoader.item
+                    ignoreUnknownSignals: true
+                    function onNavigate(id) { win.go(id); }
+                }
             }
             ParallelAnimation {
                 id: pageAnim
