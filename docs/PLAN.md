@@ -36,7 +36,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       nazwa systemu „Aster 1.0”, od razu sesja Aster (`tools/install-vm.sh` w maszynie wirtualnej, `image/` w obrazie)
 - [x] Ekran logowania Aster (motyw SDDM: rozmyta tapeta, zegar, karta użytkownika, inne osoby, zasilanie);
       SDDM zamiast Plasma Login Managera z Fedory 44 (ten nie przyjmuje własnych motywów)
-- [ ] Ikony i kursor, ekran blokady w stylu Aster.
+- [x] Ekran blokady Aster (pakiet powłoki org.aster.shell dla kscreenlocker): wygląd ekranu logowania, PAM, Caps Lock, uśpienie
+- [ ] Ikony i kursor w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.
 
 ## Etap 3b — system bez programów Fedory/KDE (najpierw to, potem programy użytkowe)

@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "Plasma/Shell",
+    "KPlugin": {
+        "Authors": [{ "Name": "Aster" }],
+        "Description": "Ekran blokady Aster (resztę pakietu powłoki Plasma bierze z org.kde.plasma.desktop)",
+        "Id": "org.aster.shell",
+        "License": "GPL-3.0-or-later",
+        "Name": "Aster",
+        "Version": "1.0"
+    },
+    "X-Plasma-APIVersion": "2"
+}

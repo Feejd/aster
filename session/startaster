@@ -2,6 +2,8 @@
 # Sesja Aster: cała Plasma (KWin, usługi, ustawienia), ale zamiast plasmashell
 # działa aster-shell. Maska „--runtime” obowiązuje tylko do wylogowania.
 export ASTER_SESSION=1
+# Ekran blokady Aster: kscreenlocker bierze go z pakietu powłoki (tylko w tej sesji — Plasma zostaje bez zmian)
+export PLASMA_DEFAULT_SHELL=org.aster.shell
 # Zamiast ekranu ładowania KDE — przejście Aster (rozmyta tapeta jak na ekranie logowania)
 kwriteconfig6 --file ksplashrc --group KSplash --key Engine KSplashQML
 kwriteconfig6 --file ksplashrc --group KSplash --key Theme org.aster.desktop
