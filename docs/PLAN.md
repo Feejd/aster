@@ -62,7 +62,12 @@ Programy:
       przejdź do wiersza, numery wierszy, kolorowanie KSyntaxHighlighting, Windows-1250 i CRLF, zmiany pliku na dysku
 - [x] Kalkulator (KCalc) — `apps/calculator`: standardowy i naukowy, historia, kolejność działań, procenty jak w Windows,
       polski zapis liczb, long double (0,1 + 0,2 = 0,3), testy obliczeń (ASTER_TEST=1)
-- [ ] Wideo (Dragon/Haruna), Muzyka (Elisa)
+- [x] Wideo (Dragon/Haruna) — `apps/video`: ekran startowy z miniaturami i „Ostatnio oglądane” (wznawianie), odtwarzacz
+      na całe okno z chowanym sterowaniem, napisy z pliku (SRT, VTT, MicroDVD, MPL2; UTF-8 i Windows-1250), ścieżki
+      dźwięku, prędkość, następny film z folderu z odliczaniem, okno dopasowane do proporcji, brak wygaszania ekranu
+- [x] Muzyka (Elisa) — `apps/music`: albumy, wykonawcy, utwory, kolejka; losowo, powtarzanie, skróty jak w Windows
+      Media Player; okładki z tagów albo cover.jpg; kolejka przetrwa zamknięcie; MPRIS dla Centrum sterowania
+- [ ] Kodeki H.264/HEVC/AAC w pełnym zakresie (ffmpeg z RPM Fusion — decyzja przy obrazie systemu)
 - [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
 - [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
 

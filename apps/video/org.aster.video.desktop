@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Wideo
+GenericName=Odtwarzacz wideo
+Comment=Oglądaj filmy — z napisami, wznawianiem i pełnym ekranem
+Exec=aster-video %U
+Icon=video-player
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=wideo;film;filmy;odtwarzacz;napisy;video;movie;player;mp4;mkv;
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/x-ms-wmv;video/mpeg;video/mp2t;video/ogg;video/x-flv;video/3gpp;video/x-m4v;video/vnd.avi;application/x-matroska;
+StartupWMClass=aster-video

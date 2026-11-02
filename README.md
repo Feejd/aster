@@ -19,6 +19,9 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/pdf/` | Podgląd PDF — strony z cieniem na szarym tle (QtPdf), spis treści i miniatury, szukanie, zaznaczanie tekstu, linki, hasło, drukowanie, wracanie do ostatnio czytanej strony. |
 | `apps/editor/` | Edytor tekstu — karty, niezapisane karty wracają po ponownym otwarciu, szukaj/zamień, numery wierszy, kolorowanie kodu (KSyntaxHighlighting), pliki z Windows (Windows-1250, CRLF). |
 | `apps/calculator/` | Kalkulator — standardowy i naukowy, historia, wynik na żywo, procenty jak w Windows, polski zapis liczb; `ASTER_TEST=1` sprawdza obliczenia. |
+| `apps/video/` | Wideo — ostatnio oglądane z miejscem, w którym przerwano, napisy SRT/VTT/MicroDVD/MPL2 (także Windows-1250), ścieżki dźwięku, prędkość, następny film z folderu. |
+| `apps/music/` | Muzyka — albumy z okładkami, wykonawcy, utwory, kolejka, losowo i powtarzanie; biblioteka z tagów (TagLib). |
+| `common/mediasession.*` | Wspólne dla Wideo i Muzyki: MPRIS (Centrum sterowania, klawisze multimedialne) i blokada wygaszacza podczas filmu. |
 | `apps/portal/` | Okna systemowe dla xdg-desktop-portal — na razie „Otwórz / Zapisz” dla wszystkich programów (Flathub, Qt/KDE, GTK). |
 | `apps/settings/` | Ustawienia — komplet działów (sieć, Bluetooth, dźwięk, powiadomienia, wygląd, ekran, zasilanie, mysz, klawiatura i skróty, drukarki, data, język, aplikacje, dostępność, prywatność, konta) bez odsyłania do ustawień KDE. |
 | `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
