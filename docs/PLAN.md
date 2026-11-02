@@ -60,7 +60,9 @@ Programy:
       powiększenie i obrót, hasło, właściwości, drukowanie, ostatnie dokumenty z zapamiętaną stroną
 - [x] Edytor tekstu (Kate, KWrite) — `apps/editor`: karty, sesja z niezapisanymi kartami (jak Notatnik w Windows 11), szukaj/zamień,
       przejdź do wiersza, numery wierszy, kolorowanie KSyntaxHighlighting, Windows-1250 i CRLF, zmiany pliku na dysku
-- [ ] Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
+- [x] Kalkulator (KCalc) — `apps/calculator`: standardowy i naukowy, historia, kolejność działań, procenty jak w Windows,
+      polski zapis liczb, long double (0,1 + 0,2 = 0,3), testy obliczeń (ASTER_TEST=1)
+- [ ] Wideo (Dragon/Haruna), Muzyka (Elisa)
 - [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
 - [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
 

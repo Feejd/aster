@@ -27,7 +27,7 @@ Window {
     readonly property var pinned: [
         "org.aster.files", "org.aster.browser", "org.aster.webapps", "org.aster.editor", "org.aster.terminal",
         "org.aster.store", "org.aster.settings", "org.aster.pdf", "org.aster.photos",
-        "org.kde.elisa", "org.kde.spectacle", "org.kde.kcalc"
+        "org.kde.elisa", "org.kde.spectacle", "org.aster.calculator"
     ]
     readonly property var pinnedApps: pinned.map(id => Object.assign({ id: id }, Platform.appInfo(id))).filter(a => a.valid)
     property var recents: []

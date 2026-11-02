@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kalkulator
+GenericName=Kalkulator
+Comment=Licz — zwykle albo naukowo, z historią działań
+Exec=aster-calculator
+Icon=accessories-calculator
+Terminal=false
+Categories=Utility;Calculator;
+Keywords=kalkulator;liczenie;procent;calc;calculator;matematyka;
+StartupWMClass=aster-calculator
