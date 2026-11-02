@@ -30,7 +30,8 @@ echo "==> Instaluję Aster w systemie…"
 sudo cmake --install "$BUILD" >/dev/null
 # Wersje z dev-run.sh w katalogu domowym przesłaniałyby zainstalowane
 rm -f "$HOME/.local/bin/aster-terminal"
-for app in files browser webapps store settings terminal; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
+for app in files browser webapps store settings terminal tasks; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
+rm -f "$HOME/.local/share/kglobalaccel/org.aster.tasks.desktop"
 sudo systemctl --global enable aster-shell.service
 fc-cache -f >/dev/null 2>&1 || true
 

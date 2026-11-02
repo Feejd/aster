@@ -30,6 +30,8 @@ Item {
         "systemsettings": ["#D9DEE7", "#545C6E", "sliders"],
         "kdesystemsettings": ["#D9DEE7", "#545C6E", "sliders"],
         "org.aster.terminal": ["#8B93A8", "#141621", "prompt"],
+        "org.aster.tasks": ["#7EE8A8", "#0E8F5A", "activity"],
+        "org.kde.plasma-systemmonitor": ["#7EE8A8", "#0E8F5A", "activity"],
         "org.kde.konsole": ["#8B93A8", "#141621", "prompt"],
         "org.kde.kate": ["#FFCB73", "#EF6420", "pencil"],
         "org.kde.discover": ["#86EFC0", "#0B8C74", "bag"],

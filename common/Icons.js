@@ -105,3 +105,7 @@ var prompt = "M5 7l5 5-5 5M12 18h7";
 var fullscreen = "M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4";
 var textSize = "M4 18l5-12 5 12M5.6 14h6.8M15 18l3-7 3 7M15.9 16h4.2";
 var arrowDown = "M12 5v14M6 13l6 6 6-6";
+var activity = "M3 12h4l3-8 4 16 3-8h4";
+var cpu = "M8 4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4zM9.5 9.5h5v5h-5zM9 1.5V4M15 1.5V4M9 20v2.5M15 20v2.5M1.5 9H4M1.5 15H4M20 9h2.5M20 15h2.5";
+var memory = "M3 7h18v9H3zM7 16v3M12 16v3M17 16v3M7 10v3M11.5 10v3M16 10v3";
+var stop = "M6 6h12v12H6z";

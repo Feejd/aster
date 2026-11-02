@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=Menedżer zadań
+GenericName=Menedżer zadań
+Comment=Zobacz, co obciąża komputer, i zamknij program, który się zawiesił
+Exec=aster-tasks
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=procesy;zadania;zakończ;zawiesił;nie odpowiada;procesor;pamięć;ram;wydajność;task manager;ctrl+alt+del;
+StartupWMClass=aster-tasks
+X-KDE-Shortcuts=Ctrl+Shift+Esc
+SingleMainWindow=true
+Actions=performance;
+
+[Desktop Action performance]
+Name=Wydajność
+Exec=aster-tasks performance
+X-KDE-Shortcuts=

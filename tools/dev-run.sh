@@ -17,7 +17,7 @@ cmake --build "$BUILD"
 # Aplikacje z katalogu budowania widoczne w systemie (dok, Start, „Otwórz za pomocą”)
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
-for app in files browser webapps store settings; do
+for app in files browser webapps store settings tasks; do
     sed "s|^Exec=aster-$app|Exec=env ASTER_DATA_DIR=$ROOT/data $BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
 done
 # Terminal: polecenie aster-terminal w ~/.local/bin (wołają je Pliki, KDE i xdg-terminal-exec)
@@ -27,6 +27,9 @@ cp "$ROOT/apps/terminal/org.aster.terminal.desktop" "$APPS/"
 kwriteconfig6 --file kdeglobals --group General --key TerminalApplication aster-terminal 2>/dev/null || true
 kwriteconfig6 --file kdeglobals --group General --key TerminalService org.aster.terminal.desktop 2>/dev/null || true
 printf 'org.aster.terminal.desktop\n' > "$HOME/.config/xdg-terminals.list"
+# Menedżer zadań pod Ctrl+Shift+Esc (KGlobalAccel czyta skróty programów z share/kglobalaccel)
+mkdir -p "$HOME/.local/share/kglobalaccel"
+cp "$APPS/org.aster.tasks.desktop" "$HOME/.local/share/kglobalaccel/"
 update-desktop-database "$APPS" >/dev/null 2>&1 || true     # adresy aster-settings:wifi itp.
 kbuildsycoca6 >/dev/null 2>&1 || true
 

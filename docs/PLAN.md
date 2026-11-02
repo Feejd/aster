@@ -52,7 +52,8 @@ Okna systemowe (używają ich wszystkie programy, więc najważniejsze):
 
 Programy:
 - [x] Pliki (Dolphin), Przeglądarka (Firefox), Terminal (Konsole), Sklep (Discover), Ustawienia (Ustawienia systemowe)
-- [ ] Menedżer zadań (Plasma System Monitor) — Ctrl+Shift+Esc, „Zakończ zadanie”, obciążenie, programy przy starcie
+- [x] Menedżer zadań (Plasma System Monitor) — `apps/tasks`: Ctrl+Shift+Esc, procesy pogrupowane po programach, „Zakończ zadanie”
+      (cudze procesy przez polkit), właściwości, wydajność: procesor (też każdy rdzeń), pamięć, dyski, sieć; programy po zalogowaniu → Ustawienia
 - [ ] Zdjęcia (Gwenview) i Podgląd PDF (Okular)
 - [ ] Edytor tekstu (Kate, KWrite), Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
 - [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
