@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Edytor tekstu
+GenericName=Edytor tekstu
+Comment=Notatki, pliki tekstowe i konfiguracyjne, kod
+Exec=aster-editor %U
+Icon=accessories-text-editor
+Terminal=false
+Categories=Utility;TextEditor;
+Keywords=notatnik;notepad;tekst;txt;notatki;edytor;kod;kate;
+StartupWMClass=aster-editor
+MimeType=text/plain;text/markdown;text/x-log;text/csv;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-python;text/x-python3;text/javascript;application/javascript;application/json;application/xml;text/xml;text/html;text/css;application/x-shellscript;text/x-qml;text/x-cmake;application/x-yaml;application/toml;text/x-ini;application/x-desktop;
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=Nowa karta
+Exec=aster-editor

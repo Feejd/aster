@@ -58,7 +58,9 @@ Programy:
       miniatur, powiększanie, informacje EXIF, obrót JPEG bez utraty jakości, kosz z „Cofnij”, pokaz slajdów, „Ustaw jako tapetę”
 - [x] Podgląd PDF (Okular) — `apps/pdf`: strony na QtPdf, spis treści i miniatury, szukanie, zaznaczanie i kopiowanie tekstu, linki,
       powiększenie i obrót, hasło, właściwości, drukowanie, ostatnie dokumenty z zapamiętaną stroną
-- [ ] Edytor tekstu (Kate, KWrite), Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
+- [x] Edytor tekstu (Kate, KWrite) — `apps/editor`: karty, sesja z niezapisanymi kartami (jak Notatnik w Windows 11), szukaj/zamień,
+      przejdź do wiersza, numery wierszy, kolorowanie KSyntaxHighlighting, Windows-1250 i CRLF, zmiany pliku na dysku
+- [ ] Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
 - [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
 - [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
 

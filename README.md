@@ -17,6 +17,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/tasks/` | Menedżer zadań (Ctrl+Shift+Esc) — procesy pogrupowane po programach jak w Windows, „Zakończ zadanie”, właściwości, wykresy procesora, pamięci, dysków i sieci; dane prosto z `/proc` i `/sys`. |
 | `apps/photos/` | Zdjęcia — biblioteka zdjęć z kilku folderów, oglądanie z miniaturami folderu, powiększanie, informacje z aparatu (exiv2), obrót bez utraty jakości, kosz z cofaniem, tapeta z własnego zdjęcia. |
 | `apps/pdf/` | Podgląd PDF — strony z cieniem na szarym tle (QtPdf), spis treści i miniatury, szukanie, zaznaczanie tekstu, linki, hasło, drukowanie, wracanie do ostatnio czytanej strony. |
+| `apps/editor/` | Edytor tekstu — karty, niezapisane karty wracają po ponownym otwarciu, szukaj/zamień, numery wierszy, kolorowanie kodu (KSyntaxHighlighting), pliki z Windows (Windows-1250, CRLF). |
 | `apps/portal/` | Okna systemowe dla xdg-desktop-portal — na razie „Otwórz / Zapisz” dla wszystkich programów (Flathub, Qt/KDE, GTK). |
 | `apps/settings/` | Ustawienia — komplet działów (sieć, Bluetooth, dźwięk, powiadomienia, wygląd, ekran, zasilanie, mysz, klawiatura i skróty, drukarki, data, język, aplikacje, dostępność, prywatność, konta) bez odsyłania do ustawień KDE. |
 | `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
