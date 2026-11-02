@@ -44,7 +44,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 Cel: po instalacji użytkownik widzi wyłącznie Aster. Program KDE usuwamy z obrazu dopiero wtedy, gdy jego zastępca działa.
 
 Okna systemowe (używają ich wszystkie programy, więc najważniejsze):
-- [ ] Okno „Otwórz / Zapisz jako” — własny portal xdg-desktop-portal (FileChooser) w stylu Plików
+- [x] Okno „Otwórz / Zapisz jako” — portal xdg-desktop-portal Aster (`apps/portal`): miejsca, ścieżka, szukanie, miniatury,
+      filtry, nowy folder, pytanie o nadpisanie; w sesji Aster także dla programów Qt/KDE i GTK
 - [x] Prośba o hasło administratora — agent polkit w powłoce (okno Aster: kto prosi, o co, wybór administratora, ponowna próba)
 - [ ] Hasło Wi‑Fi/VPN i parowanie Bluetooth z powłoki; pęk kluczy (hasło po zalogowaniu) bez okien KWallet
 - [ ] Ekran logowania i blokady, instalator i pierwsze uruchomienie, aktualizacje systemu (bootc) w Ustawieniach

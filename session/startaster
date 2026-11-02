@@ -4,6 +4,17 @@
 export ASTER_SESSION=1
 # Ekran blokady Aster: kscreenlocker bierze go z pakietu powłoki (tylko w tej sesji — Plasma zostaje bez zmian)
 export PLASMA_DEFAULT_SHELL=org.aster.shell
+# Okno „Otwórz / Zapisz” Aster (portal) także w programach Qt/KDE i GTK, nie tylko z Flathuba
+export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}"
+case "$XDG_CURRENT_DESKTOP" in Aster:*) ;; *) export XDG_CURRENT_DESKTOP="Aster:$XDG_CURRENT_DESKTOP" ;; esac
+export PLASMA_INTEGRATION_USE_PORTAL=1
+export GTK_USE_PORTAL=1
+# Na wypadek, gdyby startplasma przywrócił XDG_CURRENT_DESKTOP=KDE — to samo w ustawieniach portalu użytkownika
+portals="${XDG_CONFIG_HOME:-$HOME/.config}/xdg-desktop-portal"
+if [ ! -f "$portals/kde-portals.conf" ] || grep -q "^# aster" "$portals/kde-portals.conf"; then
+    mkdir -p "$portals"
+    printf '# aster: okno Otwórz/Zapisz z Aster, reszta z KDE\n[preferred]\ndefault=kde\norg.freedesktop.impl.portal.FileChooser=aster\n' > "$portals/kde-portals.conf"
+fi
 # Zamiast ekranu ładowania KDE — przejście Aster (rozmyta tapeta jak na ekranie logowania)
 kwriteconfig6 --file ksplashrc --group KSplash --key Engine KSplashQML
 kwriteconfig6 --file ksplashrc --group KSplash --key Theme org.aster.desktop
