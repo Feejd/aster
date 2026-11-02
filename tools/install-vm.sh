@@ -22,7 +22,7 @@ if [ "$1" = "--undo" ]; then
 fi
 
 # Budowanie (te same pakiety i katalog co dev-run.sh)
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr >/dev/null
 cmake --build "$BUILD"
 
@@ -30,7 +30,7 @@ echo "==> Instaluję Aster w systemie…"
 sudo cmake --install "$BUILD" >/dev/null
 # Wersje z dev-run.sh w katalogu domowym przesłaniałyby zainstalowane
 rm -f "$HOME/.local/bin/aster-terminal"
-for app in files browser webapps store settings terminal tasks; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
+for app in files browser webapps store settings terminal tasks photos; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
 rm -f "$HOME/.local/share/kglobalaccel/org.aster.tasks.desktop"
 sudo systemctl --global enable aster-shell.service
 fc-cache -f >/dev/null 2>&1 || true

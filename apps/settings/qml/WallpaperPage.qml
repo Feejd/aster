@@ -11,8 +11,10 @@ Page {
         { id: "aura", name: "Aura" }, { id: "bloom", name: "Bloom" },
         { id: "szczyty", name: "Szczyty" }, { id: "jezioro", name: "Jezioro" }
     ]
-    function src(id, mode) { return "file://" + Config.dataDir + "/wallpapers/" + id + "-" + mode + ".jpg"; }
-    readonly property var currentWall: walls.find(w => w.id === Config.wallpaper) || walls[0]
+    // Własne zdjęcie (ze Zdjęć: „Ustaw jako tapetę”) — pełna ścieżka zamiast nazwy tapety Aster
+    readonly property bool custom: Config.wallpaper.startsWith("/")
+    function src(id, mode) { return id.startsWith("/") ? "file://" + id : "file://" + Config.dataDir + "/wallpapers/" + id + "-" + mode + ".jpg"; }
+    readonly property var currentWall: custom ? ({ id: Config.wallpaper, name: "Własne zdjęcie" }) : (walls.find(w => w.id === Config.wallpaper) || walls[0])
 
     // Obecna tapeta: lewa połowa jasna, prawa ciemna
     Item {
@@ -52,7 +54,7 @@ Page {
         Column {
             x: 22; anchors.bottom: parent.bottom; anchors.bottomMargin: 18
             Text { text: wp.currentWall.name; color: "white"; font.family: Theme.font; font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: -0.5 }
-            Text { text: "Jasna w dzień, ciemna przy ciemnym motywie"; color: Qt.rgba(1, 1, 1, 0.9); font.family: Theme.font; font.pixelSize: 12 }
+            Text { text: wp.custom ? "Ustawione w Zdjęciach" : "Jasna w dzień, ciemna przy ciemnym motywie"; color: Qt.rgba(1, 1, 1, 0.9); font.family: Theme.font; font.pixelSize: 12 }
         }
     }
 

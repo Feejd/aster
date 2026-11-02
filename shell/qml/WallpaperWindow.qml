@@ -18,7 +18,10 @@ Window {
         visible = true;
     }
 
+    // Własne zdjęcie (np. „Ustaw jako tapetę” w Zdjęciach) — pełna ścieżka, to samo w jasnym i ciemnym motywie
+    readonly property bool custom: variant.startsWith("/")
     function src(mode) {
+        if (custom) return "file://" + variant;
         return "file://" + Platform.dataDir + "/wallpapers/" + wp.variant + "-" + mode + ".jpg";
     }
 
@@ -35,7 +38,7 @@ Window {
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         smooth: true
-        opacity: Theme.dark ? 1 : 0
+        opacity: Theme.dark && !wp.custom ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     }

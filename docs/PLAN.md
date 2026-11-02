@@ -54,7 +54,9 @@ Programy:
 - [x] Pliki (Dolphin), Przeglądarka (Firefox), Terminal (Konsole), Sklep (Discover), Ustawienia (Ustawienia systemowe)
 - [x] Menedżer zadań (Plasma System Monitor) — `apps/tasks`: Ctrl+Shift+Esc, procesy pogrupowane po programach, „Zakończ zadanie”
       (cudze procesy przez polkit), właściwości, wydajność: procesor (też każdy rdzeń), pamięć, dyski, sieć; programy po zalogowaniu → Ustawienia
-- [ ] Zdjęcia (Gwenview) i Podgląd PDF (Okular)
+- [x] Zdjęcia (Gwenview) — `apps/photos`: biblioteka (Obrazy, Pobrane, Pulpit, zrzuty, dodane foldery), oglądanie z paskiem
+      miniatur, powiększanie, informacje EXIF, obrót JPEG bez utraty jakości, kosz z „Cofnij”, pokaz slajdów, „Ustaw jako tapetę”
+- [ ] Podgląd PDF (Okular)
 - [ ] Edytor tekstu (Kate, KWrite), Wideo (Dragon/Haruna), Muzyka (Elisa), Kalkulator (KCalc)
 - [ ] Spakuj / Wypakuj w Plikach (Ark); Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
 - [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)

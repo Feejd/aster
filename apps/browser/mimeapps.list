@@ -1,6 +1,16 @@
-# Przeglądarka Aster jako domyślna w całym systemie (użytkownik może to zmienić w Ustawieniach)
+# Programy Aster jako domyślne w całym systemie (użytkownik może to zmienić w Ustawieniach → Aplikacje)
 [Default Applications]
 x-scheme-handler/http=org.aster.browser.desktop
 x-scheme-handler/https=org.aster.browser.desktop
 text/html=org.aster.browser.desktop
 application/xhtml+xml=org.aster.browser.desktop
+image/jpeg=org.aster.photos.desktop
+image/png=org.aster.photos.desktop
+image/gif=org.aster.photos.desktop
+image/webp=org.aster.photos.desktop
+image/bmp=org.aster.photos.desktop
+image/tiff=org.aster.photos.desktop
+image/heif=org.aster.photos.desktop
+image/heic=org.aster.photos.desktop
+image/avif=org.aster.photos.desktop
+image/jxl=org.aster.photos.desktop

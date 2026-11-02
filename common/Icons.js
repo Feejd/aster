@@ -109,3 +109,5 @@ var activity = "M3 12h4l3-8 4 16 3-8h4";
 var cpu = "M8 4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4zM9.5 9.5h5v5h-5zM9 1.5V4M15 1.5V4M9 20v2.5M15 20v2.5M1.5 9H4M1.5 15H4M20 9h2.5M20 15h2.5";
 var memory = "M3 7h18v9H3zM7 16v3M12 16v3M17 16v3M7 10v3M11.5 10v3M16 10v3";
 var stop = "M6 6h12v12H6z";
+var minus = "M5 12h14";
+var rotateLeft = "M4 11a8 8 0 1 1 2.3 5.7M4 4v7h7";
