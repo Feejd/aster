@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Podgląd PDF
+GenericName=Przeglądarka dokumentów PDF
+Comment=Czytaj, przeszukuj i drukuj dokumenty PDF
+Exec=aster-pdf %U
+Icon=application-pdf
+Terminal=false
+Categories=Office;Viewer;
+Keywords=pdf;dokument;faktura;czytnik;acrobat;reader;drukuj;
+StartupWMClass=aster-pdf
+MimeType=application/pdf;

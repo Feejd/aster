@@ -111,3 +111,4 @@ var memory = "M3 7h18v9H3zM7 16v3M12 16v3M17 16v3M7 10v3M11.5 10v3M16 10v3";
 var stop = "M6 6h12v12H6z";
 var minus = "M5 12h14";
 var rotateLeft = "M4 11a8 8 0 1 1 2.3 5.7M4 4v7h7";
+var sidebar = "M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 5v14";

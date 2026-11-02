@@ -14,3 +14,4 @@ image/heif=org.aster.photos.desktop
 image/heic=org.aster.photos.desktop
 image/avif=org.aster.photos.desktop
 image/jxl=org.aster.photos.desktop
+application/pdf=org.aster.pdf.desktop
