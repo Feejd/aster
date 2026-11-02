@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD:-$HOME/aster-build}"
 
 # Brak narzędzi albo nowych bibliotek (doszły w nowszej wersji kodu) → przygotowanie maszyny
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 
 # Stary katalog budowania z czasów, gdy budowała się sama powłoka — zacznij od nowa
 [ -f "$BUILD/CMakeCache.txt" ] && ! grep -q "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT\$" "$BUILD/CMakeCache.txt" && rm -rf "$BUILD"
@@ -30,6 +30,10 @@ printf 'org.aster.terminal.desktop\n' > "$HOME/.config/xdg-terminals.list"
 # Menedżer zadań pod Ctrl+Shift+Esc (KGlobalAccel czyta skróty programów z share/kglobalaccel)
 mkdir -p "$HOME/.local/share/kglobalaccel"
 cp "$APPS/org.aster.tasks.desktop" "$HOME/.local/share/kglobalaccel/"
+# Panel emoji pod Win+. — bez „env” w Exec: KWin rozpoznaje program po ścieżce (pozwolenie na wklejanie Ctrl+V)
+sed "s|^Exec=aster-emoji|Exec=$BUILD/apps/emoji/aster-emoji|" "$ROOT/apps/emoji/org.aster.emoji.desktop" > "$APPS/org.aster.emoji.desktop"
+cp "$APPS/org.aster.emoji.desktop" "$ROOT/apps/emoji/org.kde.plasma.emojier.desktop" "$HOME/.local/share/kglobalaccel/"
+kwriteconfig6 --file kglobalaccelrc --group org.kde.plasma.emojier.desktop --key _launch "Meta+Ctrl+Alt+Shift+Space,Meta+Ctrl+Alt+Shift+Space,Emoji Selector" 2>/dev/null || true
 update-desktop-database "$APPS" >/dev/null 2>&1 || true     # adresy aster-settings:wifi itp.
 kbuildsycoca6 >/dev/null 2>&1 || true
 

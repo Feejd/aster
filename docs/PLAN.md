@@ -74,7 +74,10 @@ Programy:
 - [x] Dyski (Partition Manager, Filelight) — pendrive’y i karty w pasku Plików (Solid): otwieranie, „Wysuń” (odmontowanie
       i wyłączenie zasilania), „Formatuj…” przez UDisks2 (exFAT/FAT32/NTFS/ext4, nazwa dysku); Ustawienia → Pamięć:
       kategorie jak „Magazyn” w Windows, największe foldery, czyszczenie plików tymczasowych i kosza, lista dysków
-- [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
+- [x] Panel emoji i znaków (Win+.) — `apps/emoji`: polskie nazwy i wyszukiwanie z CLDR (także bez ogonków), ostatnio
+      używane, odcień skóry, kaomoji, symbole (waluty, matematyka, strzałki, litery); wklejanie do aktywnego programu
+      (KWin fake-input, Ctrl+V) z przywróceniem schowka; wybierak KDE przeniesiony z Win+.
+- [ ] Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
 
 Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):
 - [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kcalc, ark, discover,

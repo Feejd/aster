@@ -21,6 +21,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/calculator/` | Kalkulator — standardowy i naukowy, historia, wynik na żywo, procenty jak w Windows, polski zapis liczb; `ASTER_TEST=1` sprawdza obliczenia. |
 | `apps/video/` | Wideo — ostatnio oglądane z miejscem, w którym przerwano, napisy SRT/VTT/MicroDVD/MPL2 (także Windows-1250), ścieżki dźwięku, prędkość, następny film z folderu. |
 | `apps/music/` | Muzyka — albumy z okładkami, wykonawcy, utwory, kolejka, losowo i powtarzanie; biblioteka z tagów (TagLib). |
+| `apps/emoji/` | Panel emoji i znaków (Win+.) — szukanie po polsku, odcienie skóry, kaomoji, symbole; wstawia do aktywnego programu. Dane: `tools/make-emoji-data.py` (Unicode + CLDR). |
 | `common/mediasession.*` | Wspólne dla Wideo i Muzyki: MPRIS (Centrum sterowania, klawisze multimedialne) i blokada wygaszacza podczas filmu. |
 | `apps/portal/` | Okna systemowe dla xdg-desktop-portal — na razie „Otwórz / Zapisz” dla wszystkich programów (Flathub, Qt/KDE, GTK). |
 | `apps/settings/` | Ustawienia — komplet działów (sieć, Bluetooth, dźwięk, powiadomienia, wygląd, ekran, zasilanie, mysz, klawiatura i skróty, drukarki, data, język, aplikacje, dostępność, prywatność, konta, pamięć dysku) bez odsyłania do ustawień KDE. |

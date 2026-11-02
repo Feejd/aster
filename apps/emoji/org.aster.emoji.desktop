@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Emoji
+GenericName=Panel emoji i znaków
+Comment=Wstaw emoji, kaomoji albo symbol (Win+.)
+Exec=aster-emoji
+Icon=face-smile
+Terminal=false
+NoDisplay=true
+Categories=Utility;
+Keywords=emoji;emotikony;buźki;symbole;znaki;kaomoji;
+X-KDE-Shortcuts=Meta+.,Meta+;
+X-KDE-Wayland-Interfaces=org_kde_kwin_fake_input
+StartupWMClass=aster-emoji
