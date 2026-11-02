@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import QtQuick.Effects
+import QtQuick.Dialogs
 import Aster.Ui
 import Aster.Files
 
@@ -11,6 +12,7 @@ import Aster.Files
 Window {
     id: win
     property string startUrl
+    property string extractOnStart: ""                 // archiwum 7z/RAR otwarte z innego programu — wypakuj obok
 
     width: 1060 + 2 * m
     height: 680 + 2 * m
@@ -44,11 +46,17 @@ Window {
     readonly property string query: searchField.text.trim()
     readonly property var crumbs: Files.crumbs(currentUrl)
     readonly property var selection: Object.keys(sel)
+    // Wnętrze archiwum ZIP/TAR (zip:/…) — tylko do odczytu
+    readonly property string archiveFile: Archiver.archiveOf(currentUrl)
+    readonly property bool inArchive: archiveFile !== ""
+    property var archiveSheet: null                    // okno: hasło do archiwum albo „Kompresuj”
+    property string pendingSelect: ""                  // wynik pakowania/wypakowania — zaznacz, gdy się pojawi
 
     FolderModel {
         id: folder
         url: win.startUrl
         onCountChanged: {
+            win.selectPending();
             if (win.pendingRename) {
                 const i = folder.indexOfName(win.pendingRename);
                 if (i >= 0) {
@@ -67,6 +75,41 @@ Window {
     Connections {
         target: Files
         function onFailed(message) { win.showToast(message, false); }
+    }
+    Connections {
+        target: Archiver
+        function onFinished(id, ok, message, resultUrl) {
+            win.showToast(message, false);
+            if (ok && resultUrl) { win.pendingSelect = resultUrl; win.selectPending(); }
+        }
+        function onPasswordNeeded(archiveUrl, destDirUrl, wrong) {
+            win.archiveSheet = { kind: "password", archive: archiveUrl, dest: destDirUrl, wrong: wrong };
+        }
+    }
+
+    // ——— Archiwa ———
+    function selectPending() {
+        if (!pendingSelect) return;
+        const i = folder.indexOfUrl(pendingSelect);
+        if (i < 0) return;
+        pendingSelect = "";
+        setSel([folder.get(i).url]);
+        lastIndex = i;
+        if (viewMode === "grid") gridView.positionViewAtIndex(i, GridView.Contain);
+        else listView.positionViewAtIndex(i, ListView.Contain);
+    }
+    function localSelection() { return selection.filter(u => u.indexOf("file:") === 0); }
+    function extractHere(url) { Archiver.extract(url, "", ""); }
+    function extractTo(url) { extractDialog.archive = url; extractDialog.open(); }
+    function compressZip() {
+        const urls = localSelection();
+        if (urls.length) Archiver.compress(urls, Archiver.suggestedName(urls, "zip"), "zip", "");
+    }
+    function askCompress() {
+        const urls = localSelection();
+        if (!urls.length) return;
+        const name = Archiver.suggestedName(urls, "zip");
+        archiveSheet = { kind: "compress", urls: urls, name: name.substring(0, name.length - 4) };
     }
 
     // ——— Pomocnicze ———
@@ -164,6 +207,8 @@ Window {
         if (!file) return;
         if (file.isDir) navigate(file.url);
         else if (inTrash) quickLook = file;
+        else if (Archiver.browseUrl(file.url)) navigate(Archiver.browseUrl(file.url));    // ZIP/TAR jak folder
+        else if (Archiver.isArchive(file.url)) extractHere(file.url);                    // 7z, RAR… — od razu obok
         else Files.open(file.url);
     }
     function selectedFile() {
@@ -173,9 +218,10 @@ Window {
     }
     function openSelected() { openItem(selectedFile()); }
 
-    function doCut() { if (selection.length && !inTrash) { Files.setClipboard(selection, true); showToast("Wycięto " + countText(selection.length) + " — wklej w innym folderze", false); } }
+    function doCut() { if (selection.length && !inTrash && !inArchive) { Files.setClipboard(selection, true); showToast("Wycięto " + countText(selection.length) + " — wklej w innym folderze", false); } }
     function doCopy() { if (selection.length && !inTrash) { Files.setClipboard(selection, false); showToast("Skopiowano " + countText(selection.length) + " do schowka", false); } }
     function doPaste() {
+        if (inArchive) return;
         if (inTrash || query) return;
         const cut = Files.clipboardCut;
         const n = Files.paste(currentUrl);
@@ -198,6 +244,7 @@ Window {
         else if (drop.hasUrls) copyIn(drop.urls.map(u => u.toString()), dest);
     }
     function trashSelected() {
+        if (inArchive) return;
         if (!selection.length) return;
         const n = selection.length;
         Files.trash(selection);
@@ -235,14 +282,14 @@ Window {
         };
     }
     function newFolder() {
-        if (inTrash || query) return;
+        if (inTrash || inArchive || query) return;
         pendingRename = Files.newFolder(currentUrl);
     }
     function newDocument() {
         if (inTrash || query) return;
         pendingRename = Files.newTextFile(currentUrl);
     }
-    function startRename() { if (selection.length === 1 && !inTrash) renaming = selection[0]; }
+    function startRename() { if (selection.length === 1 && !inTrash && !inArchive) renaming = selection[0]; }
     function commitRename(url, name) {
         if (renaming !== url) return;
         renaming = "";
@@ -280,6 +327,11 @@ Window {
 
     function handleKey(e) {
         const ctrl = e.modifiers & Qt.ControlModifier, shift = e.modifiers & Qt.ShiftModifier, alt = e.modifiers & Qt.AltModifier;
+        if (archiveSheet) {
+            if (e.key === Qt.Key_Escape) archiveSheet = null;
+            e.accepted = true;
+            return;
+        }
         if (confirm) {
             if (e.key === Qt.Key_Escape) confirm = null;
             else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { const c = confirm; confirm = null; c.run(); }
@@ -330,23 +382,45 @@ Window {
             ]);
             return;
         }
-        menu.openAt(wx, wy, [
+        if (inArchive) {
+            menu.openAt(wx, wy, [
+                { label: "Otwórz", icon: isDir ? "folder" : "arrow", shortcut: "Enter", action: "open", enabled: !!f },
+                { label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" },
+                { separator: true },
+                { label: "Wypakuj wszystko", icon: "archive", action: "extractArchive" }
+            ]);
+            return;
+        }
+        const archive = !!f && !isDir && Archiver.isArchive(f.url);
+        const local = localSelection().length === selection.length;
+        const items = [
             { label: "Otwórz", icon: isDir ? "folder" : "arrow", shortcut: "Enter", action: "open", enabled: !!f },
             { label: "Podgląd", icon: "eye", shortcut: "Spacja", action: "preview", enabled: !!f && !isDir },
             { separator: true },
             { label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" },
             { label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" },
             { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: !!f },
-            { separator: true },
-            { label: "Otwórz w Terminalu", icon: "terminal", action: "terminalHere", enabled: isDir && f.url.indexOf("file:") === 0 },
-            { separator: true },
-            { label: "Przenieś do kosza", icon: "trash", shortcut: "Delete", action: "trash", danger: true }
-        ]);
+            { separator: true }
+        ];
+        if (archive) items.push({ label: "Wypakuj wszystko", icon: "archive", action: "extract" },
+                                { label: "Wypakuj do…", icon: "folder", action: "extractTo" });
+        if (local) items.push({ label: "Kompresuj do pliku ZIP", icon: "archive", action: "zip" },
+                              { label: "Kompresuj…", icon: "sliders", action: "compress" });
+        if (archive || local) items.push({ separator: true });
+        items.push({ label: "Otwórz w Terminalu", icon: "terminal", action: "terminalHere", enabled: isDir && f.url.indexOf("file:") === 0 },
+                   { separator: true },
+                   { label: "Przenieś do kosza", icon: "trash", shortcut: "Delete", action: "trash", danger: true });
+        menu.openAt(wx, wy, items);
     }
     function showBackgroundMenu(wx, wy) {
         clearSel();
         if (inTrash) {
             menu.openAt(wx, wy, [{ label: "Opróżnij kosz", icon: "trash", action: "empty", danger: true, enabled: Files.trashCount > 0 }]);
+            return;
+        }
+        if (inArchive) {
+            menu.openAt(wx, wy, [{ label: "Wypakuj wszystko", icon: "archive", action: "extractArchive" },
+                                 { label: "Wypakuj do…", icon: "folder", action: "extractArchiveTo" }]);
             return;
         }
         menu.openAt(wx, wy, [
@@ -396,6 +470,12 @@ Window {
         else if (a === "undo") doUndo();
         else if (a === "terminal") Files.openTerminal(currentUrl);
         else if (a === "terminalHere") Files.openTerminal(selectedFile().url);
+        else if (a === "extract") extractHere(selectedFile().url);
+        else if (a === "extractTo") extractTo(selectedFile().url);
+        else if (a === "extractArchive") extractHere(archiveFile);
+        else if (a === "extractArchiveTo") extractTo(archiveFile);
+        else if (a === "zip") compressZip();
+        else if (a === "compress") askCompress();
         else if (a === "sort:flip") folder.ascending = !folder.ascending;
         else if (a.indexOf("sort:") === 0) setSort(a.slice(5));
         if (!renaming) keys.forceActiveFocus();
@@ -427,7 +507,11 @@ Window {
     onWidthChanged: effectsTimer.restart()
     onHeightChanged: effectsTimer.restart()
     onMaxedChanged: effectsTimer.restart()
-    Component.onCompleted: { effectsTimer.restart(); keys.forceActiveFocus(); }
+    Component.onCompleted: {
+        effectsTimer.restart();
+        keys.forceActiveFocus();
+        if (extractOnStart) extractHere(extractOnStart);
+    }
     Timer { id: effectsTimer; interval: 16; onTriggered: win.updateEffects() }
 
     WindowShadow { window: win; frame: frame; radius: win.r; visible: !win.maxed }
@@ -641,7 +725,7 @@ Window {
                 Rectangle {
                     id: newBtn
                     width: newRow.implicitWidth + 22; height: 32; radius: 8
-                    opacity: win.query ? 0.4 : 1
+                    opacity: win.query || win.inArchive ? 0.4 : 1
                     color: newArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
                     Row {
                         id: newRow
@@ -655,16 +739,16 @@ Window {
                         id: newArea
                         anchors.fill: parent
                         hoverEnabled: true
-                        enabled: !win.query
+                        enabled: !win.query && !win.inArchive
                         onClicked: { const p = newBtn.mapToItem(frame, 0, newBtn.height + 4); win.showNewMenu(p.x, p.y); }
                     }
                 }
                 Item { width: 8; height: 1 }
-                ToolBtn { icon: "scissors"; enabled: win.selection.length > 0; onClicked: win.doCut() }
+                ToolBtn { icon: "scissors"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.doCut() }
                 ToolBtn { icon: "copy"; enabled: win.selection.length > 0; onClicked: win.doCopy() }
-                ToolBtn { icon: "paste"; enabled: Files.clipboardCount > 0 && !win.query; onClicked: win.doPaste() }
-                ToolBtn { icon: "pencil"; enabled: win.selection.length === 1; onClicked: win.startRename() }
-                ToolBtn { icon: "trash"; enabled: win.selection.length > 0; onClicked: win.trashSelected() }
+                ToolBtn { icon: "paste"; enabled: Files.clipboardCount > 0 && !win.query && !win.inArchive; onClicked: win.doPaste() }
+                ToolBtn { icon: "pencil"; enabled: win.selection.length === 1 && !win.inArchive; onClicked: win.startRename() }
+                ToolBtn { icon: "trash"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.trashSelected() }
             }
 
             Row {
@@ -1048,6 +1132,223 @@ Window {
             }
         }
 
+        // ——— Archiwum: „tylko do odczytu” i Wypakuj wszystko ———
+        Rectangle {
+            visible: win.inArchive
+            anchors.horizontalCenter: content.horizontalCenter
+            y: content.y + content.height - height - 14 - (toastTimer.running ? 54 : 0)
+            Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+            width: archRow.implicitWidth + 16; height: 46; radius: 23
+            color: Theme.surface
+            border.width: 1; border.color: Theme.edge
+            Row {
+                id: archRow
+                x: 18; anchors.verticalCenter: parent.verticalCenter
+                spacing: 14
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.archive; size: 17; color: Theme.text2 }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Archiwum — tylko do odczytu"
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                }
+                HoverButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: extractAllText.implicitWidth + 28; height: 34; radius: 17
+                    baseColor: Theme.accent
+                    color: hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor
+                    onClicked: win.extractHere(win.archiveFile)
+                    Text { id: extractAllText; anchors.centerIn: parent; text: "Wypakuj wszystko"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                }
+            }
+        }
+
+        // ——— Postęp pakowania / wypakowywania ———
+        Column {
+            x: content.x + content.width - width - 16
+            y: content.y + content.height - height - 16
+            spacing: 8
+            z: 50
+            Repeater {
+                model: Archiver.jobs
+                delegate: Rectangle {
+                    id: jobCard
+                    required property var modelData
+                    width: 320; height: 66; radius: 14
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.edge
+                    Icon { x: 16; y: 14; d: Icons.archive; size: 18; color: Theme.accentText }
+                    Text {
+                        x: 44; y: 13; width: parent.width - 44 - 44
+                        text: jobCard.modelData.title
+                        elide: Text.ElideMiddle
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                    }
+                    Text {
+                        anchors.right: cancelJob.left; anchors.rightMargin: 4; y: 14
+                        text: Math.round(jobCard.modelData.progress * 100) + "%"
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }
+                    }
+                    Rectangle {
+                        x: 44; y: 42; width: parent.width - 44 - 44; height: 5; radius: 2.5
+                        color: Theme.fill
+                        Rectangle {
+                            width: parent.width * jobCard.modelData.progress; height: parent.height; radius: parent.radius
+                            color: Theme.accent
+                            Behavior on width { NumberAnimation { duration: 200 } }
+                        }
+                    }
+                    HoverButton {
+                        id: cancelJob
+                        anchors.right: parent.right; anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 30; height: 30; radius: 15
+                        onClicked: Archiver.cancel(jobCard.modelData.id)
+                        Icon { anchors.centerIn: parent; d: Icons.close; size: 13; stroke: 2; color: Theme.text2 }
+                    }
+                }
+            }
+        }
+
+        // ——— Hasło do archiwum / Kompresuj… ———
+        Rectangle {
+            id: sheetShade
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.3)
+            visible: !!win.archiveSheet
+            z: 60
+            readonly property bool compress: !!win.archiveSheet && win.archiveSheet.kind === "compress"
+            property string format: "zip"
+            property bool protect: false
+            function close() { win.archiveSheet = null; keys.forceActiveFocus(); }
+            function accept() {
+                const s = win.archiveSheet;
+                if (!s) return;
+                if (compress) {
+                    if (protect && pass.text === "") { pass.forceActiveFocus(); return; }
+                    Archiver.compress(s.urls, nameField.text.trim() || s.name, format, protect && format === "zip" ? pass.text : "");
+                } else {
+                    if (pass.text === "") return;
+                    Archiver.extract(s.archive, s.dest, pass.text);
+                }
+                close();
+            }
+            onVisibleChanged: {
+                if (!visible) return;
+                pass.text = "";
+                protect = false;
+                format = "zip";
+                if (compress) { nameField.text = win.archiveSheet.name; nameField.selectAll(); nameField.forceActiveFocus(); }
+                else pass.forceActiveFocus();
+            }
+            MouseArea { anchors.fill: parent; onClicked: sheetShade.close() }
+            Rectangle {
+                anchors.centerIn: parent
+                width: 420; height: sheetCol.implicitHeight + 48; radius: 16
+                color: Theme.surface
+                border.width: 1; border.color: Theme.edge
+                MouseArea { anchors.fill: parent }
+                Column {
+                    id: sheetCol
+                    x: 24; y: 24
+                    width: parent.width - 48
+                    spacing: 12
+                    Text {
+                        width: parent.width
+                        text: !win.archiveSheet ? "" : sheetShade.compress ? "Kompresuj " + win.countText(win.archiveSheet.urls.length)
+                            : "„" + decodeURIComponent(win.archiveSheet.archive.split("/").pop()) + "” jest chronione hasłem"
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold; wrapMode: Text.Wrap
+                    }
+                    Text {
+                        visible: !sheetShade.compress
+                        width: parent.width
+                        text: win.archiveSheet && win.archiveSheet.wrong ? "Nieprawidłowe hasło. Spróbuj jeszcze raz." : "Wpisz hasło, aby wypakować pliki."
+                        color: win.archiveSheet && win.archiveSheet.wrong ? Theme.danger : Theme.text2
+                        font.family: Theme.font; font.pixelSize: 13; wrapMode: Text.Wrap
+                    }
+                    // Nazwa i format (tylko „Kompresuj”)
+                    Field {
+                        id: nameBox
+                        visible: sheetShade.compress
+                        label: "Nazwa"
+                        suffix: "." + sheetShade.format
+                        TextInput {
+                            id: nameField
+                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: nameBox.suffixWidth + 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            color: Theme.text; selectionColor: Theme.accentSoft; selectedTextColor: Theme.text
+                            font.family: Theme.font; font.pixelSize: 13
+                            clip: true
+                            Keys.onReturnPressed: sheetShade.accept()
+                            Keys.onEscapePressed: sheetShade.close()
+                        }
+                    }
+                    Row {
+                        visible: sheetShade.compress
+                        spacing: 6
+                        Repeater {
+                            model: [["zip", "ZIP"], ["7z", "7z"], ["tar.gz", "TAR.GZ"], ["tar.xz", "TAR.XZ"]]
+                            delegate: HoverButton {
+                                id: fmt
+                                required property var modelData
+                                readonly property bool on: sheetShade.format === modelData[0]
+                                width: fmtText.implicitWidth + 24; height: 30; radius: 15
+                                baseColor: on ? Theme.accent : Theme.fill
+                                color: on ? baseColor : (hovered ? Theme.hover : baseColor)
+                                onClicked: sheetShade.format = fmt.modelData[0]
+                                Text { id: fmtText; anchors.centerIn: parent; text: fmt.modelData[1]; color: fmt.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                            }
+                        }
+                    }
+                    // Hasło: przy wypakowywaniu zawsze, przy pakowaniu — opcjonalnie (tylko ZIP, AES-256)
+                    Row {
+                        visible: sheetShade.compress && sheetShade.format === "zip"
+                        spacing: 10
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 20; height: 20; radius: 6
+                            color: sheetShade.protect ? Theme.accent : "transparent"
+                            border.width: sheetShade.protect ? 0 : 1.5; border.color: Theme.text2
+                            Icon { anchors.centerIn: parent; visible: sheetShade.protect; d: Icons.check; size: 14; stroke: 2.4; color: "white" }
+                        }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: "Chroń hasłem"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+                        TapHandler { onTapped: { sheetShade.protect = !sheetShade.protect; if (sheetShade.protect) pass.forceActiveFocus(); } }
+                    }
+                    Field {
+                        visible: !sheetShade.compress || (sheetShade.protect && sheetShade.format === "zip")
+                        label: "Hasło"
+                        TextInput {
+                            id: pass
+                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            echoMode: TextInput.Password
+                            color: Theme.text; selectionColor: Theme.accentSoft; selectedTextColor: Theme.text
+                            font.family: Theme.font; font.pixelSize: 13
+                            clip: true
+                            Keys.onReturnPressed: sheetShade.accept()
+                            Keys.onEscapePressed: sheetShade.close()
+                        }
+                    }
+                    Item { width: 1; height: 4 }
+                    Row {
+                        anchors.right: parent.right
+                        spacing: 8
+                        HoverButton {
+                            width: 90; height: 38; radius: 10; baseColor: Theme.fill
+                            onClicked: sheetShade.close()
+                            Text { anchors.centerIn: parent; text: "Anuluj"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                        }
+                        HoverButton {
+                            width: okText.implicitWidth + 30; height: 38; radius: 10
+                            baseColor: Theme.accent
+                            color: hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor
+                            onClicked: sheetShade.accept()
+                            Text { id: okText; anchors.centerIn: parent; text: sheetShade.compress ? "Kompresuj" : "Wypakuj"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                        }
+                    }
+                }
+            }
+        }
+
         // ——— Komunikat z „Cofnij” ———
         Rectangle {
             anchors.horizontalCenter: content.horizontalCenter
@@ -1104,5 +1405,51 @@ Window {
             id: menu
             onTriggered: (a) => win.runAction(a)
         }
+    }
+
+    FolderDialog {
+        id: extractDialog
+        property string archive
+        title: "Wypakuj do folderu"
+        onAccepted: Archiver.extract(archive, String(selectedFolder), "")
+    }
+
+    // Pole z podpisem nad nim; suffix — stała końcówka po prawej (np. „.zip”)
+    component Field: Column {
+        id: fld
+        property string label
+        property string suffix
+        readonly property real suffixWidth: suffixText.visible ? suffixText.implicitWidth + 4 : 0
+        default property alias input: box.data
+        width: parent ? parent.width : 300
+        spacing: 6
+        Text { text: fld.label; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+        Rectangle {
+            id: box
+            width: parent.width; height: 38; radius: 10
+            color: Theme.fill
+            border.width: 1; border.color: Theme.edge
+            Text {
+                id: suffixText
+                visible: fld.suffix !== ""
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                text: fld.suffix
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+            }
+        }
+    }
+
+    // Do testów (ASTER_OPEN, kroki po „;”): menu:nazwa | open:nazwa | compress | zip | extract:nazwa
+    function testOpen(what) {
+        const pick = (name) => { const i = folder.indexOfName(name); if (i >= 0) { setSel([folder.get(i).url]); lastIndex = i; } return i; };
+        if (what.startsWith("menu:")) { pick(what.substring(5)); showItemMenu(420, 220); }
+        else if (what.startsWith("open:")) { if (pick(what.substring(5)) >= 0) openSelected(); }
+        else if (what.startsWith("select:")) setSel(what.substring(7).split(",").map(n => folder.get(folder.indexOfName(n)).url));
+        else if (what === "compress") askCompress();
+        else if (what === "zip") compressZip();
+        else if (what === "zippass") Archiver.compress(localSelection(), "Szyfrowane", "zip", "haslo");
+        else if (what.startsWith("extract:")) { if (pick(what.substring(8)) >= 0) extractHere(selectedFile().url); }
+        else if (what === "bgmenu") showBackgroundMenu(420, 220);
     }
 }

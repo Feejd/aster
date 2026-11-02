@@ -135,9 +135,33 @@ QVariantMap Files::systemDrive() const
     };
 }
 
+
+// Wnętrze archiwum (zip:/…/plik.zip/folder): ścieżka pliku archiwum i ścieżka w środku
+static bool splitArchive(const QUrl &url, QString *archive, QString *inner)
+{
+    if (url.scheme() != QLatin1String("zip") && url.scheme() != QLatin1String("tar"))
+        return false;
+    QString path = url.path();
+    while (path.endsWith(QLatin1Char('/')) && path.size() > 1)
+        path.chop(1);
+    QString probe = path;
+    while (!probe.isEmpty() && probe != QLatin1String("/")) {
+        if (QFileInfo(probe).isFile()) {
+            *archive = probe;
+            *inner = path.mid(probe.size() + 1);
+            return true;
+        }
+        probe = probe.section(QLatin1Char('/'), 0, -2);
+    }
+    return false;
+}
+
 QString Files::displayName(const QString &urlString) const
 {
     const QUrl url(urlString);
+    QString archive, inner;
+    if (splitArchive(url, &archive, &inner))
+        return inner.isEmpty() ? QFileInfo(archive).fileName() : inner.section(QLatin1Char('/'), -1);
     if (url.scheme() == QLatin1String("trash"))
         return url.path().length() > 1 ? url.fileName() : QStringLiteral("Kosz");
     if (!url.isLocalFile())
@@ -161,6 +185,22 @@ QVariantList Files::crumbs(const QString &urlString) const
     const QUrl url(urlString);
     if (url.scheme() == QLatin1String("trash")) {
         out << QVariantMap{{QStringLiteral("name"), QStringLiteral("Kosz")}, {QStringLiteral("url"), QStringLiteral("trash:/")}};
+        return out;
+    }
+    // Archiwum: okruszki folderu z archiwum, potem archiwum i foldery w środku
+    QString archive, inner;
+    if (splitArchive(url, &archive, &inner)) {
+        out = crumbs(QUrl::fromLocalFile(QFileInfo(archive).absolutePath()).toString());
+        QUrl root = QUrl::fromLocalFile(archive + QLatin1Char('/'));
+        root.setScheme(url.scheme());
+        out << QVariantMap{{QStringLiteral("name"), QFileInfo(archive).fileName()}, {QStringLiteral("url"), root.toString()}};
+        QString acc = archive;
+        for (const QString &part : inner.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+            acc += QLatin1Char('/') + part;
+            QUrl u = QUrl::fromLocalFile(acc + QLatin1Char('/'));
+            u.setScheme(url.scheme());
+            out << QVariantMap{{QStringLiteral("name"), part}, {QStringLiteral("url"), u.toString()}};
+        }
         return out;
     }
     if (!url.isLocalFile()) {
@@ -193,6 +233,9 @@ QString Files::parentUrl(const QString &urlString) const
         return {};
     if (url.scheme() == QLatin1String("trash") && url.path().length() <= 1)
         return {};
+    QString archive, inner;
+    if (splitArchive(url, &archive, &inner) && inner.isEmpty())
+        return QUrl::fromLocalFile(QFileInfo(archive).absolutePath()).toString();
     return url.adjusted(QUrl::StripTrailingSlash).adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash).toString();
 }
 

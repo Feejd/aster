@@ -122,3 +122,4 @@ var disc = "M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0M14.5 12a2.5 2.5 0 1 1-5 0a2.5 2
 var speed = "M4.5 17a8.5 8.5 0 1 1 15 0M12 14l4-4";
 var exitFullscreen = "M9 4v4a1 1 0 0 1-1 1H4M15 4v4a1 1 0 0 0 1 1h4M20 15h-4a1 1 0 0 0-1 1v4M4 15h4a1 1 0 0 1 1 1v4";
 var audioTrack = "M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2";
+var archive = "M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4";

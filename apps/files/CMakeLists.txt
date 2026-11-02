@@ -1,4 +1,8 @@
 # Pliki (aster-files) — budowane z głównego CMakeLists.txt repozytorium.
+# Spakuj / Wypakuj: libarchive (pakiet libarchive-devel).
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 qt_add_executable(aster-files
     src/main.cpp
@@ -6,6 +10,8 @@ qt_add_executable(aster-files
     src/foldermodel.h
     src/fileops.cpp
     src/fileops.h
+    src/archiver.cpp
+    src/archiver.h
 )
 target_include_directories(aster-files PRIVATE src)
 
@@ -34,6 +40,8 @@ target_link_libraries(aster-files PRIVATE
     KF6::KIOGui
     KF6::KIOWidgets
     KF6::WindowSystem
+    Qt6::Concurrent
+    PkgConfig::LIBARCHIVE
     aster-uiplugin
 )
 
