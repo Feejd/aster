@@ -67,6 +67,7 @@ Page {
     }
 
     Section {
+        SettingRow { title: "Pamięć — co zajmuje miejsce"; icon: "drive"; chevron: true; onClicked: gp.navigate("storage") }
         SettingRow { title: "Aktualizacje oprogramowania"; icon: "download"; chevron: true; onClicked: System.run("aster-store") }
         SettingRow { title: "Data i czas"; icon: "clock"; chevron: true; onClicked: gp.navigate("datetime") }
         SettingRow { title: "Język i region"; icon: "translate"; chevron: true; onClicked: gp.navigate("language") }

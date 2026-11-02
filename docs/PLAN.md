@@ -71,7 +71,9 @@ Programy:
 - [x] Spakuj / Wypakuj w Plikach (Ark) — libarchive: ZIP/TAR przeglądane jak folder, „Wypakuj wszystko” (bez zbędnego
       zagnieżdżenia), 7z/RAR/ISO, „Kompresuj do pliku ZIP” i „Kompresuj…” (ZIP z hasłem AES-256, 7z, TAR), postęp z anulowaniem,
       polskie nazwy z ZIP-ów z Windows (CP852), ochrona przed „../” i dowiązaniami
-- [ ] Dyski: formatowanie pendrive’a i zajęte miejsce (Partition Manager, Filelight)
+- [x] Dyski (Partition Manager, Filelight) — pendrive’y i karty w pasku Plików (Solid): otwieranie, „Wysuń” (odmontowanie
+      i wyłączenie zasilania), „Formatuj…” przez UDisks2 (exFAT/FAT32/NTFS/ext4, nazwa dysku); Ustawienia → Pamięć:
+      kategorie jak „Magazyn” w Windows, największe foldery, czyszczenie plików tymczasowych i kosza, lista dysków
 - [ ] Panel emoji i znaków (Win+.), Kamera, Skaner, Telefon (KDE Connect z wyglądem Aster)
 
 Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):

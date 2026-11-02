@@ -1,5 +1,6 @@
 # Ustawienia (aster-settings) — budowane z głównego CMakeLists.txt repozytorium.
 find_package(KF6Config REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 qt_add_executable(aster-settings
     src/main.cpp
@@ -36,6 +37,7 @@ set(SETTINGS_QML
     qml/AppsPage.qml
     qml/AccessibilityPage.qml
     qml/PrivacyPage.qml
+    qml/StoragePage.qml
     qml/Dropdown.qml
     qml/Sheet.qml
     qml/Field.qml
@@ -62,6 +64,7 @@ qt_add_qml_module(aster-settings
         src/apps.cpp src/apps.h
         src/shortcuts.cpp src/shortcuts.h
         src/printers.cpp src/printers.h
+        src/storage.cpp src/storage.h
 )
 
 target_link_libraries(aster-settings PRIVATE
@@ -69,6 +72,7 @@ target_link_libraries(aster-settings PRIVATE
     Qt6::Quick
     Qt6::Qml
     Qt6::DBus
+    Qt6::Concurrent
     KF6::ConfigCore
     KF6::Service
     crypt

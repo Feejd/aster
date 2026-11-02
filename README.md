@@ -9,7 +9,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 |---|---|
 | `prototype/` | Interaktywny prototyp całego pulpitu (QML + PySide6, działa na Macu). Wzór wyglądu i zachowania. |
 | `shell/` | Prawdziwa powłoka: C++/Qt 6 + QML. Tapeta z widżetami, dok, górny pasek z dynamiczną wyspą, Start i centrum sterowania jako warstwy Wayland. |
-| `apps/files/` | Pliki — menedżer plików (KIO: kosz, kopiowanie w tle, cofanie, wyszukiwanie); archiwa przez libarchive: ZIP/TAR jak folder, Wypakuj wszystko, Kompresuj (ZIP z hasłem, 7z, TAR). |
+| `apps/files/` | Pliki — menedżer plików (KIO: kosz, kopiowanie w tle, cofanie, wyszukiwanie); archiwa przez libarchive: ZIP/TAR jak folder, Wypakuj wszystko, Kompresuj (ZIP z hasłem, 7z, TAR); pendrive’y: Wysuń, Formatuj (UDisks2). |
 | `apps/browser/` | Przeglądarka — silnik Qt WebEngine (Chromium), wygląd Aster: karty i okna (też prywatne), historia, ulubione, pobrane, blokowanie śledzenia, przywracanie sesji. |
 | `apps/webapps/` | Aplikacje webowe — strony jako natywne programy (okno, ikona, powiadomienia, liczniki w doku). |
 | `apps/store/` | Sklep — programy z Flathub (flatpak), wygląd jak App Store. |
@@ -23,7 +23,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/music/` | Muzyka — albumy z okładkami, wykonawcy, utwory, kolejka, losowo i powtarzanie; biblioteka z tagów (TagLib). |
 | `common/mediasession.*` | Wspólne dla Wideo i Muzyki: MPRIS (Centrum sterowania, klawisze multimedialne) i blokada wygaszacza podczas filmu. |
 | `apps/portal/` | Okna systemowe dla xdg-desktop-portal — na razie „Otwórz / Zapisz” dla wszystkich programów (Flathub, Qt/KDE, GTK). |
-| `apps/settings/` | Ustawienia — komplet działów (sieć, Bluetooth, dźwięk, powiadomienia, wygląd, ekran, zasilanie, mysz, klawiatura i skróty, drukarki, data, język, aplikacje, dostępność, prywatność, konta) bez odsyłania do ustawień KDE. |
+| `apps/settings/` | Ustawienia — komplet działów (sieć, Bluetooth, dźwięk, powiadomienia, wygląd, ekran, zasilanie, mysz, klawiatura i skróty, drukarki, data, język, aplikacje, dostępność, prywatność, konta, pamięć dysku) bez odsyłania do ustawień KDE. |
 | `common/` | Wspólny wygląd: motyw i ikony liniowe (moduł QML `Aster.Ui`). |
 | `session/` | Sesja logowania „Aster”: KWin i usługi Plasmy, ale zamiast plasmashell działa aster-shell. |
 | `image/` | Szkic obrazu systemu (Fedora Kinoite + Aster), do zbudowania i instalacji jako atomowy system. |

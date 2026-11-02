@@ -77,6 +77,23 @@ Window {
         function onFailed(message) { win.showToast(message, false); }
     }
     Connections {
+        target: Drives
+        function onOpened(url) { win.navigate(url); }
+        function onMessage(text) { win.showToast(text, false); }
+        function onEjected(url) { if (win.currentUrl.indexOf(url) === 0) win.navigate(Files.homeUrl); }
+    }
+    function driveMenu(d, x, y) {
+        driveMenuData = d;
+        menu.openAt(x, y, [
+            { label: "Otwórz", icon: "folder", action: "drive:open" },
+            { label: "Wysuń", icon: "eject", action: "drive:eject", enabled: d.removable && !d.busy },
+            { separator: true },
+            { label: "Formatuj…", icon: "drive", action: "drive:format", enabled: !d.busy, danger: true }
+        ]);
+    }
+    property var driveMenuData: null
+    property var formatSheet: null                     // { udi, name, sizeText }
+    Connections {
         target: Archiver
         function onFinished(id, ok, message, resultUrl) {
             win.showToast(message, false);
@@ -327,6 +344,11 @@ Window {
 
     function handleKey(e) {
         const ctrl = e.modifiers & Qt.ControlModifier, shift = e.modifiers & Qt.ShiftModifier, alt = e.modifiers & Qt.AltModifier;
+        if (formatSheet) {
+            if (e.key === Qt.Key_Escape) formatSheet = null;
+            e.accepted = true;
+            return;
+        }
         if (archiveSheet) {
             if (e.key === Qt.Key_Escape) archiveSheet = null;
             e.accepted = true;
@@ -475,6 +497,9 @@ Window {
         else if (a === "extractArchive") extractHere(archiveFile);
         else if (a === "extractArchiveTo") extractTo(archiveFile);
         else if (a === "zip") compressZip();
+        else if (a === "drive:open") Drives.open(driveMenuData.udi);
+        else if (a === "drive:eject") Drives.eject(driveMenuData.udi);
+        else if (a === "drive:format") formatSheet = { udi: driveMenuData.udi, name: driveMenuData.name, sizeText: driveMenuData.sizeText };
         else if (a === "compress") askCompress();
         else if (a === "sort:flip") folder.ascending = !folder.ascending;
         else if (a.indexOf("sort:") === 0) setSort(a.slice(5));
@@ -687,6 +712,36 @@ Window {
                         Rectangle { width: parent.width * drivePlace.info.usedRatio; height: 4; radius: 2; color: Theme.accent }
                     }
                     Text { x: 38; y: 9; text: drivePlace.info.freeText; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
+                }
+                // Pendrive’y, karty, dodatkowe dyski
+                Repeater {
+                    model: Drives.list
+                    delegate: Column {
+                        id: driveItem
+                        required property var modelData
+                        width: parent.width
+                        SidebarPlace {
+                            width: parent.width
+                            label: driveItem.modelData.name
+                            icon: "drive"
+                            badge: driveItem.modelData.busy || ""
+                            ejectable: driveItem.modelData.removable && !driveItem.modelData.busy
+                            active: !!driveItem.modelData.url && win.currentUrl === driveItem.modelData.url
+                            onClicked: Drives.open(driveItem.modelData.udi)
+                            onEjectClicked: Drives.eject(driveItem.modelData.udi)
+                            onRightClicked: (x, y) => { const p = mapToItem(frame, x, y); win.driveMenu(driveItem.modelData, p.x, p.y); }
+                            onDropped: (d) => { if (driveItem.modelData.url) win.handleDrop(d, driveItem.modelData.url); }
+                        }
+                        Item {
+                            visible: driveItem.modelData.mounted && !!driveItem.modelData.freeText
+                            width: parent.width; height: visible ? 24 : 0
+                            Rectangle {
+                                x: 38; y: 2; width: parent.width - 48; height: 4; radius: 2; color: Theme.line
+                                Rectangle { width: parent.width * (driveItem.modelData.usedRatio || 0); height: 4; radius: 2; color: Theme.accent }
+                            }
+                            Text { x: 38; y: 9; text: driveItem.modelData.freeText || ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
+                        }
+                    }
                 }
                 Item { width: 1; height: 10 }
                 SidebarPlace {
@@ -1349,6 +1404,122 @@ Window {
             }
         }
 
+        // ——— Formatuj dysk ———
+        Rectangle {
+            id: formatShade
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.3)
+            visible: !!win.formatSheet
+            z: 60
+            property string type: "exfat"
+            readonly property var types: [
+                { id: "exfat", name: "exFAT", hint: "Zalecany — działa w Windows, macOS, telewizorach; pliki dowolnej wielkości" },
+                { id: "vfat", name: "FAT32", hint: "Dla starszych urządzeń (radio, drukarka); pliki do 4 GB" },
+                { id: "ntfs", name: "NTFS", hint: "Dla dysków używanych głównie z Windows" },
+                { id: "ext4", name: "ext4", hint: "Tylko dla Linuksa (np. kopie zapasowe Aster)" }
+            ]
+            readonly property var current: types.find(t => t.id === type)
+            function close() { win.formatSheet = null; keys.forceActiveFocus(); }
+            function accept() {
+                const s = win.formatSheet;
+                if (!s) return;
+                Drives.format(s.udi, type, labelField.text);
+                close();
+            }
+            onVisibleChanged: {
+                if (!visible) return;
+                type = "exfat";
+                labelField.text = win.formatSheet.name === "Dysk USB" ? "" : win.formatSheet.name;
+                labelField.selectAll();
+                labelField.forceActiveFocus();
+            }
+            MouseArea { anchors.fill: parent; onClicked: formatShade.close() }
+            Rectangle {
+                anchors.centerIn: parent
+                width: 440; height: formatCol.implicitHeight + 48; radius: 16
+                color: Theme.surface
+                border.width: 1; border.color: Theme.edge
+                MouseArea { anchors.fill: parent }
+                Column {
+                    id: formatCol
+                    x: 24; y: 24
+                    width: parent.width - 48
+                    spacing: 12
+                    Text {
+                        width: parent.width
+                        text: win.formatSheet ? "Formatuj „" + win.formatSheet.name + "” (" + win.formatSheet.sizeText + ")" : ""
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.DemiBold; wrapMode: Text.Wrap
+                    }
+                    Field {
+                        id: labelBox
+                        label: "Nazwa dysku"
+                        TextInput {
+                            id: labelField
+                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                            verticalAlignment: TextInput.AlignVCenter
+                            maximumLength: Drives.labelLimit(formatShade.type)
+                            color: Theme.text; selectionColor: Theme.accentSoft; selectedTextColor: Theme.text
+                            font.family: Theme.font; font.pixelSize: 13
+                            font.capitalization: formatShade.type === "vfat" ? Font.AllUppercase : Font.MixedCase
+                            clip: true
+                            Keys.onReturnPressed: formatShade.accept()
+                            Keys.onEscapePressed: formatShade.close()
+                        }
+                    }
+                    Text { text: "System plików"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                    Row {
+                        spacing: 6
+                        Repeater {
+                            model: formatShade.types
+                            delegate: HoverButton {
+                                id: fsBtn
+                                required property var modelData
+                                readonly property bool on: formatShade.type === modelData.id
+                                width: fsText.implicitWidth + 26; height: 30; radius: 15
+                                baseColor: on ? Theme.accent : Theme.fill
+                                color: on ? baseColor : (hovered ? Theme.hover : baseColor)
+                                onClicked: formatShade.type = fsBtn.modelData.id
+                                Text { id: fsText; anchors.centerIn: parent; text: fsBtn.modelData.name; color: fsBtn.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        text: formatShade.current ? formatShade.current.hint : ""
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; wrapMode: Text.Wrap
+                    }
+                    Rectangle {
+                        width: parent.width; height: warnText.implicitHeight + 20; radius: 10
+                        color: Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.1)
+                        Text {
+                            id: warnText
+                            x: 12; width: parent.width - 24
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Wszystkie pliki na tym dysku zostaną usunięte. Tego nie da się cofnąć."
+                            color: Theme.danger; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; wrapMode: Text.Wrap
+                        }
+                    }
+                    Item { width: 1; height: 2 }
+                    Row {
+                        anchors.right: parent.right
+                        spacing: 8
+                        HoverButton {
+                            width: 90; height: 38; radius: 10; baseColor: Theme.fill
+                            onClicked: formatShade.close()
+                            Text { anchors.centerIn: parent; text: "Anuluj"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                        }
+                        HoverButton {
+                            width: fmtOk.implicitWidth + 30; height: 38; radius: 10
+                            baseColor: "#D93B3B"
+                            color: hovered ? "#B92E2E" : baseColor
+                            onClicked: formatShade.accept()
+                            Text { id: fmtOk; anchors.centerIn: parent; text: "Formatuj"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                        }
+                    }
+                }
+            }
+        }
+
         // ——— Komunikat z „Cofnij” ———
         Rectangle {
             anchors.horizontalCenter: content.horizontalCenter
@@ -1451,5 +1622,7 @@ Window {
         else if (what === "zippass") Archiver.compress(localSelection(), "Szyfrowane", "zip", "haslo");
         else if (what.startsWith("extract:")) { if (pick(what.substring(8)) >= 0) extractHere(selectedFile().url); }
         else if (what === "bgmenu") showBackgroundMenu(420, 220);
+        else if (what === "drivemenu") driveMenu(Drives.list[0], 120, 470);
+        else if (what === "format") formatSheet = { udi: Drives.list[0].udi, name: Drives.list[0].name, sizeText: Drives.list[0].sizeText };
     }
 }

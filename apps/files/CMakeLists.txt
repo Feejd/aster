@@ -2,7 +2,8 @@
 # Spakuj / Wypakuj: libarchive (pakiet libarchive-devel).
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
-find_package(Qt6 REQUIRED COMPONENTS Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent DBus)
+find_package(KF6Solid REQUIRED)
 
 qt_add_executable(aster-files
     src/main.cpp
@@ -12,6 +13,8 @@ qt_add_executable(aster-files
     src/fileops.h
     src/archiver.cpp
     src/archiver.h
+    src/drives.cpp
+    src/drives.h
 )
 target_include_directories(aster-files PRIVATE src)
 
@@ -41,6 +44,8 @@ target_link_libraries(aster-files PRIVATE
     KF6::KIOWidgets
     KF6::WindowSystem
     Qt6::Concurrent
+    Qt6::DBus
+    KF6::Solid
     PkgConfig::LIBARCHIVE
     aster-uiplugin
 )

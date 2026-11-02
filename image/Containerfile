@@ -5,7 +5,7 @@ ARG FEDORA=44
 
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules \
-        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
@@ -18,7 +18,7 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
 
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
-RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib \
+RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  && systemctl --global enable aster-shell.service \
