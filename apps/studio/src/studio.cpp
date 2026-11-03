@@ -1938,3 +1938,51 @@ bool Studio::inKey(int midi) const
             return true;
     return false;
 }
+
+void Studio::previewNote(int index, int value)
+{
+    if (index < 0 || index >= m_tracks.size() || !m_engine.running())
+        return;
+    const Track &t = m_tracks[index];
+    const BeatSynth::Kind kind = kindOf(t.kind);
+    QJsonObject p;
+    double seconds = 1.2;
+    if (kind == BeatSynth::Drums) {
+        const QStringList rows = BeatSynth::rowNames();
+        if (value < 0 || value >= rows.size())
+            return;
+        p = BeatSynth::emptyPattern(BeatSynth::Drums, t.pattern.value(QStringLiteral("kit")).toString(), 1);
+        QJsonObject r = p.value(QStringLiteral("rows")).toObject();
+        QJsonArray row = r.value(rows[value]).toArray();
+        row[0] = 1.0;
+        r.insert(rows[value], row);
+        p.insert(QStringLiteral("rows"), r);
+        seconds = 0.6;
+    } else if (kind == BeatSynth::Bass) {
+        p = BeatSynth::emptyPattern(BeatSynth::Bass, t.pattern.value(QStringLiteral("kit")).toString(), 1);
+        QJsonArray notes = p.value(QStringLiteral("notes")).toArray();
+        notes[0] = std::clamp(value, 0, 14);
+        p.insert(QStringLiteral("notes"), notes);
+        p.insert(QStringLiteral("root"), t.pattern.value(QStringLiteral("root")));
+        p.insert(QStringLiteral("glide"), false);
+        seconds = 0.9;
+    } else if (kind == BeatSynth::Keys || kind == BeatSynth::Melody) {
+        p = QJsonObject{{QStringLiteral("instrument"), t.pattern.value(QStringLiteral("instrument"))},
+                        {QStringLiteral("bars"), 1},
+                        {QStringLiteral("notes"), QJsonArray{QJsonObject{{QStringLiteral("step"), 0}, {QStringLiteral("len"), 6},
+                                                                        {QStringLiteral("pitch"), std::clamp(value, 12, 120)}}}}};
+    } else {
+        return;
+    }
+    const std::shared_ptr<AudioSource> full = BeatSynth::render(p, kind == BeatSynth::Keys ? BeatSynth::Melody : kind, m_bpm, Engine::Rate);
+    // Tylko początek pętli, z krótkim wyciszeniem na końcu (bez trzasku)
+    auto snd = std::make_shared<AudioSource>();
+    snd->channels = full->channels;
+    snd->frames = std::min(full->frames, llround(seconds * Engine::Rate));
+    snd->data.assign(full->data.begin(), full->data.begin() + snd->frames * snd->channels);
+    const long long fade = Engine::Rate / 50;
+    for (long long i = 0; i < fade && i < snd->frames; ++i)
+        for (int c = 0; c < snd->channels; ++c)
+            snd->data[size_t((snd->frames - 1 - i) * snd->channels + c)] *= float(i) / fade;
+    m_engine.preview(snd, float(dbToGain(t.volume) * dbToGain(m_masterDb) * 0.8));
+}

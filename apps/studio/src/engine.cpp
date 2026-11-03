@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include <QDateTime>
 #include <QFile>
 #include <QMetaObject>
 #include <algorithm>
@@ -532,6 +533,24 @@ void Engine::onPlayback()
     } else {
         std::memset(dst, 0, n * stride);
     }
+    // Głosy odsłuchu dokładane na wierzch
+    for (PreviewSlot &v : m_preview) {
+        const unsigned gen = v.gen.load(std::memory_order_acquire);
+        if (gen != v.seen) {
+            v.seen = gen;
+            v.pos = 0;
+        }
+        const AudioSource *src = v.src.load(std::memory_order_acquire);
+        if (!src || v.pos >= src->frames)
+            continue;
+        const float g = v.gain.load(std::memory_order_relaxed);
+        const long long k = std::min<long long>(n, src->frames - v.pos);
+        for (long long i = 0; i < k; ++i) {
+            dst[2 * i] += src->at(v.pos + i, 0) * g;
+            dst[2 * i + 1] += src->at(v.pos + i, 1) * g;
+        }
+        v.pos += k;
+    }
     m_pos.store(m_rtPos);
 
     pw_time t{};
@@ -576,6 +595,22 @@ void Engine::onCapture()
 }
 
 // ——— Interfejs → silnik ———
+
+void Engine::preview(SourcePtr sound, float gain)
+{
+    if (!sound || !m_core)
+        return;
+    // Dźwięki starsze niż 10 s na pewno już przebrzmiały — można je zwolnić
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    while (!m_previewKeep.isEmpty() && now - m_previewKeep.first().first > 10000)
+        m_previewKeep.removeFirst();
+    m_previewKeep.append({now, sound});
+    PreviewSlot &v = m_preview[m_previewNext];
+    m_previewNext = (m_previewNext + 1) % PreviewVoices;
+    v.gain.store(gain);
+    v.src.store(sound.get(), std::memory_order_release);
+    v.gen.fetch_add(1, std::memory_order_acq_rel);
+}
 
 void Engine::setSnapshot(Snapshot *s)
 {

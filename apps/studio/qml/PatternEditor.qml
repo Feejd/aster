@@ -298,6 +298,11 @@ Item {
                 y: index * grid.cellH
                 width: grid.width; height: grid.cellH
                 readonly property int degree: pe.degrees - 1 - index
+                MouseArea {
+                    width: grid.labelW - 10; height: parent.height
+                    cursorShape: Qt.PointingHandCursor
+                    onPressed: Studio.previewNote(pe.track, pe.bass ? rowItem.degree : rowItem.index)
+                }
                 Text {
                     width: grid.labelW - 10; height: parent.height
                     verticalAlignment: Text.AlignVCenter
@@ -358,6 +363,7 @@ Item {
                 }
                 grid.painting = true;
                 grid.paintValue = grid.cellValue(c.r, c.i) > 0 ? 0 : 1;
+                if (grid.paintValue > 0) Studio.previewNote(pe.track, pe.bass ? pe.degrees - 1 - c.r : c.r);
                 grid.lastCell = c.r * 1000 + c.i;
                 grid.setCell(c.r, c.i, grid.paintValue);
             }

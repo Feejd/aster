@@ -156,6 +156,10 @@ public:
     long long recordStart() const { return m_recStart; }
     std::vector<float> livePeaks() const;  // szczyty nagrywanego dźwięku (do rysowania w trakcie)
 
+    // Odsłuch pojedynczego dźwięku (klik w piano rollu, klawiatura) — gra też przy zatrzymanym transporcie.
+    // Dźwięk trzymany jest po stronie interfejsu jeszcze kilka sekund, więc wątek audio nigdy go nie zwalnia.
+    void preview(SourcePtr sound, float gain);
+
     // Wejście włączone tylko, gdy jakaś ścieżka czeka na nagranie (inaczej system pokazuje używany mikrofon)
     void setCapture(bool on);
     bool capturing() const { return m_in != nullptr; }
@@ -230,4 +234,18 @@ private:
     std::vector<float> m_livePeaks;
     std::atomic<float> m_inPeak[2] = {};
     std::atomic<long long> m_recClipStart{0};
+
+    // Głosy odsłuchu: wątek interfejsu wpisuje dźwięk i zwiększa numer, wątek audio zaczyna go od początku
+    static constexpr int PreviewVoices = 8;
+    struct PreviewSlot
+    {
+        std::atomic<const AudioSource *> src{nullptr};
+        std::atomic<float> gain{1.f};
+        std::atomic<unsigned> gen{0};
+        unsigned seen = 0;               // tylko wątek audio
+        long long pos = 0;               // tylko wątek audio
+    };
+    PreviewSlot m_preview[PreviewVoices];
+    int m_previewNext = 0;
+    QList<QPair<qint64, SourcePtr>> m_previewKeep;
 };

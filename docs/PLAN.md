@@ -200,8 +200,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         1/16…cała), przeciąganie przesuwa, prawy brzeg zmienia długość, prawy klik / dwuklik usuwa; wiersze tonacji
         podświetlone, „Tylko nuty skali”; te same brzmienia co Akordy; „Zamień na nuty” przenosi akordy do piano rolla
         bez zmiany brzmienia (eksport identyczny)
-  - [ ] Dalej: odsłuch nuty przy kliknięciu w piano rollu (głos syntezatora w wątku audio), siła uderzenia nuty,
-        kopiowanie taktów, melodia z klawiatury komputera / MIDI USB, biblioteka pętli, przełącznik A/B masteringu
+  - [x] odsłuch: klik w piano rollu, na klawiaturze ekranowej, w Beat Makerze (krok i nazwa wiersza) i w nutach 808
+        od razu gra dźwięk — 8 głosów odsłuchu w wątku audio, także przy zatrzymanym transporcie
+  - [x] klawiatura komputera jak pianino w piano rollu (A S D F G H J K / W E T Y U O, Z/X — oktawa), wciśnięte
+        klawisze podświetlone; „Nagrywaj nuty” — granie w trakcie odtwarzania zapisuje nuty wyrównane do szesnastek
+  - [ ] Dalej: klawiatury MIDI na USB (ALSA/PipeWire MIDI), siła uderzenia nuty, kopiowanie taktów, dłuższe trzymanie
+        dźwięku na żywo (pad), biblioteka pętli, przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem

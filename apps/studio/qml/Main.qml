@@ -26,7 +26,9 @@ Window {
     property bool showMixer: false
     property bool showInspector: true
     property int editTrack: -1                  // ścieżka otwarta w Beat Makerze (-1 — zamknięty)
-    readonly property bool typing: activeFocusItem instanceof TextInput
+    readonly property bool textTyping: activeFocusItem instanceof TextInput
+    // Litery są zajęte przez wpisywanie tekstu albo granie na klawiaturze w piano rollu
+    readonly property bool typing: textTyping || (pianoRoll.visible && pianoRoll.keysActive)
 
     onClosing: Studio.closeProject()
     Component.onCompleted: effectsTimer.restart()
@@ -57,7 +59,7 @@ Window {
     }
 
     // ——— Skróty ———
-    Shortcut { sequences: ["Space"]; enabled: Studio.open && !win.typing; onActivated: Studio.toggle() }
+    Shortcut { sequences: ["Space"]; enabled: Studio.open && !win.textTyping; onActivated: Studio.toggle() }
     Shortcut { sequences: ["R"]; enabled: Studio.open && !win.typing; onActivated: Studio.record() }
     Shortcut { sequences: ["Return", "Home"]; enabled: Studio.open && !win.typing; onActivated: Studio.seek(0) }
     Shortcut { sequences: ["K"]; enabled: Studio.open && !win.typing; onActivated: Studio.metronome = !Studio.metronome }
@@ -101,6 +103,10 @@ Window {
         else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
         else if (what.startsWith("import:")) { const a = what.split(":"); Studio.importFiles([a[2]], Number(a[1]), 0); }
         else if (what.startsWith("add:")) Studio.addPatternTrack(what.substring(4), "trap");
+        else if (what.startsWith("pv:")) { const a = what.split(":"); Studio.previewNote(Number(a[1]), Number(a[2])); }
+        else if (what.startsWith("kd:")) pianoRoll.keyDown(what.substring(3));
+        else if (what.startsWith("ku:")) pianoRoll.keyUp(what.substring(3));
+        else if (what === "recNotes") pianoRoll.recNotes = true;
         else if (what.startsWith("toNotes:")) Studio.chordsToNotes(Number(what.substring(8)));
         else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
         else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));

@@ -6,6 +6,8 @@ import Aster.Studio
 // Piano roll ścieżki Melodia: z lewej klawiatura, w siatce nuty (wiersz = wysokość, kolumna = szesnastka).
 // Klik w puste miejsce — nowa nuta, przeciągnięcie nuty — przesuwa, prawy brzeg — długość, prawy klik — usuwa.
 // Wiersze tonacji piosenki są jaśniejsze; „Tylko nuty skali” nie pozwala trafić w fałszywą nutę.
+// Klawiatura komputera gra jak pianino (A S D F G H J K — białe, W E T Y U O — czarne, Z/X — oktawa);
+// przy odtwarzaniu z „Nagrywaj nuty” zagrane dźwięki trafiają do siatki (wyrównane do szesnastek).
 Item {
     id: pr
     property int track: -1
@@ -16,6 +18,47 @@ Item {
     property var pat: null
     property int noteLen: 2                       // długość nowej nuty (kroki)
     property bool scaleOnly: true
+    property bool keysActive: true               // klawiatura komputera gra nuty
+    property bool recNotes: false
+    property int octave: 4                       // oktawa dla A = C
+    property var held: ({})                      // klawisz → { pitch, start }
+    readonly property var keyMap: ({ "A": 0, "W": 1, "S": 2, "E": 3, "D": 4, "F": 5, "T": 6, "G": 7, "Y": 8, "H": 9, "U": 10, "J": 11, "K": 12, "O": 13, "L": 14, "P": 15 })
+    readonly property var heldPitches: Object.keys(held).map(k => held[k].pitch)
+    focus: visible && keysActive
+    onVisibleChanged: if (visible) forceActiveFocus()
+
+    function absStep() { return Math.round(Math.max(0, Studio.position) / stepSec); }
+    Keys.onPressed: (e) => { if (!e.isAutoRepeat && keyDown(e.text.toUpperCase())) e.accepted = true; }
+    Keys.onReleased: (e) => { if (!e.isAutoRepeat && keyUp(e.text.toUpperCase())) e.accepted = true; }
+    function keyDown(ch) {
+        if (!keysActive || !pat) return false;
+        if (ch === "Z") { octave = Math.max(1, octave - 1); return true; }
+        if (ch === "X") { octave = Math.min(7, octave + 1); return true; }
+        if (!(ch in keyMap) || ch in held) return false;
+        const pitch = 12 * (octave + 1) + keyMap[ch];
+        Studio.previewNote(track, pitch);
+        const h = Object.assign({}, held);
+        h[ch] = { pitch: pitch, start: absStep() };
+        held = h;
+        return true;
+    }
+    function keyUp(ch) {
+        if (!(ch in held)) return false;
+        const n = held[ch];
+        const h = Object.assign({}, held);
+        delete h[ch];
+        held = h;
+        if (!recNotes || !Studio.playing) return true;
+        // Nagranie: początek i długość wyrównane do szesnastek, w pętli wzoru
+        const len = Math.max(1, Math.min(16, absStep() - n.start));
+        const step = ((n.start % steps) + steps) % steps;
+        const p = JSON.parse(JSON.stringify(pat));
+        p.notes = p.notes.filter(x => !(x.pitch === n.pitch && x.step === step));
+        p.notes.push({ step: step, len: Math.min(len, steps - step), pitch: n.pitch, vel: 0.85 });
+        pat = p;
+        commit();
+        return true;
+    }
     readonly property int steps: pat ? (pat.bars || 4) * 16 : 64
     readonly property int lowest: 36             // C2
     readonly property int highest: 96            // C7
@@ -139,6 +182,20 @@ Item {
             }
         }
         Pill { anchors.verticalCenter: parent.verticalCenter; height: 28; text: "Wyczyść"; icon: "trash"; onClicked: pr.setKey("notes", []) }
+        Pill {
+            anchors.verticalCenter: parent.verticalCenter; height: 28
+            text: pr.keysActive ? "Klawiatura: oktawa " + pr.octave : "Klawiatura wył."
+            icon: "keyboard"; active: pr.keysActive
+            tip: "Graj na klawiaturze komputera: A S D F G H J K — białe klawisze, W E T Y U — czarne, Z/X — oktawa niżej/wyżej"
+            onClicked: { pr.keysActive = !pr.keysActive; if (pr.keysActive) pr.forceActiveFocus(); }
+        }
+        Pill {
+            anchors.verticalCenter: parent.verticalCenter; height: 28
+            text: "Nagrywaj nuty"; icon: "mic"
+            active: pr.recNotes
+            tip: "Włącz, naciśnij Spację i graj na klawiaturze — nuty zapiszą się w siatce"
+            onClicked: { pr.recNotes = !pr.recNotes; pr.forceActiveFocus(); }
+        }
     }
 
     // ——— Klawiatura i siatka ———
@@ -161,7 +218,9 @@ Item {
                         required property int index
                         readonly property int midi: pr.highest - index
                         width: pr.keyW - 4; height: pr.rowH
-                        color: pr.black(midi) ? (Theme.dark ? "#2A2C33" : "#3A3D45") : (Theme.dark ? "#D8DAE0" : "white")
+                        color: pr.heldPitches.indexOf(midi) >= 0 || keyArea.pressed ? Theme.accent
+                             : pr.black(midi) ? (Theme.dark ? "#2A2C33" : "#3A3D45") : (Theme.dark ? "#D8DAE0" : "white")
+                        MouseArea { id: keyArea; anchors.fill: parent; onPressed: { Studio.previewNote(pr.track, key.midi); pr.forceActiveFocus(); } }
                         border.width: 1; border.color: Theme.dark ? Qt.rgba(0, 0, 0, 0.5) : Qt.rgba(0, 0, 0, 0.12)
                         Text {
                             visible: key.midi % 12 === 0 || Studio.inKey(key.midi) && key.midi % 12 === Studio.keyRoot
@@ -267,6 +326,7 @@ Item {
                 }
                 onPressed: (e) => {
                     if (!pr.pat) return;
+                    pr.forceActiveFocus();
                     const i = noteAt(e.x, e.y);
                     const p = JSON.parse(JSON.stringify(pr.pat));
                     if (e.button === Qt.RightButton) {
@@ -280,8 +340,10 @@ Item {
                         mode = e.x > (n.step + n.len) * pr.stepW - 7 ? "resize" : "move";
                         grabStep = stepAt(e.x) - n.step;
                         pr.noteLen = n.len;               // następne nuty takie same jak ta
+                        if (mode === "move") Studio.previewNote(pr.track, n.pitch);
                     } else {
                         p.notes.push({ step: stepAt(e.x), len: Math.min(pr.noteLen, pr.steps - stepAt(e.x)), pitch: pr.snapPitch(pitchAt(e.y)), vel: 0.85 });
+                        Studio.previewNote(pr.track, p.notes[p.notes.length - 1].pitch);
                         index = p.notes.length - 1;
                         mode = "resize";
                         pr.pat = p;
@@ -293,7 +355,9 @@ Item {
                     const n = p.notes[index];
                     if (mode === "move") {
                         n.step = Math.max(0, Math.min(pr.steps - n.len, stepAt(e.x) - grabStep));
-                        n.pitch = pr.snapPitch(pitchAt(e.y));
+                        const np = pr.snapPitch(pitchAt(e.y));
+                        if (np !== n.pitch) Studio.previewNote(pr.track, np);
+                        n.pitch = np;
                     } else {
                         n.len = Math.max(1, Math.min(pr.steps - n.step, stepAt(e.x) - n.step + 1));
                         pr.noteLen = n.len;
