@@ -543,6 +543,10 @@ Window {
         { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
+        { label: "Dodaj następne wystąpienie", shortcut: "Ctrl+D", action: "nextOccurrence", icon: "cursor" },
+        { label: "Zaznacz wszystkie wystąpienia", shortcut: "Ctrl+Shift+L", action: "allOccurrences", icon: "cursor" },
+        { label: "Dodaj kursor powyżej", shortcut: "Ctrl+Alt+↑", action: "cursorAbove", icon: "up" },
+        { label: "Dodaj kursor poniżej", shortcut: "Ctrl+Alt+↓", action: "cursorBelow", icon: "chevronDown" },
         { label: "Usuń wiersz", shortcut: "Ctrl+Shift+K", action: "deleteLine", icon: "trash" },
         { label: "Następna zmiana", shortcut: "Alt+F5", action: "nextChange", icon: "chevronDown" },
         { label: "Poprzednia zmiana", shortcut: "Shift+Alt+F5", action: "prevChange", icon: "up" },
@@ -605,6 +609,10 @@ Window {
         else if (a === "paste") { if (cur) cur.edit.paste(); }
         else if (a === "selectAll") { if (cur) cur.edit.selectAll(); }
         else if (a === "duplicate") { if (cur) cur.lines("duplicateDown"); }
+        else if (a === "nextOccurrence") { if (cur) cur.addNextOccurrence(); }
+        else if (a === "allOccurrences") { if (cur) cur.selectAllOccurrences(); }
+        else if (a === "cursorAbove") { if (cur) cur.addCursorVertical(-1); }
+        else if (a === "cursorBelow") { if (cur) cur.addCursorVertical(1); }
         else if (a === "deleteLine") { if (cur) cur.lines("deleteLine"); }
         else if (a === "nextChange") { if (cur) cur.nextChange(false); }
         else if (a === "prevChange") { if (cur) cur.nextChange(true); }
@@ -744,6 +752,10 @@ Window {
         else if (what === "commit") changesView.commitNow();
         else if (what === "push") Project.push();
         else if (what === "save") save(current);
+        else if (what === "ctrlD") { if (cur) cur.addNextOccurrence(); }
+        else if (what === "allOcc") { if (cur) cur.selectAllOccurrences(); }
+        else if (what === "cursorBelow") { if (cur) cur.addCursorVertical(1); }
+        else if (what === "end") { if (cur) cur.moveAll(c => cur.lineEndOf(c.p), false); }
         else if (what.startsWith("resolve:")) { if (cur) { const r = arg.split(","); cur.resolve(Number(r[0]) - 1, r[1]); } }
         else if (what.startsWith("branches:")) { palette.openBranches(arg.split(",")[0]); }
         else if (what.startsWith("newbranch:")) branchAction("checkout", arg, false, true);
@@ -1163,6 +1175,12 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
                     visible: !!win.cur
+                    StatusBtn {
+                        visible: !!win.cur && win.cur.cursorCount > 1
+                        icon: "cursor"
+                        text: !win.cur ? "" : win.cur.cursorCount + (win.cur.cursorCount % 10 >= 2 && win.cur.cursorCount % 10 <= 4 && (win.cur.cursorCount % 100 < 10 || win.cur.cursorCount % 100 >= 20) ? " kursory" : " kursorów")
+                        onClicked: win.cur.clearExtras()
+                    }
                     StatusBtn {
                         text: !win.cur ? "" : (win.cur.edit.selectedText ? "(zaznaczono " + Project.number(win.cur.edit.selectedText.length) + ")  " : "")
                                              + "Wiersz " + Project.number(win.cur.lineCol.y + 1) + ", kol. " + (win.cur.lineCol.x + 1)

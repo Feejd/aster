@@ -473,6 +473,11 @@ void Project::copyText(const QString &text) const
     QGuiApplication::clipboard()->setText(text);
 }
 
+QString Project::clipboardText() const
+{
+    return QGuiApplication::clipboard()->text();
+}
+
 // ——— Git ———
 
 QString Project::gitRelative(const QString &path) const

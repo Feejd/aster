@@ -41,4 +41,10 @@ public:
     Q_INVOKABLE QVariantList conflicts(QQuickTextDocument *doc) const;
     // choice: ours | theirs | both — zamienia blok zaczynający się w wierszu startLine
     Q_INVOKABLE bool resolveConflict(QQuickTextDocument *doc, int startLine, const QString &choice);
+    // Wiele kursorów: zakresy [{ a, b }] (a ≤ b) zamieniane na texts[i] jednym krokiem cofania;
+    // zwraca nowe kursory [{ p, i }] (i — numer zakresu; p — początek wstawienia + caretOffset, −1 — za wstawionym tekstem)
+    Q_INVOKABLE QVariantList multiEdit(QQuickTextDocument *doc, const QVariantList &ranges, const QStringList &texts, int caretOffset = -1);
+    // Następne wystąpienie tekstu od pozycji (z zawinięciem do początku); −1 — brak
+    Q_INVOKABLE int findNext(QQuickTextDocument *doc, const QString &needle, int from, bool wholeWord) const;
+    Q_INVOKABLE QVariantList findAll(QQuickTextDocument *doc, const QString &needle, bool wholeWord) const;
 };

@@ -8,6 +8,7 @@ import Aster.Code
 // Klawisze jak w VS Code: Tab/Shift+Tab, Alt+↑/↓, Shift+Alt+↑/↓, Ctrl+Shift+K, Ctrl+Enter, Home.
 // Serwer języka (Lsp): podpowiedzi przy pisaniu i Ctrl+Spacja, opis po najechaniu, Ctrl+klik — definicja,
 // podkreślone błędy i kropki przy numerach wierszy. Nawiasy i cudzysłowy domykają się same.
+// Wiele kursorów: Ctrl+D (następne wystąpienie), Ctrl+Shift+L (wszystkie), Alt+klik, Ctrl+Alt+↑/↓, Esc — jeden.
 Item {
     id: page
     property string path
@@ -38,6 +39,139 @@ Item {
     signal edited()
     signal definitionRequested(int seq)
     signal quickFixRequested()
+    // ——— Wiele kursorów ———
+    // TextEdit ma jeden kursor (główny); dodatkowe są tu: [{ a: kotwica, p: pozycja }], rysowane i obsługiwane ręcznie
+    property var extras: []
+    readonly property int cursorCount: extras.length + 1
+    property bool occurrenceWord: false            // Ctrl+D zaczęło od słowa — szukamy całych słów
+    function primaryCursor() {
+        const p = te.cursorPosition;
+        return { a: p === te.selectionStart ? te.selectionEnd : te.selectionStart, p: p };
+    }
+    function allCursors() { return [primaryCursor()].concat(extras); }
+    function setCursors(list) {
+        if (!list.length) return;
+        const pr = list[0];
+        te.cursorPosition = pr.a;
+        if (pr.p !== pr.a) te.moveCursorSelection(pr.p, TextEdit.SelectCharacters);
+        const seen = {}, out = [];
+        seen[pr.a + ":" + pr.p] = true;
+        for (let i = 1; i < list.length; ++i) {
+            const k = list[i].a + ":" + list[i].p;
+            if (!seen[k]) { seen[k] = true; out.push(list[i]); }
+        }
+        extras = out;
+    }
+    function clearExtras() { if (extras.length) extras = []; }
+    function addCursorAt(pos) { if (pos !== te.cursorPosition) extras = extras.concat([{ a: pos, p: pos }]); }
+    // Zamiana zaznaczeń (albo zakresów z rangeFn) przy wszystkich kursorach — jeden krok cofania
+    function multiReplace(text, caretOffset, rangeFn) {
+        const cs = allCursors();
+        const ranges = cs.map(c => rangeFn ? rangeFn(c) : { a: Math.min(c.a, c.p), b: Math.max(c.a, c.p) });
+        const texts = cs.map((c, i) => typeof text === "function" ? text(c, i) : text);
+        const res = TextOps.multiEdit(te.textDocument, ranges, texts, caretOffset === undefined ? -1 : caretOffset);
+        if (!res.length) return;
+        const prim = res.find(r => r.i === 0) || res[0];
+        setCursors([{ a: prim.p, p: prim.p }].concat(res.filter(r => r !== prim).map(r => ({ a: r.p, p: r.p }))));
+    }
+    function moveAll(fn, extend) {
+        setCursors(allCursors().map(c => { const np = fn(c); return { a: extend ? c.a : np, p: np }; }));
+    }
+    function lineStartOf(pos) { return TextOps.positionOfLine(te.textDocument, TextOps.lineColumn(te.textDocument, pos).y); }
+    function lineEndOf(pos) { const l = TextOps.lineColumn(te.textDocument, pos).y; return TextOps.positionOfLine(te.textDocument, l) + TextOps.lineText(te.textDocument, l).length; }
+    function verticalPos(pos, dir) {
+        const r = te.positionToRectangle(pos);
+        return te.positionAt(r.x + 1, dir < 0 ? r.y - r.height / 2 : r.y + r.height * 1.5);
+    }
+    // Ctrl+D: pierwsze naciśnięcie zaznacza słowo, kolejne dodają następne wystąpienie
+    function addNextOccurrence() {
+        if (te.selectedText === "") {
+            const w = TextOps.wordAt(te.textDocument, te.cursorPosition);
+            if (!w.text) return;
+            te.select(w.start, w.end);
+            occurrenceWord = true;
+            return;
+        }
+        const needle = te.selectedText;
+        if (needle.indexOf("\u2029") >= 0) return;
+        const cs = allCursors();
+        const last = Math.max.apply(null, cs.map(c => Math.max(c.a, c.p)));
+        const next = TextOps.findNext(te.textDocument, needle, last, occurrenceWord);
+        if (next < 0 || cs.some(c => Math.min(c.a, c.p) === next)) return;
+        extras = extras.concat([{ a: next, p: next + needle.length }]);
+        const r = te.positionToRectangle(next);
+        if (r.y < flick.contentY || r.y > flick.contentY + flick.height - r.height)
+            flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, r.y - flick.height / 3));
+    }
+    function selectAllOccurrences() {
+        if (te.selectedText === "") {
+            const w = TextOps.wordAt(te.textDocument, te.cursorPosition);
+            if (!w.text) return;
+            te.select(w.start, w.end);
+            occurrenceWord = true;
+        }
+        const needle = te.selectedText;
+        if (!needle || needle.indexOf("\u2029") >= 0) return;
+        const all = TextOps.findAll(te.textDocument, needle, occurrenceWord);
+        const cur = te.selectionStart;
+        extras = all.filter(p => p !== cur).map(p => ({ a: p, p: p + needle.length }));
+    }
+    function addCursorVertical(dir) {
+        const cs = allCursors();
+        const edge = cs.reduce((m, c) => dir < 0 ? (c.p < m.p ? c : m) : (c.p > m.p ? c : m), cs[0]);
+        const lc = TextOps.lineColumn(te.textDocument, edge.p);
+        const line = lc.y + dir;
+        if (line < 0 || line >= TextOps.lineCount(te.textDocument)) return;
+        const pos = TextOps.positionOfLine(te.textDocument, line) + Math.min(lc.x, TextOps.lineText(te.textDocument, line).length);
+        extras = extras.concat([{ a: pos, p: pos }]);
+    }
+    // Klawisze przy kilku kursorach; true — obsłużone
+    function multiKey(e) {
+        const ctrl = e.modifiers & Qt.ControlModifier, shift = e.modifiers & Qt.ShiftModifier, alt = e.modifiers & Qt.AltModifier;
+        const k = e.key;
+        if (k === Qt.Key_Escape) { clearExtras(); return true; }
+        if (ctrl && (k === Qt.Key_Z || k === Qt.Key_Y || k === Qt.Key_A)) { clearExtras(); return false; }
+        if (!ctrl && !alt) {
+            if (k === Qt.Key_Left) { moveAll(c => c.a !== c.p && !shift ? Math.min(c.a, c.p) : Math.max(0, c.p - 1), shift); return true; }
+            if (k === Qt.Key_Right) { moveAll(c => c.a !== c.p && !shift ? Math.max(c.a, c.p) : Math.min(te.length, c.p + 1), shift); return true; }
+            if (k === Qt.Key_Home) { moveAll(c => lineStartOf(c.p), shift); return true; }
+            if (k === Qt.Key_End) { moveAll(c => lineEndOf(c.p), shift); return true; }
+            if (k === Qt.Key_Up || k === Qt.Key_Down) { moveAll(c => verticalPos(c.p, k === Qt.Key_Up ? -1 : 1), shift); return true; }
+            if (k === Qt.Key_Backspace) { multiReplace("", -1, c => c.a !== c.p ? { a: Math.min(c.a, c.p), b: Math.max(c.a, c.p) } : { a: Math.max(0, c.p - 1), b: c.p }); return true; }
+            if (k === Qt.Key_Delete) { multiReplace("", -1, c => c.a !== c.p ? { a: Math.min(c.a, c.p), b: Math.max(c.a, c.p) } : { a: c.p, b: Math.min(te.length, c.p + 1) }); return true; }
+            if (k === Qt.Key_Return || k === Qt.Key_Enter) {
+                multiReplace(c => "\n" + TextOps.lineText(te.textDocument, TextOps.lineColumn(te.textDocument, c.p).y).match(/^[ \t]*/)[0]);
+                return true;
+            }
+            if (k === Qt.Key_Tab) { multiReplace(indentUnit); return true; }
+        }
+        // Schowek: każde zaznaczenie w osobnym wierszu; wklejanie rozdziela wiersze po kursorach, gdy ich liczba się zgadza
+        const ordered = () => allCursors().map((c, i) => ({ c: c, i: i })).sort((x, y) => Math.min(x.c.a, x.c.p) - Math.min(y.c.a, y.c.p));
+        if (ctrl && !alt && (k === Qt.Key_C || k === Qt.Key_X)) {
+            Project.copyText(ordered().map(o => te.getText(Math.min(o.c.a, o.c.p), Math.max(o.c.a, o.c.p))).join("\n"));
+            if (k === Qt.Key_X) multiReplace("");
+            return true;
+        }
+        if (ctrl && !alt && k === Qt.Key_V) {
+            const t = Project.clipboardText(), lines = t.split("\n");
+            if (lines.length === cursorCount) {
+                const rank = {};
+                ordered().forEach((o, r) => rank[o.i] = r);
+                multiReplace((c, i) => lines[rank[i]]);
+            } else {
+                multiReplace(t);
+            }
+            return true;
+        }
+        if (!ctrl && e.text.length === 1 && e.text >= " ") {
+            const pairs = { "(": ")", "[": "]", "{": "}", "\"": "\"", "'": "'", "`": "`" };
+            if (pairs[e.text] && allCursors().every(c => c.a === c.p)) multiReplace(e.text + pairs[e.text], 1);
+            else multiReplace(e.text);
+            return true;
+        }
+        return false;
+    }
+
     // Konflikty łączenia i autor wierszy (git blame)
     property var conflicts: []
     property bool showBlame: true
@@ -106,6 +240,7 @@ Item {
     }
     // Zaznacza fragment i pokazuje go w jednej trzeciej wysokości (wyniki szukania, przejście do wiersza)
     function reveal(start, end) {
+        clearExtras();
         te.select(start, end);
         const r = te.positionToRectangle(start);
         if (r.y < flick.contentY + 20 || r.y > flick.contentY + flick.height - 40)
@@ -213,6 +348,7 @@ Item {
     }
     // Do testów (ASTER_OPEN keys:…) — znak jak z klawiatury: domykanie nawiasów, potem zwykłe wstawienie
     function typeKey(ch) {
+        if (extras.length) { multiReplace(ch); return; }
         if (!autoPair(ch)) te.insert(te.cursorPosition, ch);
     }
     // Do testów (ASTER_OPEN hover:WIERSZ,KOLUMNA) — opis bez prawdziwej myszy
@@ -445,6 +581,31 @@ Item {
             }
         }
 
+        // Zaznaczenia dodatkowych kursorów
+        Repeater {
+            model: {
+                te.length; te.contentWidth;
+                const rects = [];
+                for (const c of page.extras) {
+                    const a = Math.min(c.a, c.p), b = Math.max(c.a, c.p);
+                    if (a === b) continue;
+                    const la = TextOps.lineColumn(te.textDocument, a).y, lb = TextOps.lineColumn(te.textDocument, b).y;
+                    for (let l = la; l <= lb && rects.length < 1000; ++l) {
+                        const ls = TextOps.positionOfLine(te.textDocument, l), le = ls + TextOps.lineText(te.textDocument, l).length;
+                        const r1 = te.positionToRectangle(l === la ? a : ls), r2 = te.positionToRectangle(l === lb ? b : le);
+                        rects.push({ x: r1.x, y: r1.y, w: Math.max(2, r2.x - r1.x + (l < lb ? fm.averageCharacterWidth * 0.6 : 0)), h: r1.height });
+                    }
+                }
+                return rects;
+            }
+            delegate: Rectangle {
+                required property var modelData
+                x: te.x + modelData.x; y: te.y + modelData.y
+                width: modelData.w; height: modelData.h
+                color: Theme.accentSoft
+            }
+        }
+
         TextEdit {
             id: te
             width: page.wrap ? flick.width : Math.max(flick.width, implicitWidth)
@@ -491,6 +652,16 @@ Item {
                     page.contextMenuRequested(te, ev.position.x, ev.position.y);
                 }
             }
+            // Alt+klik — dodatkowy kursor; zwykły klik — z powrotem jeden kursor
+            TapHandler {
+                acceptedModifiers: Qt.AltModifier
+                gesturePolicy: TapHandler.ReleaseWithinBounds
+                onTapped: (ev) => page.addCursorAt(te.positionAt(ev.position.x, ev.position.y))
+            }
+            TapHandler {
+                acceptedModifiers: Qt.NoModifier
+                onPressedChanged: if (pressed) page.clearExtras()
+            }
             // Ctrl+klik — przejdź do definicji
             TapHandler {
                 acceptedModifiers: Qt.ControlModifier
@@ -498,6 +669,19 @@ Item {
             }
 
             Keys.onPressed: (e) => page.handleKey(e)
+        }
+
+        // Dodatkowe kursory (bez migania)
+        Repeater {
+            model: page.extras
+            delegate: Rectangle {
+                required property var modelData
+                readonly property rect r: { te.length; te.contentWidth; return te.positionToRectangle(modelData.p); }
+                visible: te.activeFocus
+                x: te.x + r.x; y: te.y + r.y
+                width: 2; height: r.height
+                color: Theme.text
+            }
         }
 
         // Żarówka przy wierszu z problemem — szybkie poprawki (Ctrl+.)
@@ -515,7 +699,7 @@ Item {
         // Autor bieżącego wiersza (git blame) — szary dopisek za końcem wiersza
         Text {
             readonly property rect endRect: { te.length; page.lineCol; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
-            visible: page.blameText !== "" && te.activeFocus && te.selectedText === "" && !page.conflicts.length
+            visible: page.blameText !== "" && te.activeFocus && te.selectedText === "" && !page.conflicts.length && !page.extras.length
             x: te.x + endRect.x + (page.lspOn && page.lineHasProblem ? 48 : 28)
             y: te.y + endRect.y + (endRect.height - height) / 2
             text: page.blameText
@@ -551,6 +735,10 @@ Item {
             if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Tab) { completion.accept(); e.accepted = true; return; }
             if (e.key === Qt.Key_Escape) { completion.hide(); e.accepted = true; return; }
         }
+        if (ctrl && !shift && !alt && e.key === Qt.Key_D) { addNextOccurrence(); e.accepted = true; return; }
+        if (ctrl && shift && e.key === Qt.Key_L) { selectAllOccurrences(); e.accepted = true; return; }
+        if (ctrl && alt && (e.key === Qt.Key_Up || e.key === Qt.Key_Down)) { addCursorVertical(e.key === Qt.Key_Up ? -1 : 1); e.accepted = true; return; }
+        if (extras.length && multiKey(e)) { e.accepted = true; return; }
         if (ctrl && e.key === Qt.Key_Space) { requestCompletion(); e.accepted = true; return; }
         if (!ctrl && !alt && e.text.length === 1 && autoPair(e.text)) {
             const pc = e.text;

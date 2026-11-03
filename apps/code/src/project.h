@@ -104,6 +104,7 @@ public:
     Q_INVOKABLE void watch(const QStringList &paths);
     Q_INVOKABLE void showInFiles(const QString &path) const;
     Q_INVOKABLE void copyText(const QString &text) const;
+    Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE QString number(int n) const;                     // „12 345”
 
     // Git

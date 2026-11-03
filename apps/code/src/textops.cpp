@@ -428,3 +428,80 @@ bool TextOps::resolveConflict(QQuickTextDocument *doc, int startLine, const QStr
     }
     return false;
 }
+
+QVariantList TextOps::multiEdit(QQuickTextDocument *doc, const QVariantList &ranges, const QStringList &texts, int caretOffset)
+{
+    if (!doc || !doc->textDocument() || ranges.isEmpty())
+        return {};
+    QTextDocument *d = doc->textDocument();
+    const int maxPos = d->characterCount() - 1;
+    struct R { int a, b, i; };
+    QList<R> list;
+    for (int i = 0; i < ranges.size(); ++i) {
+        const QVariantMap m = ranges.at(i).toMap();
+        const int a = std::clamp(m.value(QStringLiteral("a")).toInt(), 0, maxPos), b = std::clamp(m.value(QStringLiteral("b")).toInt(), 0, maxPos);
+        list.append({std::min(a, b), std::max(a, b), i});
+    }
+    std::sort(list.begin(), list.end(), [](const R &x, const R &y) { return x.a < y.a; });
+    // Nakładające się zakresy (dwa kursory w tym samym miejscu) łączą się w jeden
+    QList<R> merged;
+    for (const R &r : std::as_const(list)) {
+        if (!merged.isEmpty() && r.a < merged.last().b)
+            merged.last().b = std::max(merged.last().b, r.b);
+        else if (!merged.isEmpty() && r.a == merged.last().a && r.b == merged.last().b)
+            continue;
+        else
+            merged.append(r);
+    }
+    // Nowe pozycje — po kolei, z przesunięciem od wcześniejszych zmian
+    QVariantList carets;
+    int delta = 0;
+    for (const R &r : std::as_const(merged)) {
+        const QString &t = texts.value(r.i, texts.value(0));
+        carets << QVariantMap{{QStringLiteral("p"), r.a + delta + (caretOffset < 0 ? int(t.size()) : std::min(caretOffset, int(t.size())))},
+                              {QStringLiteral("i"), r.i}};
+        delta += int(t.size()) - (r.b - r.a);
+    }
+    QTextCursor c(d);
+    c.beginEditBlock();
+    for (int k = int(merged.size()) - 1; k >= 0; --k) {
+        const R &r = merged.at(k);
+        c.setPosition(r.a);
+        c.setPosition(r.b, QTextCursor::KeepAnchor);
+        c.insertText(texts.value(r.i, texts.value(0)));
+    }
+    c.endEditBlock();
+    return carets;
+}
+
+int TextOps::findNext(QQuickTextDocument *doc, const QString &needle, int from, bool wholeWord) const
+{
+    if (!doc || !doc->textDocument() || needle.isEmpty())
+        return -1;
+    const QString text = doc->textDocument()->toPlainText();
+    const auto isWord = [](QChar ch) { return ch.isLetterOrNumber() || ch == QLatin1Char('_'); };
+    for (int pass = 0; pass < 2; ++pass) {
+        int i = int(text.indexOf(needle, pass == 0 ? from : 0));
+        while (i >= 0 && (pass == 0 || i < from)) {
+            const bool ok = !wholeWord || ((i == 0 || !isWord(text.at(i - 1))) && (i + needle.size() >= text.size() || !isWord(text.at(i + needle.size()))));
+            if (ok)
+                return i;
+            i = int(text.indexOf(needle, i + 1));
+        }
+    }
+    return -1;
+}
+
+QVariantList TextOps::findAll(QQuickTextDocument *doc, const QString &needle, bool wholeWord) const
+{
+    QVariantList out;
+    if (!doc || !doc->textDocument() || needle.isEmpty())
+        return out;
+    const QString text = doc->textDocument()->toPlainText();
+    const auto isWord = [](QChar ch) { return ch.isLetterOrNumber() || ch == QLatin1Char('_'); };
+    for (int i = int(text.indexOf(needle)); i >= 0 && out.size() < 5000; i = int(text.indexOf(needle, i + needle.size()))) {
+        if (!wholeWord || ((i == 0 || !isWord(text.at(i - 1))) && (i + needle.size() >= text.size() || !isWord(text.at(i + needle.size())))))
+            out << i;
+    }
+    return out;
+}
