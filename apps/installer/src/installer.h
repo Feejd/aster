@@ -83,6 +83,7 @@ private:
     qreal m_progress = 0;
     qreal m_cap = 0;            // do ilu postęp może sam dorastać przed następnym krokiem skryptu
     QTimer m_creep;
+    QTimer m_logTimer;          // logChanged najwyżej co 0,5 s
     QString m_stage, m_log, m_error;
     QProcess *m_proc = nullptr;
     QTimer m_fake;

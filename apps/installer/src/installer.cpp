@@ -91,6 +91,9 @@ Installer::Installer(QObject *parent)
     m_fake.setInterval(120);
     connect(&m_fake, &QTimer::timeout, this, &Installer::simulate);
     // Kopiowanie trwa minutami bez komunikatów — pasek rośnie powoli (coraz wolniej) do progu bieżącego kroku
+    m_logTimer.setSingleShot(true);
+    m_logTimer.setInterval(500);
+    connect(&m_logTimer, &QTimer::timeout, this, &Installer::logChanged);
     m_creep.setInterval(1000);
     connect(&m_creep, &QTimer::timeout, this, [this] {
         if (m_progress < m_cap) {
@@ -481,7 +484,12 @@ void Installer::install(const QVariantMap &s)
 // Skrypt pisze „@progress 0.42”, „@stage Tekst” i „@error Tekst”; reszta trafia do szczegółów
 void Installer::handleLine(const QString &text)
 {
-    for (const QString &line : text.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+    // Paski postępu nadpisują wiersz znakiem \r — liczy się tylko ostatnia wersja wiersza
+    for (QString line : text.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        if (line.contains(QLatin1Char('\r')))
+            line = line.section(QLatin1Char('\r'), -1).trimmed();
+        if (line.isEmpty())
+            continue;
         if (line.startsWith(QLatin1String("@progress "))) {
             const QStringList v = line.mid(10).split(QLatin1Char(' '), Qt::SkipEmptyParts);
             const qreal now = qBound(0.0, v.value(0).toDouble(), 1.0);
@@ -494,10 +502,13 @@ void Installer::handleLine(const QString &text)
         } else if (line.startsWith(QLatin1String("@error "))) {
             m_error = line.mid(7);
         } else {
+            // Log bootc ma tysiące wierszy — trzymamy koniec i powiadamiamy co 0,5 s, nie po każdym wierszu
+            // (inaczej przeliczanie tekstu w oknie zajmuje program na długie minuty)
             m_log += line + QLatin1Char('\n');
-            if (m_log.size() > 200000)
-                m_log = m_log.right(150000);
-            Q_EMIT logChanged();
+            if (m_log.size() > 60000)
+                m_log = m_log.right(40000);
+            if (!m_logTimer.isActive())
+                m_logTimer.start();
         }
     }
 }

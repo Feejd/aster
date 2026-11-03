@@ -417,7 +417,7 @@ Window {
                         id: logText
                         width: parent.width
                         wrapMode: Text.WrapAnywhere
-                        text: Installer.log
+                        text: logView.visible ? Installer.log : ""   // ukryty log nie jest przeliczany
                         color: Qt.rgba(1, 1, 1, 0.8); font.family: "JetBrains Mono"; font.pixelSize: 11
                     }
                 }
