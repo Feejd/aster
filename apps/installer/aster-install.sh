@@ -90,6 +90,9 @@ if ls /etc/NetworkManager/system-connections/*.nmconnection >/dev/null 2>&1; the
     chmod 600 "$etc"/NetworkManager/system-connections/*.nmconnection
 fi
 
+# Kreator pierwszego uruchomienia KDE (plasma-setup) — konto zakłada już Aster, więc oznaczamy go jako wykonany
+touch "$etc/plasma-setup-done"
+
 # Konto i wygląd — przy pierwszym starcie (aster-firstboot.service); plik tylko dla roota, jest w nim skrót hasła
 mkdir -p "$etc/aster"
 grep -v '^DISK=' "$SETTINGS" > "$etc/aster/firstboot.env"
@@ -99,7 +102,7 @@ chmod 600 "$etc/aster/firstboot.env"
 contexts="$etc/selinux/targeted/contexts/files/file_contexts"
 if command -v setfiles >/dev/null && [ -f "$contexts" ]; then
     setfiles -r "$deploy" "$contexts" "$etc/hostname" "$etc/locale.conf" "$etc/vconsole.conf" "$etc/X11" \
-        "$etc/localtime" "$etc/aster" "$etc/NetworkManager/system-connections" 2>/dev/null || true
+        "$etc/localtime" "$etc/aster" "$etc/plasma-setup-done" "$etc/NetworkManager/system-connections" 2>/dev/null || true
 fi
 
 sync

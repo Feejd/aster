@@ -11,7 +11,7 @@ set -e
 REPLACED="dolphin dolphin-plugins konsole kate kate-plugins kwrite okular gwenview elisa-player dragon haruna
 kamoso skanlite kcalc ark filelight kde-partitionmanager kcharselect
 plasma-discover plasma-discover-* plasma-systemmonitor kinfocenter ksystemlog kjournald kwalletmanager5 kfind
-kmail kontact akregator korganizer kaddressbook kdepim kdepim-* khelpcenter plasma-welcome plasma-welcome-fedora
+kmail kontact akregator korganizer kaddressbook kdepim kdepim-* khelpcenter plasma-welcome plasma-welcome-fedora plasma-setup
 plasma-drkonqi kmahjongg kmines kpat ksudoku kolourpaint krdc krfb kmousetool kmag kmouth
 pim-sieve-editor pim-data-exporter akonadi-import-wizard akonadiconsole kmail-account-wizard grantlee-editor
 kleopatra kgpg neochat qrca skanpage kdebugsettings mediawriter gnome-abrt abrt-gui abrt-desktop setroubleshoot
