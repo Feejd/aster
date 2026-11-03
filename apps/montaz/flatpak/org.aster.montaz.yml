@@ -35,7 +35,7 @@ modules:
         sha256: 90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37
   - name: mlt
     buildsystem: cmake-ninja
-    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DGPL=ON, -DGPL3=ON, -DBUILD_TESTING=OFF, -DSWIG_PYTHON=OFF,
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DCMAKE_INSTALL_LIBDIR=lib, -DGPL=ON, -DGPL3=ON, -DBUILD_TESTING=OFF, -DSWIG_PYTHON=OFF,
                   -DMOD_QT=OFF, -DMOD_QT6=ON, -DMOD_GLAXNIMATE=OFF, -DMOD_GLAXNIMATE_QT6=OFF, -DMOD_OPENCV=OFF,
                   -DMOD_MOVIT=OFF, -DMOD_RTAUDIO=OFF, -DMOD_SOX=OFF, -DMOD_VIDSTAB=OFF, -DMOD_JACKRACK=OFF,
                   -DMOD_RUBBERBAND=OFF, -DMOD_FREI0R=OFF, -DMOD_SPATIALAUDIO=OFF, -DMOD_XINE=OFF, -DMOD_GDK=OFF,
@@ -46,7 +46,7 @@ modules:
         tag: v7.42.0
   - name: whisper-cpp
     buildsystem: cmake-ninja
-    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DWHISPER_BUILD_EXAMPLES=OFF, -DWHISPER_BUILD_TESTS=OFF,
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DCMAKE_INSTALL_LIBDIR=lib, -DWHISPER_BUILD_EXAMPLES=OFF, -DWHISPER_BUILD_TESTS=OFF,
                   -DWHISPER_BUILD_SERVER=OFF, -DGGML_NATIVE=OFF]
     sources:
       - type: git
