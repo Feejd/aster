@@ -187,9 +187,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       od miejsca głowicy przy odtwarzanym (wyciszonym) filmie, zapis WAV (QAudioSource) do nagrań projektu, nagranie
       na ścieżce dźwięku jako „Lektor N”; automatyczne przyciszanie muzyki i dźwięku filmu pod lektorem (−14 dB,
       można wyłączyć); muzyka i lektor nachodzące na siebie w osobnych wierszach osi
-- [ ] Montaż, dalej: odszumianie lektora (rnnoise w MLT), efekty głosu, naklejki animowane (GIF/WebP, Lottie),
+- [x] Montaż 9: odszumianie głosu — dla klipu z dźwiękiem, muzyki i lektora: „Lekkie” (RNNoise, 90%) albo „Mocne”
+      (RNNoise 100% i bramka — cisza między słowami) oraz „Wyraźny głos” (bez dudnienia, pasmo 3 kHz, kompresor);
+      nagranie lektora od razu lekko odszumione i wyraźne; afftdn z ffmpeg w MLT nie działa (zmienia liczbę próbek)
+- [ ] Montaż, dalej: efekty głosu, naklejki animowane (GIF/WebP, Lottie),
       własne naklejki użytkownika z wycinaniem tła,
-      klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
+      klatki kluczowe położenia i skali, cofanie klipu i stop-klatka,
       płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster

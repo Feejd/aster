@@ -225,6 +225,7 @@ Item {
                     value: insp.info.volume ?? 1
                     onMoved: (v) => Project.setValue(insp.selected, "volume", v)
                 }
+                VoiceTools { visible: insp.info.audio ?? false }
 
                 Label { text: "Prędkość"; visible: insp.info.kind !== "image" }
                 Chips {
@@ -409,6 +410,7 @@ Item {
                     current: insp.info.fadeOut ?? true
                     onPicked: (v) => Project.setValue(insp.selected, "fadeOut", v)
                 }
+                VoiceTools {}
                 InfoRow { label: "Długość"; value: Project.time(insp.info.length ?? 0) }
             }
 
@@ -565,6 +567,31 @@ Item {
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: seg.picked(segItem.modelData.id) }
                 }
             }
+        }
+    }
+
+    // Głos: odszumianie i „wyraźny głos” (klip z dźwiękiem, muzyka, lektor)
+    component VoiceTools: Column {
+        width: parent ? parent.width : 0
+        spacing: 10
+        Label { text: "Odszumianie" }
+        Segmented {
+            model: [{ id: "0", name: "Wyłączone" }, { id: "1", name: "Lekkie" }, { id: "2", name: "Mocne" }]
+            current: String(insp.info.denoise ?? 0)
+            onPicked: (v) => Project.setValue(insp.selected, "denoise", Number(v))
+        }
+        Toggle {
+            label: "Wyraźny głos"
+            on: insp.info.clearVoice ?? false
+            onToggled: Project.setValue(insp.selected, "clearVoice", !on)
+        }
+        Text {
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: (insp.info.denoise ?? 0) === 2 ? "Usuwa szum, wiatr, wentylator i gwar w tle. Muzyka w tle też zniknie — zostaje sam głos."
+                : (insp.info.denoise ?? 0) === 1 ? "Ścisza szum i hałas w tle, a głos zostaje naturalny."
+                : "Szum w nagraniu? Włącz odszumianie — program zostawi sam głos."
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.15
         }
     }
 

@@ -126,6 +126,8 @@ public:
     // Filtry MLT „wyglądu” klipu: [(usługa, [(właściwość, wartość)])] — wspólne dla filmu i miniatur
     using FilterList = QList<QPair<QString, QList<QPair<QString, QString>>>>;
     static FilterList lookFilters(const QString &look, double brightness = 0, double contrast = 1, double saturation = 1);
+    // Filtry dźwięku mowy: odszumianie (RNNoise, przy mocnym także szum stały) i „wyraźny głos”
+    static FilterList voiceFilters(int denoise, bool clearVoice);
 
 Q_SIGNALS:
     void changed();
@@ -142,6 +144,8 @@ private:
         int in = 0, out = 0;           // klatki źródła (30 kl./s)
         double speed = 1.0;
         double volume = 1.0;
+        int denoise = 0;               // odszumianie dźwięku: 0 — wył., 1 — lekkie, 2 — mocne
+        bool clearVoice = false;       // „wyraźny głos”: bez dudnienia, wyrównana głośność
         bool fill = true;              // wypełnij kadr (przytnij) zamiast pasów
         bool blurBg = false;           // zmieść całość na rozmytym tle z tego samego klipu
         bool flip = false;             // odbicie lustrzane
@@ -173,6 +177,8 @@ private:
         double volume = 0.8;
         bool fadeOut = true;
         bool voice = false;             // nagranie lektora (pod nim muzyka i film się przyciszają)
+        int denoise = 0;                // jak w klipie
+        bool clearVoice = false;
     };
     struct Overlay {
         QString id, path, kind, name;
