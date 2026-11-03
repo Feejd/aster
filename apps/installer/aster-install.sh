@@ -75,6 +75,14 @@ fi
 conf=/run/aster-storage.conf
 printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n[storage.options]\nadditionalimagestores = ["%s"]\n' "$STORE" > "$conf"
 export CONTAINERS_STORAGE_CONF="$conf"
+# bootc nie podaje postępu kopiowania (trwa kilka minut) — liczymy go z tego, ile już leży na dysku
+size_mib=$(( $(podman image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null || echo 8000000000) / 1048576 ))
+while sleep 3; do
+    used=$(df -m --output=used "$TARGET" 2>/dev/null | tail -n1 | tr -dc 0-9)
+    awk -v u="${used:-0}" -v s="$size_mib" 'BEGIN { p = 0.08 + 0.52 * u / s; if (p > 0.6) p = 0.6; printf "@progress %.3f 0.6\n", p }'
+done &
+monitor=$!
+trap 'kill $monitor 2>/dev/null; umount -R "$TARGET" "$TMPDIR_HOST" 2>/dev/null' EXIT
 # bootc działa z wnętrza kontenera z obrazem Aster (tak wymaga „bootc install”); obraz leży w magazynie
 # kontenerów na nośniku (tools/build-iso.sh), więc nic nie jest pobierane z internetu
 podman run --rm --privileged --pid=host --security-opt label=type:unconfined_t \
@@ -94,6 +102,7 @@ while IFS= read -r line; do
         *"Installation complete"*)    progress 0.88 0.9 ;;
     esac
 done || fail "Nie udało się skopiować systemu na dysk."
+kill "$monitor" 2>/dev/null
 
 # ——— 3. Ustawienia ———
 stage "Zapisywanie Twoich ustawień…"

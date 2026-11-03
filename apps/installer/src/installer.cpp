@@ -494,7 +494,8 @@ void Installer::handleLine(const QString &text)
             const QStringList v = line.mid(10).split(QLatin1Char(' '), Qt::SkipEmptyParts);
             const qreal now = qBound(0.0, v.value(0).toDouble(), 1.0);
             m_progress = qMax(m_progress, now);
-            m_cap = v.size() > 1 ? qBound(now, v.at(1).toDouble(), 1.0) : now;
+            // Próg tylko rośnie — pomiar zapisu na dysk może się spóźnić względem następnego kroku
+            m_cap = qMax(m_cap, v.size() > 1 ? qBound(now, v.at(1).toDouble(), 1.0) : now);
             Q_EMIT progressChanged();
         } else if (line.startsWith(QLatin1String("@stage "))) {
             m_stage = line.mid(7);

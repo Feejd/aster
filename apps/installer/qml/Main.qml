@@ -119,14 +119,20 @@ Window {
         asynchronous: true
         visible: !win.shaders
     }
-    MultiEffect {
+    // Rozmycie liczone raz i trzymane jako tekstura — bez tego każda klatka animacji (pasek postępu)
+    // liczy je od nowa, a bez karty graficznej (maszyna wirtualna) robi to procesor
+    Item {
         anchors.fill: parent
-        source: wall
         visible: win.shaders
-        blurEnabled: true
-        blur: 1
-        blurMax: 64
-        saturation: 0.15
+        layer.enabled: true
+        MultiEffect {
+            anchors.fill: parent
+            source: wall
+            blurEnabled: true
+            blur: 1
+            blurMax: 64
+            saturation: 0.15
+        }
     }
     // Przyciemnienie (mocniejsze na ekranie instalacji — biały tekst na jasnej tapecie)
     Rectangle {
@@ -315,10 +321,9 @@ Window {
                     visible: Installer.state === "installing"
                     d: Icons.aster
                     size: 44; stroke: 2.4; color: "white"
-                    RotationAnimation on rotation {
-                        running: Installer.state === "installing"; loops: Animation.Infinite
-                        from: 0; to: 360; duration: 9000
-                    }
+                    // Obraca się razem z postępem, nie w kółko — ciągła animacja zajmowała procesor potrzebny instalacji
+                    rotation: Installer.progress * 720
+                    Behavior on rotation { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
                 }
                 Icon {
                     anchors.centerIn: parent
