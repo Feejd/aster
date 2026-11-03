@@ -6,6 +6,7 @@ import Aster.Code
 // Podgląd różnic jednego pliku (git diff) nad edytorem: numery wierszy starej i nowej wersji,
 // dodane na zielono, usunięte na czerwono. Esc albo × zamyka; „Dodaj” / „Wycofaj” — cały plik,
 // przyciski przy nagłówku fragmentu — tylko ten fragment (dodaj, wycofaj, odrzuć).
+// Tryb zatwierdzenia (z historii): zmiany pliku w jednym zatwierdzeniu i „Przywróć tę wersję”.
 Rectangle {
     id: dv
     property bool shown: false
@@ -16,6 +17,10 @@ Rectangle {
     property real fontSize: 13
     signal openFile(string path)
     signal discardHunk(string path, int index)
+    signal restoreVersion(string path, string hash, string rel)
+    property string commit: ""                  // pusty — zmiany robocze; inaczej hash zatwierdzenia
+    property string commitRel: ""
+    property string commitTitle: ""
 
     visible: shown
     color: Theme.dark ? "#090A0D" : "#FFFFFF"
@@ -23,14 +28,24 @@ Rectangle {
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: (w) => w.accepted = true }
 
     function open(p, isStaged) {
+        commit = "";
         path = p;
         staged = isStaged;
         reload();
         shown = true;
         list.positionViewAtBeginning();
     }
+    function openCommit(p, rel, hash, title) {
+        commit = hash;
+        commitRel = rel;
+        commitTitle = title;
+        path = p;
+        rows = Project.commitDiff(hash, rel);
+        shown = true;
+        list.positionViewAtBeginning();
+    }
     function close() { shown = false; }
-    function reload() { rows = Project.diff(path, staged); }
+    function reload() { if (!commit) rows = Project.diff(path, staged); }
 
     // Po dodaniu / wycofaniu plik może zniknąć z tej strony różnic
     Connections {
@@ -50,12 +65,12 @@ Rectangle {
             width: parent.width - 42 - btns.width - 20
             Text {
                 width: parent.width; elide: Text.ElideMiddle
-                text: Project.fileName(dv.path) + "  —  " + (dv.staged ? "dodane do zatwierdzenia" : "zmiany względem zatwierdzonej wersji")
+                text: Project.fileName(dv.path) + "  —  " + (dv.commit ? dv.commitTitle : dv.staged ? "dodane do zatwierdzenia" : "zmiany względem zatwierdzonej wersji")
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
             }
             Text {
                 textFormat: Text.StyledText
-                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + Project.relative(dv.path)
+                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + (dv.commit ? dv.commit.slice(0, 8) + "  ·  " : "") + Project.relative(dv.path)
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
             }
         }
@@ -66,6 +81,12 @@ Rectangle {
             spacing: 6
             Pill { text: "Otwórz plik"; visible: Project.exists(dv.path); onClicked: { dv.close(); dv.openFile(dv.path); } }
             Pill {
+                visible: !!dv.commit
+                text: "Przywróć tę wersję"
+                onClicked: { dv.close(); dv.restoreVersion(dv.path, dv.commit, dv.commitRel); }
+            }
+            Pill {
+                visible: !dv.commit
                 text: dv.staged ? "Wycofaj" : "Dodaj"
                 onClicked: { if (dv.staged) Project.unstage([dv.path]); else Project.stage([dv.path]); dv.close(); }
             }
@@ -113,7 +134,7 @@ Rectangle {
             }
             // Fragment: dodaj / wycofaj / odrzuć tylko ten kawałek
             Row {
-                visible: line.modelData.kind === "@"
+                visible: line.modelData.kind === "@" && !dv.commit
                 anchors.right: parent.right; anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4

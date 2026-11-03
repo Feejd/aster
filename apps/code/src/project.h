@@ -120,6 +120,12 @@ public:
     Q_INVOKABLE void fetch(bool quiet = false);                   // quiet — w tle, bez komunikatu o błędzie
     Q_INVOKABLE QString lastCommitMessage() const;
     Q_INVOKABLE QVariantList diff(const QString &path, bool staged) const;
+    // Historia pliku (git log --follow); wynik: historyReady(ścieżka, [{ hash, short, subject, author, time, body, added, removed, rel }])
+    Q_INVOKABLE void requestHistory(const QString &path);
+    // Zatwierdzenie: { hash, short, subject, author, time, body, files: [{ path, rel, name, dir, added, removed, exists }] }
+    Q_INVOKABLE QVariantMap commitInfo(const QString &hash) const;
+    Q_INVOKABLE QVariantList commitDiff(const QString &hash, const QString &rel) const;
+    Q_INVOKABLE QVariantMap fileAt(const QString &hash, const QString &rel) const;        // { ok, text }
     // Jeden fragment różnic (numer z diff): stage | unstage | discard
     Q_INVOKABLE void applyHunk(const QString &path, bool staged, int index, const QString &action);
     // Gałęzie: lokalne i zdalne bez lokalnej kopii, od ostatnio zmienianej: [{ name, remote, current, upstream, time, subject }]
@@ -155,6 +161,7 @@ Q_SIGNALS:
     void gitDone(const QString &op, bool ok, const QString &message);
     void gitBusyChanged();
     void blameReady(const QString &path, const QVariantList &commits, const QVariantList &lines);
+    void historyReady(const QString &path, const QVariantList &entries);
 
 private:
     void addRecent(const QString &path);
@@ -162,6 +169,7 @@ private:
     QString gitRelative(const QString &path) const;
     QStringList gitPaths(const QStringList &paths) const;
     QString rawDiff(const QString &path, bool staged) const;
+    static QVariantList parseDiff(const QString &raw);
     void runGit(const QString &op, const QStringList &args, const QByteArray &input, std::function<void(bool, const QString &)> done);
     void loadCommits();
     static QStringList listFiles(const QString &root, bool git);

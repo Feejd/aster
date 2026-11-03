@@ -28,6 +28,7 @@ set(CODE_QML
     qml/SettingsView.qml
     qml/TaskOutput.qml
     qml/DebugView.qml
+    qml/HistoryView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)

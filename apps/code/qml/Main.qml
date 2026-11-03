@@ -610,6 +610,33 @@ Window {
         function onMessage(text) { win.toast(text); }
         function onEnded(code) { win.toast(code >= 0 ? "Program zakończył się (kod " + code + ")" : "Debugowanie zakończone"); }
     }
+    // ——— Historia pliku ———
+    function showHistory(path) {
+        if (!Project.isGit) { toast("Historia jest dostępna w repozytorium gita"); return; }
+        if (path && path !== curPath) openFile(path);
+        historyView.commitData = null;
+        prefs.sidebar = true;
+        sidebarView = 3;
+    }
+    function showCommit(hash) {
+        historyView.openCommit(hash);
+        prefs.sidebar = true;
+        sidebarView = 3;
+    }
+    // Starsza wersja wchodzi do edytora jak zwykła zmiana — da się ją przejrzeć, cofnąć (Ctrl+Z) albo zapisać
+    function restoreVersion(path, hash, rel) {
+        const f = Project.fileAt(hash, rel);
+        if (!f.ok) { toast("Nie udało się wczytać tej wersji"); return; }
+        openFile(path);
+        const i = indexOfPath(path);
+        if (i < 0) return;
+        const e = page(i).edit;
+        const pos = e.cursorPosition;
+        TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [f.text], 0);
+        e.cursorPosition = Math.min(pos, e.length);
+        pin(i);
+        toast("Wersja z " + hash.slice(0, 7) + " w edytorze — zapisz (Ctrl+S) albo cofnij (Ctrl+Z)");
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -765,7 +792,7 @@ Window {
     }
 
     // ——— Widoki ———
-    property int sidebarView: 0          // 0 pliki, 1 szukaj, 2 zmiany
+    property int sidebarView: 0          // 0 pliki, 1 szukaj, 2 zmiany, 3 historia
     property bool terminalShown: false
     property bool terminalMax: false
     function showView(v) {
@@ -845,6 +872,7 @@ Window {
         { label: "Git: wyślij (push)", shortcut: "", action: "git:push", icon: "upload" },
         { label: "Git: pobierz (pull)", shortcut: "", action: "git:pull", icon: "download" },
         { label: "Git: pokaż zmiany w pliku", shortcut: "", action: "git:diff", icon: "gitBranch" },
+        { label: "Git: historia pliku", shortcut: "", action: "fileHistory", icon: "clock" },
         { label: "Git: przełącz gałąź…", shortcut: "", action: "git:checkout", icon: "gitBranch" },
         { label: "Git: nowa gałąź…", shortcut: "", action: "git:checkout", icon: "plus" },
         { label: "Git: połącz gałąź z bieżącą…", shortcut: "", action: "git:merge", icon: "gitBranch" },
@@ -938,6 +966,8 @@ Window {
         else if (a === "tab:reveal") { prefs.sidebar = true; sidebarView = 0; const row = Project.tree.reveal(tabs.get(menu.tab).path); if (row >= 0) treeList.positionViewAtIndex(row, ListView.Center); }
         else if (a === "tab:copy") Project.copyText(Project.relative(tabs.get(menu.tab).path));
         else if (a === "tab:split") { activate(menu.tab); splitEditor(); }
+        else if (a === "tab:history") showHistory(tabs.get(menu.tab).path);
+        else if (a === "fileHistory") showHistory(curPath);
         else if (a === "tab:move") moveToOtherGroup(menu.tab);
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
@@ -954,6 +984,7 @@ Window {
         if (a === "newFile") newFile(path);
         else if (a === "newFolder") newFolder(path);
         else if (a === "rename") renamePath(path);
+        else if (a === "history") showHistory(path);
         else if (a === "trash") trashPath(path);
         else if (a === "copyPath") Project.copyText(path);
         else if (a === "copyRel") Project.copyText(Project.relative(path));
@@ -1005,6 +1036,7 @@ Window {
             { label: "Zmień nazwę", icon: "pencil", action: "tree:rename", enabled: path !== Project.root },
             { label: "Przenieś do Kosza", icon: "trash", action: "tree:trash", danger: true, enabled: path !== Project.root },
             { separator: true },
+            { label: "Historia pliku", icon: "clock", action: "tree:history", enabled: !isDir && Project.isGit },
             { label: "Kopiuj ścieżkę", icon: "copy", action: "tree:copyPath" },
             { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tree:copyRel" },
             { label: "Otwórz w terminalu", icon: "terminal", action: "tree:terminal" },
@@ -1058,6 +1090,10 @@ Window {
         else if (what === "split") splitEditor();
         else if (what === "settings") settingsView.open();
         else if (what === "tasks") showTasks();
+        else if (what === "history") showHistory(curPath);
+        else if (what.startsWith("histdiff:")) { const n = Number(arg); const e = historyView.entries[n]; if (e) diffView.openCommit(curPath, e.rel, e.hash, e.subject); }
+        else if (what.startsWith("histfiles:")) { const e = historyView.entries[Number(arg)]; if (e) showCommit(e.hash); }
+        else if (what.startsWith("restore:")) { const e = historyView.entries[Number(arg)]; if (e) restoreVersion(curPath, e.hash, e.rel); }
         else if (what.startsWith("bp:")) Debugger.toggleBreakpoint(curPath, Number(arg) - 1);
         else if (what.startsWith("debug:")) { const d = arg.split(" "); launchDebug("native", Project.root + "/" + d[0], d.slice(1).join(" ")); }
         else if (what === "dnext") Debugger.next();
@@ -1420,6 +1456,7 @@ Window {
                     z: 8
                     fontSize: prefs.fontSize - 0.5
                     onOpenFile: (path) => win.openFile(path)
+                    onRestoreVersion: (path, hash, rel) => win.restoreVersion(path, hash, rel)
                     onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
                 }
 
@@ -1683,6 +1720,7 @@ Window {
                     ViewBtn { icon: "files"; view: 0 }
                     ViewBtn { icon: "search"; view: 1 }
                     ViewBtn { icon: "gitBranch"; view: 2; badge: Project.changes.length }
+                    ViewBtn { icon: "clock"; view: 3; visible: Project.isGit }
                 }
             }
 
@@ -1766,6 +1804,15 @@ Window {
                 onReplaceFileRequested: (path) => win.replaceInPaths([path])
                 onReplaceMatchRequested: (path, line, col) => win.replaceMatch(path, line, col)
             }
+            HistoryView {
+                id: historyView
+                visible: win.sidebarView === 3
+                y: sideTop.height
+                width: parent.width; height: parent.height - y
+                path: win.curPath
+                onShowDiff: (path, rel, hash, title) => diffView.openCommit(path, rel, hash, title)
+            }
+
             ChangesView {
                 id: changesView
                 visible: win.sidebarView === 2
@@ -1775,6 +1822,7 @@ Window {
                 onShowDiff: (path, staged) => diffView.open(path, staged)
                 onDiscardRequested: (paths) => win.confirm = { kind: "discard", paths: paths, name: Project.fileName(paths[0] || "") }
                 onPickBranch: palette.openBranches("checkout")
+                onShowCommit: (hash) => win.showCommit(hash)
             }
 
             // Zmiana szerokości paska
@@ -2044,6 +2092,7 @@ Window {
                         { label: tab.group === 0 ? "Przenieś do prawej grupy" : "Przenieś do lewej grupy", icon: "forward", action: "tab:move" },
                         { separator: true },
                         { label: "Pokaż w drzewie plików", icon: "files", action: "tab:reveal" },
+                        { label: "Historia pliku", icon: "clock", action: "tab:history" },
                         { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tab:copy" }
                     ]);
                     return;

@@ -12,6 +12,7 @@ Item {
     signal showDiff(string path, bool staged)
     signal discardRequested(var paths)
     signal pickBranch()
+    signal showCommit(string hash)
     property bool amend: false
 
     function statusColor(s) {
@@ -335,10 +336,12 @@ Item {
                 }
             }
 
-            // Zatwierdzenie z historii
+            // Zatwierdzenie z historii — klik: zmienione pliki
             Item {
                 visible: row.modelData.kind === "commit"
                 anchors.fill: parent
+                Rectangle { anchors.fill: parent; anchors.leftMargin: 6; anchors.rightMargin: 6; radius: 7; color: commitArea.containsMouse ? Theme.hover : "transparent" }
+                MouseArea { id: commitArea; anchors.fill: parent; hoverEnabled: true; onClicked: cv.showCommit(row.modelData.hash) }
                 Rectangle { x: 20; y: 0; width: 2; height: parent.height; color: Theme.line }
                 Rectangle {
                     x: 16; anchors.verticalCenter: parent.verticalCenter
