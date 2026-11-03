@@ -3,6 +3,7 @@
 #include <QBuffer>
 #include <QClipboard>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -797,6 +798,174 @@ QStringList Project::colors() const
     return out;
 }
 
+static const char *const ColorKeys[] = {"color", "color2", "fill", "fill2", "stroke", "outlineColor", "bg", "shadowColor", "duo1", "duo2"};
+
+// Wywołuje fn dla każdego koloru w projekcie (tła stron, pola elementów, kolory słupków wykresów)
+static void eachColor(QVariantList &pages, const std::function<void(QVariant &)> &fn)
+{
+    for (QVariant &pv : pages) {
+        QVariantMap p = pv.toMap();
+        QVariantMap bg = p.value(QStringLiteral("background")).toMap();
+        for (const char *k : {"color", "color2"})
+            if (bg.contains(QLatin1String(k)))
+                fn(bg[QLatin1String(k)]);
+        p[QStringLiteral("background")] = bg;
+        QVariantList elements = p.value(QStringLiteral("elements")).toList();
+        for (QVariant &v : elements) {
+            QVariantMap el = v.toMap();
+            for (const char *k : ColorKeys)
+                if (el.contains(QLatin1String(k)))
+                    fn(el[QLatin1String(k)]);
+            if (el.contains(QStringLiteral("data")) && el.value(QStringLiteral("data")).typeId() == QMetaType::QVariantList) {
+                QVariantList data = el.value(QStringLiteral("data")).toList();
+                for (QVariant &d : data) {
+                    QVariantMap row = d.toMap();
+                    if (row.contains(QStringLiteral("color")))
+                        fn(row[QStringLiteral("color")]);
+                    d = row;
+                }
+                el[QStringLiteral("data")] = data;
+            }
+            v = el;
+        }
+        p[QStringLiteral("elements")] = elements;
+        pv = p;
+    }
+}
+
+QStringList Project::projectColors() const
+{
+    QVariantList all = pages();
+    QStringList out;
+    eachColor(all, [&out](QVariant &v) {
+        const QString s = v.toString().toLower();
+        if (s.startsWith(QLatin1Char('#')) && (s.size() == 7 || s.size() == 9) && !out.contains(s) && out.size() < 18)
+            out.append(s);
+    });
+    return out;
+}
+
+void Project::replaceColor(const QString &from, const QString &to, bool commitNow)
+{
+    QVariantMap doc = QJsonDocument::fromJson(m_last).toVariant().toMap();
+    QVariantList all = doc.value(QStringLiteral("pages")).toList();
+    const QString f = from.toLower();
+    eachColor(all, [&f, &to](QVariant &v) {
+        if (v.toString().toLower() == f)
+            v = to;
+    });
+    doc[QStringLiteral("pages")] = all;
+    load(doc);
+    setModified(true);
+    Q_EMIT changed();
+    if (commitNow)
+        commit();
+}
+
+// ——— Moje elementy ———
+
+static QString savedDir()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/aster-grafika/elements");
+}
+
+static QRectF clipBounds(const QVariantList &list)
+{
+    QRectF r;
+    for (const QVariant &v : list) {
+        const QVariantMap el = v.toMap();
+        r = r.united(QRectF(num(el, "x"), num(el, "y"), qMax(1.0, num(el, "w")), qMax(1.0, num(el, "h"))));
+    }
+    return r;
+}
+
+bool Project::saveElements(const QStringList &ids)
+{
+    QVariantMap clip = clipData(ids);
+    QVariantList list = clip.value(QStringLiteral("elements")).toList();
+    if (list.isEmpty() || !QDir().mkpath(savedDir()))
+        return false;
+    const QRectF r = clipBounds(list);
+    // Zapis od lewego górnego rogu; miniatura do 240 px na dłuższym boku
+    for (QVariant &v : list) {
+        QVariantMap el = v.toMap();
+        el[QStringLiteral("x")] = num(el, "x") - r.x();
+        el[QStringLiteral("y")] = num(el, "y") - r.y();
+        v = el;
+    }
+    clip[QStringLiteral("elements")] = list;
+    const QString base = savedDir() + QLatin1Char('/') + QString::number(QDateTime::currentMSecsSinceEpoch());
+    QSaveFile f(base + QStringLiteral(".json"));
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(QJsonDocument::fromVariant(clip).toJson(QJsonDocument::Compact));
+    if (!f.commit())
+        return false;
+    const qreal k = 240 / qMax(r.width(), r.height());
+    const QVariantMap doc{{QStringLiteral("width"), r.width()}, {QStringLiteral("height"), r.height()},
+                          {QStringLiteral("background"), QVariantMap{{QStringLiteral("type"), QStringLiteral("color")}, {QStringLiteral("color"), QStringLiteral("#00000000")}}},
+                          {QStringLiteral("elements"), list}};
+    Art::renderPage(doc, QSize(qMax(1, qRound(r.width() * k)), qMax(1, qRound(r.height() * k))), this).save(base + QStringLiteral(".png"));
+    Q_EMIT savedElementsChanged();
+    return true;
+}
+
+QVariantList Project::savedElements() const
+{
+    QVariantList out;
+    const QDir dir(savedDir());
+    const QStringList files = dir.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name | QDir::Reversed);
+    for (const QString &name : files) {
+        const QString file = dir.filePath(name);
+        QString thumb = file;
+        thumb.replace(thumb.size() - 4, 4, QStringLiteral("png"));
+        // Jasna treść (np. biały napis) — podgląd na ciemnym tle
+        const QImage img(thumb);
+        qreal sum = 0, weight = 0;
+        for (int y = 0; y < img.height(); y += 2)
+            for (int x = 0; x < img.width(); x += 2) {
+                const QColor c = img.pixelColor(x, y);
+                sum += c.lightnessF() * c.alphaF();
+                weight += c.alphaF();
+            }
+        out.append(QVariantMap{{QStringLiteral("file"), file},
+                               {QStringLiteral("thumb"), img.isNull() ? QString() : QUrl::fromLocalFile(thumb).toString()},
+                               {QStringLiteral("light"), weight > 0 && sum / weight > 0.72}});
+    }
+    return out;
+}
+
+QStringList Project::insertSaved(const QString &file)
+{
+    QFile f(file);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QVariantMap clip = QJsonDocument::fromJson(f.readAll()).toVariant().toMap();
+    const QRectF r = clipBounds(clip.value(QStringLiteral("elements")).toList());
+    if (r.isEmpty())
+        return {};
+    // Na środek strony; większe niż 80% strony — zmniejszone
+    const qreal k = qMin(1.0, qMin(m_width * 0.8 / r.width(), m_height * 0.8 / r.height()));
+    const qreal dx = (m_width - r.width() * k) / 2, dy = (m_height - r.height() * k) / 2;
+    return insertClip(clip, [this, k, dx, dy, r](QVariantMap el) {
+        if (k < 1)
+            el = scaled(el, k, r.x(), r.y());
+        el[QStringLiteral("x")] = std::round((num(el, "x") - r.x() + dx) * 10) / 10;
+        el[QStringLiteral("y")] = std::round((num(el, "y") - r.y() + dy) * 10) / 10;
+        return el;
+    });
+}
+
+void Project::removeSaved(const QString &file)
+{
+    if (!file.startsWith(savedDir()))
+        return;
+    QFile::remove(file);
+    QString thumb = file;
+    QFile::remove(thumb.replace(thumb.size() - 4, 4, QStringLiteral("png")));
+    Q_EMIT savedElementsChanged();
+}
+
 // ——— Zdjęcia ———
 
 QString Project::addAsset(const QByteArray &data, const QString &ext)
@@ -922,7 +1091,7 @@ QStringList Project::images() const
 
 // ——— Schowek ———
 
-void Project::copy(const QStringList &ids) const
+QVariantMap Project::clipData(const QStringList &ids) const
 {
     QVariantList list;
     QVariantMap images;
@@ -935,9 +1104,38 @@ void Project::copy(const QStringList &ids) const
         if (m_assets.contains(src) && !images.contains(src))
             images[src] = QString::fromLatin1(m_assets.value(src).data.toBase64());
     }
+    return {{QStringLiteral("elements"), list}, {QStringLiteral("images"), images}};
+}
+
+QStringList Project::insertClip(const QVariantMap &clip, const std::function<QVariantMap(QVariantMap)> &place)
+{
+    const QVariantMap images = clip.value(QStringLiteral("images")).toMap();
+    QHash<QString, QString> keys;
+    for (auto it = images.cbegin(); it != images.cend(); ++it)
+        keys[it.key()] = addAsset(QByteArray::fromBase64(it.value().toString().toLatin1()), QFileInfo(it.key()).suffix());
+    if (!keys.isEmpty())
+        Q_EMIT imagesChanged();
+    QStringList out;
+    QHash<QString, QString> groups;
+    for (const QVariant &v : clip.value(QStringLiteral("elements")).toList()) {
+        QVariantMap el = v.toMap();
+        regroup(el, groups);
+        const QString src = el.value(QStringLiteral("src")).toString();
+        if (keys.contains(src))
+            el[QStringLiteral("src")] = keys.value(src);
+        el.remove(QStringLiteral("id"));
+        out.append(insert(place(el)));
+    }
+    commit();
+    return out;
+}
+
+void Project::copy(const QStringList &ids) const
+{
+    const QVariantMap clip = clipData(ids);
+    const QVariantList list = clip.value(QStringLiteral("elements")).toList();
     if (list.isEmpty())
         return;
-    const QVariantMap clip{{QStringLiteral("elements"), list}, {QStringLiteral("images"), images}};
     auto *mime = new QMimeData;
     mime->setData(QLatin1String(ClipboardMime), QJsonDocument::fromVariant(clip).toJson(QJsonDocument::Compact));
     // Inne programy dostają tekst albo zdjęcie pojedynczego elementu
@@ -957,25 +1155,11 @@ QStringList Project::paste()
         return {};
     if (mime->hasFormat(QLatin1String(ClipboardMime))) {
         const QVariantMap clip = QJsonDocument::fromJson(mime->data(QLatin1String(ClipboardMime))).toVariant().toMap();
-        const QVariantMap images = clip.value(QStringLiteral("images")).toMap();
-        QHash<QString, QString> keys;
-        for (auto it = images.cbegin(); it != images.cend(); ++it)
-            keys[it.key()] = addAsset(QByteArray::fromBase64(it.value().toString().toLatin1()), QFileInfo(it.key()).suffix());
-        QStringList out;
-        QHash<QString, QString> groups;
-        for (const QVariant &v : clip.value(QStringLiteral("elements")).toList()) {
-            QVariantMap el = v.toMap();
-            regroup(el, groups);
-            const QString src = el.value(QStringLiteral("src")).toString();
-            if (keys.contains(src))
-                el[QStringLiteral("src")] = keys.value(src);
-            el.remove(QStringLiteral("id"));
+        return insertClip(clip, [](QVariantMap el) {
             el[QStringLiteral("x")] = num(el, "x") + 24;
             el[QStringLiteral("y")] = num(el, "y") + 24;
-            out.append(insert(el));
-        }
-        commit();
-        return out;
+            return el;
+        });
     }
     if (mime->hasImage()) {
         const QImage img = qvariant_cast<QImage>(mime->imageData());

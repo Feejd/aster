@@ -83,6 +83,17 @@ public:
     Q_INVOKABLE void movePage(int from, int to);
     Q_INVOKABLE void setGuides(const QVariantMap &guides, bool commit = true);
 
+    // Kolory całego projektu (wszystkie strony) i zamiana jednego na inny wszędzie naraz.
+    // Zamiana zawsze od ostatniego zamkniętego stanu — podgląd podczas wybierania nie skleja kolorów.
+    Q_INVOKABLE QStringList projectColors() const;
+    Q_INVOKABLE void replaceColor(const QString &from, const QString &to, bool commit = true);
+
+    // Moje elementy (np. logo, podpis) — zapisane poza projektem, do wstawienia w każdym projekcie
+    Q_INVOKABLE bool saveElements(const QStringList &ids);
+    Q_INVOKABLE QVariantList savedElements() const;              // [{ file, thumb }] od najnowszych
+    Q_INVOKABLE QStringList insertSaved(const QString &file);
+    Q_INVOKABLE void removeSaved(const QString &file);
+
     // ——— Elementy (po id, bo indeks zmienia się przy zmianie kolejności) ———
     Q_INVOKABLE QString add(const QVariantMap &element);
     Q_INVOKABLE void change(const QString &id, const QVariantMap &patch, bool commit = true);
@@ -125,6 +136,7 @@ Q_SIGNALS:
     void colorsChanged();
     void pagesChanged();
     void guidesChanged();
+    void savedElementsChanged();
     void changed();                 // każda zmiana treści (do zapisu automatycznego)
     void reset();                   // nowa zawartość (cofanie, otwarcie) — zaznaczenie mogło zniknąć
     void error(const QString &message);
@@ -150,6 +162,8 @@ private:
     QVariantMap prepared(QVariantMap el) const;
     QString newId();
     QString insert(const QVariantMap &element);     // bez zamykania kroku cofania
+    QVariantMap clipData(const QStringList &ids) const;                 // elementy z dołączonymi zdjęciami
+    QStringList insertClip(const QVariantMap &clip, const std::function<QVariantMap(QVariantMap)> &place);
     QString uniquePath(const QString &dir, const QString &base, const QString &ext) const;
 
     qreal m_width = 1080;

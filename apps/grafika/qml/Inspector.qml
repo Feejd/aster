@@ -16,6 +16,9 @@ Item {
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
     readonly property var bg: project.background
+    property var projectColors: []
+    Connections { target: ins.project; function onColorsChanged() { colorsTimer.restart(); } }
+    Timer { id: colorsTimer; interval: 50; onTriggered: ins.projectColors = ins.project.projectColors() }
     readonly property bool softShadow: !!el.shadow && el.shadowBlur !== undefined
     readonly property bool recolor: type === "vector" && project.recolorable(el.src || "")
     readonly property var filters: [
@@ -125,6 +128,36 @@ Item {
                     visible: ins.bg.type === "image"
                     text: "Usuń zdjęcie tła"
                     onClicked: ins.setBg({ type: "color", src: null })
+                }
+            }
+            Section {
+                visible: ins.type === "page" && ins.projectColors.length > 0
+                title: "Kolory projektu"
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Kliknij kolor, żeby zmienić go na wszystkich stronach naraz."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 4
+                    Repeater {
+                        model: ins.projectColors
+                        delegate: ColorWell {
+                            id: pcw
+                            required property string modelData
+                            value: modelData
+                            onClicked: {
+                                ins.project.commit();
+                                let cur = modelData;
+                                ins.editor.pickColor(pcw, modelData, false, (c, done) => {
+                                    ins.project.replaceColor(cur, c, done);
+                                    if (done) cur = c;
+                                });
+                            }
+                        }
+                    }
                 }
             }
             Text {

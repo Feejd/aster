@@ -178,6 +178,16 @@ Item {
         project.removeAll(ids);
     }
     function copy() { if (many.length > 0) project.copy(many); }
+    function saveElements() {
+        if (many.length === 0) return;
+        if (project.saveElements(many)) app.toast("Zapisano w „Moich elementach” — znajdziesz je w zakładce Elementy w każdym projekcie", "");
+    }
+    function insertSaved(file) {
+        stage.stopEditing();
+        const ids = project.insertSaved(file);
+        if (ids.length > 0) stage.setSelection(ids);
+        stage.forceActiveFocus();
+    }
     function paste() { const ids = project.paste(); if (ids.length > 0) stage.setSelection(ids); }
     function duplicate() { if (many.length > 0) stage.setSelection(project.duplicateAll(many)); }
     function arrange(how) { if (sel !== "") project.arrange(sel, how); }
@@ -376,6 +386,7 @@ Item {
         else if (a === "lock") setLocked(true);
         else if (a === "group") group();
         else if (a === "copyStyle") copyStyle();
+        else if (a === "saveElements") saveElements();
         else if (a === "pasteStyle") pasteStyle();
         else if (a === "ungroup") ungroup();
         else if (a === "unlock") setLocked(false);
@@ -388,6 +399,7 @@ Item {
             items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
             items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
             items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
+            items.push({ label: "Zapisz jako mój element", icon: "star", action: "saveElements" });
             if (grouped) items.push({ label: "Rozgrupuj", icon: "layers", shortcut: "Ctrl+Shift+G", action: "ungroup" });
             else items.push({ label: "Grupuj", icon: "layers", shortcut: "Ctrl+G", action: "group" });
             items.push({ label: "Zablokuj", icon: "lock", action: "lock" });
@@ -409,6 +421,7 @@ Item {
             items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
             items.push({ label: "Kopiuj styl", icon: "palette", shortcut: "Ctrl+Alt+C", action: "copyStyle" });
             if (styleClip && styleClip.type === el.type) items.push({ label: "Wklej styl", icon: "palette", shortcut: "Ctrl+Alt+V", action: "pasteStyle" });
+            items.push({ label: "Zapisz jako mój element", icon: "star", action: "saveElements" });
             items.push({ separator: true });
             items.push({ label: "Na wierzch", icon: "bringFront", shortcut: "Ctrl+Shift+]", action: "front" });
             items.push({ label: "Do przodu", icon: "layerUp", shortcut: "Ctrl+]", action: "up" });
@@ -476,6 +489,9 @@ Item {
         else if (cmd === "zoom") stage.zoomTo(Number(arg));
         else if (cmd === "menuaction") runMenu(arg);
         else if (cmd === "savestyle") side.saveTextStyle();
+        else if (cmd === "saveel") saveElements();
+        else if (cmd === "insertsaved") insertSaved(side.saved[Number(arg)].file);
+        else if (cmd === "replacecolor") { const [a, b] = arg.split(","); project.commit(); project.replaceColor(a, b); }
         else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
         else if (cmd === "guides") project.setGuides(JSON.parse(arg));
         else if (cmd === "snapmove") {

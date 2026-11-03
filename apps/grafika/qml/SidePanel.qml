@@ -225,6 +225,20 @@ Item {
         { color: "#FFE29F", color2: "#FF719A", angle: 0, type: "radial" }
     ]
 
+    // Kolor podglądu stylu czytelny na tle panelu (ciemny tekst w trybie ciemnym — jasny, i odwrotnie)
+    function readable(c) {
+        const q = Qt.color(c || "#16181D");
+        const lum = 0.2126 * q.r + 0.7152 * q.g + 0.0722 * q.b;
+        // Szare — kolor tekstu; barwne zostają, tylko jaśniejsze
+        if (Theme.dark) return lum < 0.45 && (lum < 0.15 || q.hslSaturation < 0.3) ? Theme.text : lum < 0.45 ? Qt.lighter(q, 1.6) : c;
+        return lum > 0.85 ? "#16181D" : c;
+    }
+
+    // Moje elementy — pliki w ~/.local/share/aster-grafika/elements
+    property var saved: []
+    Connections { target: sp.project; function onSavedElementsChanged() { sp.saved = sp.project.savedElements(); } }
+    Component.onCompleted: saved = project.savedElements()
+
     // Moje style tekstu — zapisane w ustawieniach programu, wspólne dla wszystkich projektów.
     // Wielkość pamiętana względem krótszego boku strony, żeby pasowała też do innego formatu.
     Settings { id: mine; category: "Grafika"; property string textStyles: "[]" }
@@ -488,8 +502,7 @@ Item {
                                 elide: Text.ElideRight
                                 text: my.modelData.sample
                                 readonly property string c: my.modelData.color || "#16181D"
-                                color: my.modelData.outline || my.modelData.bg ? c : (Theme.dark && c.toLowerCase() < "#555555" ? Theme.text
-                                     : !Theme.dark && c.toLowerCase() > "#e8e8e8" ? "#16181D" : c)
+                                color: my.modelData.outline || my.modelData.bg ? c : sp.readable(c)
                                 style: my.modelData.outline ? Text.Outline : Text.Normal
                                 styleColor: my.modelData.outlineColor || "transparent"
                                 font.family: Library.fonts.indexOf(my.modelData.font) >= 0 ? my.modelData.font : Theme.font
@@ -540,7 +553,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
                                 text: ts.modelData.label
-                                color: ts.modelData.outline ? ts.modelData.color : (Theme.dark && ts.modelData.color.toLowerCase() < "#555555" ? Theme.text : ts.modelData.color)
+                                color: ts.modelData.outline ? ts.modelData.color : sp.readable(ts.modelData.color)
                                 style: ts.modelData.outline ? Text.Outline : Text.Normal
                                 styleColor: ts.modelData.outlineColor || "transparent"
                                 font.family: ts.modelData.font
@@ -579,7 +592,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
                                 text: ws.modelData.label
-                                color: Theme.dark && ws.modelData.color.toLowerCase() < "#555555" ? Theme.text : ws.modelData.color
+                                color: sp.readable(ws.modelData.color)
                                 font.family: ws.ready ? ws.modelData.font : Theme.font
                                 font.pixelSize: ws.modelData.preview
                                 font.weight: ws.modelData.weight
@@ -674,6 +687,58 @@ Item {
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
                     }
                     Text {
+                        text: "Moje elementy"
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        visible: sp.saved.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Logo, podpis, stopka z kontaktem — zaznacz je na stronie i zapisz, a wstawisz je jednym kliknięciem w każdym projekcie."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    }
+                    Grid {
+                        visible: sp.saved.length > 0
+                        columns: 3
+                        spacing: 6
+                        Repeater {
+                            model: sp.saved
+                            delegate: HoverButton {
+                                id: sv
+                                required property var modelData
+                                width: (elementsCol.width - 12) / 3; height: width
+                                radius: 10
+                                baseColor: modelData.light ? "#3A3F4B" : Theme.fill
+                                color: hovered ? Qt.darker(baseColor, modelData.light ? 0.85 : 1.08) : baseColor
+                                onClicked: sp.editor.insertSaved(modelData.file)
+                                Image {
+                                    anchors.fill: parent; anchors.margins: 8
+                                    source: sv.modelData.thumb
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    cache: false
+                                    sourceSize.width: 160
+                                }
+                                HoverButton {
+                                    anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 3
+                                    width: 22; height: 22; radius: 11
+                                    visible: sv.hovered || hovered
+                                    baseColor: Theme.surface
+                                    onClicked: sp.project.removeSaved(sv.modelData.file)
+                                    Icon { anchors.centerIn: parent; d: Icons.close; size: 10; stroke: 2; color: Theme.text2 }
+                                }
+                            }
+                        }
+                    }
+                    Btn {
+                        width: parent.width
+                        icon: "plus"
+                        text: sp.editor && sp.editor.many.length > 1 ? "Zapisz zaznaczone jako mój element" : "Zapisz zaznaczony jako mój element"
+                        enabled: !!sp.editor && sp.editor.many.length > 0
+                        onClicked: sp.editor.saveElements()
+                    }
+                    Text {
+                        topPadding: 4
                         text: "Kody i wykresy"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
                     }
