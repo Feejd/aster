@@ -3,60 +3,189 @@ import QtQuick
 import Aster.Ui
 import Aster.Grafika
 
-// Wybór czcionki z zainstalowanych w systemie — każda nazwa napisana swoją czcionką, z wyszukiwaniem
+// Wybór czcionki: zainstalowane w systemie i ponad tysiąc darmowych z Google Fonts (z polskimi znakami).
+// Każda nazwa napisana swoją czcionką; czcionka z internetu pobiera się po kliknięciu i od razu działa.
 Popover {
     id: fp
     property var callback: null
     property string value
-    cardWidth: 280
-    cardHeight: 420
+    property string source: "local"            // local | web
+    property string category: ""
+    property string installing: ""
+    property int previews: 0                    // rośnie, gdy dojdzie podgląd — odświeża nazwy
+    cardWidth: 340
+    cardHeight: 540
+
+    readonly property var categories: [
+        { id: "", label: "Wszystkie" }, { id: "sans-serif", label: "Bez szeryfów" }, { id: "serif", label: "Szeryfowe" },
+        { id: "display", label: "Ozdobne" }, { id: "handwriting", label: "Odręczne" }, { id: "monospace", label: "Maszynowe" }
+    ]
+    readonly property string query: search.text.trim().toLowerCase()
+    readonly property var localList: query === "" ? Library.fonts : Library.fonts.filter(f => f.toLowerCase().indexOf(query) >= 0)
+    readonly property var webList: Online.fontCatalog.filter(f => (category === "" || f.category === category)
+                                                               && (query === "" || f.family.toLowerCase().indexOf(query) >= 0))
 
     function open(item, family, fn) {
         callback = fn;
         value = family;
+        installing = "";
         search.text = "";
         openAt(item, "left");
-        search.forceActiveFocus();
+        search.focusInput();
+        if (source === "web") Online.loadFontCatalog();
         const i = Library.fonts.indexOf(family);
-        if (i >= 0) list.positionViewAtIndex(i, ListView.Center);
+        if (source === "local" && i >= 0) localView.positionViewAtIndex(i, ListView.Center);
     }
+    function choose(family) {
+        if (Library.fonts.indexOf(family) >= 0) {
+            if (callback) callback(family);
+            close();
+            return;
+        }
+        installing = family;
+        Online.installFont(family);
+    }
+    onSourceChanged: if (source === "web") Online.loadFontCatalog()
 
-    Rectangle {
-        width: parent.width; height: 36; radius: 10
-        color: Theme.fill
-        Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 15; color: Theme.text2 }
-        TextInput {
-            id: search
-            x: 34; width: parent.width - 44
-            anchors.verticalCenter: parent.verticalCenter
-            color: Theme.text
-            font.family: Theme.font; font.pixelSize: 13
-            Keys.onEscapePressed: fp.close()
-            Text { visible: !search.text; text: "Szukaj czcionki"; color: Theme.text2; font: search.font }
+    Connections {
+        target: Online
+        function onFontPreviewReady() { fp.previews += 1; }
+        function onFontInstalled(family) {
+            Library.reloadFonts();
+            if (family !== fp.installing) return;
+            fp.installing = "";
+            if (fp.shown && fp.callback) fp.callback(family);
+            fp.close();
+        }
+        function onFontFailed(family) {
+            if (family === fp.installing) fp.installing = "";
+            fp.failed = family;
         }
     }
+    property string failed: ""
+
+    Column {
+        width: parent.width
+        spacing: 10
+        SearchField {
+            id: search
+            delay: 150
+            placeholder: "Szukaj czcionki"
+            Keys.onEscapePressed: fp.close()
+        }
+        Row {
+            spacing: 6
+            Chip { text: "Na komputerze"; height: 30; on: fp.source === "local"; onClicked: fp.source = "local" }
+            Chip { text: "Więcej z internetu"; height: 30; on: fp.source === "web"; onClicked: fp.source = "web" }
+        }
+        Flow {
+            visible: fp.source === "web"
+            width: parent.width
+            spacing: 4
+            Repeater {
+                model: fp.categories
+                delegate: Chip {
+                    required property var modelData
+                    height: 26
+                    text: modelData.label
+                    on: fp.category === modelData.id
+                    onClicked: fp.category = modelData.id
+                }
+            }
+        }
+    }
+
+    // Zainstalowane
     ListView {
-        id: list
-        y: 46
-        width: parent.width; height: parent.height - 46
+        id: localView
+        visible: fp.source === "local"
+        y: 92
+        width: parent.width; height: fp.cardHeight - 32 - y
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        model: search.text === "" ? Library.fonts : Library.fonts.filter(f => f.toLowerCase().indexOf(search.text.toLowerCase()) >= 0)
+        model: fp.localList
         delegate: HoverButton {
             id: row
             required property string modelData
-            width: list.width; height: 38; radius: 8
+            width: localView.width; height: 40; radius: 8
             baseColor: modelData === fp.value ? Theme.accentSoft : "transparent"
             color: modelData === fp.value ? baseColor : hovered ? Theme.hover : baseColor
-            onClicked: { if (fp.callback) fp.callback(row.modelData); fp.close(); }
+            onClicked: fp.choose(row.modelData)
             Text {
                 x: 10; width: parent.width - 20
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
                 text: row.modelData
                 color: Theme.text
-                font.family: row.modelData; font.pixelSize: 17
+                font.family: row.modelData; font.pixelSize: 18
             }
         }
+    }
+
+    // Z internetu
+    Text {
+        visible: fp.source === "web" && fp.webList.length === 0
+        y: 160; width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: Online.catalogFailed ? "Nie udało się pobrać listy czcionek. Sprawdź połączenie z internetem."
+            : Online.fontCatalog.length === 0 ? "Wczytuję listę czcionek…" : "Nie ma takiej czcionki."
+        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+    }
+    ListView {
+        id: webView
+        visible: fp.source === "web"
+        y: 160
+        width: parent.width; height: fp.cardHeight - 32 - y - 34
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        cacheBuffer: 200
+        model: fp.webList
+        delegate: HoverButton {
+            id: wrow
+            required property var modelData
+            readonly property string family: modelData.family
+            readonly property bool installed: Library.fonts.indexOf(family) >= 0
+            readonly property bool ready: fp.previews >= 0 && (installed || Online.hasPreview(family))
+            width: webView.width; height: 46; radius: 8
+            baseColor: family === fp.value ? Theme.accentSoft : "transparent"
+            color: family === fp.value ? baseColor : hovered ? Theme.hover : baseColor
+            enabled: fp.installing === "" || fp.installing === family
+            onClicked: fp.choose(family)
+            Component.onCompleted: Online.previewFont(family)
+            Text {
+                x: 10; width: parent.width - 60
+                y: 5
+                elide: Text.ElideRight
+                text: wrow.family
+                color: Theme.text
+                font.family: wrow.ready ? wrow.family : Theme.font
+                font.pixelSize: 19
+            }
+            Text {
+                x: 10; y: 29
+                text: fp.installing === wrow.family ? "Pobieranie…" : fp.failed === wrow.family ? "Nie udało się pobrać — spróbuj jeszcze raz"
+                    : (fp.categories.find(c => c.id === wrow.modelData.category) || { label: "" }).label
+                      + (wrow.modelData.rank < 1000 ? " · polecana" : "")
+                color: fp.failed === wrow.family ? "#E5484D" : Theme.text2
+                font.family: Theme.font; font.pixelSize: 11
+            }
+            Icon {
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                d: wrow.installed ? Icons.check : Icons.download
+                size: 15; stroke: 2
+                color: wrow.installed ? Theme.accentText : Theme.text2
+                opacity: wrow.installed || wrow.hovered ? 1 : 0.5
+            }
+        }
+    }
+    Text {
+        visible: fp.source === "web" && fp.webList.length > 0
+        y: webView.y + webView.height + 6
+        width: parent.width
+        text: "Google Fonts — darmowe, także do użytku komercyjnego. Pobrane zapisują się w projekcie."
+        wrapMode: Text.WordWrap
+        color: Theme.text2; font.family: Theme.font; font.pixelSize: 10
     }
 }

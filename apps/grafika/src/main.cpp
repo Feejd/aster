@@ -1,6 +1,7 @@
 // aster-grafika — Grafika Aster: posty, plakaty, zaproszenia, CV i miniaturki bez internetu, z gotowych szablonów.
 
 #include "library.h"
+#include "online.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -22,6 +23,8 @@ int main(int argc, char *argv[])
     app.setOrganizationName(QStringLiteral("Aster"));
     app.setOrganizationDomain(QStringLiteral("aster.local"));
     app.setDesktopFileName(QStringLiteral("org.aster.grafika"));
+
+    Online::loadDownloadedFonts();
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("thumb"), new ThumbProvider);

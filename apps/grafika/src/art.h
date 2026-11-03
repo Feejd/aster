@@ -14,12 +14,14 @@ class ImageSource
 public:
     virtual ~ImageSource() = default;
     virtual QImage image(const QString &key, qreal pixels) const = 0;
+    // Grafika wektorowa (SVG: ikony, naklejki) — rysowana ostro w każdym rozmiarze
+    virtual QByteArray vector(const QString &key) const { Q_UNUSED(key); return {}; }
 };
 
 // Rysowanie projektu — jedno dla płótna na ekranie, miniatur i eksportu (PNG, JPG, PDF),
 // więc to, co widać w edytorze, wychodzi w pliku co do piksela.
 //
-// Element to mapa: id, type ("text" | "shape" | "image"), x, y, w, h (piksele strony), rotation (stopnie,
+// Element to mapa: id, type ("text" | "shape" | "image" | "vector"), x, y, w, h (piksele strony), rotation (stopnie,
 // wokół środka), opacity (0..1) oraz pola rodzaju (opis w docs/grafika-format.md).
 namespace Art {
 

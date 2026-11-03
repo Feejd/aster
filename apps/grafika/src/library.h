@@ -15,7 +15,7 @@ class Library : public QObject
     QML_SINGLETON
     Q_PROPERTY(QVariantList templates READ templates CONSTANT)
     Q_PROPERTY(QVariantList projects READ projects NOTIFY projectsChanged)
-    Q_PROPERTY(QStringList fonts READ fonts CONSTANT)
+    Q_PROPERTY(QStringList fonts READ fonts NOTIFY fontsChanged)
     Q_PROPERTY(QString projectsFolder READ projectsFolder CONSTANT)
 
 public:
@@ -27,6 +27,7 @@ public:
     QString projectsFolder() const;
 
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE void reloadFonts() { Q_EMIT fontsChanged(); }     // po pobraniu czcionki
     Q_INVOKABLE void addRecent(const QString &path);
     Q_INVOKABLE bool trash(const QString &path);
     Q_INVOKABLE QVariantList photos() const;        // ostatnie zdjęcia z folderu Obrazy
@@ -36,6 +37,7 @@ public:
 
 Q_SIGNALS:
     void projectsChanged();
+    void fontsChanged();
 
 private:
     QVariantList m_templates;

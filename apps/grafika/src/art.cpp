@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QRadialGradient>
+#include <QSvgRenderer>
 #include <QRawFont>
 #include <QTextLayout>
 #include <QtMath>
@@ -332,6 +333,27 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
     return img;
 }
 
+// Ikona albo naklejka (SVG). `color` zastępuje currentColor — jednokolorowe ikony da się przefarbować
+void paintVector(QPainter *p, const QVariantMap &el, const ImageSource *images)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    QByteArray data = images ? images->vector(el.value(QStringLiteral("src")).toString()) : QByteArray();
+    if (data.isEmpty())
+        return;
+    const QString c = el.value(QStringLiteral("color")).toString();
+    if (!c.isEmpty())
+        data.replace("currentColor", c.toLatin1());
+    QSvgRenderer svg(data);
+    if (!svg.isValid())
+        return;
+    svg.setAspectRatioMode(Qt::KeepAspectRatio);
+    if (el.value(QStringLiteral("flipX")).toBool()) {
+        p->translate(w, 0);
+        p->scale(-1, 1);
+    }
+    svg.render(p, QRectF(0, 0, w, h));
+}
+
 void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
     const qreal w = num(el, "w", 100), h = num(el, "h", 100);
@@ -412,6 +434,8 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
         paintShape(p, el);
     else if (type == QLatin1String("image"))
         paintPicture(p, el, images);
+    else if (type == QLatin1String("vector"))
+        paintVector(p, el, images);
     p->restore();
 }
 

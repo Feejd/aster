@@ -16,6 +16,7 @@ Item {
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow")
     readonly property var bg: project.background
+    readonly property bool recolor: type === "vector" && project.recolorable(el.src || "")
     readonly property var filters: [
         { id: "", label: "Brak" }, { id: "gray", label: "Czarno-białe" }, { id: "sepia", label: "Sepia" }, { id: "warm", label: "Ciepłe" },
         { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }
@@ -42,7 +43,7 @@ Item {
     Text {
         x: 18; y: 16
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
-            : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+            : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
     }
@@ -372,6 +373,19 @@ Item {
                     suffix: " px"
                     onMoved: (v, done) => ins.set({ radius: v }, done)
                 }
+                Text {
+                    visible: !!ins.el.credit
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Licencja wymaga podpisu autora: " + (ins.el.credit || "")
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                }
+                Btn {
+                    visible: !!ins.el.credit
+                    text: "Dodaj podpis na grafice"
+                    icon: "textT"
+                    onClicked: ins.editor.addCredit(ins.id_)
+                }
                 Row {
                     spacing: 8
                     Btn { text: ins.el.src ? "Zamień…" : "Wybierz…"; icon: "image"; onClicked: ins.editor.chooseImage("replace") }
@@ -464,6 +478,30 @@ Item {
                     visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter)
                     text: "Przywróć oryginał"
                     onClicked: ins.set({ brightness: null, contrast: null, saturation: null, filter: null })
+                }
+            }
+
+            // ——— Ikona, naklejka ———
+            Section {
+                visible: ins.type === "vector"
+                title: ins.recolor ? "Kolor" : "Naklejka"
+                Row {
+                    spacing: 8
+                    ColorWell {
+                        id: vecWell
+                        visible: ins.recolor
+                        label: "Kolor"
+                        value: ins.el.color || "#16181D"
+                        onClicked: ins.editor.pickColor(vecWell, value, false, (c, done) => ins.set({ color: c }, done))
+                    }
+                    Btn { text: "Odbij"; icon: "mirror"; onClicked: ins.set({ flipX: ins.el.flipX ? null : true }) }
+                }
+                Text {
+                    visible: !ins.recolor
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Naklejki są wielokolorowe — ich kolorów nie da się zmienić. Jednokolorowe znajdziesz wśród ikon."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
                 }
             }
 

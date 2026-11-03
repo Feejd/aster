@@ -56,6 +56,7 @@ Window {
     }
     function openProject(path) {
         if (!project.open(String(path))) return;
+        Library.reloadFonts();              // czcionki dołączone do projektu
         Library.addRecent(project.path);
         editing = true;
     }

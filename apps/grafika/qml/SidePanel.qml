@@ -3,7 +3,8 @@ import QtQuick
 import Aster.Ui
 import Aster.Grafika
 
-// Panel po lewej: Szablony, Tekst, Kształty, Zdjęcia, Tło — kliknięcie dodaje element na środek strony;
+// Panel po lewej: Szablony, Tekst, Elementy (kształty, ikony i naklejki z internetu), Zdjęcia (z dysku i darmowe
+// z internetu), Tło — kliknięcie dodaje element na środek strony;
 // Warstwy — lista elementów od wierzchu: zaznaczanie, ukrywanie, blokowanie i kolejność (przeciąganie)
 Item {
     id: sp
@@ -16,7 +17,7 @@ Item {
     readonly property var tabs: [
         { id: "templates", label: "Szablony", icon: "layout" },
         { id: "text", label: "Tekst", icon: "textT" },
-        { id: "shapes", label: "Kształty", icon: "shapes" },
+        { id: "shapes", label: "Elementy", icon: "shapes" },
         { id: "photos", label: "Zdjęcia", icon: "image" },
         { id: "background", label: "Tło", icon: "palette" },
         { id: "layers", label: "Warstwy", icon: "layers" }
@@ -24,6 +25,59 @@ Item {
     onTabChanged: {
         if (tab === "photos") photos = Library.photos();
         if (tab === "layers") refreshLayers();
+    }
+
+    // ——— Z internetu ———
+    property string gQuery: ""
+    property var icons: []
+    property var stickers: []
+    property int gLoading: 0
+    property bool gFailed: false
+    property string pQuery: ""
+    property var webPhotos: []
+    property int pPage: 1
+    property bool pMore: false
+    property bool pLoading: false
+    property bool pFailed: false
+    readonly property var graphicIdeas: ["serce", "gwiazda", "kwiat", "liść", "kawa", "prezent", "tort", "balon", "konfetti", "korona",
+                                         "strzałka", "telefon", "poczta", "lokalizacja", "muzyka", "słońce", "uśmiech", "ptaszek"]
+    readonly property var photoIdeas: ["natura", "góry", "morze", "kwiaty", "kawa", "jedzenie", "miasto", "praca", "zima", "lato", "tekstura", "tło"]
+    readonly property string iconTint: Theme.dark ? "ECEEF3" : "16181D"
+
+    function searchGraphics(q) {
+        gQuery = q; icons = []; stickers = []; gFailed = false;
+        if (q === "") { gLoading = 0; return; }
+        gLoading = 2;
+        Online.searchGraphics(q, "icons", "#" + iconTint);
+        Online.searchGraphics(q, "stickers");
+    }
+    function searchPhotos(q) {
+        pQuery = q; webPhotos = []; pPage = 1; pMore = false; pFailed = false;
+        pLoading = q !== "";
+        if (q !== "") Online.searchPhotos(q, 1);
+    }
+    function morePhotos() {
+        pPage += 1;
+        pLoading = true;
+        Online.searchPhotos(pQuery, pPage);
+    }
+    Connections {
+        target: Online
+        function onGraphicsFound(q, kind, results) {
+            if (q !== sp.gQuery) return;
+            if (kind === "icons") sp.icons = results; else sp.stickers = results;
+            sp.gLoading = Math.max(0, sp.gLoading - 1);
+        }
+        function onPhotosFound(q, page, results, more) {
+            if (q !== sp.pQuery || page !== sp.pPage) return;
+            sp.webPhotos = sp.webPhotos.concat(results);
+            sp.pMore = more;
+            sp.pLoading = false;
+        }
+        function onSearchFailed(what) {
+            if (what === "photos") { sp.pLoading = false; sp.pFailed = true; }
+            else { sp.gLoading = Math.max(0, sp.gLoading - 1); sp.gFailed = true; }
+        }
     }
 
     // ——— Warstwy ———
@@ -56,6 +110,50 @@ Item {
         { label: "O D S T Ę P Y", text: "Odstępy", font: "URW Gothic", size: 0.045, weight: 400, color: "#16181D", caps: true, spacing: 0.3, preview: 16 },
         { label: "„Cytat”", text: "„Prosto, pięknie, po swojemu.”", font: "Noto Serif", size: 0.05, weight: 400, italic: true, color: "#3D4048", lineHeight: 1.3, preview: 18 }
     ]
+    // Style z czcionkami z Google Fonts — czcionka pobiera się przy pierwszym kliknięciu
+    readonly property var webStyles: [
+        { label: "WIELKIE OTWARCIE", font: "Bebas Neue", size: 0.13, weight: 400, color: "#16181D", spacing: 0.02, preview: 30 },
+        { label: "NOWOŚĆ", font: "Montserrat", size: 0.1, weight: 800, color: "#16181D", caps: true, spacing: 0.04, preview: 24 },
+        { label: "Wakacje!", font: "Pacifico", size: 0.1, weight: 400, color: "#FF6A3D", preview: 26 },
+        { label: "Zaproszenie ślubne", font: "Great Vibes", size: 0.1, weight: 400, color: "#8B5E3C", preview: 28 },
+        { label: "Elegancko", font: "Playfair Display", size: 0.09, weight: 500, italic: true, color: "#2B2B2B", preview: 26 },
+        { label: "Festiwal", font: "Abril Fatface", size: 0.11, weight: 400, color: "#B71C1C", preview: 28 },
+        { label: "Super okazja!", font: "Permanent Marker", size: 0.08, weight: 400, color: "#16181D", preview: 22 },
+        { label: "Notatka odręczna", font: "Caveat", size: 0.07, weight: 500, color: "#1E3A8A", preview: 24 },
+        { label: "JUBILEUSZ", font: "Cinzel", size: 0.08, weight: 600, color: "#8B6B1F", spacing: 0.08, preview: 22 },
+        { label: "MEGA PROMO", font: "Archivo Black", size: 0.1, weight: 400, color: "#E53935", preview: 24 },
+        { label: "Tekst na luzie", font: "Comfortaa", size: 0.06, weight: 700, color: "#3D4048", preview: 20 },
+        { label: "Nagłówek nowoczesny", font: "Space Grotesk", size: 0.07, weight: 700, color: "#16181D", preview: 20 }
+    ]
+    property var pendingStyle: null
+    property string installingFont: ""
+    function addWebStyle(s) {
+        if (Library.fonts.indexOf(s.font) >= 0) { addTextStyle(s); return; }
+        pendingStyle = s;
+        installingFont = s.font;
+        Online.installFont(s.font);
+    }
+    Connections {
+        target: Online
+        function onFontInstalled(family) {
+            Library.reloadFonts();
+            if (sp.pendingStyle && sp.pendingStyle.font === family) {
+                const s = sp.pendingStyle;
+                sp.pendingStyle = null;
+                sp.installingFont = "";
+                sp.addTextStyle(s);
+            }
+        }
+        function onFontFailed(family) {
+            if (family !== sp.installingFont) return;
+            sp.pendingStyle = null;
+            sp.installingFont = "";
+            sp.editor.app.toast("Nie udało się pobrać czcionki — sprawdź połączenie z internetem", "");
+        }
+        function onFontPreviewReady() { sp.previews += 1; }
+    }
+    property int previews: 0
+
     readonly property var shapes: [
         { shape: "rect", label: "Prostokąt", fill: "#5B7CFA" },
         { shape: "rect", label: "Zaokrąglony", fill: "#5B7CFA", radius: 0.18 },
@@ -170,7 +268,7 @@ Item {
                 id: pages
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
-                      : sp.tab === "shapes" ? shapesGrid.height : sp.tab === "photos" ? photosCol.height
+                      : sp.tab === "shapes" ? elementsCol.height : sp.tab === "photos" ? photosCol.height
                       : sp.tab === "layers" ? layersCol.height : bgCol.height
 
                 // Szablony
@@ -254,42 +352,164 @@ Item {
                             }
                         }
                     }
-                }
-
-                // Kształty
-                Grid {
-                    id: shapesGrid
-                    visible: sp.tab === "shapes"
-                    columns: 3
-                    spacing: 8
+                    Text {
+                        topPadding: 8
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Z czcionkami z internetu — pobiorą się po kliknięciu. Więcej czcionek w wyborze czcionki."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                    }
                     Repeater {
-                        model: sp.shapes
+                        model: sp.webStyles
                         delegate: HoverButton {
-                            id: sh
+                            id: ws
                             required property var modelData
-                            readonly property bool line: modelData.shape === "line" || modelData.shape === "arrow"
-                            width: (pages.width - 16) / 3
-                            height: width + 16
+                            readonly property bool ready: sp.previews >= 0 && (Library.fonts.indexOf(modelData.font) >= 0 || Online.hasPreview(modelData.font))
+                            width: textCol.width
+                            height: Math.max(52, wlabel.implicitHeight + 24)
                             radius: 12
                             baseColor: Theme.fill
-                            onClicked: sp.addShape(modelData)
-                            ArtView {
-                                x: 14; y: sh.line ? (sh.width - 18) / 2 : 12
-                                width: sh.width - 28
-                                height: sh.line ? 18 : sh.width - 28
-                                element: ({
-                                    type: "shape", shape: sh.modelData.shape, w: 100, h: sh.line ? 18 : 100,
-                                    fill: sh.modelData.fill ? sh.modelData.fill : "",
-                                    stroke: sh.modelData.stroke ? (Theme.dark ? "#ECEEF3" : sh.modelData.stroke) : "",
-                                    strokeWidth: sh.modelData.stroke ? (sh.line ? 6 : 6) : 0,
-                                    radius: sh.modelData.radius ? 18 : 0, dash: !!sh.modelData.dash
-                                })
+                            enabled: sp.installingFont === ""
+                            onClicked: sp.addWebStyle(modelData)
+                            Component.onCompleted: Online.previewFont(modelData.font, modelData.label + modelData.label.toUpperCase())
+                            Text {
+                                id: wlabel
+                                anchors.centerIn: parent
+                                width: parent.width - 20
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                                text: ws.modelData.label
+                                color: Theme.dark && ws.modelData.color.toLowerCase() < "#555555" ? Theme.text : ws.modelData.color
+                                font.family: ws.ready ? ws.modelData.font : Theme.font
+                                font.pixelSize: ws.modelData.preview
+                                font.weight: ws.modelData.weight
+                                font.italic: !!ws.modelData.italic
+                                font.letterSpacing: (ws.modelData.spacing || 0) * ws.modelData.preview
+                                opacity: sp.installingFont === ws.modelData.font ? 0.4 : 1
                             }
                             Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottom: parent.bottom; anchors.bottomMargin: 6
-                                text: sh.modelData.label
-                                color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                                visible: sp.installingFont === ws.modelData.font
+                                anchors.centerIn: parent
+                                text: "Pobieranie czcionki…"
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                            }
+                        }
+                    }
+                }
+
+                // Elementy: ikony i naklejki z internetu, kształty
+                Column {
+                    id: elementsCol
+                    visible: sp.tab === "shapes"
+                    width: parent.width
+                    spacing: 12
+                    SearchField {
+                        id: gSearch
+                        placeholder: "Szukaj ikon i naklejek"
+                        onSearch: (t) => sp.searchGraphics(t)
+                    }
+                    Flow {
+                        visible: sp.gQuery === ""
+                        width: parent.width
+                        spacing: 6
+                        Repeater {
+                            model: sp.graphicIdeas
+                            delegate: Chip {
+                                required property string modelData
+                                height: 28
+                                text: modelData
+                                onClicked: gSearch.set(modelData)
+                            }
+                        }
+                    }
+                    Text {
+                        visible: sp.gQuery !== "" && (sp.gLoading > 0 || sp.gFailed || (sp.icons.length === 0 && sp.stickers.length === 0))
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.gLoading > 0 ? "Szukam…" : sp.gFailed ? "Nie udało się połączyć z biblioteką. Sprawdź internet."
+                            : "Nic nie znalazłem. Spróbuj innego słowa, np. po angielsku."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                    }
+                    Repeater {
+                        model: [{ kind: "stickers", title: "Naklejki", list: sp.stickers }, { kind: "icons", title: "Ikony — możesz zmienić ich kolor", list: sp.icons }]
+                        delegate: Column {
+                            id: gsec
+                            required property var modelData
+                            visible: modelData.list.length > 0
+                            width: elementsCol.width
+                            spacing: 8
+                            Text {
+                                text: gsec.modelData.title
+                                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                            }
+                            Flow {
+                                width: parent.width
+                                spacing: 4
+                                Repeater {
+                                    model: gsec.modelData.list
+                                    delegate: HoverButton {
+                                        id: gt
+                                        required property var modelData
+                                        width: (elementsCol.width - 12) / 4; height: width
+                                        radius: 10
+                                        onClicked: sp.editor.addGraphic(modelData.file)
+                                        Image {
+                                            anchors.centerIn: parent
+                                            width: parent.width * (gsec.modelData.kind === "icons" ? 0.5 : 0.7); height: width
+                                            source: gt.modelData.thumb
+                                            sourceSize.width: 96; sourceSize.height: 96
+                                            fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        visible: sp.gQuery !== "" && (sp.icons.length > 0 || sp.stickers.length > 0)
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Ikony i naklejki z Iconify — z zestawów na wolnych licencjach, do użytku bez podpisu."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    }
+                    Text {
+                        text: "Kształty"
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                    }
+                    Grid {
+                        id: shapesGrid
+                        columns: 3
+                        spacing: 8
+                        Repeater {
+                            model: sp.shapes
+                            delegate: HoverButton {
+                                id: sh
+                                required property var modelData
+                                readonly property bool line: modelData.shape === "line" || modelData.shape === "arrow"
+                                width: (pages.width - 16) / 3
+                                height: width + 16
+                                radius: 12
+                                baseColor: Theme.fill
+                                onClicked: sp.addShape(modelData)
+                                ArtView {
+                                    x: 14; y: sh.line ? (sh.width - 18) / 2 : 12
+                                    width: sh.width - 28
+                                    height: sh.line ? 18 : sh.width - 28
+                                    element: ({
+                                        type: "shape", shape: sh.modelData.shape, w: 100, h: sh.line ? 18 : 100,
+                                        fill: sh.modelData.fill ? sh.modelData.fill : "",
+                                        stroke: sh.modelData.stroke ? (Theme.dark ? "#ECEEF3" : sh.modelData.stroke) : "",
+                                        strokeWidth: sh.modelData.stroke ? (sh.line ? 6 : 6) : 0,
+                                        radius: sh.modelData.radius ? 18 : 0, dash: !!sh.modelData.dash
+                                    })
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                                    text: sh.modelData.label
+                                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                                }
                             }
                         }
                     }
@@ -301,6 +521,86 @@ Item {
                     visible: sp.tab === "photos"
                     width: parent.width
                     spacing: 12
+                    SearchField {
+                        id: pSearch
+                        placeholder: "Szukaj darmowych zdjęć"
+                        onSearch: (t) => sp.searchPhotos(t)
+                    }
+                    Flow {
+                        visible: sp.pQuery === ""
+                        width: parent.width
+                        spacing: 6
+                        Repeater {
+                            model: sp.photoIdeas
+                            delegate: Chip {
+                                required property string modelData
+                                height: 28
+                                text: modelData
+                                onClicked: pSearch.set(modelData)
+                            }
+                        }
+                    }
+                    Text {
+                        visible: sp.pQuery !== "" && (sp.pFailed || (sp.webPhotos.length === 0 && !sp.pLoading))
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.pFailed ? "Nie udało się połączyć z biblioteką zdjęć. Sprawdź internet." : "Nic nie znalazłem. Spróbuj innego słowa."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                    }
+                    Flow {
+                        visible: sp.webPhotos.length > 0
+                        width: parent.width
+                        spacing: 6
+                        Repeater {
+                            model: sp.webPhotos
+                            delegate: HoverButton {
+                                id: wp
+                                required property var modelData
+                                readonly property bool loading: !!sp.editor.downloads[modelData.url]
+                                width: (photosCol.width - 6) / 2; height: 104
+                                radius: 8
+                                onClicked: sp.editor.addOnlinePhoto(modelData)
+                                Image {
+                                    id: wpImg
+                                    anchors.fill: parent; anchors.margins: 2
+                                    source: wp.modelData.thumb
+                                    sourceSize.width: 320
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    clip: true
+                                    opacity: wp.loading ? 0.4 : 1
+                                    onStatusChanged: if (status === Image.Error && source !== wp.modelData.fallback && wp.modelData.fallback) source = wp.modelData.fallback
+                                }
+                                Rectangle {
+                                    anchors.fill: parent; anchors.margins: 2
+                                    visible: wpImg.status !== Image.Ready
+                                    radius: 6
+                                    color: Theme.fill
+                                }
+                                Text {
+                                    visible: wp.loading
+                                    anchors.centerIn: parent
+                                    text: "Pobieranie…"
+                                    color: "white"; style: Text.Outline; styleColor: Qt.rgba(0, 0, 0, 0.5)
+                                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                    }
+                    Btn {
+                        visible: sp.pQuery !== "" && (sp.pMore || sp.pLoading)
+                        width: parent.width
+                        enabled: !sp.pLoading
+                        text: sp.pLoading ? "Szukam…" : "Więcej zdjęć"
+                        onClicked: sp.morePhotos()
+                    }
+                    Text {
+                        visible: sp.webPhotos.length > 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Zdjęcia z Wikimedia Commons na wolnych licencjach. Przy części trzeba podpisać autora — program zapamięta podpis, a w panelu zdjęcia dodasz go jednym kliknięciem."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    }
                     Btn {
                         width: parent.width
                         primary: true

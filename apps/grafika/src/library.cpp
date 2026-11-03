@@ -1,4 +1,5 @@
 #include "library.h"
+#include "online.h"
 
 #include "art.h"
 
@@ -53,7 +54,7 @@ QStringList Library::fonts() const
     QStringList out;
     const QStringList families = QFontDatabase::families(QFontDatabase::Latin);
     for (const QString &f : families) {
-        if (QFontDatabase::isPrivateFamily(f) || f.contains(QLatin1String("Emoji")) || f.contains(QLatin1String("Symbol"))
+        if (QFontDatabase::isPrivateFamily(f) || Online::previewOnly(f) || f.contains(QLatin1String("Emoji")) || f.contains(QLatin1String("Symbol"))
             || f.startsWith(QLatin1String("Droid Sans ")) || f.contains(QLatin1String("Dingbat")) || f == QLatin1String("D050000L"))
             continue;
         out.append(f);

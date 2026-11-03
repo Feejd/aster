@@ -583,7 +583,7 @@ Item {
                                 if (!pressed) return;
                                 const p = mapToItem(page, e.x, e.y);
                                 const t = s.type;
-                                const keep = (t === "image" || t === "text") !== !!(e.modifiers & Qt.ShiftModifier);
+                                const keep = (t === "image" || t === "text" || t === "vector") !== !!(e.modifiers & Qt.ShiftModifier);
                                 let g = stage.resized(s, handle.modelData.hx, handle.modelData.hy, (p.x - start.x) / stage.zoom, (p.y - start.y) / stage.zoom, keep);
                                 if (!(s.rotation) && !sel.line) g = stage.snapResize(g, s, handle.modelData.hx, handle.modelData.hy, keep, t === "text" && handle.modelData.hy !== 0);
                                 const patch = { x: Math.round(g.x * 10) / 10, y: Math.round(g.y * 10) / 10, w: Math.round(g.w * 10) / 10 };

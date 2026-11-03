@@ -6,6 +6,7 @@ Plik projektu to zwykłe archiwum ZIP (można je otworzyć dowolnym programem do
 |---|---|
 | `project.json` | strona, tło i elementy (opis niżej) |
 | `images/<skrót>.<rozszerzenie>` | zdjęcia użyte w projekcie, w oryginalnej postaci (nazwa = początek SHA-1 treści) |
+| `fonts/<rodzina>/<plik>.ttf` | czcionki pobrane z Google Fonts, użyte w tekstach — na innym komputerze tekst wygląda tak samo |
 | `thumbnail.png` | miniatura (dłuższy bok 512 px) do ekranu startowego i menedżera plików |
 
 Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zdjęć.
@@ -45,4 +46,7 @@ z ruchem wskazówek, wokół środka), `opacity` (0–1), `hidden` (ukryty — n
 - `image`: `src` (plik z `images/`), wypełnia pole i jest przycinane („cover”) wokół punktu `focusX`, `focusY` (0–1),
   `radius` albo `mask: "ellipse"` (zdjęcie w kółku), `zoom` (≥ 1 — powiększenie kadru), `flipX` (odbicie lustrzane),
   `brightness`, `contrast`, `saturation` (−1–1) i `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`).
+  `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.
+- `vector`: `src` (plik SVG z `images/` — ikona albo naklejka), rysowana ostro w każdym rozmiarze; `color` zastępuje
+  `currentColor` (jednokolorowe ikony), `flipX`.

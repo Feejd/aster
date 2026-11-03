@@ -13,7 +13,10 @@
 #include <QPainter>
 #include <QPdfWriter>
 #include <QSaveFile>
+#include <QFontDatabase>
 #include <QStandardPaths>
+#include <QSvgRenderer>
+#include "online.h"
 #include <QUrl>
 #include <private/qzipreader_p.h>
 #include <private/qzipwriter_p.h>
@@ -286,14 +289,20 @@ bool Project::open(const QString &fileOrUrl)
         Asset a;
         a.data = zip.fileData(fi.filePath);
         a.ext = QFileInfo(file).suffix();
-        QBuffer buf(&a.data);
-        QImageReader reader(&buf);
-        reader.setAutoTransform(true);
-        a.full = reader.read();
-        if (a.full.isNull())
+        if (decode(a))
+            m_assets.insert(file, a);
+    }
+    // Czcionki pobrane na innym komputerze, których tu nie ma
+    for (const QZipReader::FileInfo &fi : zip.fileInfoList()) {
+        if (!fi.isFile || !fi.filePath.startsWith(QLatin1String("fonts/")))
             continue;
-        a.preview = qMax(a.full.width(), a.full.height()) > 1600 ? a.full.scaled(1600, 1600, Qt::KeepAspectRatio, Qt::SmoothTransformation) : a.full;
-        m_assets.insert(file, a);
+        const QString file = QFileInfo(fi.filePath).fileName();
+        const QString family = QFileInfo(fi.filePath).path().section(QLatin1Char('/'), 1);
+        if (m_fonts.contains(file) || !Online::fontFiles(family).isEmpty())
+            continue;
+        const int id = QFontDatabase::addApplicationFontFromData(zip.fileData(fi.filePath));
+        if (id >= 0)
+            m_fonts.insert(file, id);
     }
     load(doc);
     m_last = snapshot();
@@ -341,6 +350,17 @@ bool Project::save()
         for (auto it = m_assets.cbegin(); it != m_assets.cend(); ++it)
             if (json.contains(it.key().toUtf8()))
                 zip.addFile(QStringLiteral("images/") + it.key(), it->data);
+        // Pobrane czcionki jadą razem z projektem — na innym komputerze tekst wygląda tak samo
+        QSet<QString> families;
+        for (const QVariant &v : std::as_const(m_elements))
+            families.insert(v.toMap().value(QStringLiteral("font")).toString());
+        for (const QString &family : std::as_const(families)) {
+            for (const QString &path : Online::fontFiles(family)) {
+                QFile f(path);
+                if (f.open(QIODevice::ReadOnly))
+                    zip.addFile(QStringLiteral("fonts/%1/%2").arg(family, QFileInfo(path).fileName()), f.readAll());
+            }
+        }
         const qreal k = 512 / qMax(m_width, m_height);
         QByteArray thumb;
         QBuffer buf(&thumb);
@@ -568,16 +588,53 @@ QString Project::addAsset(const QByteArray &data, const QString &ext)
     Asset a;
     a.data = data;
     a.ext = ext;
+    if (!decode(a))
+        return {};
+    m_assets.insert(key, a);
+    Q_EMIT imagesChanged();
+    return key;
+}
+
+// Zdjęcie do pamięci (pełne i mniejsze na ekran); SVG — obraz 512 px tylko do proporcji i miniatur
+bool Project::decode(Asset &a)
+{
+    if (a.ext == QLatin1String("svg")) {
+        QSvgRenderer svg(a.data);
+        if (!svg.isValid())
+            return false;
+        QSizeF s = svg.viewBoxF().size();
+        if (s.isEmpty())
+            s = svg.defaultSize();
+        if (s.isEmpty())
+            return false;
+        s.scale(512, 512, Qt::KeepAspectRatio);
+        a.full = QImage(s.toSize().expandedTo(QSize(1, 1)), QImage::Format_ARGB32_Premultiplied);
+        a.full.fill(Qt::transparent);
+        QPainter p(&a.full);
+        svg.render(&p);
+        p.end();
+        a.preview = a.full;
+        return true;
+    }
     QBuffer buf(&a.data);
     QImageReader reader(&buf);
     reader.setAutoTransform(true);
     a.full = reader.read();
     if (a.full.isNull())
-        return {};
+        return false;
     a.preview = qMax(a.full.width(), a.full.height()) > 1600 ? a.full.scaled(1600, 1600, Qt::KeepAspectRatio, Qt::SmoothTransformation) : a.full;
-    m_assets.insert(key, a);
-    Q_EMIT imagesChanged();
-    return key;
+    return true;
+}
+
+QByteArray Project::vector(const QString &key) const
+{
+    const auto it = m_assets.constFind(key);
+    return it != m_assets.cend() && it->ext == QLatin1String("svg") ? it->data : QByteArray();
+}
+
+bool Project::recolorable(const QString &key) const
+{
+    return vector(key).contains("currentColor");
 }
 
 QString Project::importImage(const QString &fileOrUrl)
@@ -593,6 +650,14 @@ QString Project::importImage(const QString &fileOrUrl)
     buf.setData(data);
     buf.open(QIODevice::ReadOnly);
     QByteArray format = QImageReader::imageFormat(&buf);
+    if (format.isEmpty() && (path.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive) || data.trimmed().startsWith("<svg")))
+        format = "svg";
+    if (format == "svg" || format == "svgz") {
+        const QString key = addAsset(data, QStringLiteral("svg"));
+        if (key.isEmpty())
+            Q_EMIT error(QStringLiteral("Nie udało się wczytać grafiki SVG."));
+        return key;
+    }
     if (format.isEmpty()) {
         Q_EMIT error(QStringLiteral("Ten plik nie jest zdjęciem, które umiem wczytać."));
         return {};

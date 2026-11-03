@@ -35,8 +35,73 @@ Item {
     function addImageKey(key) {
         const s = project.imageSize(key);
         if (s.width <= 0) return;
+        if (key.endsWith(".svg")) { addVector(key, "#16181D"); return; }
         const k = Math.min(1, project.pageWidth * 0.6 / s.width, project.pageHeight * 0.6 / s.height);
         addElement({ type: "image", src: key, w: Math.round(s.width * k), h: Math.round(s.height * k) });
+    }
+    // Ikona albo naklejka na środek strony; jednokolorowe dostają kolor (da się go potem zmienić)
+    function addVector(key, color) {
+        const s = project.imageSize(key);
+        const side = Math.round(Math.min(project.pageWidth, project.pageHeight) * 0.28);
+        const k = side / Math.max(s.width, s.height);
+        const el = { type: "vector", src: key, w: Math.round(s.width * k), h: Math.round(s.height * k) };
+        if (project.recolorable(key)) el.color = color;
+        addElement(el);
+    }
+
+    // ——— Z internetu: pobranie, potem wstawienie ———
+    property var downloads: ({})            // adres → co zrobić po pobraniu
+    function download(url, job) {
+        if (downloads[url]) return;
+        const d = Object.assign({}, downloads);
+        d[url] = job;
+        downloads = d;
+        Online.fetch(url, url);
+    }
+    function finishDownload(url) {
+        const d = Object.assign({}, downloads);
+        delete d[url];
+        downloads = d;
+    }
+    function addGraphic(file) {
+        const key = project.importImage(file);
+        if (key !== "") addVector(key, "#16181D");
+    }
+    function addOnlinePhoto(photo) {
+        // Zaznaczone puste miejsce na zdjęcie (np. w szablonie) — zdjęcie trafia do niego
+        const frame = stage.current.type === "image" && !stage.current.locked ? stage.current.id : "";
+        download(photo.url, { kind: "photo", frame: frame, fallback: photo.fallback, credit: photo.credit || "" });
+    }
+    Connections {
+        target: Online
+        function onFetched(tag, path) {
+            const job = ed.downloads[tag];
+            if (!job) return;
+            ed.finishDownload(tag);
+            const key = ed.project.importImage(path);
+            if (key === "") return;
+            if (job.kind === "photo") {
+                if (job.frame !== "" && ed.project.indexOf(job.frame) >= 0) {
+                    ed.project.change(job.frame, { src: key, focusX: null, focusY: null, zoom: null, credit: job.credit || null });
+                    stage.select(job.frame);
+                } else {
+                    ed.addImageKey(key);
+                    if (job.credit) ed.project.change(ed.sel, { credit: job.credit });
+                }
+                if (job.credit) ed.app.toast("To zdjęcie wymaga podpisu autora — dodasz go w panelu zdjęcia", "");
+            }
+        }
+        function onFetchFailed(tag) {
+            const job = ed.downloads[tag];
+            if (!job) return;
+            ed.finishDownload(tag);
+            // Oryginał bywa niedostępny — wtedy mniejsza kopia z Openverse
+            if (job.kind === "photo" && job.fallback && job.fallback !== tag) {
+                ed.download(job.fallback, { kind: "photo", frame: job.frame, credit: job.credit });
+                return;
+            }
+            ed.app.toast("Nie udało się pobrać — sprawdź połączenie z internetem", "");
+        }
     }
     function addImageFile(url) {
         const key = project.importImage(String(url));
@@ -53,7 +118,7 @@ Item {
         if (target && target.type === "image" && !target.locked) {
             const key = project.importImage(String(urls[0]));
             if (key === "") return;
-            project.change(target.id, { src: key, focusX: null, focusY: null, zoom: null });
+            project.change(target.id, { src: key, focusX: null, focusY: null, zoom: null, credit: null });
             stage.select(target.id);
             app.toast("Zdjęcie wstawione w ramkę — dwuklik, żeby wybrać kadr", "");
             return;
@@ -66,7 +131,7 @@ Item {
         if (mode === "background") {
             project.setBackground({ type: "image", src: key, color: project.background.color || "#ffffff" });
         } else if (mode === "replace" && sel !== "") {
-            project.change(sel, { src: key });
+            project.change(sel, { src: key, credit: null });
         } else {
             addImageKey(key);
         }
@@ -155,6 +220,17 @@ Item {
         if (on && stage.isSelected(id)) stage.setSelection(many.filter(i => i !== id));
         project.change(id, { hidden: on ? true : null });
     }
+    // Podpis autora zdjęcia (licencja CC BY) — mały tekst w rogu strony
+    function addCredit(id) {
+        const el = project.get(id);
+        if (!el.credit) return;
+        const size = Math.max(10, Math.round(Math.min(project.pageWidth, project.pageHeight) * 0.016));
+        const t = { type: "text", text: el.credit, size: size, color: "#ffffff", font: "Geist", weight: 500, align: "right", shadow: true, opacity: 0.85 };
+        t.w = Math.min(project.pageWidth * 0.9, project.naturalWidth(t) + size);
+        t.x = Math.round(project.pageWidth - t.w - size * 1.5);
+        t.y = Math.round(project.pageHeight - size * 3);
+        addElement(t);
+    }
     function copyImage() {
         exportPop.close();
         if (project.copyImage()) app.toast("Skopiowano grafikę — wklej ją w wiadomości (Ctrl+V)", "");
@@ -235,6 +311,14 @@ Item {
         else if (cmd === "set") project.change(sel, JSON.parse(arg));
         else if (cmd === "align") alignMany(arg);
         else if (cmd === "dup") duplicate();
+        else if (cmd === "searchg") { side.tab = "shapes"; side.searchGraphics(arg); }
+        else if (cmd === "searchp") { side.tab = "photos"; side.searchPhotos(arg); }
+        else if (cmd === "addg") addGraphic(side.icons[Number(arg)].file);
+        else if (cmd === "addst") addGraphic(side.stickers[Number(arg)].file);
+        else if (cmd === "addp") addOnlinePhoto(side.webPhotos[Number(arg)]);
+        else if (cmd === "fontweb") { fontPop.source = "web"; pickFont(inspector, stage.current.font || "Geist", f => project.change(sel, { font: f })); }
+        else if (cmd === "fontinstall") fontPop.choose(arg);
+        else if (cmd === "fontpop") pickFont(inspector, stage.current.font || "Geist", f => project.change(sel, { font: f }));
         else if (cmd === "edit") stage.startEditing(sel);
         else if (cmd === "tab") side.tab = arg;
         else if (cmd === "export") exportPop.openAt(exportBtn);

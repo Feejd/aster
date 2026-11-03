@@ -51,6 +51,8 @@ public:
     QStringList colors() const;
 
     QImage image(const QString &key, qreal pixels) const override;
+    QByteArray vector(const QString &key) const override;
+    Q_INVOKABLE bool recolorable(const QString &key) const;     // SVG z currentColor (jednokolorowa ikona)
 
     // ——— Projekt ———
     Q_INVOKABLE void create(qreal width, qreal height, const QString &name, const QVariantMap &print = {});
@@ -118,6 +120,7 @@ private:
     void setModified(bool on);
     void setPath(const QString &path);
     QString addAsset(const QByteArray &data, const QString &ext);
+    static bool decode(Asset &a);
     QVariantMap prepared(QVariantMap el) const;
     QString newId();
     QString insert(const QVariantMap &element);     // bez zamykania kroku cofania
@@ -132,6 +135,7 @@ private:
     QString m_path;
     bool m_modified = false;
     QHash<QString, Asset> m_assets;
+    QHash<QString, int> m_fonts;    // czcionki dołączone do otwartego pliku (nazwa pliku → id)
     QList<QByteArray> m_undo;
     QList<QByteArray> m_redo;
     QByteArray m_last;              // ostatni zamknięty stan

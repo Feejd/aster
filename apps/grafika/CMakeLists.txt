@@ -1,6 +1,6 @@
 # Grafika (aster-grafika) — budowana z głównego CMakeLists.txt repozytorium.
 # Rysowanie przez QPainter (to samo na ekranie i w eksporcie), PDF przez QPdfWriter, plik projektu — ZIP (QZipWriter z Qt).
-find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+find_package(Qt6 REQUIRED COMPONENTS CorePrivate Svg Network)
 
 qt_add_executable(aster-grafika src/main.cpp)
 target_include_directories(aster-grafika PRIVATE src)
@@ -22,6 +22,7 @@ set(GRAFIKA_QML
     qml/ColorWell.qml
     qml/IconToggle.qml
     qml/Section.qml
+    qml/SearchField.qml
 )
 foreach(f ${GRAFIKA_QML})
     get_filename_component(name ${f} NAME)
@@ -41,6 +42,8 @@ qt_add_qml_module(aster-grafika
         src/project.h
         src/library.cpp
         src/library.h
+        src/online.cpp
+        src/online.h
 )
 
 # Szablony — zwykłe pliki projektu (project.json), wbudowane w program pod :/szablony
@@ -57,6 +60,8 @@ target_link_libraries(aster-grafika PRIVATE
     Qt6::Quick
     Qt6::Qml
     Qt6::DBus
+    Qt6::Svg
+    Qt6::Network
     aster-uiplugin
 )
 
