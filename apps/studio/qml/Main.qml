@@ -206,7 +206,8 @@ Window {
         menu.openAt(p.x, p.y, [
             { label: "Nagranie — głos, gitara", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
             { label: "Bit — Beat Maker", icon: "grid", action: "addDrums" },
-            { label: "Bas 808", icon: "music", action: "addBass" }
+            { label: "Bas 808", icon: "music", action: "addBass" },
+            { label: "Akordy / melodia", icon: "music", action: "addKeys" }
         ]);
     }
     function projectMenu(project, item, x, y) {
@@ -239,7 +240,13 @@ Window {
         else if (a === "forget") Studio.forgetRecent(menu.folder);
         else if (a === "addAudio") Studio.addTrack();
         else if (a === "addDrums") { const i = Studio.addPatternTrack("drums", "trap"); if (i >= 0) editTrack = i; }
+        else if (a === "addKeys") { const i = Studio.addPatternTrack("keys", "trap"); if (i >= 0) editTrack = i; }
         else if (a === "addBass") { const i = Studio.addPatternTrack("bass", "trap"); if (i >= 0) editTrack = i; }
+        else if (a.startsWith("chord:") && editTrack >= 0) {
+            const p = JSON.parse(JSON.stringify(Studio.tracks[editTrack].pattern));
+            p.chords[menu.chordIndex] = Number(a.substring(6));
+            Studio.setPattern(editTrack, p);
+        }
         else if (a.startsWith("genre:") && editTrack >= 0) Studio.setPattern(editTrack, Studio.genrePattern(Studio.tracks[editTrack].kind, a.substring(6)));
     }
 
@@ -543,9 +550,16 @@ Window {
             colors: win.trackColors
             readonly property bool bassMode: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "bass"
             height: win.editTrack >= 0 && !!Studio.tracks[win.editTrack] ? Math.min(bassMode ? 450 : 330, project.height * 0.55) : 0
+            // Akordy: niższy panel
             visible: height > 0
             clip: true
             onCloseRequested: win.editTrack = -1
+            onChordMenuRequested: (index, x, y) => {
+                const p = beatMaker.mapToItem(frame, x, y);
+                const seventh = !!Studio.tracks[win.editTrack].pattern.seventh;
+                menu.chordIndex = index;
+                menu.openAt(p.x, Math.min(p.y, frame.height - 300), [0, 1, 2, 3, 4, 5, 6].map(d => ({ label: Studio.chordName(d, seventh), shortcut: ["I", "II", "III", "IV", "V", "VI", "VII"][d], action: "chord:" + d })));
+            }
             onGenreMenuRequested: (x, y) => {
                 const p = beatMaker.mapToItem(frame, x, y);
                 menu.openAt(p.x, Math.min(p.y, frame.height - 320), Studio.genres.map(g => ({ label: g.label + " · " + g.bpm + " BPM", icon: "sparkle", action: "genre:" + g.id })));
@@ -855,6 +869,7 @@ Window {
             property real at
             property int track
             property string folder
+            property int chordIndex
             onTriggered: (a) => win.runMenu(a)
         }
     }

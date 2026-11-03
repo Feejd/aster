@@ -16,13 +16,18 @@
 // Wzór 808:      { kit, bars, root (0 = C … 11 = H), notes: [stopień skali molowej 0…14 albo -1], glide }
 namespace BeatSynth {
 
-enum Kind { Drums, Bass };
+enum Kind { Drums, Bass, Keys };
 
 QVariantList kits();                                       // [{ id, label, hint }]
 QVariantList genres();                                     // [{ id, label, bpm, hint }]
 QJsonObject genrePattern(const QString &genre, Kind kind); // gotowy wzór gatunku
 QJsonObject emptyPattern(Kind kind, const QString &kit, int bars);
 QStringList rowNames();                                    // kick, snare, clap, hat, openhat, perc
+// Akordy: { instrument, rhythm, chords: [stopień 0…6 na takt], octave, seventh } — tonację (keyRoot, keyMinor) wstawia Studio
+QVariantList instruments();                                // [{ id, label, hint }]
+QVariantList rhythms();                                    // [{ id, label }]
+QVariantList progressions();                               // [{ id, label, hint, chords }]
+QString chordName(int root, bool minor, int degree, bool seventh);   // „a-moll”, „F-dur⁷”
 int noteMidi(const QJsonObject &bassPattern, int degree);  // stopień skali → MIDI
 
 // Pętla audio (stereo, `rate`) z wzoru w danym tempie; ogony dźwięków zawijają się na początek (pętla bez szwu)

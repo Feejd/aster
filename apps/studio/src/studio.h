@@ -44,6 +44,9 @@ class Studio : public QObject
     Q_PROPERTY(bool keyMinor READ keyMinor WRITE setKeyMinor NOTIFY settingsChanged)
     Q_PROPERTY(QString keyName READ keyName NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList genres READ genres CONSTANT)
+    Q_PROPERTY(QVariantList instruments READ instruments CONSTANT)
+    Q_PROPERTY(QVariantList rhythms READ rhythms CONSTANT)
+    Q_PROPERTY(QVariantList progressions READ progressions CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
@@ -114,6 +117,9 @@ public:
     void setKeyMinor(bool m);
     QString keyName() const;
     QVariantList genres() const;
+    QVariantList instruments() const;
+    QVariantList rhythms() const;
+    QVariantList progressions() const;
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
     QVariantList mix() const { return m_mixView; }
@@ -178,6 +184,7 @@ public:
     Q_INVOKABLE void setPattern(int index, const QVariantMap &pattern);
     Q_INVOKABLE QVariantMap genrePattern(const QString &kind, const QString &genre) const;
     Q_INVOKABLE QString noteName(int root, int degree) const;     // „Fis1”
+    Q_INVOKABLE QString chordName(int degree, bool seventh) const; // w tonacji projektu: „a-moll”
     Q_INVOKABLE void setMastering(const QString &key, double value);
     Q_INVOKABLE void applyMastering(const QString &preset);
     Q_INVOKABLE bool keyFrom808();                              // tonacja jak w pierwszej ścieżce 808               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
@@ -273,7 +280,8 @@ private:
         double eqLow = 0, eqHigh = 0, comp = 0, width = 1, drive = 0;   // dB, dB, 0…1, ×, dB
         QString preset;
     };
-    void renderPattern(int index);                  // wzór → plik audio/_bit-N.wav → klipy ścieżki
+    void renderPattern(int index);
+    void renderKeyTracks();                         // po zmianie tonacji — akordy idą za nią                  // wzór → plik audio/_bit-N.wav → klipy ścieżki
     void applyPresetTo(Track &t, const QString &preset);
     void applyMasteringPreset(const QString &preset);
     static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)

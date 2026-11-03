@@ -14,6 +14,9 @@ Item {
 
     readonly property var tr: Studio.tracks[track] || null
     readonly property bool bass: !!tr && tr.kind === "bass"
+    readonly property bool keys: !!tr && tr.kind === "keys"
+    signal chordMenuRequested(int index, real x, real y)
+    readonly property int playBar: Studio.playing && pat && pat.chords ? Math.floor(Math.max(0, Studio.position) / (stepSec * 16)) % pat.chords.length : -1
     property var pat: null                       // lokalna kopia wzoru (edycja przed zapisaniem)
     readonly property int steps: pat ? (pat.bars || 2) * 16 : 32
     readonly property var rowIds: ["kick", "snare", "clap", "hat", "openhat", "perc"]
@@ -63,15 +66,16 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 34; height: 34; radius: 10
                 color: pe.tint
-                Text { anchors.centerIn: parent; text: pe.bass ? "808" : "BIT"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold }
+                Text { anchors.centerIn: parent; text: pe.bass ? "808" : pe.keys ? "♪" : "BIT"; color: "white"; font.family: Theme.font; font.pixelSize: pe.keys ? 17 : 11; font.weight: Font.Bold }
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
                 Text { text: pe.tr ? pe.tr.name : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Bold }
-                Text { text: pe.bass ? "Bas 808 — kliknij nutę w kolumnie" : "Beat Maker — kliknij albo maluj kroki"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                Text { text: pe.bass ? "Bas 808 — kliknij nutę w kolumnie" : pe.keys ? "Akordy w tonacji " + Studio.keyName : "Beat Maker — kliknij albo maluj kroki"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
             }
             Item { width: 8; height: 1 }
             Segmented {
+                visible: !pe.keys
                 anchors.verticalCenter: parent.verticalCenter
                 model: Studio.kits.map(k => ({ label: k.label, value: k.id }))
                 value: pe.pat ? pe.pat.kit : ""
@@ -83,7 +87,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 8
             Pill { height: 30; text: "Wzór…"; icon: "sparkle"; tip: "Wstaw gotowy wzór gatunku"; onClicked: { const p = mapToItem(pe, 0, height + 4); pe.genreMenu(p.x, p.y); } }
-            Pill { height: 30; text: "Wyczyść"; icon: "trash"; onClicked: pe.clear() }
+            Pill { visible: !pe.keys; height: 30; text: "Wyczyść"; icon: "trash"; onClicked: pe.clear() }
             HoverButton {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 30; height: 30; radius: 15
@@ -95,8 +99,107 @@ Item {
     signal genreMenuRequested(real x, real y)
     function genreMenu(x, y) { genreMenuRequested(x, y); }
 
+    // ——— Akordy: brzmienie, rytm, oktawa, progresja i akord na każdy takt ———
+    Column {
+        id: keysPane
+        visible: pe.keys
+        x: 16; y: bar.height
+        width: parent.width - 32
+        spacing: 12
+        Flow {
+            width: parent.width
+            spacing: 6
+            Repeater {
+                model: Studio.instruments
+                delegate: Chip {
+                    required property var modelData
+                    text: modelData.label; tip: modelData.hint
+                    on: !!pe.pat && pe.pat.instrument === modelData.id
+                    onClicked: pe.setKey("instrument", modelData.id)
+                }
+            }
+        }
+        Row {
+            spacing: 14
+            height: 34
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Rytm"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+            Segmented {
+                anchors.verticalCenter: parent.verticalCenter
+                model: Studio.rhythms.map(r => ({ label: r.label, value: r.id }))
+                value: pe.pat ? pe.pat.rhythm || "" : ""
+                onPicked: (v) => pe.setKey("rhythm", v)
+            }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Oktawa"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                Pill { height: 28; icon: "minus"; onClicked: pe.setKey("octave", Math.max(2, (pe.pat.octave || 4) - 1)) }
+                Text { anchors.verticalCenter: parent.verticalCenter; width: 24; horizontalAlignment: Text.AlignHCenter; text: pe.pat ? pe.pat.octave || 4 : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                Pill { height: 28; icon: "plus"; onClicked: pe.setKey("octave", Math.min(6, (pe.pat.octave || 4) + 1)) }
+            }
+            Chip { anchors.verticalCenter: parent.verticalCenter; text: "Septymy (bogatsze akordy)"; on: !!pe.pat && !!pe.pat.seventh; onClicked: pe.setKey("seventh", !pe.pat.seventh) }
+        }
+        Row {
+            spacing: 6
+            Text { anchors.verticalCenter: parent.verticalCenter; rightPadding: 8; text: "Progresja"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+            Repeater {
+                model: Studio.progressions
+                delegate: Chip {
+                    required property var modelData
+                    text: modelData.label; tip: modelData.hint
+                    on: !!pe.pat && !!pe.pat.chords && JSON.stringify(pe.pat.chords) === JSON.stringify(modelData.chords)
+                    onClicked: pe.setKey("chords", modelData.chords)
+                }
+            }
+        }
+        Row {
+            spacing: 10
+            Repeater {
+                model: pe.pat && pe.pat.chords ? pe.pat.chords.length : 0
+                delegate: HoverButton {
+                    id: tile
+                    required property int index
+                    readonly property int degree: pe.pat && pe.pat.chords ? pe.pat.chords[index] || 0 : 0
+                    width: 128; height: 76; radius: 14
+                    baseColor: index === pe.playBar ? Qt.rgba(pe.tint.r, pe.tint.g, pe.tint.b, 0.55) : Qt.rgba(pe.tint.r, pe.tint.g, pe.tint.b, 0.22)
+                    border.width: 1; border.color: Qt.rgba(pe.tint.r, pe.tint.g, pe.tint.b, 0.8)
+                    onClicked: { const p = mapToItem(pe, 0, height + 4); pe.chordMenuRequested(index, p.x, p.y); }
+                    Text { x: 12; y: 8; text: "Takt " + (tile.index + 1); color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                    Text { x: 12; y: 26; text: Studio.chordName(tile.degree, !!pe.pat && !!pe.pat.seventh); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold }
+                    Text { x: 12; y: 52; text: ["I", "II", "III", "IV", "V", "VI", "VII"][tile.degree] + " stopień"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 10; y: 10; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
+                }
+            }
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                Pill { height: 30; icon: "plus"; tip: "Dodaj takt"; enabled: !!pe.pat && !!pe.pat.chords && pe.pat.chords.length < 8; onClicked: pe.setKey("chords", pe.pat.chords.concat([pe.pat.chords[pe.pat.chords.length - 1]])) }
+                Pill { height: 30; icon: "minus"; tip: "Usuń ostatni takt"; enabled: !!pe.pat && !!pe.pat.chords && pe.pat.chords.length > 1; onClicked: pe.setKey("chords", pe.pat.chords.slice(0, -1)) }
+            }
+        }
+        Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: "Akordy są zawsze w tonacji piosenki (" + Studio.keyName + ") — tej samej co 808 i autotune. Tonację zmienisz w panelu po prawej (Projekt)."
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+        }
+    }
+
+    component Chip: HoverButton {
+        id: chip
+        property string text
+        property string tip
+        property bool on: false
+        width: chipText.implicitWidth + 24; height: 30; radius: 15
+        baseColor: on ? Theme.accent : Theme.fill
+        color: on ? baseColor : (hovered ? Theme.hover : baseColor)
+        Text { id: chipText; anchors.centerIn: parent; text: chip.text; color: chip.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+        Tip { shown: chip.hovered && chip.tip !== ""; text: chip.tip }
+    }
+
     Row {
         id: opts
+        visible: !pe.keys
         x: 16; y: bar.height
         spacing: 14
         height: 34
@@ -161,6 +264,7 @@ Item {
     // ——— Siatka ———
     Item {
         id: grid
+        visible: !pe.keys
         x: 16; y: opts.y + opts.height + 8
         width: parent.width - 32; height: parent.height - y - 12
         readonly property int labelW: 112

@@ -301,6 +301,156 @@ void normalize(Buffer &b, float target)
     }
 }
 
+// ——— Akordy i melodia ———
+
+struct Instrument { const char *id, *label, *hint; };
+const Instrument s_instruments[] = {
+    {"piano", "Pianino", "Ciepły fortepian"},
+    {"epiano", "Klawisze elektryczne", "Miękkie, dzwoniące — lo-fi, R&B"},
+    {"pad", "Pad", "Długa, szeroka plama dźwięku"},
+    {"pluck", "Pluck", "Szarpana struna — krótko i rytmicznie"},
+    {"bells", "Dzwonki", "Szklane dzwonki — klasyka trapu"},
+    {"lead", "Lead", "Wyrazisty syntezator na melodię"},
+};
+
+struct Rhythm { const char *id, *label; };
+const Rhythm s_rhythms[] = {
+    {"sustain", "Cały takt"}, {"half", "Półnuty"}, {"stabs", "Staccato"}, {"arp", "Arpeggio ósemki"}, {"arp16", "Arpeggio szesnastki"},
+};
+
+struct Progression { const char *id, *label, *hint; int chords[4]; };
+const Progression s_progressions[] = {
+    {"sad", "Smutna", "i – VI – III – VII", {0, 5, 2, 6}},
+    {"dark", "Mroczna", "i – i – VI – v", {0, 0, 5, 4}},
+    {"epic", "Epicka", "VI – VII – i – i", {5, 6, 0, 0}},
+    {"dreamy", "Rozmarzona", "iv – VII – III – VI", {3, 6, 2, 5}},
+    {"hopeful", "Z nadzieją", "VI – III – VII – iv", {5, 2, 6, 3}},
+    {"simple", "Dwa akordy", "i – VI", {0, 5, 0, 5}},
+};
+
+const int s_major[7] = {0, 2, 4, 5, 7, 9, 11};
+
+int scaleSemis(int degree, bool minor)
+{
+    const int *sc = minor ? s_scale : s_major;
+    return 12 * (degree / 7) + sc[degree % 7];
+}
+
+double midiHz(double m) { return 440.0 * std::pow(2.0, (m - 69) / 12.0); }
+
+// Piła i prostokąt z wygładzonymi skokami (PolyBLEP) — bez „cyfrowego” aliasingu
+double blep(double t, double dt)
+{
+    if (t < dt) {
+        t /= dt;
+        return t + t - t * t - 1;
+    }
+    if (t > 1 - dt) {
+        t = (t - 1) / dt;
+        return t * t + t + t + 1;
+    }
+    return 0;
+}
+
+std::vector<float> keyVoice(const QString &inst, double f, long long len, int rate, Noise &rnd)
+{
+    const bool ring = inst == QLatin1String("bells") || inst == QLatin1String("pluck");
+    const double rel = inst == QLatin1String("pad") ? 0.45 : ring ? 1.2 : 0.25;
+    const long long n = len + llround(rel * rate);
+    std::vector<float> v(static_cast<size_t>(n), 0.f);
+    const double dt = f / rate;
+    double ph = 0, ph2 = 0, ph3 = 0, lp = 0;
+    std::vector<float> ks;
+    size_t ksPos = 0;
+    if (inst == QLatin1String("pluck")) {
+        ks.resize(static_cast<size_t>(std::max(2.0, rate / f)));
+        for (float &s : ks)
+            s = rnd.next();
+    }
+    for (long long i = 0; i < n; ++i) {
+        const double t = double(i) / rate;
+        const double off = i < len ? 1.0 : std::exp(-(double(i - len) / rate) * (3.0 / rel) * 2.3);
+        double y = 0;
+        if (inst == QLatin1String("piano")) {
+            for (int h = 1; h <= 8; ++h) {
+                const double hf = h * std::sqrt(1 + 0.0004 * h * h);
+                y += std::sin(2 * M_PI * f * hf * t) * std::pow(h, -1.1) * std::exp(-t * (0.7 + 0.55 * h));
+            }
+            y *= 0.55 * std::min(1.0, t / 0.002);
+            y += rnd.next() * std::exp(-t * 300) * 0.05;
+        } else if (inst == QLatin1String("epiano")) {
+            const double index = 1.6 * std::exp(-t * 4) + 0.25;
+            y = std::sin(2 * M_PI * f * t + index * std::sin(2 * M_PI * f * t)) * std::exp(-t * 0.9);
+            y += 0.12 * std::sin(2 * M_PI * f * 7.0 * t) * std::exp(-t * 14);
+            y *= 0.6 * std::min(1.0, t / 0.003);
+        } else if (inst == QLatin1String("pad")) {
+            // Trzy rozstrojone piły przez łagodny filtr; powolne narastanie
+            const double d2 = dt * 1.0046, d3 = dt * 0.9954;
+            ph += dt; ph -= std::floor(ph);
+            ph2 += d2; ph2 -= std::floor(ph2);
+            ph3 += d3; ph3 -= std::floor(ph3);
+            const double saw = (2 * ph - 1 - blep(ph, dt)) + (2 * ph2 - 1 - blep(ph2, d2)) + (2 * ph3 - 1 - blep(ph3, d3));
+            const double cutoff = 900 + 900 * std::min(1.0, t / 1.5);
+            lp += (1 - std::exp(-2 * M_PI * cutoff / rate)) * (saw / 3 - lp);
+            y = lp * 0.9 * std::min(1.0, t / 0.35);
+        } else if (inst == QLatin1String("pluck")) {
+            // Karplus–Strong: szum w pętli opóźniającej z uśrednianiem — szarpana struna
+            const size_t N = ks.size();
+            const float a = ks[ksPos], b2 = ks[(ksPos + 1) % N];
+            ks[ksPos] = 0.5f * (a + b2) * 0.996f;
+            ksPos = (ksPos + 1) % N;
+            y = a * 0.7;
+        } else if (inst == QLatin1String("bells")) {
+            const double index = 2.4 * std::exp(-t * 2.2);
+            y = std::sin(2 * M_PI * f * t + index * std::sin(2 * M_PI * f * 3.5 * t)) * std::exp(-t * 1.6) * 0.6;
+            y += 0.2 * std::sin(2 * M_PI * f * 2 * t) * std::exp(-t * 3);
+        } else {   // lead
+            const double vib = t > 0.2 ? 1 + 0.005 * std::sin(2 * M_PI * 5.2 * t) : 1;
+            const double d = dt * vib;
+            ph += d; ph -= std::floor(ph);
+            double q = ph < 0.5 ? 1 : -1;
+            q += blep(ph, d);
+            double p2 = ph + 0.5; p2 -= std::floor(p2);
+            q -= blep(p2, d);
+            lp += (1 - std::exp(-2 * M_PI * 2600 / rate)) * (q - lp);
+            y = lp * 0.4 * std::min(1.0, t / 0.01);
+        }
+        v[size_t(i)] = float(y * off);
+    }
+    return v;
+}
+
+// Prowadzenie głosów: przewrót akordu najbliższy poprzedniemu (palce nie skaczą po klawiaturze)
+std::vector<int> voiceChord(std::vector<int> notes, double &prevCenter)
+{
+    std::vector<int> best = notes;
+    double bestCost = 1e9;
+    for (size_t inv = 0; inv < notes.size(); ++inv) {
+        std::vector<int> c = notes;
+        for (size_t i = 0; i < inv; ++i)
+            c[i] += 12;
+        for (int shift : {-12, 0, 12}) {
+            double center = 0;
+            for (int m : c)
+                center += m + shift;
+            center /= double(c.size());
+            const double cost = std::fabs(center - prevCenter);
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = c;
+                for (int &m : best)
+                    m += shift;
+            }
+        }
+    }
+    double center = 0;
+    for (int m : best)
+        center += m;
+    prevCenter = center / double(best.size());
+    std::sort(best.begin(), best.end());
+    return best;
+}
+
 } // namespace
 
 QVariantList kits()
@@ -319,6 +469,50 @@ QVariantList genres()
         list.append(QVariantMap{{QStringLiteral("id"), QString::fromUtf8(g.id)}, {QStringLiteral("label"), QString::fromUtf8(g.label)},
                                 {QStringLiteral("bpm"), g.bpm}, {QStringLiteral("hint"), QString::fromUtf8(g.hint)}});
     return list;
+}
+
+QVariantList instruments()
+{
+    QVariantList list;
+    for (const Instrument &i : s_instruments)
+        list.append(QVariantMap{{QStringLiteral("id"), QString::fromUtf8(i.id)}, {QStringLiteral("label"), QString::fromUtf8(i.label)},
+                                {QStringLiteral("hint"), QString::fromUtf8(i.hint)}});
+    return list;
+}
+
+QVariantList rhythms()
+{
+    QVariantList list;
+    for (const Rhythm &r : s_rhythms)
+        list.append(QVariantMap{{QStringLiteral("id"), QString::fromUtf8(r.id)}, {QStringLiteral("label"), QString::fromUtf8(r.label)}});
+    return list;
+}
+
+QVariantList progressions()
+{
+    QVariantList list;
+    for (const Progression &p : s_progressions)
+        list.append(QVariantMap{{QStringLiteral("id"), QString::fromUtf8(p.id)}, {QStringLiteral("label"), QString::fromUtf8(p.label)},
+                                {QStringLiteral("hint"), QString::fromUtf8(p.hint)},
+                                {QStringLiteral("chords"), QVariantList{p.chords[0], p.chords[1], p.chords[2], p.chords[3]}}});
+    return list;
+}
+
+QString chordName(int root, bool minor, int degree, bool seventh)
+{
+    static const char *names[12] = {"C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"};
+    degree = std::clamp(degree, 0, 6);
+    const int r = scaleSemis(degree, minor);
+    const int third = scaleSemis(degree + 2, minor) - r, fifth = scaleSemis(degree + 4, minor) - r;
+    const QString n = QString::fromUtf8(names[(root + r) % 12]);
+    QString s;
+    if (third == 4)
+        s = n + QStringLiteral("-dur");
+    else if (fifth == 6)
+        s = n.toLower() + QStringLiteral(" zmn.");
+    else
+        s = n.toLower() + QStringLiteral("-moll");
+    return seventh ? s + QStringLiteral("⁷") : s;
 }
 
 QStringList rowNames()
@@ -353,6 +547,25 @@ QJsonObject genrePattern(const QString &id, Kind kind)
     const Genre *g = genre(id);
     if (!g)
         g = &s_genres[0];
+    if (kind == Keys) {
+        struct K { const char *genre, *inst, *rhythm, *prog; int octave; bool seventh; };
+        static const K table[] = {
+            {"trap", "bells", "arp", "sad", 5, false}, {"drill", "pluck", "arp16", "dark", 4, false},
+            {"boombap", "epiano", "half", "dreamy", 4, true}, {"lofi", "epiano", "sustain", "dreamy", 4, true},
+            {"house", "piano", "stabs", "sad", 4, true}, {"pop", "piano", "half", "epic", 4, false},
+        };
+        const K *k = &table[0];
+        for (const K &x : table)
+            if (id == QLatin1String(x.genre))
+                k = &x;
+        QJsonArray chords;
+        for (const Progression &pr : s_progressions)
+            if (QLatin1String(pr.id) == QLatin1String(k->prog))
+                for (int c : pr.chords)
+                    chords.append(c);
+        return QJsonObject{{QStringLiteral("instrument"), QString::fromUtf8(k->inst)}, {QStringLiteral("rhythm"), QString::fromUtf8(k->rhythm)},
+                           {QStringLiteral("chords"), chords}, {QStringLiteral("octave"), k->octave}, {QStringLiteral("seventh"), k->seventh}};
+    }
     if (kind == Bass) {
         QJsonArray notes;
         for (const char *p = g->bass; *p; ++p)
@@ -381,7 +594,8 @@ int noteMidi(const QJsonObject &p, int degree)
 std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm, int rate)
 {
     const Kit &k = kit(p.value(QStringLiteral("kit")).toString());
-    const int bars = std::clamp(p.value(QStringLiteral("bars")).toInt(2), 1, 4);
+    const int bars = kind == Keys ? std::clamp(int(p.value(QStringLiteral("chords")).toArray().size()), 1, 8)
+                                  : std::clamp(p.value(QStringLiteral("bars")).toInt(2), 1, 4);
     const int nSteps = bars * 16;
     const double stepSec = 60.0 / std::clamp(bpm, 30.0, 300.0) / 4;
     const long long loop = llround(nSteps * stepSec * rate);
@@ -433,6 +647,59 @@ std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm,
         }
         lofi(b, k.lofi, rate, rnd);
         normalize(b, 0.75f);
+    } else if (kind == Keys) {
+        // Akordy w tonacji projektu (keyRoot, keyMinor wstawia Studio) w wybranym rytmie
+        const QString inst = p.value(QStringLiteral("instrument")).toString(QStringLiteral("piano"));
+        const QString rhythm = p.value(QStringLiteral("rhythm")).toString(QStringLiteral("sustain"));
+        const QJsonArray chords = p.value(QStringLiteral("chords")).toArray();
+        const bool minor = p.value(QStringLiteral("keyMinor")).toBool(true);
+        const int root = std::clamp(p.value(QStringLiteral("keyRoot")).toInt(9), 0, 11);
+        const int octave = std::clamp(p.value(QStringLiteral("octave")).toInt(4), 2, 6);
+        const bool seventh = p.value(QStringLiteral("seventh")).toBool(false);
+        const int base = 12 * (octave + 1) + root;
+        double center = base + 5;
+        struct Ev { int step, len; int tone; float vel; };    // tone −1 = cały akord
+        std::vector<Ev> bar;
+        if (rhythm == QLatin1String("half"))
+            bar = {{0, 8, -1, 0.9f}, {8, 8, -1, 0.75f}};
+        else if (rhythm == QLatin1String("stabs"))
+            bar = {{0, 2, -1, 1}, {3, 2, -1, 0.7f}, {6, 2, -1, 0.85f}, {10, 2, -1, 0.75f}, {12, 3, -1, 0.9f}};
+        else if (rhythm == QLatin1String("arp")) {
+            static const int seq[8] = {0, 1, 2, 3, 2, 1, 0, 1};
+            for (int i = 0; i < 8; ++i)
+                bar.push_back({i * 2, 2, seq[i], i % 2 ? 0.7f : 0.95f});
+        } else if (rhythm == QLatin1String("arp16")) {
+            for (int i = 0; i < 16; ++i)
+                bar.push_back({i, 1, i % 4, i % 4 == 0 ? 1.0f : 0.65f});
+        } else {
+            bar = {{0, 16, -1, 0.9f}};
+        }
+        for (int pass = 0; pass < 2; ++pass) {
+            double c = center;
+            for (int ci = 0; ci < bars; ++ci) {
+                const int d = std::clamp(chords.at(ci).toInt(), 0, 6);
+                std::vector<int> notes;
+                for (int t = 0; t < (seventh ? 4 : 3); ++t)
+                    notes.push_back(base + scaleSemis(d + 2 * t, minor));
+                notes = voiceChord(notes, c);
+                for (const Ev &e : bar) {
+                    const long long at = pass * loop + llround((ci * 16 + e.step) * stepSec * rate);
+                    const long long len = llround(e.len * stepSec * rate);
+                    auto play = [&](int midi, float vel, float pan) {
+                        b.add(at, keyVoice(inst, midiHz(midi), len, rate, rnd), vel, pan);
+                    };
+                    if (e.tone < 0) {
+                        for (size_t t = 0; t < notes.size(); ++t)
+                            play(notes[t], e.vel * 0.6f, float(t) / notes.size() * 0.6f - 0.3f);
+                    } else {
+                        // Arpeggio: kolejne dźwięki akordu, czwarty to podstawa oktawę wyżej
+                        const int midi = e.tone < int(notes.size()) && !(e.tone == 3 && !seventh) ? notes[size_t(e.tone)] : notes[0] + 12;
+                        play(midi, e.vel, e.tone % 2 ? 0.25f : -0.25f);
+                    }
+                }
+            }
+        }
+        normalize(b, 0.6f);
     } else {
         // 808: jeden głos; przy ślizgu nuta płynnie przechodzi w następną bez ponownego uderzenia
         const QJsonArray notes = p.value(QStringLiteral("notes")).toArray();
@@ -498,11 +765,11 @@ std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm,
     }
 
     auto src = std::make_shared<AudioSource>();
-    src->channels = kind == Drums ? 2 : 1;
+    src->channels = kind == Bass ? 1 : 2;
     src->frames = loop;
     src->data.resize(size_t(loop * src->channels));
     for (long long i = 0; i < loop; ++i) {
-        if (kind == Drums) {
+        if (kind != Bass) {
             src->data[size_t(2 * i)] = b.l[size_t(loop + i)];
             src->data[size_t(2 * i + 1)] = b.r[size_t(loop + i)];
         } else {

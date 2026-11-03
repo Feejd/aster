@@ -473,7 +473,7 @@ Item {
                     x: 8; anchors.verticalCenter: parent.verticalCenter
                     spacing: 5
                     Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.grid; size: 13; stroke: 2; color: Theme.text }
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : th.track.kind === "keys" ? "Akordy" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
                 }
             }
             MiniBtn {

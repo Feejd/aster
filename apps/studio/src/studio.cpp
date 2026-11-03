@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
+#include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QThreadPool>
@@ -253,6 +254,7 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
         // Podkład trochę ciszej — zostaje miejsce na głos
         m_tracks[addPatternTrack(QStringLiteral("drums"), templ)].volume = -4;
         m_tracks[addPatternTrack(QStringLiteral("bass"), templ)].volume = -5;
+        m_tracks[addPatternTrack(QStringLiteral("keys"), templ)].volume = -7;
         applyMasteringPreset(trap ? QStringLiteral("trap") : templ == QLatin1String("boombap") ? QStringLiteral("warm")
                              : templ == QLatin1String("lofi") ? QStringLiteral("lofi") : templ == QLatin1String("house") ? QStringLiteral("loud") : QStringLiteral("pop"));
         m_echoTime = trap ? QStringLiteral("3/16") : QStringLiteral("1/4");
@@ -334,6 +336,15 @@ void Studio::closeProject()
     stop();
     if (m_dirty)
         save();
+    // Pętle Beat Makera („_…”) z wcześniejszych wersji wzoru — po zamknięciu cofanie i tak znika, więc można je usunąć
+    QSet<QString> used;
+    for (const Track &t : m_tracks)
+        for (const Clip &c : t.clips)
+            used.insert(c.file);
+    const QDir audio(m_folder + QStringLiteral("/audio"));
+    for (const QString &f : audio.entryList({QStringLiteral("_*.wav")}, QDir::Files))
+        if (!used.contains(f))
+            QFile::remove(audio.filePath(f));
     m_folder.clear();
     m_name.clear();
     m_tracks.clear();
@@ -1507,6 +1518,7 @@ const FxPreset s_presets[] = {
     {"guitar", "Gitara", "Instrumenty", "Klarowna, z odrobiną sali", true, -1, 0, 2, 0.3, 0.2, 0.05, 0, 0},
     {"bass", "Bas", "Instrumenty", "Pełny dół, równy poziom", false, 3, -2, -1, 0.6, 0, 0, 0.2, 0},
     {"drums", "Perkusja", "Instrumenty", "Mocne uderzenie, trochę sali", false, 2, -2, 2, 0.4, 0.1, 0, 0.1, 0},
+    {"keys", "Klawisze", "Instrumenty", "Akordy w tle: jasno, z salą i echem", true, -2, 0, 1.5, 0.25, 0.3, 0.12, 0, 0},
     {"808", "808", "Instrumenty", "Przester dla słyszalności na telefonie", false, 2, 0, 0, 0.3, 0, 0, 0.35, 0},
     {"radio", "Radio", "Efekty", "Wąsko, jak z małego głośniczka", true, -12, 8, -10, 0.7, 0, 0, 0.4, 0},
     {"lofi", "Lo-fi", "Efekty", "Ciemno i ciepło, jak ze starej taśmy", false, 1, -1, -8, 0.3, 0.15, 0, 0.3, 0},
@@ -1746,10 +1758,30 @@ void Studio::cycleClip(int id)
 
 QVariantList Studio::kits() const { return BeatSynth::kits(); }
 QVariantList Studio::genres() const { return BeatSynth::genres(); }
+QVariantList Studio::instruments() const { return BeatSynth::instruments(); }
+QVariantList Studio::rhythms() const { return BeatSynth::rhythms(); }
+QVariantList Studio::progressions() const { return BeatSynth::progressions(); }
+
+QString Studio::chordName(int degree, bool seventh) const
+{
+    return BeatSynth::chordName(m_keyRoot, m_keyMinor, degree, seventh);
+}
+
+static BeatSynth::Kind kindOf(const QString &kind)
+{
+    return kind == QLatin1String("bass") ? BeatSynth::Bass : kind == QLatin1String("keys") ? BeatSynth::Keys : BeatSynth::Drums;
+}
+
+void Studio::renderKeyTracks()
+{
+    for (int i = 0; i < m_tracks.size(); ++i)
+        if (m_tracks[i].kind == QLatin1String("keys"))
+            renderPattern(i);
+}
 
 QVariantMap Studio::genrePattern(const QString &kind, const QString &genre) const
 {
-    return BeatSynth::genrePattern(genre, kind == QLatin1String("bass") ? BeatSynth::Bass : BeatSynth::Drums).toVariantMap();
+    return BeatSynth::genrePattern(genre, kindOf(kind)).toVariantMap();
 }
 
 QString Studio::noteName(int root, int degree) const
@@ -1763,12 +1795,14 @@ int Studio::addPatternTrack(const QString &kind, const QString &genre)
 {
     if (!isOpen() || m_tracks.size() >= Renderer::MaxTracks)
         return -1;
-    const bool bass = kind == QLatin1String("bass");
-    addTrack(bass ? QStringLiteral("808") : QStringLiteral("Bit"));       // zapamiętuje stan do cofnięcia
+    const BeatSynth::Kind k = kindOf(kind);
+    addTrack(k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys ? QStringLiteral("Akordy") : QStringLiteral("Bit"));   // zapamiętuje stan do cofnięcia
     Track &t = m_tracks.last();
-    t.kind = bass ? QStringLiteral("bass") : QStringLiteral("drums");
-    t.pattern = BeatSynth::genrePattern(genre.isEmpty() ? QStringLiteral("trap") : genre, bass ? BeatSynth::Bass : BeatSynth::Drums);
-    applyPresetTo(t, bass ? QStringLiteral("808") : QStringLiteral("drums"));
+    t.kind = k == BeatSynth::Bass ? QStringLiteral("bass") : k == BeatSynth::Keys ? QStringLiteral("keys") : QStringLiteral("drums");
+    t.pattern = BeatSynth::genrePattern(genre.isEmpty() ? QStringLiteral("trap") : genre, k);
+    applyPresetTo(t, k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys ? QStringLiteral("keys") : QStringLiteral("drums"));
+    if (k == BeatSynth::Keys && genre == QLatin1String("trap"))
+        t.echo = 0.25;                          // dzwonki w trapie z echem
     renderPattern(int(m_tracks.size()) - 1);
     changed();
     return int(m_tracks.size()) - 1;
@@ -1788,9 +1822,14 @@ void Studio::setPattern(int index, const QVariantMap &pattern)
 void Studio::renderPattern(int index)
 {
     Track &t = m_tracks[index];
-    const bool bass = t.kind == QLatin1String("bass");
-    std::shared_ptr<AudioSource> src = BeatSynth::render(t.pattern, bass ? BeatSynth::Bass : BeatSynth::Drums, m_bpm, Engine::Rate);
-    const QString path = uniqueAudioPath(bass ? QStringLiteral("_808") : QStringLiteral("_bit"), QStringLiteral("wav"));
+    const BeatSynth::Kind kind = kindOf(t.kind);
+    QJsonObject pattern = t.pattern;
+    pattern.insert(QStringLiteral("keyRoot"), m_keyRoot);
+    pattern.insert(QStringLiteral("keyMinor"), m_keyMinor);
+    std::shared_ptr<AudioSource> src = BeatSynth::render(pattern, kind, m_bpm, Engine::Rate);
+    const QString path = uniqueAudioPath(kind == BeatSynth::Bass ? QStringLiteral("_808") : kind == BeatSynth::Keys ? QStringLiteral("_akordy")
+                                                                                                                   : QStringLiteral("_bit"),
+                                         QStringLiteral("wav"));
     SF_INFO info{};
     info.samplerate = Engine::Rate;
     info.channels = src->channels;
@@ -1830,8 +1869,9 @@ void Studio::setKeyRoot(int r)
     if (r == m_keyRoot)
         return;
     m_keyRoot = r;
+    renderKeyTracks();
     emit settingsChanged();
-    changed(false);
+    changed();
 }
 
 void Studio::setKeyMinor(bool m)
@@ -1839,8 +1879,9 @@ void Studio::setKeyMinor(bool m)
     if (m == m_keyMinor)
         return;
     m_keyMinor = m;
+    renderKeyTracks();
     emit settingsChanged();
-    changed(false);
+    changed();
 }
 
 QString Studio::keyName() const
@@ -1856,8 +1897,9 @@ bool Studio::keyFrom808()
         if (t.kind == QLatin1String("bass")) {
             m_keyRoot = std::clamp(t.pattern.value(QStringLiteral("root")).toInt(), 0, 11);
             m_keyMinor = true;                  // 808 gra w skali molowej
+            renderKeyTracks();
             emit settingsChanged();
-            changed(false);
+            changed();
             return true;
         }
     return false;

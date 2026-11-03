@@ -191,8 +191,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         Wokal pop, Chórki. Test: A4 −40 c → ±3 c, 302 Hz → D4, ześlizg przyciągnięty do nut a-moll; na żywo nadąża
   - [ ] Dalej: autotune dokładniejszy przy dużych przesunięciach (PSOLA z zachowaniem formantów), wybór nut ręcznie
         (edytor wysokości jak w programach do korekcji), de-esser, bramka szumów, wtyczki LV2 (lilv)
-  - [ ] Dalej: więcej instrumentów (klawisze/pad/lead z tym samym syntezatorem, wzory akordów), piano roll dla dłuższych
-        fraz, biblioteka pętli generowanych w programie, „mastering” porównujący z/bez (przełącznik A/B)
+  - [x] ścieżka Akordy: brzmienia Pianino, Klawisze elektryczne (FM), Pad (rozstrojone piły), Pluck (Karplus–Strong),
+        Dzwonki (FM), Lead; rytmy (cały takt, półnuty, staccato, arpeggio ósemki/szesnastki), oktawa, septymy; progresje
+        (Smutna, Mroczna, Epicka, Rozmarzona, Z nadzieją, Dwa akordy) i akord na każdy takt z nazwami w tonacji projektu
+        (np. fis-moll → D-dur → A-dur → E-dur); prowadzenie głosów (najbliższy przewrót); zmiana tonacji przelicza akordy;
+        szablony gatunków mają gotową ścieżkę akordów; nieużywane pętle „_…” sprzątane przy zamknięciu projektu
+  - [ ] Dalej: piano roll dla własnych melodii, biblioteka pętli generowanych w programie, przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
