@@ -49,6 +49,76 @@ Window {
     readonly property string curPath: { revision; return tabs.count ? tabs.get(Math.min(current, tabs.count - 1)).path : ""; }
     function page(i) { return pages.itemAt(i); }
     function tabTitle(i) { return i >= 0 && i < tabs.count ? Project.fileName(tabs.get(i).path) : ""; }
+    // ——— Podział edytora: dwie grupy kart (0 — lewa, 1 — prawa) ———
+    property int focusGroup: 0
+    property int g0Uid: 0                       // aktywna karta każdej grupy (uid — indeksy się przesuwają)
+    property int g1Uid: 0
+    property var pendingPrimary: ({})           // duplikat pliku z drugiej grupy nie otwiera go w serwerze języka
+    readonly property bool split: { revision; for (let i = 0; i < tabs.count; ++i) if (tabs.get(i).group === 1) return true; return false; }
+    readonly property real splitX: split ? Math.round(pane.width / 2) : pane.width
+    function groupActive(g) {
+        const i = indexOfUid(g === 0 ? g0Uid : g1Uid);
+        if (i >= 0 && tabs.get(i).group === g) return i;
+        for (let k = 0; k < tabs.count; ++k) if (tabs.get(k).group === g) return k;
+        return -1;
+    }
+    function anyInGroup(g) { for (let k = 0; k < tabs.count; ++k) if (tabs.get(k).group === g) return true; return false; }
+    function indexOfPathInGroup(p, g) {
+        for (let i = 0; i < tabs.count; ++i) if (tabs.get(i).path === p && tabs.get(i).group === g) return i;
+        return -1;
+    }
+    // Ctrl+\ — bieżący plik także w drugiej grupie (ta sama treść, zmiany w obu na bieżąco)
+    function splitEditor() {
+        if (!cur) return;
+        const t = tabs.get(current);
+        const other = 1 - t.group;
+        const existing = indexOfPathInGroup(t.path, other);
+        if (existing >= 0) { activate(existing); return; }
+        const src = cur;
+        const uid = ++uidSeq;
+        pendingText[uid] = src.edit.text;
+        pendingCursor[uid] = src.edit.cursorPosition;
+        pendingPrimary[uid] = false;
+        let at = tabs.count;
+        for (let k = tabs.count - 1; k >= 0; --k) if (tabs.get(k).group === other) { at = k + 1; break; }
+        tabs.insert(at, { uid: uid, path: t.path, preview: false, encoding: t.encoding, eol: t.eol, readOnly: t.readOnly, changedOnDisk: false, group: other });
+        revision++;
+        const i = indexOfUid(uid), dup = page(i);
+        if (src.modified) dup.edit.textDocument.modified = true;
+        TextOps.link(dup.edit.textDocument, src.edit.textDocument);
+        activate(i);
+    }
+    function moveToOtherGroup(i) {
+        if (i < 0 || i >= tabs.count) return;
+        const t = tabs.get(i), other = 1 - t.group;
+        const existing = indexOfPathInGroup(t.path, other);
+        if (existing >= 0) { const uid = tabs.get(existing).uid; closeTab(i, true); activate(indexOfUid(uid)); return; }
+        tabs.setProperty(i, "group", other);
+        revision++;
+        normalizeGroups();
+        activate(i);
+    }
+    // Pusta lewa grupa — prawa staje się jedyną (jak w VS Code)
+    function normalizeGroups() {
+        if (tabs.count && !anyInGroup(0)) {
+            for (let k = 0; k < tabs.count; ++k) tabs.setProperty(k, "group", 0);
+            g0Uid = g1Uid; g1Uid = 0;
+            revision++;
+        }
+        if (!anyInGroup(focusGroup)) focusGroup = 0;
+    }
+    function focusGroupN(g) {
+        const i = groupActive(g);
+        if (i >= 0) activate(i);
+    }
+    // Klik w edytor drugiej grupy — ta grupa staje się aktywna
+    function editorFocused(i) {
+        if (i < 0 || i >= tabs.count || i === current) return;
+        current = i;
+        focusGroup = tabs.get(i).group;
+        if (focusGroup === 0) g0Uid = tabs.get(i).uid; else g1Uid = tabs.get(i).uid;
+        revision++;
+    }
     function indexOfPath(p) {
         for (let i = 0; i < tabs.count; ++i) if (tabs.get(i).path === p) return i;
         return -1;
@@ -61,6 +131,8 @@ Window {
     function activate(i) {
         if (i < 0 || i >= tabs.count) return;
         current = i;
+        focusGroup = tabs.get(i).group;
+        if (focusGroup === 0) g0Uid = tabs.get(i).uid; else g1Uid = tabs.get(i).uid;
         revision++;
         Qt.callLater(() => { if (win.cur) win.cur.focusEditor(); });
         if (findBar.shown) Qt.callLater(findAll);
@@ -71,22 +143,25 @@ Window {
     function openFile(p, opts) {
         opts = opts || {};
         p = Project.toPath(p);
-        let i = indexOfPath(p);
+        // Najpierw karta w aktywnej grupie, potem w drugiej
+        let i = indexOfPathInGroup(p, focusGroup);
+        if (i < 0) i = indexOfPath(p);
         if (i < 0) {
             const res = Project.load(p);
             if (!res.ok) { toast(res.error); return; }
-            let at = tabs.count ? current + 1 : 0;
+            const g = anyInGroup(focusGroup) ? focusGroup : 0;
+            let at = tabs.count && tabs.get(current).group === g ? current + 1 : tabs.count;
             if (opts.preview) {
                 for (let k = 0; k < tabs.count; ++k)
-                    if (tabs.get(k).preview && !page(k).modified) { tabs.remove(k); revision++; at = k; break; }
+                    if (tabs.get(k).preview && tabs.get(k).group === g && !page(k).modified) { tabs.remove(k); revision++; at = k; break; }
             }
             const uid = ++uidSeq;
             pendingText[uid] = res.text;
             pendingCursor[uid] = 0;
             tabs.insert(Math.min(at, tabs.count), { uid: uid, path: p, preview: !!opts.preview, encoding: res.encoding, eol: res.eol,
-                                                   readOnly: res.readOnly, changedOnDisk: false });
+                                                   readOnly: res.readOnly, changedOnDisk: false, group: g });
             revision++;
-            i = indexOfPath(p);
+            i = indexOfUid(uid);
             watchAll();
             Qt.callLater(saveSession);
         } else if (!opts.preview && tabs.get(i).preview) {
@@ -115,6 +190,7 @@ Window {
         lastSave[t.path] = Date.now();
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
+            for (let k = 0; k < tabs.count; ++k) if (k !== i && tabs.get(k).path === t.path) page(k).markSaved();
             Lsp.saved(t.path);
             p.refreshBlame();
             tabs.setProperty(i, "changedOnDisk", false);
@@ -124,7 +200,12 @@ Window {
         }
     }
     function saveAll() { for (let i = 0; i < tabs.count; ++i) if (page(i).modified) save(i); }
-    function dirtyCount() { let n = 0; for (let i = 0; i < tabs.count; ++i) if (page(i) && page(i).modified) n++; return n; }
+    function dirtyCount() {
+        const seen = {};
+        let n = 0;
+        for (let i = 0; i < tabs.count; ++i) if (page(i) && page(i).modified && !seen[tabs.get(i).path]) { seen[tabs.get(i).path] = true; n++; }
+        return n;
+    }
 
     // ——— Zamykanie ———
     property var confirm: null           // { kind: "tab", index, name } albo { kind: "all", count, then }
@@ -136,15 +217,29 @@ Window {
             confirm = { kind: "tab", index: i, name: tabTitle(i) };
             return;
         }
+        const g = tabs.get(i).group, uid = tabs.get(i).uid, path = tabs.get(i).path;
+        // Duplikat tego pliku w drugiej grupie przejmuje dokument w serwerze języka
+        const wasPrimary = p ? p.lspPrimary : false;
+        const wasFocused = i === current;
         tabs.remove(i);
+        if (wasPrimary) {
+            const d = indexOfPath(path);
+            if (d >= 0) { page(d).lspPrimary = true; Lsp.open(path, page(d).edit.text); }
+        }
+        // Następna karta w tej samej grupie
+        let next = -1;
+        for (let k = i; k < tabs.count && next < 0; ++k) if (tabs.get(k).group === g) next = k;
+        for (let k = i - 1; k >= 0 && next < 0; --k) if (tabs.get(k).group === g) next = k;
+        if ((g === 0 ? g0Uid : g1Uid) === uid) { if (g === 0) g0Uid = next >= 0 ? tabs.get(next).uid : 0; else g1Uid = next >= 0 ? tabs.get(next).uid : 0; }
         revision++;
-        current = Math.max(0, Math.min(current > i ? current - 1 : current, tabs.count - 1));
-        revision++;
-        if (tabs.count) activate(current);
+        normalizeGroups();
+        if (!tabs.count) { current = 0; focusGroup = 0; revision++; watchAll(); Qt.callLater(saveSession); return; }
+        if (wasFocused || !anyInGroup(focusGroup)) activate(groupActive(anyInGroup(g) ? g : focusGroup));
+        else { current = indexOfUid(focusGroup === 0 ? g0Uid : g1Uid); if (current < 0) current = groupActive(focusGroup); revision++; }
         watchAll();
         Qt.callLater(saveSession);
     }
-    function closeAllTabs() { while (tabs.count) { tabs.remove(tabs.count - 1); } revision++; current = 0; watchAll(); }
+    function closeAllTabs() { while (tabs.count) { tabs.remove(tabs.count - 1); } revision++; current = 0; focusGroup = 0; g0Uid = g1Uid = 0; watchAll(); }
     // Przed zamknięciem okna albo zmianą folderu — pytanie o niezapisane pliki
     function whenSaved(then) {
         const n = dirtyCount();
@@ -183,7 +278,7 @@ Window {
     function saveSession() {
         if (!hasProject) return;
         const list = [];
-        for (let i = 0; i < tabs.count; ++i) if (!tabs.get(i).preview) list.push(tabs.get(i).path);
+        for (let i = 0; i < tabs.count; ++i) if (!tabs.get(i).preview && list.indexOf(tabs.get(i).path) < 0) list.push(tabs.get(i).path);
         Project.saveSession(list, Math.max(0, list.indexOf(curPath)), terminalShown, sidebarView);
     }
     Timer { interval: 5000; running: win.hasProject; repeat: true; onTriggered: win.saveSession() }
@@ -568,6 +663,7 @@ Window {
         { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
+        { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Zwiń blok", shortcut: "Ctrl+Shift+[", action: "fold", icon: "chevronRight" },
         { label: "Rozwiń blok", shortcut: "Ctrl+Shift+]", action: "unfold", icon: "chevronDown" },
         { label: "Zwiń wszystko", shortcut: "Ctrl+K Ctrl+0", action: "foldAll", icon: "chevronRight" },
@@ -688,6 +784,9 @@ Window {
         else if (a === "tab:right") { for (let i = tabs.count - 1; i > menu.tab; --i) closeTab(i); }
         else if (a === "tab:reveal") { prefs.sidebar = true; sidebarView = 0; const row = Project.tree.reveal(tabs.get(menu.tab).path); if (row >= 0) treeList.positionViewAtIndex(row, ListView.Center); }
         else if (a === "tab:copy") Project.copyText(Project.relative(tabs.get(menu.tab).path));
+        else if (a === "tab:split") { activate(menu.tab); splitEditor(); }
+        else if (a === "tab:move") moveToOtherGroup(menu.tab);
+        else if (a === "split") splitEditor();
     }
     function runTree(a, path) {
         if (a === "newFile") newFile(path);
@@ -792,6 +891,9 @@ Window {
         else if (what === "commit") changesView.commitNow();
         else if (what === "push") Project.push();
         else if (what === "save") save(current);
+        else if (what === "split") splitEditor();
+        else if (what.startsWith("focus:")) focusGroupN(Number(arg));
+        else if (what === "moveTab") moveToOtherGroup(current);
         else if (what.startsWith("fold:")) { if (cur) cur.toggleFold(Number(arg) - 1); }
         else if (what === "foldAll") { if (cur) cur.foldAllBlocks(); }
         else if (what === "ctrlD") { if (cur) cur.addNextOccurrence(); }
@@ -828,6 +930,9 @@ Window {
     Shortcut { sequence: "Ctrl+S"; enabled: !!win.cur; onActivated: win.save(win.current) }
     Shortcut { sequence: "Ctrl+Alt+S"; onActivated: win.saveAll() }
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
+    Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
+    Shortcut { sequence: "Ctrl+1"; enabled: win.split; onActivated: win.focusGroupN(0) }
+    Shortcut { sequence: "Ctrl+2"; enabled: win.split; onActivated: win.focusGroupN(1) }
     Shortcut { sequences: ["Ctrl+P", "Ctrl+E"]; enabled: win.hasProject; onActivated: palette.open("") }
     Shortcut { sequences: ["Ctrl+Shift+P", "F1"]; enabled: win.hasProject; onActivated: palette.open(">") }
     Shortcut { sequence: "Ctrl+G"; enabled: !!win.cur; onActivated: palette.open(":") }
@@ -921,7 +1026,7 @@ Window {
                 Flickable {
                     id: tabFlick
                     x: 8
-                    width: Math.min(tabRow.width, rightGroup.x - x - 8)
+                    width: Math.min(tabRow.width, (win.split ? win.splitX : rightGroup.x) - x - 8)
                     height: parent.height
                     contentWidth: tabRow.width
                     flickableDirection: Flickable.HorizontalFlick
@@ -932,15 +1037,35 @@ Window {
                         id: tabRow
                         height: parent.height
                         spacing: 2
-                        Repeater { model: tabs; delegate: TabButton {} }
+                        Repeater { model: tabs; delegate: TabButton { shownGroup: 0 } }
                     }
                 }
+                // Karty prawej grupy
+                Flickable {
+                    visible: win.split
+                    x: win.splitX + 8
+                    width: Math.min(tabRow1.width, rightGroup.x - x - 8)
+                    height: parent.height
+                    contentWidth: tabRow1.width
+                    flickableDirection: Flickable.HorizontalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    interactive: contentWidth > width
+                    clip: true
+                    Row {
+                        id: tabRow1
+                        height: parent.height
+                        spacing: 2
+                        Repeater { model: tabs; delegate: TabButton { shownGroup: 1 } }
+                    }
+                }
+                Rectangle { visible: win.split; x: win.splitX; y: 10; width: 1; height: parent.height - 20; color: Theme.line }
                 Row {
                     id: rightGroup
                     anchors.right: winButtons.left; anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
                     ToolBtn { icon: "search"; onClicked: palette.open("") }
+                    ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
                     ToolBtn { icon: "panelBottom"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
                     ToolBtn { id: moreBtn; icon: "more"; onClicked: win.showMenu() }
                 }
@@ -959,23 +1084,34 @@ Window {
                 y: tabBar.height
                 width: parent.width; height: win.cur ? 28 : 0
                 visible: !!win.cur
-                Row {
-                    x: 16; anchors.verticalCenter: parent.verticalCenter
-                    spacing: 4
-                    Repeater {
-                        model: win.curPath ? Project.relative(win.curPath).split("/") : []
-                        delegate: Row {
-                            id: crumb
-                            required property string modelData
-                            required property int index
-                            spacing: 4
-                            Icon { visible: crumb.index > 0; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronRight; size: 11; stroke: 2; color: Theme.text2 }
-                            FileIcon {
-                                visible: crumb.index === Project.relative(win.curPath).split("/").length - 1
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: crumb.modelData; size: 13
+                Repeater {
+                    model: win.split ? [0, 1] : [0]
+                    delegate: Row {
+                        id: crumbRow
+                        required property int modelData
+                        readonly property string gpath: { win.revision; const i = win.groupActive(modelData); return i >= 0 ? tabs.get(i).path : ""; }
+                        readonly property var parts: gpath ? Project.relative(gpath).split("/") : []
+                        x: (modelData === 1 ? win.splitX : 0) + 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: (win.split ? win.splitX : crumbs.width) - 24
+                        clip: true
+                        spacing: 4
+                        opacity: !win.split || modelData === win.focusGroup ? 1 : 0.6
+                        Repeater {
+                            model: crumbRow.parts
+                            delegate: Row {
+                                id: crumb
+                                required property string modelData
+                                required property int index
+                                spacing: 4
+                                Icon { visible: crumb.index > 0; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronRight; size: 11; stroke: 2; color: Theme.text2 }
+                                FileIcon {
+                                    visible: crumb.index === crumbRow.parts.length - 1
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: crumb.modelData; size: 13
+                                }
+                                Text { anchors.verticalCenter: parent.verticalCenter; text: crumb.modelData; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                             }
-                            Text { anchors.verticalCenter: parent.verticalCenter; text: crumb.modelData; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                         }
                     }
                 }
@@ -1017,11 +1153,14 @@ Window {
                         required property int index
                         required property int uid
                         required property var model
+                        required property int group
                         path: model.path
+                        x: group === 1 ? win.splitX : 0
                         y: banner.height
-                        width: editorArea.width
+                        width: win.split ? (group === 0 ? win.splitX : editorArea.width - win.splitX) : editorArea.width
                         height: editorArea.height - y
-                        visible: index === win.current
+                        visible: { win.revision; return index === win.groupActive(group); }
+                        onEditFocused: win.editorFocused(index)
                         wrap: prefs.wrap
                         showBlame: prefs.blame
                         showMinimap: prefs.minimap
@@ -1032,12 +1171,17 @@ Window {
                         onContextMenuRequested: (item, x, y) => win.showEditorMenu(item, x, y)
                         onModifiedChanged: { if (modified) win.pin(index); win.revision++; }
                         Component.onCompleted: {
+                            if (win.pendingPrimary[uid] === false) lspPrimary = false;
+                            delete win.pendingPrimary[uid];
                             load(win.pendingText[uid] || "", win.pendingCursor[uid] || 0);
                             delete win.pendingText[uid];
                             delete win.pendingCursor[uid];
                         }
                     }
                 }
+
+                // Linia między grupami
+                Rectangle { visible: win.split; x: win.splitX; width: 1; height: parent.height; color: Theme.line; z: 6 }
 
                 // Podgląd różnic (z widoku zmian)
                 DiffView {
@@ -1613,12 +1757,17 @@ Window {
         required property int index
         required property string path
         required property bool preview
-        readonly property bool active: index === win.current
+        required property int group
+        property int shownGroup: 0
+        visible: group === shownGroup
+        // Aktywna w swojej grupie; wyraźniej — w grupie z fokusem
+        readonly property bool active: { win.revision; return index === win.groupActive(group); }
+        readonly property bool focused: active && (!win.split || group === win.focusGroup)
         readonly property bool dirty: { win.revision; const p = win.page(index); return !!p && p.modified; }
         width: Math.min(240, tabLabel.implicitWidth + 70); height: 34
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         radius: 9
-        color: active ? Theme.fill : (tabArea.containsMouse ? Theme.hover : "transparent")
+        color: focused ? Theme.fill : active ? Qt.rgba(Theme.fill.r, Theme.fill.g, Theme.fill.b, Theme.fill.a * 0.5) : (tabArea.containsMouse ? Theme.hover : "transparent")
         FileIcon { x: 11; anchors.verticalCenter: parent.verticalCenter; name: Project.fileName(tab.path); size: 14 }
         Text {
             id: tabLabel
@@ -1644,6 +1793,9 @@ Window {
                         { label: "Zamknij", icon: "close", shortcut: "Ctrl+W", action: "tab:close" },
                         { label: "Zamknij pozostałe", icon: "close", action: "tab:others", enabled: tabs.count > 1 },
                         { label: "Zamknij karty po prawej", icon: "close", action: "tab:right", enabled: tab.index < tabs.count - 1 },
+                        { separator: true },
+                        { label: "Podziel w prawo", icon: "sidebar", shortcut: "Ctrl+\\", action: "tab:split" },
+                        { label: tab.group === 0 ? "Przenieś do prawej grupy" : "Przenieś do lewej grupy", icon: "forward", action: "tab:move" },
                         { separator: true },
                         { label: "Pokaż w drzewie plików", icon: "files", action: "tab:reveal" },
                         { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tab:copy" }

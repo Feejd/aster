@@ -763,3 +763,42 @@ void TextOps::revealLine(QQuickTextDocument *doc, int line)
             break;
     }
 }
+
+namespace {
+
+bool s_linking = false;
+
+void mirror(QTextDocument *src, QTextDocument *dst, int pos, int removed, int added)
+{
+    if (s_linking || !src || !dst)
+        return;
+    const int srcEnd = std::min(pos + added, src->characterCount() - 1);
+    const int dstEnd = std::min(pos + removed, dst->characterCount() - 1);
+    if (pos > dst->characterCount() - 1)
+        return;
+    QTextCursor from(src);
+    from.setPosition(std::min(pos, srcEnd));
+    from.setPosition(srcEnd, QTextCursor::KeepAnchor);
+    QTextCursor to(dst);
+    to.setPosition(pos);
+    to.setPosition(std::max(pos, dstEnd), QTextCursor::KeepAnchor);
+    // Samo kolorowanie (KSyntaxHighlighting zgłasza zmianę bez zmiany treści) — nic do przeniesienia
+    const QString text = from.selectedText();
+    if (text == to.selectedText())
+        return;
+    s_linking = true;
+    to.insertText(QString(text).replace(QChar::ParagraphSeparator, QLatin1Char('\n')));
+    s_linking = false;
+}
+
+} // namespace
+
+void TextOps::link(QQuickTextDocument *a, QQuickTextDocument *b)
+{
+    if (!a || !b || !a->textDocument() || !b->textDocument() || a == b)
+        return;
+    QTextDocument *da = a->textDocument(), *db = b->textDocument();
+    // Połączenie z dokumentem docelowym jako kontekstem — znika razem z nim
+    connect(da, &QTextDocument::contentsChange, db, [da, db](int pos, int removed, int added) { mirror(da, db, pos, removed, added); });
+    connect(db, &QTextDocument::contentsChange, da, [da, db](int pos, int removed, int added) { mirror(db, da, pos, removed, added); });
+}

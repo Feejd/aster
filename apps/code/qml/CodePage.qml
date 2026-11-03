@@ -39,6 +39,8 @@ Item {
     signal zoomRequested(int d)
     signal edited()
     signal definitionRequested(int seq)
+    signal editFocused()
+    property bool lspPrimary: true                  // duplikat w drugiej grupie nie otwiera dokumentu w serwerze
     signal quickFixRequested()
     // ——— Zwijanie i minimapa ———
     property var foldRanges: []
@@ -249,7 +251,7 @@ Item {
         Qt.callLater(ensureVisible);
         requestBase();
         lspPath = path;
-        Lsp.open(path, text);
+        if (lspPrimary) Lsp.open(path, text);
         serverInfo = Lsp.serverFor(path);
         updateConflicts();
         updateFolds();
@@ -257,12 +259,12 @@ Item {
     onPathChanged: {
         // Zmiana nazwy pliku — serwer języka dostaje „nowy” dokument
         if (!lspPath || lspPath === path) return;
-        Lsp.close(lspPath);
+        if (lspPrimary) Lsp.close(lspPath);
         lspPath = path;
-        Lsp.open(path, te.text);
+        if (lspPrimary) Lsp.open(path, te.text);
         serverInfo = Lsp.serverFor(path);
     }
-    Component.onDestruction: if (lspPath) Lsp.close(lspPath)
+    Component.onDestruction: if (lspPath && lspPrimary) Lsp.close(lspPath)
     function requestBase() { if (path) Project.requestBase(path); refreshBlame(); }
     function markSaved() { te.textDocument.modified = false; }
     function focusEditor() { te.forceActiveFocus(); }
@@ -682,7 +684,11 @@ Item {
 
         TextEdit {
             id: te
-            width: page.wrap ? flick.width : Math.max(flick.width, implicitWidth)
+            // Naturalna szerokość przez callLater — inaczej zmiana szerokości okna (podział) wiąże width z implicitWidth w pętlę
+            property real naturalWidth: 0
+            onImplicitWidthChanged: Qt.callLater(() => te.naturalWidth = te.implicitWidth)
+            Component.onCompleted: naturalWidth = implicitWidth
+            width: page.wrap ? flick.width : Math.max(flick.width, naturalWidth)
             height: Math.max(flick.height, implicitHeight)
             leftPadding: 12; rightPadding: 24
             topPadding: 10; bottomPadding: 10
@@ -716,7 +722,7 @@ Item {
                 foldTimer.restart();
                 if (page.showBlame && page.blameLines.length) blameTimer.restart();
             }
-            onActiveFocusChanged: if (!activeFocus) { completion.hide(); sig.text = ""; }
+            onActiveFocusChanged: { if (!activeFocus) { completion.hide(); sig.text = ""; } else page.editFocused(); }
 
             HoverHandler {
                 id: hov
