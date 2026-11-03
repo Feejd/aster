@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QObject>
@@ -25,11 +26,14 @@ public:
     bool failed() const { return m_failed; }
     QString id() const { return m_id; }
     QString program() const { return m_program; }
+    // Czy serwer to potrafi (klucz z capabilities, np. "signatureHelpProvider")
+    bool supports(const QString &provider) const { const QJsonValue v = m_caps.value(provider); return !v.isUndefined() && !v.isNull() && v != QJsonValue(false); }
     void shutdown();
 
 Q_SIGNALS:
     void readyChanged();
     void notification(const QString &method, const QJsonObject &params);
+    void applyEdit(const QJsonObject &edit);
     void stopped();
 
 private:
@@ -45,6 +49,7 @@ private:
     bool m_failed = false;
     QList<QJsonObject> m_queue;                // wiadomości przed odpowiedzią na „initialize”
     QHash<int, Reply> m_replies;
+    QJsonObject m_caps;
 };
 
 // Serwery języków dla projektu w Aster Code: dobierane po rozszerzeniu pliku (clangd, qmlls, pylsp/pyright,
@@ -85,6 +90,13 @@ public:
     // Odwołania: [{ path, name, dir, items: [{ line, col, endCol, text }] }]
     Q_INVOKABLE int references(const QString &path, int line, int col);
     Q_INVOKABLE int format(const QString &path, int tabSize, bool insertSpaces);
+    // Szybkie poprawki dla zakresu (wiersze/kolumny od 0): [{ title, kind, preferred, index }]; wybór — runCodeAction(index)
+    Q_INVOKABLE int codeActions(const QString &path, int sl, int sc, int el, int ec);
+    Q_INVOKABLE void runCodeAction(int index);
+    // Symbole pliku i projektu: [{ name, detail, kind, line, col, depth, container, path, rel }]
+    Q_INVOKABLE int documentSymbols(const QString &path);
+    Q_INVOKABLE int workspaceSymbols(const QString &query);
+    Q_INVOKABLE int signatureHelp(const QString &path, int line, int col);
     // [{ line, col, endLine, endCol, severity (1 błąd, 2 ostrzeżenie, 3 informacja, 4 podpowiedź), message, source }]
     Q_INVOKABLE QVariantList diagnostics(const QString &path) const;
 
@@ -98,6 +110,11 @@ Q_SIGNALS:
     void renameReady(int seq, const QVariantList &files, const QString &error);
     void referencesReady(int seq, const QVariantList &groups, int total);
     void formatReady(int seq, const QString &path, const QVariantList &edits);
+    void codeActionsReady(int seq, const QString &path, const QVariantList &actions);
+    void workspaceEditReady(const QVariantList &files);
+    void symbolsReady(int seq, const QString &path, const QVariantList &symbols);
+    void workspaceSymbolsReady(int seq, const QVariantList &symbols);
+    void signatureReady(int seq, const QString &path, const QString &label, int activeStart, int activeEnd);
     void message(const QString &text);
 
 private:
@@ -122,6 +139,9 @@ private:
     QHash<QString, LspServer *> m_servers;
     QHash<QString, Doc> m_docs;
     QHash<QString, QVariantList> m_diagnostics;   // ścieżka → lista
+    QHash<QString, QJsonArray> m_rawDiag;         // to samo w postaci z serwera (do szybkich poprawek)
+    QJsonArray m_actions;                         // ostatnie szybkie poprawki
+    QString m_actionsServer;
     int m_seq = 0;
     int m_revision = 0;
     int m_errors = 0, m_warnings = 0;

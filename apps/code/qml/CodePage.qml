@@ -37,6 +37,8 @@ Item {
     signal zoomRequested(int d)
     signal edited()
     signal definitionRequested(int seq)
+    signal quickFixRequested()
+    property int sigSeq: -1
     signal contextMenuRequested(Item item, real x, real y)
 
     function load(text, cursor) {
@@ -113,6 +115,8 @@ Item {
         const w = wordBefore();
         const before = te.getText(Math.max(0, te.cursorPosition - 2), te.cursorPosition);
         const trigger = ch === "." || before === "::" || before === "->";
+        if (ch === "(" || ch === ",") signatureTimer.restart();
+        else if (ch === ")") sig.text = "";
         if (completion.visible) {
             if (trigger) { completion.hide(); completionTimer.restart(); }
             else if (!w) completion.hide();
@@ -149,6 +153,18 @@ Item {
         Lsp.update(path, te.text);
         return Lsp.format(path, indentSize, !indentTabs);
     }
+    function requestCodeActions() {
+        if (!lspOn) return -1;
+        const a = TextOps.lineColumn(te.textDocument, te.selectionStart), b = TextOps.lineColumn(te.textDocument, te.selectionEnd);
+        Lsp.update(path, te.text);
+        return Lsp.codeActions(path, a.y, a.x, b.y, b.x);
+    }
+    function requestSignature() {
+        if (!lspOn) return;
+        Lsp.update(path, te.text);
+        sigSeq = Lsp.signatureHelp(path, lineCol.y, lineCol.x);
+    }
+    readonly property bool lineHasProblem: { diagnostics; lineCol; return diagnostics.some(d => d.line === lineCol.y && d.severity <= 2); }
     function applyEdits(edits) {
         const cursor = te.cursorPosition;
         const n = TextOps.applyEdits(te.textDocument, edits);
@@ -182,6 +198,7 @@ Item {
         if (lspOn) { Lsp.update(path, te.text); hoverSeq = Lsp.hover(path, line - 1, col - 1); }
     }
     Timer { id: lspTimer; interval: 350; onTriggered: if (page.lspOn) Lsp.update(page.path, te.text) }
+    Timer { id: signatureTimer; interval: 80; onTriggered: page.requestSignature() }
     Timer { id: completionTimer; interval: 120; onTriggered: page.requestCompletion() }
     Timer {
         id: hoverTimer
@@ -216,6 +233,12 @@ Item {
             tip.text = [page.hoverDiag, text].filter(t => !!t).join("\n\n");
         }
         function onServersChanged() { page.serverInfo = Lsp.serverFor(page.path); }
+        function onSignatureReady(seq, p, label, a, b) {
+            if (seq !== page.sigSeq || !te.activeFocus) return;
+            const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            sig.line = page.lineCol.y;
+            sig.text = !label ? "" : a >= 0 ? esc(label.slice(0, a)) + "<b><font color=\"" + Theme.accentText + "\">" + esc(label.slice(a, b)) + "</font></b>" + esc(label.slice(b)) : esc(label);
+        }
     }
 
     Connections {
@@ -373,11 +396,12 @@ Item {
             onCursorRectangleChanged: page.ensureVisible()
             onCursorPositionChanged: {
                 Qt.callLater(page.updateBracket);
+                if (sig.text && page.lineCol.y !== sig.line) sig.text = "";
                 if (completion.visible && page.lineCol.y !== completion.line) completion.hide();
             }
             onLengthChanged: { Qt.callLater(page.updateFirstLine); page.edited(); }
             onTextChanged: if (page.lspOn) lspTimer.restart()
-            onActiveFocusChanged: if (!activeFocus) completion.hide()
+            onActiveFocusChanged: if (!activeFocus) { completion.hide(); sig.text = ""; }
 
             HoverHandler {
                 id: hov
@@ -400,6 +424,18 @@ Item {
             }
 
             Keys.onPressed: (e) => page.handleKey(e)
+        }
+
+        // Żarówka przy wierszu z problemem — szybkie poprawki (Ctrl+.)
+        HoverButton {
+            readonly property rect endRect: { te.length; page.lineCol; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
+            visible: page.lspOn && page.lineHasProblem && te.activeFocus
+            z: 3
+            x: te.x + endRect.x + 12; y: te.y + endRect.y + (endRect.height - height) / 2
+            width: 22; height: 20; radius: 6
+            baseColor: Theme.dark ? Qt.rgba(0.89, 0.70, 0.25, 0.18) : Qt.rgba(0.75, 0.53, 0, 0.12)
+            onClicked: page.quickFixRequested()
+            Icon { anchors.centerIn: parent; d: Icons.bolt; size: 13; stroke: 1.8; color: Theme.dark ? "#E3B341" : "#9A6700" }
         }
 
         WheelHandler {
@@ -431,7 +467,14 @@ Item {
             if (e.key === Qt.Key_Escape) { completion.hide(); e.accepted = true; return; }
         }
         if (ctrl && e.key === Qt.Key_Space) { requestCompletion(); e.accepted = true; return; }
-        if (!ctrl && !alt && e.text.length === 1 && autoPair(e.text)) { e.accepted = true; return; }
+        if (!ctrl && !alt && e.text.length === 1 && autoPair(e.text)) {
+            const pc = e.text;
+            Qt.callLater(() => page.afterTyped(pc));
+            e.accepted = true;
+            return;
+        }
+        if (!ctrl && !alt && e.text === ",") Qt.callLater(() => page.afterTyped(","));
+        if (e.key === Qt.Key_Escape && sig.text) { sig.text = ""; e.accepted = true; return; }
         if (!ctrl && !alt && e.text.length === 1 && /[A-Za-z0-9_.:>$]/.test(e.text)) {
             const ch = e.text;
             Qt.callLater(() => page.afterTyped(ch));
@@ -562,6 +605,32 @@ Item {
         fontFamily: page.fontFamily
         onVisibleChanged: if (visible) line = page.lineCol.y
         onAccepted: (item) => page.acceptCompletion(item)
+    }
+
+    // Podpowiedź parametrów nad kursorem (po „(” i „,”), aktywny parametr wyróżniony
+    Rectangle {
+        id: sig
+        property string text
+        property int line: -1
+        readonly property rect cr: te.cursorRectangle
+        visible: text !== "" && !completion.visible
+        z: 55
+        width: Math.min(page.width - 16, sigText.implicitWidth + 20)
+        height: sigText.implicitHeight + 12
+        x: Math.max(4, Math.min(page.width - width - 8, flick.x + te.x + cr.x - flick.contentX - 20))
+        y: te.y + cr.y - flick.contentY - height - 4 >= 0 ? te.y + cr.y - flick.contentY - height - 4 : te.y + cr.y - flick.contentY + cr.height + 4
+        radius: 8
+        color: Theme.surface
+        border.width: 1; border.color: Theme.edge
+        Text {
+            id: sigText
+            x: 10; y: 6
+            width: Math.min(implicitWidth, page.width - 36)
+            elide: Text.ElideRight
+            textFormat: Text.StyledText
+            text: sig.text
+            color: Theme.text; font.family: page.fontFamily; font.pixelSize: 12
+        }
     }
 
     // Opis po najechaniu: błąd w tym miejscu i odpowiedź serwera języka

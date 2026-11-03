@@ -248,21 +248,55 @@ Window {
         target: Lsp
         function onRenameReady(seq, files, error) {
             if (error) { win.toast(error); return; }
-            // Zmiany idą do kart (pliki spoza kart otwierają się w tle) — do przejrzenia i zapisania
-            const back = win.curPath;
-            let total = 0, others = 0;
-            for (const f of files) {
-                let i = win.indexOfPath(f.path);
-                if (i < 0) { win.openFile(f.path); i = win.indexOfPath(f.path); }
-                if (i < 0) continue;
-                total += win.page(i).applyEdits(f.edits);
-                if (f.path !== back) { win.pin(i); others++; }
-            }
-            if (back) win.activate(win.indexOfPath(back));
-            win.revision++;
-            win.toast("Zmieniono " + total + (total === 1 ? " miejsce" : total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? " miejsca" : " miejsc")
-                      + (files.length > 1 ? " w " + files.length + " plikach" : "") + (others ? " — zapisz wszystko: Ctrl+Alt+S" : ""));
+            win.applyWorkspace(files);
         }
+        function onWorkspaceEditReady(files) { if (files.length) win.applyWorkspace(files); }
+        function onCodeActionsReady(seq, path, actions) {
+            if (seq !== win.quickFixSeq || !win.cur) return;
+            if (!actions.length) { win.toast("Brak szybkich poprawek w tym miejscu"); return; }
+            const r = win.cur.edit.cursorRectangle;
+            const p = win.cur.edit.mapToItem(frame, r.x, r.y + r.height + 4);
+            menu.openAt(p.x, p.y, actions.slice(0, 14).map(a => ({ label: a.title.length > 34 ? a.title.slice(0, 33) + "…" : a.title,
+                                                                 icon: a.preferred ? "bolt" : "", action: "qa:" + a.index })));
+        }
+        function onSymbolsReady(seq, path, symbols) {
+            if (palette.shown && palette.mode === "symbols") palette.setSymbols(symbols.map(s => Object.assign({}, s, { path: path })));
+        }
+        function onWorkspaceSymbolsReady(seq, symbols) { if (palette.shown && palette.mode === "workspace") palette.setSymbols(symbols); }
+    }
+    property int quickFixSeq: -1
+    function quickFix() {
+        if (!cur) return;
+        if (!cur.lspOn) { lspHint(); return; }
+        quickFixSeq = cur.requestCodeActions();
+    }
+    function symbolQuery(mode, q) {
+        if (mode === "symbols") {
+            if (!cur || !cur.lspOn || Lsp.documentSymbols(curPath) < 0) palette.setSymbols([], "Brak serwera języka dla tego pliku");
+        } else if (q.trim().length >= 2) {
+            if (Lsp.workspaceSymbols(q.trim()) < 0) palette.setSymbols([], "Żaden działający serwer języka nie szuka symboli w całym projekcie");
+        } else {
+            palette.setSymbols([]);
+        }
+    }
+    // Zmiany w wielu plikach (zmiana nazwy, szybka poprawka) idą do kart — pliki spoza kart otwierają się w tle
+    function applyWorkspace(files) {
+        const back = win.curPath;
+        let total = 0, others = 0;
+        for (const f of files) {
+            let i = win.indexOfPath(f.path);
+            if (i < 0) { win.openFile(f.path); i = win.indexOfPath(f.path); }
+            if (i < 0) continue;
+            total += win.page(i).applyEdits(f.edits);
+            if (f.path !== back) { win.pin(i); others++; }
+        }
+        if (back) win.activate(win.indexOfPath(back));
+        win.revision++;
+        win.toast("Zmieniono " + total + (total === 1 ? " miejsce" : total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? " miejsca" : " miejsc")
+                  + (files.length > 1 ? " w " + files.length + " plikach" : "") + (others ? " — zapisz wszystko: Ctrl+Alt+S" : ""));
+    }
+    Connections {
+        target: Lsp
         function onReferencesReady(seq, groups, total) {
             if (!total) { win.toast("Brak odwołań"); return; }
             terminalPanel.refGroups = groups;
@@ -321,6 +355,7 @@ Window {
         const e = cur.edit;
         menu.openAt(p.x, p.y, [
             { label: "Przejdź do definicji", icon: "arrow", shortcut: "F12", action: "definition", enabled: cur.lspOn },
+            { label: "Szybka poprawka", icon: "bolt", shortcut: "Ctrl+.", action: "quickfix", enabled: cur.lspOn },
             { label: "Znajdź odwołania", icon: "search", shortcut: "Shift+F12", action: "references", enabled: cur.lspOn },
             { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: cur.lspOn },
             { label: "Podpowiedzi", icon: "sparkle", shortcut: "Ctrl+Spacja", action: "complete", enabled: cur.lspOn },
@@ -498,6 +533,9 @@ Window {
         { label: "Szukaj w projekcie", shortcut: "Ctrl+Shift+F", action: "searchProject", icon: "search" },
         { label: "Przejdź do definicji", shortcut: "F12", action: "definition", icon: "arrow" },
         { label: "Znajdź odwołania", shortcut: "Shift+F12", action: "references", icon: "search" },
+        { label: "Szybka poprawka", shortcut: "Ctrl+.", action: "quickfix", icon: "bolt" },
+        { label: "Symbole w pliku", shortcut: "Ctrl+Shift+O", action: "symbols", icon: "list" },
+        { label: "Symbole w projekcie", shortcut: "Ctrl+T", action: "workspaceSymbols", icon: "list" },
         { label: "Zmień nazwę symbolu", shortcut: "F2", action: "rename", icon: "pencil" },
         { label: "Formatuj dokument", shortcut: "Shift+Alt+F", action: "format", icon: "textSize" },
         { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
@@ -550,6 +588,10 @@ Window {
         else if (a === "comment") { if (cur) cur.toggleComment(); }
         else if (a === "definition") goToDefinition();
         else if (a === "references") findReferences();
+        else if (a === "quickfix") quickFix();
+        else if (a === "symbols") palette.open("@");
+        else if (a === "workspaceSymbols") palette.open("#");
+        else if (a.startsWith("qa:")) Lsp.runCodeAction(Number(a.slice(3)));
         else if (a === "rename") startRename();
         else if (a === "format") formatDocument();
         else if (a === "complete") { if (cur) { cur.focusEditor(); cur.requestCompletion(); } }
@@ -707,6 +749,8 @@ Window {
         else if (what === "problems") showProblems();
         else if (what === "definition") goToDefinition();
         else if (what === "refs") findReferences();
+        else if (what === "quickfix") quickFix();
+        else if (what.startsWith("runqa:")) { menu.close(); Lsp.runCodeAction(Number(arg)); }
         else if (what === "format") formatDocument();
         else if (what.startsWith("rename:")) { if (cur) { renameFrom = cur.symbolAt().text; cur.renameSymbol(arg); } }
         else if (what.startsWith("keys:")) { if (cur) for (const ch of arg) cur.typeKey(ch); }
@@ -736,6 +780,9 @@ Window {
     Shortcut { sequences: ["Ctrl+/", "Ctrl+K,Ctrl+C"]; enabled: !!win.cur && win.cur.edit.activeFocus; onActivated: win.cur.toggleComment() }
     Shortcut { sequence: "F12"; enabled: !!win.cur; onActivated: win.goToDefinition() }
     Shortcut { sequence: "Shift+F12"; enabled: !!win.cur; onActivated: win.findReferences() }
+    Shortcut { sequence: "Ctrl+."; enabled: !!win.cur; onActivated: win.quickFix() }
+    Shortcut { sequence: "Ctrl+Shift+O"; enabled: !!win.cur; onActivated: palette.open("@") }
+    Shortcut { sequence: "Ctrl+T"; enabled: win.hasProject; onActivated: palette.open("#") }
     Shortcut { sequence: "F2"; enabled: !!win.cur; onActivated: win.startRename() }
     Shortcut { sequence: "Shift+Alt+F"; enabled: !!win.cur; onActivated: win.formatDocument() }
     Shortcut { sequence: "Ctrl+Shift+M"; enabled: win.hasProject; onActivated: win.showProblems() }
@@ -912,6 +959,7 @@ Window {
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)
+                        onQuickFixRequested: win.quickFix()
                         onContextMenuRequested: (item, x, y) => win.showEditorMenu(item, x, y)
                         onModifiedChanged: { if (modified) win.pin(index); win.revision++; }
                         Component.onCompleted: {
@@ -1149,6 +1197,8 @@ Window {
                 onCommandChosen: (action) => win.run(action)
                 onLineChosen: (line) => { if (win.cur) win.cur.goToLine(line); }
                 onBranchChosen: (mode, name, remote, isNew) => win.branchAction(mode, name, remote, isNew)
+                onSymbolQuery: (mode, q) => win.symbolQuery(mode, q)
+                onSymbolChosen: (path, line, col) => win.openFile(path || win.curPath, { line: line, col: col, length: 0 })
                 onClosed: if (win.cur) win.cur.focusEditor()
             }
             NameBox {

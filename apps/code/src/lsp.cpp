@@ -22,6 +22,8 @@ struct ServerDef {
     const char *package;                    // jak zainstalować (Fedora)
 };
 
+QVariantList workspaceEdit(const QJsonObject &we);     // niżej, przy zmianie nazwy
+
 const QList<ServerDef> &definitions()
 {
     static const QList<ServerDef> defs{
@@ -139,8 +141,13 @@ LspServer::LspServer(const QString &id, const QString &program, const QStringLis
                                         {"contextSupport", true}}},
              {"hover", QJsonObject{{"contentFormat", QJsonArray{"markdown", "plaintext"}}}},
              {"definition", QJsonObject{{"linkSupport", true}}},
+             {"codeAction", QJsonObject{{"codeActionLiteralSupport", QJsonObject{{"codeActionKind", QJsonObject{
+                  {"valueSet", QJsonArray{"", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"}}}}}}}},
+             {"documentSymbol", QJsonObject{{"hierarchicalDocumentSymbolSupport", true}}},
+             {"signatureHelp", QJsonObject{{"signatureInformation", QJsonObject{{"parameterInformation", QJsonObject{{"labelOffsetSupport", true}}}}}}},
+             {"rename", QJsonObject{{"prepareSupport", false}}},
              {"publishDiagnostics", QJsonObject{{"relatedInformation", false}}}}},
-        {"workspace", QJsonObject{{"configuration", true}, {"workspaceFolders", true}}},
+        {"workspace", QJsonObject{{"configuration", true}, {"workspaceFolders", true}, {"applyEdit", true}, {"symbol", QJsonObject{}}}},
         {"window", QJsonObject{{"workDoneProgress", false}}},
         {"general", QJsonObject{{"positionEncodings", QJsonArray{"utf-16"}}}}};
     const QJsonObject params{
@@ -152,13 +159,14 @@ LspServer::LspServer(const QString &id, const QString &program, const QStringLis
         {"capabilities", caps}};
     // „initialize” idzie od razu; reszta czeka w kolejce na odpowiedź
     const int id0 = ++m_seq;
-    m_replies.insert(id0, [this](const QJsonValue &, const QJsonObject &error) {
+    m_replies.insert(id0, [this](const QJsonValue &result, const QJsonObject &error) {
         if (!error.isEmpty()) {
             m_failed = true;
             Q_EMIT stopped();
             return;
         }
         m_ready = true;
+        m_caps = result.toObject().value(QStringLiteral("capabilities")).toObject();
         send(QJsonObject{{"jsonrpc", "2.0"}, {"method", "initialized"}, {"params", QJsonObject{}}});
         for (const QJsonObject &m : std::as_const(m_queue))
             send(m);
@@ -264,6 +272,10 @@ void LspServer::handle(const QJsonObject &msg)
             for (int i = 0; i < n; ++i)
                 items << QJsonValue();
             result = items;
+        } else if (method == QLatin1String("workspace/applyEdit")) {
+            // Polecenie z szybkiej poprawki: serwer prosi o zmianę plików
+            Q_EMIT applyEdit(msg.value(QStringLiteral("params")).toObject().value(QStringLiteral("edit")).toObject());
+            result = QJsonObject{{"applied", true}};
         } else if (method == QLatin1String("workspace/workspaceFolders")) {
             result = QJsonArray{QJsonObject{{"uri", uri(m_proc.workingDirectory())}, {"name", QFileInfo(m_proc.workingDirectory()).fileName()}}};
         }
@@ -343,6 +355,7 @@ LspServer *Lsp::serverForPath(const QString &path)
         auto *s = new LspServer(id, exe, c.mid(1), m_root, this);
         m_servers.insert(id, s);
         connect(s, &LspServer::notification, this, &Lsp::onNotification);
+        connect(s, &LspServer::applyEdit, this, [this](const QJsonObject &edit) { Q_EMIT workspaceEditReady(workspaceEdit(edit)); });
         connect(s, &LspServer::readyChanged, this, &Lsp::serversChanged);
         connect(s, &LspServer::stopped, this, [this, s] {
             // Serwer padł — jego błędy znikają (zostałyby nieaktualne); następny plik nie uruchamia go od nowa
@@ -567,6 +580,26 @@ QVariantList textEdits(const QJsonArray &arr)
     return out;
 }
 
+// WorkspaceEdit: „changes” (uri → zmiany) albo „documentChanges” (pomijamy tworzenie i przenoszenie plików)
+QVariantList workspaceEdit(const QJsonObject &we)
+{
+    QHash<QString, QVariantList> byFile;
+    const QJsonObject changes = we.value(QStringLiteral("changes")).toObject();
+    for (auto it = changes.begin(); it != changes.end(); ++it)
+        byFile[pathFromUri(it.key())] += textEdits(it.value().toArray());
+    for (const QJsonValue &v : we.value(QStringLiteral("documentChanges")).toArray()) {
+        const QJsonObject dc = v.toObject();
+        if (!dc.contains(QStringLiteral("edits")))
+            continue;
+        byFile[pathFromUri(dc.value(QStringLiteral("textDocument")).toObject().value(QStringLiteral("uri")).toString())]
+            += textEdits(dc.value(QStringLiteral("edits")).toArray());
+    }
+    QVariantList files;
+    for (auto it = byFile.begin(); it != byFile.end(); ++it)
+        files << QVariantMap{{QStringLiteral("path"), it.key()}, {QStringLiteral("edits"), it.value()}};
+    return files;
+}
+
 } // namespace
 
 int Lsp::rename(const QString &path, int line, int col, const QString &newName)
@@ -582,22 +615,7 @@ int Lsp::rename(const QString &path, int line, int col, const QString &newName)
             Q_EMIT renameReady(seq, {}, error.value(QStringLiteral("message")).toString());
             return;
         }
-        // WorkspaceEdit: „changes” (uri → zmiany) albo „documentChanges” (pomijamy tworzenie i przenoszenie plików)
-        QHash<QString, QVariantList> byFile;
-        const QJsonObject we = result.toObject();
-        const QJsonObject changes = we.value(QStringLiteral("changes")).toObject();
-        for (auto it = changes.begin(); it != changes.end(); ++it)
-            byFile[pathFromUri(it.key())] += textEdits(it.value().toArray());
-        for (const QJsonValue &v : we.value(QStringLiteral("documentChanges")).toArray()) {
-            const QJsonObject dc = v.toObject();
-            if (!dc.contains(QStringLiteral("edits")))
-                continue;
-            byFile[pathFromUri(dc.value(QStringLiteral("textDocument")).toObject().value(QStringLiteral("uri")).toString())]
-                += textEdits(dc.value(QStringLiteral("edits")).toArray());
-        }
-        QVariantList files;
-        for (auto it = byFile.begin(); it != byFile.end(); ++it)
-            files << QVariantMap{{QStringLiteral("path"), it.key()}, {QStringLiteral("edits"), it.value()}};
+        const QVariantList files = workspaceEdit(result.toObject());
         Q_EMIT renameReady(seq, files, files.isEmpty() ? QStringLiteral("Tu nie ma nazwy do zmiany") : QString());
     });
     return seq;
@@ -656,10 +674,172 @@ int Lsp::format(const QString &path, int tabSize, bool insertSpaces)
     return seq;
 }
 
+// ——— Szybkie poprawki, symbole, podpowiedź parametrów ———
+
+int Lsp::codeActions(const QString &path, int sl, int sc, int el, int ec)
+{
+    LspServer *s = docServer(path);
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    // Problemy w tych wierszach idą z powrotem do serwera — z nich robi poprawki
+    QJsonArray diags;
+    for (const QJsonValue &v : m_rawDiag.value(path)) {
+        const QJsonObject r = v.toObject().value(QStringLiteral("range")).toObject();
+        const int a = r.value(QStringLiteral("start")).toObject().value(QStringLiteral("line")).toInt();
+        const int b = r.value(QStringLiteral("end")).toObject().value(QStringLiteral("line")).toInt();
+        if (b >= sl && a <= el)
+            diags << v;
+    }
+    const QJsonObject params{
+        {"textDocument", QJsonObject{{"uri", uri(path)}}},
+        {"range", QJsonObject{{"start", QJsonObject{{"line", sl}, {"character", sc}}}, {"end", QJsonObject{{"line", el}, {"character", ec}}}}},
+        {"context", QJsonObject{{"diagnostics", diags}, {"triggerKind", 1}}}};
+    const QString server = s->id();
+    s->request(QStringLiteral("textDocument/codeAction"), params, [this, seq, path, server](const QJsonValue &result, const QJsonObject &) {
+        m_actions = result.toArray();
+        m_actionsServer = server;
+        QVariantList out;
+        for (int i = 0; i < m_actions.size(); ++i) {
+            const QJsonObject a = m_actions.at(i).toObject();
+            if (a.contains(QStringLiteral("disabled")))
+                continue;
+            out << QVariantMap{{QStringLiteral("title"), a.value(QStringLiteral("title")).toString()},
+                               {QStringLiteral("kind"), a.value(QStringLiteral("kind")).toString()},
+                               {QStringLiteral("preferred"), a.value(QStringLiteral("isPreferred")).toBool()},
+                               {QStringLiteral("index"), i}};
+        }
+        Q_EMIT codeActionsReady(seq, path, out);
+    });
+    return seq;
+}
+
+void Lsp::runCodeAction(int index)
+{
+    LspServer *s = m_servers.value(m_actionsServer);
+    if (!s || index < 0 || index >= m_actions.size())
+        return;
+    const QJsonObject a = m_actions.at(index).toObject();
+    // CodeAction: zmiana plików i/albo polecenie; stary Command: { title, command, arguments }
+    if (a.contains(QStringLiteral("edit")))
+        Q_EMIT workspaceEditReady(workspaceEdit(a.value(QStringLiteral("edit")).toObject()));
+    QJsonObject cmd = a.value(QStringLiteral("command")).toObject();
+    if (cmd.isEmpty() && a.value(QStringLiteral("command")).isString())
+        cmd = a;
+    if (!cmd.isEmpty())
+        s->request(QStringLiteral("workspace/executeCommand"),
+                   QJsonObject{{"command", cmd.value(QStringLiteral("command"))}, {"arguments", cmd.value(QStringLiteral("arguments"))}},
+                   [](const QJsonValue &, const QJsonObject &) {});
+}
+
+namespace {
+
+void flattenSymbols(const QJsonArray &arr, int depth, const QString &container, QVariantList &out)
+{
+    for (const QJsonValue &v : arr) {
+        const QJsonObject o = v.toObject();
+        // DocumentSymbol (selectionRange, children) albo SymbolInformation (location)
+        QJsonObject range = o.value(QStringLiteral("selectionRange")).toObject();
+        if (range.isEmpty())
+            range = o.value(QStringLiteral("location")).toObject().value(QStringLiteral("range")).toObject();
+        const QJsonObject st = range.value(QStringLiteral("start")).toObject();
+        const QString name = o.value(QStringLiteral("name")).toString();
+        out << QVariantMap{{QStringLiteral("name"), name},
+                           {QStringLiteral("detail"), o.value(QStringLiteral("detail")).toString().simplified().left(80)},
+                           {QStringLiteral("kind"), o.value(QStringLiteral("kind")).toInt()},
+                           {QStringLiteral("line"), st.value(QStringLiteral("line")).toInt()},
+                           {QStringLiteral("col"), st.value(QStringLiteral("character")).toInt()},
+                           {QStringLiteral("depth"), depth},
+                           {QStringLiteral("container"), container.isEmpty() ? o.value(QStringLiteral("containerName")).toString() : container},
+                           {QStringLiteral("path"), pathFromUri(o.value(QStringLiteral("location")).toObject().value(QStringLiteral("uri")).toString())}};
+        if (out.size() > 5000)
+            return;
+        flattenSymbols(o.value(QStringLiteral("children")).toArray(), depth + 1, name, out);
+    }
+}
+
+} // namespace
+
+int Lsp::documentSymbols(const QString &path)
+{
+    LspServer *s = docServer(path);
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    s->request(QStringLiteral("textDocument/documentSymbol"), QJsonObject{{"textDocument", QJsonObject{{"uri", uri(path)}}}},
+               [this, seq, path](const QJsonValue &result, const QJsonObject &) {
+                   QVariantList out;
+                   flattenSymbols(result.toArray(), 0, QString(), out);
+                   Q_EMIT symbolsReady(seq, path, out);
+               });
+    return seq;
+}
+
+int Lsp::workspaceSymbols(const QString &query)
+{
+    // Pierwszy działający serwer projektu (zwykle ten od otwartych plików)
+    LspServer *s = nullptr;
+    for (LspServer *c : std::as_const(m_servers))
+        if (c->ready() && !c->failed() && c->supports(QStringLiteral("workspaceSymbolProvider"))) {
+            s = c;
+            break;
+        }
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    s->request(QStringLiteral("workspace/symbol"), QJsonObject{{"query", query}}, [this, seq](const QJsonValue &result, const QJsonObject &) {
+        QVariantList out;
+        flattenSymbols(result.toArray(), 0, QString(), out);
+        for (QVariant &v : out) {
+            QVariantMap m = v.toMap();
+            m.insert(QStringLiteral("rel"), relative(m.value(QStringLiteral("path")).toString()));
+            v = m;
+        }
+        Q_EMIT workspaceSymbolsReady(seq, out.mid(0, 200));
+    });
+    return seq;
+}
+
+int Lsp::signatureHelp(const QString &path, int line, int col)
+{
+    LspServer *s = docServer(path);
+    if (!s || (s->ready() && !s->supports(QStringLiteral("signatureHelpProvider"))))
+        return -1;
+    const int seq = ++m_seq;
+    s->request(QStringLiteral("textDocument/signatureHelp"), position(path, line, col), [this, seq, path](const QJsonValue &result, const QJsonObject &) {
+        const QJsonObject r = result.toObject();
+        const QJsonArray sigs = r.value(QStringLiteral("signatures")).toArray();
+        if (sigs.isEmpty()) {
+            Q_EMIT signatureReady(seq, path, QString(), -1, -1);
+            return;
+        }
+        const int active = std::clamp(r.value(QStringLiteral("activeSignature")).toInt(), 0, int(sigs.size()) - 1);
+        const QJsonObject sig = sigs.at(active).toObject();
+        const QString label = sig.value(QStringLiteral("label")).toString();
+        const int ap = sig.contains(QStringLiteral("activeParameter")) ? sig.value(QStringLiteral("activeParameter")).toInt()
+                                                                       : r.value(QStringLiteral("activeParameter")).toInt();
+        int a = -1, b = -1;
+        const QJsonArray params = sig.value(QStringLiteral("parameters")).toArray();
+        if (ap >= 0 && ap < params.size()) {
+            const QJsonValue pl = params.at(ap).toObject().value(QStringLiteral("label"));
+            if (pl.isArray()) {
+                a = pl.toArray().at(0).toInt();
+                b = pl.toArray().at(1).toInt();
+            } else if (const int i = int(label.indexOf(pl.toString())); i >= 0) {
+                a = i;
+                b = i + int(pl.toString().size());
+            }
+        }
+        Q_EMIT signatureReady(seq, path, label, a, b);
+    });
+    return seq;
+}
+
 void Lsp::onNotification(const QString &method, const QJsonObject &params)
 {
     if (method == QLatin1String("textDocument/publishDiagnostics")) {
         const QString path = pathFromUri(params.value(QStringLiteral("uri")).toString());
+        m_rawDiag.insert(path, params.value(QStringLiteral("diagnostics")).toArray());
         QVariantList list;
         for (const QJsonValue &v : params.value(QStringLiteral("diagnostics")).toArray()) {
             const QJsonObject d = v.toObject();
