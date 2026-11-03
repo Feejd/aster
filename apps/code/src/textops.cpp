@@ -316,3 +316,52 @@ QVariantMap TextOps::commentMarkers(const QString &fileName, const QString &lang
             {QStringLiteral("start"), multi.first},
             {QStringLiteral("end"), multi.second}};
 }
+
+int TextOps::applyEdits(QQuickTextDocument *doc, const QVariantList &edits)
+{
+    if (!doc || !doc->textDocument() || edits.isEmpty())
+        return 0;
+    QTextDocument *d = doc->textDocument();
+    const auto pos = [d](int line, int col) {
+        const QTextBlock b = d->findBlockByNumber(line);
+        if (!b.isValid())
+            return d->characterCount() - 1;
+        return b.position() + std::clamp(col, 0, b.length() - 1);
+    };
+    // Od końca — wcześniejsze pozycje się nie przesuwają
+    struct E { int a, b; QString text; };
+    QList<E> list;
+    for (const QVariant &v : edits) {
+        const QVariantMap m = v.toMap();
+        list.append({pos(m.value(QStringLiteral("sl")).toInt(), m.value(QStringLiteral("sc")).toInt()),
+                     pos(m.value(QStringLiteral("el")).toInt(), m.value(QStringLiteral("ec")).toInt()),
+                     m.value(QStringLiteral("text")).toString()});
+    }
+    std::stable_sort(list.begin(), list.end(), [](const E &x, const E &y) { return x.a > y.a; });
+    QTextCursor c(d);
+    c.beginEditBlock();
+    for (const E &e : std::as_const(list)) {
+        c.setPosition(e.a);
+        c.setPosition(std::max(e.a, e.b), QTextCursor::KeepAnchor);
+        c.insertText(e.text);
+    }
+    c.endEditBlock();
+    return int(list.size());
+}
+
+QVariantMap TextOps::wordAt(QQuickTextDocument *doc, int position) const
+{
+    if (!doc || !doc->textDocument())
+        return {};
+    QTextDocument *d = doc->textDocument();
+    const auto word = [d](int p) { const QChar ch = d->characterAt(p); return ch.isLetterOrNumber() || ch == QLatin1Char('_') || ch == QLatin1Char('$'); };
+    int a = position, b = position;
+    while (a > 0 && word(a - 1))
+        --a;
+    while (b < d->characterCount() - 1 && word(b))
+        ++b;
+    QTextCursor c(d);
+    c.setPosition(a);
+    c.setPosition(b, QTextCursor::KeepAnchor);
+    return {{QStringLiteral("start"), a}, {QStringLiteral("end"), b}, {QStringLiteral("text"), c.selectedText()}};
+}

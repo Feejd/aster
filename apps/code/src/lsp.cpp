@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
+#include <QMap>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -513,6 +515,143 @@ int Lsp::hover(const QString &path, int line, int col)
         return -1;
     s->request(QStringLiteral("textDocument/hover"), position(path, line, col), [this, seq, path](const QJsonValue &result, const QJsonObject &) {
         Q_EMIT hoverReady(seq, path, result.isObject() ? hoverText(result.toObject().value(QStringLiteral("contents"))) : QString());
+    });
+    return seq;
+}
+
+LspServer *Lsp::docServer(const QString &path) const
+{
+    auto it = m_docs.find(path);
+    LspServer *s = it == m_docs.end() ? nullptr : m_servers.value(it->server);
+    return s && !s->failed() ? s : nullptr;
+}
+
+QString Lsp::relative(const QString &path) const
+{
+    return m_root.isEmpty() || !path.startsWith(m_root + QLatin1Char('/')) ? path : path.mid(m_root.size() + 1);
+}
+
+// Wiersz pliku do podglądu odwołania: z otwartego dokumentu albo z dysku
+QString Lsp::lineOf(const QString &path, int line, QHash<QString, QStringList> &cache) const
+{
+    if (!cache.contains(path)) {
+        QString text;
+        if (auto it = m_docs.find(path); it != m_docs.end()) {
+            text = it->text;
+        } else {
+            QFile f(path);
+            if (f.size() < 8 * 1024 * 1024 && f.open(QIODevice::ReadOnly))
+                text = QString::fromUtf8(f.readAll());
+        }
+        cache.insert(path, text.split(QLatin1Char('\n')));
+    }
+    const QStringList &lines = cache[path];
+    return line >= 0 && line < lines.size() ? lines.at(line) : QString();
+}
+
+namespace {
+
+QVariantList textEdits(const QJsonArray &arr)
+{
+    QVariantList out;
+    for (const QJsonValue &v : arr) {
+        const QJsonObject e = v.toObject();
+        const QJsonObject r = e.value(QStringLiteral("range")).toObject();
+        const QJsonObject st = r.value(QStringLiteral("start")).toObject(), en = r.value(QStringLiteral("end")).toObject();
+        out << QVariantMap{{QStringLiteral("sl"), st.value(QStringLiteral("line")).toInt()},
+                           {QStringLiteral("sc"), st.value(QStringLiteral("character")).toInt()},
+                           {QStringLiteral("el"), en.value(QStringLiteral("line")).toInt()},
+                           {QStringLiteral("ec"), en.value(QStringLiteral("character")).toInt()},
+                           {QStringLiteral("text"), e.value(QStringLiteral("newText")).toString()}};
+    }
+    return out;
+}
+
+} // namespace
+
+int Lsp::rename(const QString &path, int line, int col, const QString &newName)
+{
+    LspServer *s = docServer(path);
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    QJsonObject params = position(path, line, col);
+    params.insert(QStringLiteral("newName"), newName);
+    s->request(QStringLiteral("textDocument/rename"), params, [this, seq](const QJsonValue &result, const QJsonObject &error) {
+        if (!error.isEmpty()) {
+            Q_EMIT renameReady(seq, {}, error.value(QStringLiteral("message")).toString());
+            return;
+        }
+        // WorkspaceEdit: „changes” (uri → zmiany) albo „documentChanges” (pomijamy tworzenie i przenoszenie plików)
+        QHash<QString, QVariantList> byFile;
+        const QJsonObject we = result.toObject();
+        const QJsonObject changes = we.value(QStringLiteral("changes")).toObject();
+        for (auto it = changes.begin(); it != changes.end(); ++it)
+            byFile[pathFromUri(it.key())] += textEdits(it.value().toArray());
+        for (const QJsonValue &v : we.value(QStringLiteral("documentChanges")).toArray()) {
+            const QJsonObject dc = v.toObject();
+            if (!dc.contains(QStringLiteral("edits")))
+                continue;
+            byFile[pathFromUri(dc.value(QStringLiteral("textDocument")).toObject().value(QStringLiteral("uri")).toString())]
+                += textEdits(dc.value(QStringLiteral("edits")).toArray());
+        }
+        QVariantList files;
+        for (auto it = byFile.begin(); it != byFile.end(); ++it)
+            files << QVariantMap{{QStringLiteral("path"), it.key()}, {QStringLiteral("edits"), it.value()}};
+        Q_EMIT renameReady(seq, files, files.isEmpty() ? QStringLiteral("Tu nie ma nazwy do zmiany") : QString());
+    });
+    return seq;
+}
+
+int Lsp::references(const QString &path, int line, int col)
+{
+    LspServer *s = docServer(path);
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    QJsonObject params = position(path, line, col);
+    params.insert(QStringLiteral("context"), QJsonObject{{"includeDeclaration", true}});
+    s->request(QStringLiteral("textDocument/references"), params, [this, seq](const QJsonValue &result, const QJsonObject &) {
+        QMap<QString, QVariantList> byFile;
+        QHash<QString, QStringList> cache;
+        int total = 0;
+        for (const QJsonValue &v : result.toArray()) {
+            const QJsonObject loc = v.toObject();
+            const QString p = pathFromUri(loc.value(QStringLiteral("uri")).toString());
+            const QJsonObject r = loc.value(QStringLiteral("range")).toObject();
+            const QJsonObject st = r.value(QStringLiteral("start")).toObject(), en = r.value(QStringLiteral("end")).toObject();
+            const int l = st.value(QStringLiteral("line")).toInt(), c = st.value(QStringLiteral("character")).toInt();
+            const int ec = en.value(QStringLiteral("line")).toInt() == l ? en.value(QStringLiteral("character")).toInt() : c;
+            byFile[p] << QVariantMap{{QStringLiteral("line"), l}, {QStringLiteral("col"), c}, {QStringLiteral("endCol"), ec},
+                                     {QStringLiteral("text"), lineOf(p, l, cache)}};
+            ++total;
+        }
+        QVariantList groups;
+        for (auto it = byFile.begin(); it != byFile.end(); ++it) {
+            QVariantList items = it.value();
+            std::sort(items.begin(), items.end(), [](const QVariant &a, const QVariant &b) {
+                return a.toMap().value(QStringLiteral("line")).toInt() < b.toMap().value(QStringLiteral("line")).toInt();
+            });
+            const QString rel = relative(it.key());
+            const int slash = int(rel.lastIndexOf(QLatin1Char('/')));
+            groups << QVariantMap{{QStringLiteral("path"), it.key()}, {QStringLiteral("name"), rel.mid(slash + 1)},
+                                  {QStringLiteral("dir"), slash > 0 ? rel.left(slash) : QString()}, {QStringLiteral("items"), items}};
+        }
+        Q_EMIT referencesReady(seq, groups, total);
+    });
+    return seq;
+}
+
+int Lsp::format(const QString &path, int tabSize, bool insertSpaces)
+{
+    LspServer *s = docServer(path);
+    if (!s)
+        return -1;
+    const int seq = ++m_seq;
+    const QJsonObject params{{"textDocument", QJsonObject{{"uri", uri(path)}}},
+                             {"options", QJsonObject{{"tabSize", tabSize}, {"insertSpaces", insertSpaces}, {"trimTrailingWhitespace", true}}}};
+    s->request(QStringLiteral("textDocument/formatting"), params, [this, seq, path](const QJsonValue &result, const QJsonObject &) {
+        Q_EMIT formatReady(seq, path, textEdits(result.toArray()));
     });
     return seq;
 }

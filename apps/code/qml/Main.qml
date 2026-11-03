@@ -220,6 +220,65 @@ Window {
         function onDefinitionMissing(seq) { win.toast("Nie znaleziono definicji"); }
         function onMessage(text) { win.toast(text); }
     }
+    // Zmiana nazwy symbolu w całym projekcie (F2)
+    property string renameFrom: ""
+    function startRename() {
+        if (!cur) return;
+        if (!cur.lspOn) { lspHint(); return; }
+        const w = cur.symbolAt();
+        if (!w.text) { toast("Ustaw kursor na nazwie, którą chcesz zmienić"); return; }
+        nameBox.ask("Zmień nazwę „" + w.text + "”", w.text, "We wszystkich plikach projektu (" + cur.serverInfo.name + ")", (name) => {
+            if (name === w.text) return;
+            win.renameFrom = w.text;
+            win.cur.renameSymbol(name);
+        });
+    }
+    function findReferences() {
+        if (!cur) return;
+        if (!cur.lspOn) { lspHint(); return; }
+        refName = cur.symbolAt().text;
+        cur.findReferences();
+    }
+    property string refName: ""
+    function formatDocument() {
+        if (!cur) return;
+        if (cur.formatDocument() === -1) lspHint();
+    }
+    Connections {
+        target: Lsp
+        function onRenameReady(seq, files, error) {
+            if (error) { win.toast(error); return; }
+            // Zmiany idą do kart (pliki spoza kart otwierają się w tle) — do przejrzenia i zapisania
+            const back = win.curPath;
+            let total = 0, others = 0;
+            for (const f of files) {
+                let i = win.indexOfPath(f.path);
+                if (i < 0) { win.openFile(f.path); i = win.indexOfPath(f.path); }
+                if (i < 0) continue;
+                total += win.page(i).applyEdits(f.edits);
+                if (f.path !== back) { win.pin(i); others++; }
+            }
+            if (back) win.activate(win.indexOfPath(back));
+            win.revision++;
+            win.toast("Zmieniono " + total + (total === 1 ? " miejsce" : total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? " miejsca" : " miejsc")
+                      + (files.length > 1 ? " w " + files.length + " plikach" : "") + (others ? " — zapisz wszystko: Ctrl+Alt+S" : ""));
+        }
+        function onReferencesReady(seq, groups, total) {
+            if (!total) { win.toast("Brak odwołań"); return; }
+            terminalPanel.refGroups = groups;
+            terminalPanel.refTitle = total + (total === 1 ? " odwołanie" : total % 10 >= 2 && total % 10 <= 4 && (total % 100 < 10 || total % 100 >= 20) ? " odwołania" : " odwołań")
+                                     + (win.refName ? " do „" + win.refName + "”" : "") + " w " + groups.length + (groups.length === 1 ? " pliku" : " plikach");
+            win.terminalShown = true;
+            terminalPanel.tab = 2;
+        }
+        function onFormatReady(seq, path, edits) {
+            const i = win.indexOfPath(path);
+            if (i < 0) return;
+            if (!edits.length) { win.toast("Plik jest już sformatowany"); return; }
+            win.page(i).applyEdits(edits);
+            win.toast("Sformatowano");
+        }
+    }
     function goToDefinition() {
         if (!cur) return;
         definitionFeedback(cur.goToDefinition());
@@ -262,7 +321,10 @@ Window {
         const e = cur.edit;
         menu.openAt(p.x, p.y, [
             { label: "Przejdź do definicji", icon: "arrow", shortcut: "F12", action: "definition", enabled: cur.lspOn },
+            { label: "Znajdź odwołania", icon: "search", shortcut: "Shift+F12", action: "references", enabled: cur.lspOn },
+            { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: cur.lspOn },
             { label: "Podpowiedzi", icon: "sparkle", shortcut: "Ctrl+Spacja", action: "complete", enabled: cur.lspOn },
+            { label: "Formatuj dokument", icon: "textSize", shortcut: "Shift+Alt+F", action: "format", enabled: cur.lspOn },
             { separator: true },
             { label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut", enabled: e.selectedText !== "" },
             { label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy", enabled: e.selectedText !== "" },
@@ -435,6 +497,9 @@ Window {
         { label: "Zamień", shortcut: "Ctrl+H", action: "replace", icon: "pencil" },
         { label: "Szukaj w projekcie", shortcut: "Ctrl+Shift+F", action: "searchProject", icon: "search" },
         { label: "Przejdź do definicji", shortcut: "F12", action: "definition", icon: "arrow" },
+        { label: "Znajdź odwołania", shortcut: "Shift+F12", action: "references", icon: "search" },
+        { label: "Zmień nazwę symbolu", shortcut: "F2", action: "rename", icon: "pencil" },
+        { label: "Formatuj dokument", shortcut: "Shift+Alt+F", action: "format", icon: "textSize" },
         { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
@@ -484,6 +549,9 @@ Window {
         else if (a === "searchProject") showView(1);
         else if (a === "comment") { if (cur) cur.toggleComment(); }
         else if (a === "definition") goToDefinition();
+        else if (a === "references") findReferences();
+        else if (a === "rename") startRename();
+        else if (a === "format") formatDocument();
         else if (a === "complete") { if (cur) { cur.focusEditor(); cur.requestCompletion(); } }
         else if (a === "problems") showProblems();
         else if (a === "cut") { if (cur) cur.edit.cut(); }
@@ -638,6 +706,9 @@ Window {
         else if (what.startsWith("discard:")) win.confirm = { kind: "discard", paths: [Project.root + "/" + arg], name: Project.fileName(arg) };
         else if (what === "problems") showProblems();
         else if (what === "definition") goToDefinition();
+        else if (what === "refs") findReferences();
+        else if (what === "format") formatDocument();
+        else if (what.startsWith("rename:")) { if (cur) { renameFrom = cur.symbolAt().text; cur.renameSymbol(arg); } }
         else if (what.startsWith("keys:")) { if (cur) for (const ch of arg) cur.typeKey(ch); }
         else if (what.startsWith("hover:")) { if (cur) { const ab = arg.split(","); cur.testHover(Number(ab[0]), Number(ab[1])); } }
         else if (what === "newfile") newFile("");
@@ -664,6 +735,9 @@ Window {
     Shortcut { sequences: ["Ctrl+`", "Ctrl+J"]; enabled: win.hasProject; onActivated: win.toggleTerminal() }
     Shortcut { sequences: ["Ctrl+/", "Ctrl+K,Ctrl+C"]; enabled: !!win.cur && win.cur.edit.activeFocus; onActivated: win.cur.toggleComment() }
     Shortcut { sequence: "F12"; enabled: !!win.cur; onActivated: win.goToDefinition() }
+    Shortcut { sequence: "Shift+F12"; enabled: !!win.cur; onActivated: win.findReferences() }
+    Shortcut { sequence: "F2"; enabled: !!win.cur; onActivated: win.startRename() }
+    Shortcut { sequence: "Shift+Alt+F"; enabled: !!win.cur; onActivated: win.formatDocument() }
     Shortcut { sequence: "Ctrl+Shift+M"; enabled: win.hasProject; onActivated: win.showProblems() }
     Shortcut { sequence: "Alt+F5"; enabled: !!win.cur; onActivated: win.cur.nextChange(false) }
     Shortcut { sequence: "Shift+Alt+F5"; enabled: !!win.cur; onActivated: win.cur.nextChange(true) }
@@ -981,6 +1055,7 @@ Window {
                 onHideRequested: { win.terminalShown = false; win.terminalMax = false; if (win.cur) win.cur.focusEditor(); }
                 onMaximizeRequested: win.terminalMax = !win.terminalMax
                 onOpenProblem: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
+                onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5

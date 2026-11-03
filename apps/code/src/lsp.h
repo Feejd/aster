@@ -80,6 +80,11 @@ public:
     Q_INVOKABLE int complete(const QString &path, int line, int col);
     Q_INVOKABLE int definition(const QString &path, int line, int col);
     Q_INVOKABLE int hover(const QString &path, int line, int col);
+    // Zmiana nazwy symbolu w całym projekcie; wynik: [{ path, edits: [{ sl, sc, el, ec, text }] }]
+    Q_INVOKABLE int rename(const QString &path, int line, int col, const QString &newName);
+    // Odwołania: [{ path, name, dir, items: [{ line, col, endCol, text }] }]
+    Q_INVOKABLE int references(const QString &path, int line, int col);
+    Q_INVOKABLE int format(const QString &path, int tabSize, bool insertSpaces);
     // [{ line, col, endLine, endCol, severity (1 błąd, 2 ostrzeżenie, 3 informacja, 4 podpowiedź), message, source }]
     Q_INVOKABLE QVariantList diagnostics(const QString &path) const;
 
@@ -90,6 +95,9 @@ Q_SIGNALS:
     void definitionReady(int seq, const QString &path, int line, int col);
     void definitionMissing(int seq);
     void hoverReady(int seq, const QString &path, const QString &text);
+    void renameReady(int seq, const QVariantList &files, const QString &error);
+    void referencesReady(int seq, const QVariantList &groups, int total);
+    void formatReady(int seq, const QString &path, const QVariantList &edits);
     void message(const QString &text);
 
 private:
@@ -106,6 +114,9 @@ private:
     void onNotification(const QString &method, const QJsonObject &params);
     void recount();
     static QJsonObject position(const QString &path, int line, int col);
+    LspServer *docServer(const QString &path) const;
+    QString lineOf(const QString &path, int line, QHash<QString, QStringList> &cache) const;
+    QString relative(const QString &path) const;
 
     QString m_root;
     QHash<QString, LspServer *> m_servers;

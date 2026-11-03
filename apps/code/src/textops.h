@@ -33,4 +33,8 @@ public:
     Q_INVOKABLE QVariantMap detectIndent(const QString &text) const;
     // { line: "//", start: "/*", end: "*/" } — z definicji języka KSyntaxHighlighting
     Q_INVOKABLE QVariantMap commentMarkers(const QString &fileName, const QString &language) const;
+    // Zmiany z serwera języka [{ sl, sc, el, ec, text }] jednym krokiem cofania; zwraca liczbę zmian
+    Q_INVOKABLE int applyEdits(QQuickTextDocument *doc, const QVariantList &edits);
+    // Słowo (nazwa) pod pozycją: { start, end, text }
+    Q_INVOKABLE QVariantMap wordAt(QQuickTextDocument *doc, int position) const;
 };

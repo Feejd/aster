@@ -130,6 +130,31 @@ Item {
         te.insert(start, item.insert);
         te.cursorPosition = start + item.insert.length;
     }
+    // Zmiana nazwy, odwołania, formatowanie — numer zapytania albo −1 (brak serwera)
+    function symbolAt() { return TextOps.wordAt(te.textDocument, te.cursorPosition); }
+    function renameSymbol(name) {
+        if (!lspOn) return -1;
+        const w = symbolAt(), lc = TextOps.lineColumn(te.textDocument, w.start);
+        Lsp.update(path, te.text);
+        return Lsp.rename(path, lc.y, lc.x, name);
+    }
+    function findReferences() {
+        if (!lspOn) return -1;
+        const w = symbolAt(), lc = TextOps.lineColumn(te.textDocument, w.start);
+        Lsp.update(path, te.text);
+        return Lsp.references(path, lc.y, lc.x);
+    }
+    function formatDocument() {
+        if (!lspOn) return -1;
+        Lsp.update(path, te.text);
+        return Lsp.format(path, indentSize, !indentTabs);
+    }
+    function applyEdits(edits) {
+        const cursor = te.cursorPosition;
+        const n = TextOps.applyEdits(te.textDocument, edits);
+        te.cursorPosition = Math.min(cursor, te.length);
+        return n;
+    }
     // −1: brak serwera dla tego pliku
     function goToDefinition(position) {
         if (!lspOn) return -1;

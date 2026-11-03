@@ -12,8 +12,11 @@ Item {
     property bool maximized: false
     property bool started: false          // powłoka startuje dopiero przy pierwszym pokazaniu panelu
     property bool reloading: false
-    property int tab: 0                    // 0 terminal, 1 problemy
+    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania
+    property var refGroups: []
+    property string refTitle
     signal openProblem(string path, int line, int col)
+    signal openReference(string path, int line, int col, int length)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -47,6 +50,11 @@ Item {
                 badge: Lsp.errorCount + Lsp.warningCount
                 onClicked: tp.tab = 1
             }
+            PanelTab {
+                visible: tp.refGroups.length > 0
+                label: "ODWOŁANIA"; icon: "search"; on: tp.tab === 2
+                onClicked: tp.tab = 2
+            }
             Text {
                 visible: tp.tab === 0
                 anchors.verticalCenter: parent.verticalCenter
@@ -64,6 +72,15 @@ Item {
             PanelBtn { icon: tp.maximized ? "exitFullscreen" : "fullscreen"; onClicked: tp.maximizeRequested() }
             PanelBtn { icon: "close"; onClicked: tp.hideRequested() }
         }
+    }
+
+    ReferencesView {
+        visible: tp.tab === 2
+        anchors.fill: parent
+        anchors.topMargin: header.height + 1
+        groups: tp.refGroups
+        title: tp.refTitle
+        onOpenReference: (path, line, col, length) => tp.openReference(path, line, col, length)
     }
 
     ProblemsView {
