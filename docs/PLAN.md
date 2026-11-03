@@ -151,5 +151,17 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Asystent pod klawiszem.
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
+- [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
+      (silnik Kdenlive/Shotcut): nowy projekt 9:16 / 16:9 / 1:1 (albo od razu z upuszczonych plików — format z pierwszego
+      filmu), import filmów, zdjęć i muzyki (przeciąganiem i z okna), oś czasu z ścieżkami wideo / tekst / muzyka,
+      przycinanie krawędzi, dzielenie w miejscu głowicy (S), przesuwanie, usuwanie, przybliżanie, podgląd z dźwiękiem
+      i klatka po klatce, 6 stylów napisów, przenikanie 0,5/1 s, głośność klipu i muzyki (wyciszanie na końcu),
+      prędkość 0,25–3×, kadr „wypełnij”/„zmieść”, cofanie; projekty zapisują się same (JSON), zapis do MLT XML;
+      eksport MP4 (H.264 przez x264 albo OpenH264 + AAC) w 720p/1080p, a bez kodera H.264 — WebM (VP9/Opus) z wyjaśnieniem
+- [ ] Montaż, dalej: automatyczne napisy z mowy (whisper.cpp offline, po polsku, model do pobrania przy pierwszym użyciu),
+      filtry i korekcja kolorów, animacje tekstu (pojawianie się, słowo po słowie), przejścia (przesunięcie, zoom),
+      kształt fali dźwięku na osi, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
+      szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
+- [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264
 - [ ] Aster Code — edytor kodu w stylu Aster
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)

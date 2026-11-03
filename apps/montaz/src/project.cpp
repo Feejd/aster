@@ -1,0 +1,1184 @@
+#include "project.h"
+
+#include <QDate>
+#include <QDateTime>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QLocale>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QUrl>
+#include <QUuid>
+#include <QXmlStreamWriter>
+#include <QtMath>
+
+#include <mlt++/Mlt.h>
+
+namespace {
+
+const QStringList imageExt = {QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("png"), QStringLiteral("webp"),
+                              QStringLiteral("bmp"), QStringLiteral("gif"), QStringLiteral("heic"), QStringLiteral("heif"),
+                              QStringLiteral("avif"), QStringLiteral("tif"), QStringLiteral("tiff")};
+const QStringList audioExt = {QStringLiteral("mp3"), QStringLiteral("m4a"), QStringLiteral("aac"), QStringLiteral("ogg"),
+                              QStringLiteral("oga"), QStringLiteral("opus"), QStringLiteral("flac"), QStringLiteral("wav"),
+                              QStringLiteral("wma")};
+
+constexpr int ImageFrames = 3 * Project::Fps;      // zdjęcie na osi: 3 s
+constexpr int TextFrames = 3 * Project::Fps;
+constexpr int MinFrames = 6;
+
+// Gotowe style napisów. Rozmiary — ułamek krótszego boku kadru, położenie — pionowo w kadrze.
+struct Style {
+    const char *id, *name, *fg, *bg, *ol;
+    double size, outline; int weight; const char *place; bool upper;
+};
+const Style styles[] = {
+    {"klasyczny", "Klasyczny", "#FFFFFF", "#00000000", "#000000", 0.072, 0.09, 700, "bottom", false},
+    {"pasek", "Pasek", "#FFFFFF", "#B0000000", "#00000000", 0.058, 0, 600, "bottom", false},
+    {"naglowek", "Nagłówek", "#FFFFFF", "#00000000", "#000000", 0.115, 0.07, 900, "middle", true},
+    {"zolty", "Żółty", "#FFD84D", "#00000000", "#000000", 0.08, 0.1, 800, "lower", false},
+    {"etykieta", "Etykieta", "#FFFFFF", "#FFFF3B6B", "#00000000", 0.062, 0, 700, "top", false},
+    {"delikatny", "Delikatny", "#FFFFFF", "#00000000", "#90000000", 0.052, 0.05, 400, "bottom", false},
+};
+const Style &styleOf(const QString &id)
+{
+    for (const Style &s : styles)
+        if (id == QLatin1String(s.id))
+            return s;
+    return styles[0];
+}
+
+// Łamanie długiego tekstu na wiersze (qtext sam nie zawija)
+QString wrapText(const QString &text, int maxChars)
+{
+    QStringList out;
+    for (const QString &para : text.split(QLatin1Char('\n'))) {
+        QString line;
+        for (const QString &word : para.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+            if (!line.isEmpty() && line.size() + 1 + word.size() > maxChars) {
+                out << line;
+                line.clear();
+            }
+            line += (line.isEmpty() ? QString() : QStringLiteral(" ")) + word;
+        }
+        out << line;
+    }
+    return out.join(QLatin1Char('\n'));
+}
+
+Mlt::Profile &probeProfile()
+{
+    static Mlt::Profile *p = [] {
+        auto *pr = new Mlt::Profile;
+        pr->set_width(640);
+        pr->set_height(360);
+        pr->set_frame_rate(Project::Fps, 1);
+        pr->set_sample_aspect(1, 1);
+        pr->set_progressive(1);
+        pr->set_explicit(1);
+        return pr;
+    }();
+    return *p;
+}
+
+} // namespace
+
+Project::Project(QObject *parent)
+    : QObject(parent)
+{
+    m_saveTimer.setSingleShot(true);
+    m_saveTimer.setInterval(600);
+    connect(&m_saveTimer, &QTimer::timeout, this, &Project::save);
+    loadProjects();
+
+}
+
+Project *Project::instance()
+{
+    static Project *p = new Project;
+    return p;
+}
+
+Project *Project::create(QQmlEngine *, QJSEngine *engine)
+{
+    Project *p = instance();
+    engine->setObjectOwnership(p, QJSEngine::CppOwnership);
+    return p;
+}
+
+Project::~Project()
+{
+    if (m_saveTimer.isActive())
+        save();
+}
+
+int Project::width() const
+{
+    return m_format == QLatin1String("16:9") ? 1920 : 1080;
+}
+
+int Project::height() const
+{
+    return m_format == QLatin1String("9:16") ? 1920 : 1080;
+}
+
+void Project::setName(const QString &name)
+{
+    const QString n = name.trimmed();
+    if (n.isEmpty() || n == m_name)
+        return;
+    snapshot();
+    m_name = n;
+    commit();
+}
+
+QVariantList Project::media() const
+{
+    QVariantList l;
+    for (const Media &m : m_media)
+        l << QVariantMap{{QStringLiteral("path"), m.path}, {QStringLiteral("kind"), m.kind}, {QStringLiteral("name"), m.name},
+                         {QStringLiteral("frames"), m.frames}, {QStringLiteral("thumb"), m.kind == QLatin1String("audio") ? QString() : thumbUrl(m.path, m.frames / 5)}};
+    return l;
+}
+
+QVariantList Project::clips() const
+{
+    QVariantList l;
+    for (int i = 0; i < m_clips.size(); ++i) {
+        const Clip &c = m_clips.at(i);
+        l << QVariantMap{{QStringLiteral("id"), c.id}, {QStringLiteral("path"), c.path}, {QStringLiteral("kind"), c.kind},
+                         {QStringLiteral("name"), c.name}, {QStringLiteral("in"), c.in}, {QStringLiteral("out"), c.out},
+                         {QStringLiteral("speed"), c.speed}, {QStringLiteral("volume"), c.volume}, {QStringLiteral("fill"), c.fill},
+                         {QStringLiteral("fade"), c.fade}, {QStringLiteral("srcFrames"), c.srcFrames},
+                         {QStringLiteral("start"), c.start}, {QStringLiteral("length"), c.length}, {QStringLiteral("index"), i}};
+    }
+    return l;
+}
+
+QVariantList Project::texts() const
+{
+    QVariantList l;
+    for (const Text &t : m_texts)
+        l << QVariantMap{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
+                         {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
+    return l;
+}
+
+QVariantList Project::music() const
+{
+    QVariantList l;
+    for (const Music &m : m_music)
+        l << QVariantMap{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("name"), m.name},
+                         {QStringLiteral("start"), m.start}, {QStringLiteral("in"), m.in}, {QStringLiteral("out"), m.out},
+                         {QStringLiteral("length"), m.out - m.in + 1}, {QStringLiteral("srcFrames"), m.srcFrames},
+                         {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}};
+    return l;
+}
+
+QVariantList Project::textStyles() const
+{
+    QVariantList l;
+    for (const Style &s : styles)
+        l << QVariantMap{{QStringLiteral("id"), QString::fromLatin1(s.id)}, {QStringLiteral("name"), QString::fromUtf8(s.name)},
+                         {QStringLiteral("fg"), QString::fromLatin1(s.fg)}, {QStringLiteral("bg"), QString::fromLatin1(s.bg)},
+                         {QStringLiteral("ol"), QString::fromLatin1(s.ol)}, {QStringLiteral("outline"), s.outline},
+                         {QStringLiteral("weight"), s.weight}, {QStringLiteral("place"), QString::fromLatin1(s.place)},
+                         {QStringLiteral("upper"), s.upper}, {QStringLiteral("size"), s.size}};
+    return l;
+}
+
+// ——— Projekty ———
+
+QString Project::projectsDir() const
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/projects");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString Project::newId() const
+{
+    return QUuid::createUuid().toString(QUuid::Id128).left(12);
+}
+
+void Project::loadProjects()
+{
+    QList<QVariantMap> list;
+    const QDir dir(projectsDir());
+    for (const QFileInfo &fi : dir.entryInfoList({QStringLiteral("*.json")}, QDir::Files)) {
+        QFile f(fi.absoluteFilePath());
+        if (!f.open(QIODevice::ReadOnly))
+            continue;
+        const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+        const QJsonArray clips = o.value(QLatin1String("clips")).toArray();
+        QString thumb;
+        if (!clips.isEmpty()) {
+            const QJsonObject c = clips.first().toObject();
+            thumb = thumbUrl(c.value(QLatin1String("path")).toString(), c.value(QLatin1String("in")).toInt() + 15);
+        }
+        list << QVariantMap{{QStringLiteral("id"), fi.completeBaseName()}, {QStringLiteral("name"), o.value(QLatin1String("name")).toString()},
+                            {QStringLiteral("format"), o.value(QLatin1String("format")).toString()},
+                            {QStringLiteral("modified"), fi.lastModified().toMSecsSinceEpoch()},
+                            {QStringLiteral("duration"), o.value(QLatin1String("duration")).toInt()}, {QStringLiteral("thumb"), thumb}};
+    }
+    std::sort(list.begin(), list.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a.value(QStringLiteral("modified")).toLongLong() > b.value(QStringLiteral("modified")).toLongLong();
+    });
+    m_projects.clear();
+    for (const QVariantMap &m : list)
+        m_projects << m;
+    Q_EMIT projectsChanged();
+}
+
+void Project::newProject(const QString &format)
+{
+
+    closeProject();
+    m_id = newId();
+    m_format = (format == QLatin1String("16:9") || format == QLatin1String("1:1")) ? format : QStringLiteral("9:16");
+    const QLocale pl(QLocale::Polish);
+    const QString base = QStringLiteral("Film z ") + pl.toString(QDate::currentDate(), QStringLiteral("d MMMM"));
+    m_name = base;
+    for (int i = 2;; ++i) {          // „Film z 3 listopada (2)”, gdy taki już jest
+        bool taken = false;
+        for (const QVariant &v : std::as_const(m_projects))
+            taken |= v.toMap().value(QStringLiteral("name")).toString() == m_name;
+        if (!taken)
+            break;
+        m_name = base + QStringLiteral(" (%1)").arg(i);
+    }
+    m_created = QDateTime::currentMSecsSinceEpoch();
+    m_undo.clear();
+    m_redo.clear();
+    layout();
+    ++m_revision;
+    Q_EMIT openChanged();
+    Q_EMIT changed();
+}
+
+bool Project::openProject(const QString &id)
+{
+    QFile f(projectsDir() + QLatin1Char('/') + id + QStringLiteral(".json"));
+    if (!f.open(QIODevice::ReadOnly))
+        return false;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    closeProject();
+    m_id = id;
+    fromJson(o);
+    m_created = qint64(o.value(QLatin1String("created")).toDouble());
+    m_undo.clear();
+    m_redo.clear();
+    layout();
+    ++m_revision;
+    Q_EMIT openChanged();
+    Q_EMIT changed();
+    return true;
+}
+
+void Project::closeProject()
+{
+    if (m_id.isEmpty())
+        return;
+    if (m_clips.isEmpty() && m_texts.isEmpty() && m_music.isEmpty()) {
+        m_saveTimer.stop();
+        QFile::remove(projectsDir() + QLatin1Char('/') + m_id + QStringLiteral(".json"));   // pusty projekt nie zostaje na liście
+    } else {
+        save();
+    }
+    m_id.clear();
+    m_media.clear();
+    m_clips.clear();
+    m_texts.clear();
+    m_music.clear();
+    m_undo.clear();
+    m_redo.clear();
+    layout();
+    ++m_revision;
+    loadProjects();
+    Q_EMIT openChanged();
+    Q_EMIT changed();
+}
+
+void Project::deleteProject(const QString &id)
+{
+    if (id.isEmpty() || id.contains(QLatin1Char('/')))
+        return;
+    if (id == m_id)
+        closeProject();
+    QFile::remove(projectsDir() + QLatin1Char('/') + id + QStringLiteral(".json"));
+    loadProjects();
+}
+
+QString Project::guessFormat(const QStringList &files) const
+{
+    for (const QString &f : files) {
+        const Media *m = const_cast<Project *>(this)->probe(toPath(f));
+        if (m && m->w > 0 && m->h > 0) {
+            const double r = double(m->w) / m->h;
+            return r < 0.8 ? QStringLiteral("9:16") : r > 1.25 ? QStringLiteral("16:9") : QStringLiteral("1:1");
+        }
+    }
+    return QStringLiteral("9:16");
+}
+
+void Project::save()
+{
+    m_saveTimer.stop();
+    if (m_id.isEmpty())
+        return;
+    QJsonObject o = toJson();
+    o.insert(QStringLiteral("created"), double(m_created));
+    o.insert(QStringLiteral("duration"), m_duration);
+    QSaveFile f(projectsDir() + QLatin1Char('/') + m_id + QStringLiteral(".json"));
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
+        f.commit();
+    }
+}
+
+QJsonObject Project::toJson() const
+{
+    QJsonArray media, clips, texts, music;
+    for (const Media &m : m_media)
+        media << QJsonObject{{QStringLiteral("path"), m.path}, {QStringLiteral("kind"), m.kind}, {QStringLiteral("frames"), m.frames},
+                             {QStringLiteral("w"), m.w}, {QStringLiteral("h"), m.h}, {QStringLiteral("audio"), m.audio}};
+    for (const Clip &c : m_clips)
+        clips << QJsonObject{{QStringLiteral("id"), c.id}, {QStringLiteral("path"), c.path}, {QStringLiteral("kind"), c.kind},
+                             {QStringLiteral("in"), c.in}, {QStringLiteral("out"), c.out}, {QStringLiteral("speed"), c.speed},
+                             {QStringLiteral("volume"), c.volume}, {QStringLiteral("fill"), c.fill}, {QStringLiteral("fade"), c.fade},
+                             {QStringLiteral("srcFrames"), c.srcFrames}};
+    for (const Text &t : m_texts)
+        texts << QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
+                             {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
+    for (const Music &m : m_music)
+        music << QJsonObject{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("start"), m.start},
+                             {QStringLiteral("in"), m.in}, {QStringLiteral("out"), m.out}, {QStringLiteral("srcFrames"), m.srcFrames},
+                             {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}};
+    return QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("name"), m_name}, {QStringLiteral("format"), m_format},
+                       {QStringLiteral("fps"), Fps}, {QStringLiteral("media"), media}, {QStringLiteral("clips"), clips},
+                       {QStringLiteral("texts"), texts}, {QStringLiteral("music"), music}};
+}
+
+void Project::fromJson(const QJsonObject &o)
+{
+    m_name = o.value(QLatin1String("name")).toString();
+    m_format = o.value(QLatin1String("format")).toString(QStringLiteral("9:16"));
+    m_media.clear();
+    m_clips.clear();
+    m_texts.clear();
+    m_music.clear();
+    for (const QJsonValue &v : o.value(QLatin1String("media")).toArray()) {
+        const QJsonObject m = v.toObject();
+        Media x;
+        x.path = m.value(QLatin1String("path")).toString();
+        x.kind = m.value(QLatin1String("kind")).toString();
+        x.name = QFileInfo(x.path).completeBaseName();
+        x.frames = m.value(QLatin1String("frames")).toInt();
+        x.w = m.value(QLatin1String("w")).toInt();
+        x.h = m.value(QLatin1String("h")).toInt();
+        x.audio = m.value(QLatin1String("audio")).toBool();
+        m_media << x;
+    }
+    for (const QJsonValue &v : o.value(QLatin1String("clips")).toArray()) {
+        const QJsonObject m = v.toObject();
+        Clip c;
+        c.id = m.value(QLatin1String("id")).toString();
+        c.path = m.value(QLatin1String("path")).toString();
+        c.kind = m.value(QLatin1String("kind")).toString();
+        c.name = QFileInfo(c.path).completeBaseName();
+        c.in = m.value(QLatin1String("in")).toInt();
+        c.out = m.value(QLatin1String("out")).toInt();
+        c.speed = m.value(QLatin1String("speed")).toDouble(1);
+        c.volume = m.value(QLatin1String("volume")).toDouble(1);
+        c.fill = m.value(QLatin1String("fill")).toBool(true);
+        c.fade = m.value(QLatin1String("fade")).toInt();
+        c.srcFrames = m.value(QLatin1String("srcFrames")).toInt();
+        m_clips << c;
+    }
+    for (const QJsonValue &v : o.value(QLatin1String("texts")).toArray()) {
+        const QJsonObject m = v.toObject();
+        m_texts << Text{m.value(QLatin1String("id")).toString(), m.value(QLatin1String("text")).toString(),
+                        m.value(QLatin1String("style")).toString(), m.value(QLatin1String("start")).toInt(),
+                        m.value(QLatin1String("length")).toInt()};
+    }
+    for (const QJsonValue &v : o.value(QLatin1String("music")).toArray()) {
+        const QJsonObject m = v.toObject();
+        Music x;
+        x.id = m.value(QLatin1String("id")).toString();
+        x.path = m.value(QLatin1String("path")).toString();
+        x.name = QFileInfo(x.path).completeBaseName();
+        x.start = m.value(QLatin1String("start")).toInt();
+        x.in = m.value(QLatin1String("in")).toInt();
+        x.out = m.value(QLatin1String("out")).toInt();
+        x.srcFrames = m.value(QLatin1String("srcFrames")).toInt();
+        x.volume = m.value(QLatin1String("volume")).toDouble(0.8);
+        x.fadeOut = m.value(QLatin1String("fadeOut")).toBool(true);
+        m_music << x;
+    }
+}
+
+// ——— Zmiany i cofanie ———
+
+void Project::snapshot(const QString &mergeKey)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    // Kolejne ruchy tego samego suwaka (ta sama właściwość w ciągu 1,5 s) to jeden krok cofania
+    if (!mergeKey.isEmpty() && mergeKey == m_lastKey && now - m_lastKeyTime < 1500) {
+        m_lastKeyTime = now;
+        return;
+    }
+    m_lastKey = mergeKey;
+    m_lastKeyTime = now;
+    m_undo << toJson();
+    if (m_undo.size() > 100)
+        m_undo.removeFirst();
+    m_redo.clear();
+}
+
+void Project::commit()
+{
+    layout();
+    ++m_revision;
+    Q_EMIT changed();
+    m_saveTimer.start();
+}
+
+void Project::undo()
+{
+    if (m_undo.isEmpty())
+        return;
+    m_redo << toJson();
+    fromJson(m_undo.takeLast());
+    m_lastKey.clear();
+    commit();
+}
+
+void Project::redo()
+{
+    if (m_redo.isEmpty())
+        return;
+    m_undo << toJson();
+    fromJson(m_redo.takeLast());
+    m_lastKey.clear();
+    commit();
+}
+
+int Project::clipLength(const Clip &c)
+{
+    return qMax(1, qRound((c.out - c.in + 1) / c.speed));
+}
+
+void Project::layout()
+{
+    int pos = 0, end = 0;
+    for (int i = 0; i < m_clips.size(); ++i) {
+        Clip &c = m_clips[i];
+        c.length = clipLength(c);
+        if (i == 0) {
+            c.fade = 0;
+        } else {
+            // Przenikanie najwyżej przez połowę krótszego z sąsiadów (i z zapasem na przenikanie po drugiej stronie)
+            const Clip &p = m_clips.at(i - 1);
+            c.fade = qBound(0, c.fade, qMin(p.length - p.fade, c.length) / 2);
+            pos -= c.fade;
+        }
+        c.start = pos;
+        pos += c.length;
+    }
+    end = pos;
+    for (const Text &t : m_texts)
+        end = qMax(end, t.start + t.length);
+    for (const Music &m : m_music)
+        end = qMax(end, m.start + m.out - m.in + 1);
+    m_duration = end;
+}
+
+Project::Clip *Project::clip(const QString &id)
+{
+    for (Clip &c : m_clips)
+        if (c.id == id)
+            return &c;
+    return nullptr;
+}
+
+Project::Text *Project::text(const QString &id)
+{
+    for (Text &t : m_texts)
+        if (t.id == id)
+            return &t;
+    return nullptr;
+}
+
+Project::Music *Project::track(const QString &id)
+{
+    for (Music &m : m_music)
+        if (m.id == id)
+            return &m;
+    return nullptr;
+}
+
+QString Project::kindOf(const QString &id) const
+{
+    auto *self = const_cast<Project *>(this);
+    if (self->clip(id))
+        return QStringLiteral("clip");
+    if (self->text(id))
+        return QStringLiteral("text");
+    if (self->track(id))
+        return QStringLiteral("music");
+    return QString();
+}
+
+QVariantMap Project::item(const QString &id) const
+{
+    for (const QVariantList &l : {clips(), texts(), music()})
+        for (const QVariant &v : l)
+            if (v.toMap().value(QStringLiteral("id")).toString() == id)
+                return v.toMap();
+    return {};
+}
+
+int Project::clipIndex(const QString &id) const
+{
+    for (int i = 0; i < m_clips.size(); ++i)
+        if (m_clips.at(i).id == id)
+            return i;
+    return -1;
+}
+
+QString Project::clipAt(int frame) const
+{
+    for (int i = m_clips.size() - 1; i >= 0; --i)
+        if (frame >= m_clips.at(i).start && frame < m_clips.at(i).start + m_clips.at(i).length)
+            return m_clips.at(i).id;
+    return QString();
+}
+
+QString Project::itemAt(const QString &trackName, int frame) const
+{
+    if (trackName == QLatin1String("text")) {
+        for (const Text &t : m_texts)
+            if (frame >= t.start && frame < t.start + t.length)
+                return t.id;
+    } else if (trackName == QLatin1String("music")) {
+        for (const Music &m : m_music)
+            if (frame >= m.start && frame <= m.start + m.out - m.in)
+                return m.id;
+    } else {
+        return clipAt(frame);
+    }
+    return QString();
+}
+
+// ——— Import ———
+
+const Project::Media *Project::probe(const QString &path)
+{
+    for (const Media &m : std::as_const(m_media))
+        if (m.path == path)
+            return &m;
+    static QList<Media> cache;        // zbadane wcześniej (np. przy zgadywaniu formatu)
+    for (const Media &m : std::as_const(cache))
+        if (m.path == path)
+            return &m;
+    const QFileInfo fi(path);
+    if (!fi.isFile())
+        return nullptr;
+    Media m;
+    m.path = path;
+    m.name = fi.completeBaseName();
+    const QString ext = fi.suffix().toLower();
+    if (imageExt.contains(ext)) {
+        QImageReader r(path);
+        r.setAutoTransform(true);
+        const QSize s = r.size();
+        if (!s.isValid() && !r.canRead())
+            return nullptr;
+        m.kind = QStringLiteral("image");
+        m.w = s.width();
+        m.h = s.height();
+        m.frames = 0;
+    } else {
+        Mlt::Producer p(probeProfile(), nullptr, path.toUtf8().constData());
+        if (!p.is_valid())
+            return nullptr;
+        m.frames = p.get_length();
+        const int vi = p.get_int("video_index");
+        const int ai = p.get_int("audio_index");
+        m.audio = ai >= 0;
+        const bool video = vi >= 0 && !audioExt.contains(ext)
+                           && QString::fromUtf8(p.get(QStringLiteral("meta.media.%1.codec.name").arg(vi).toUtf8().constData())) != QLatin1String("mjpeg");
+        if (video) {
+            m.kind = QStringLiteral("video");
+            m.w = p.get_int(QStringLiteral("meta.media.%1.codec.width").arg(vi).toUtf8().constData());
+            m.h = p.get_int(QStringLiteral("meta.media.%1.codec.height").arg(vi).toUtf8().constData());
+            if (m.w <= 0) { m.w = p.get_int("meta.media.width"); m.h = p.get_int("meta.media.height"); }
+            // Filmy z telefonu bywają nagrane poziomo z informacją o obrocie
+            const int rot = qAbs(p.get_int(QStringLiteral("meta.media.%1.codec.rotate").arg(vi).toUtf8().constData())) % 360;
+            if (rot == 90 || rot == 270)
+                std::swap(m.w, m.h);
+        } else if (m.audio) {
+            m.kind = QStringLiteral("audio");
+        } else {
+            return nullptr;
+        }
+        if (m.frames <= 1)
+            return nullptr;
+    }
+    cache << m;
+    return &cache.last();
+}
+
+int Project::importFiles(const QStringList &pathsOrUrls, int atFrame)
+{
+    if (m_id.isEmpty())
+        return 0;
+    QList<Media> found;
+    QStringList bad;
+    for (const QString &s : pathsOrUrls) {
+        const QString path = toPath(s);
+        const Media *m = probe(path);
+        if (m)
+            found << *m;
+        else
+            bad << QFileInfo(path).fileName();
+    }
+    if (!bad.isEmpty())
+        Q_EMIT message(bad.size() == 1 ? QStringLiteral("Nie można otworzyć pliku „%1”").arg(bad.first())
+                                       : QStringLiteral("Nie można otworzyć %1 plików").arg(bad.size()));
+    if (found.isEmpty())
+        return 0;
+    snapshot();
+    // Miejsce na ścieżce wideo: granica klipów najbliższa wskazanej klatce (albo koniec)
+    int index = m_clips.size();
+    if (atFrame >= 0) {
+        index = 0;
+        while (index < m_clips.size() && m_clips.at(index).start + m_clips.at(index).length / 2 < atFrame)
+            ++index;
+    }
+    int musicAt = atFrame;
+    if (musicAt < 0) {
+        musicAt = 0;
+        for (const Music &x : std::as_const(m_music))
+            musicAt = qMax(musicAt, x.start + x.out - x.in + 1);
+    }
+    for (const Media &m : std::as_const(found)) {
+        bool known = false;
+        for (const Media &x : std::as_const(m_media))
+            known |= x.path == m.path;
+        if (!known)
+            m_media << m;
+        if (m.kind == QLatin1String("audio")) {
+            Music x;
+            x.id = newId();
+            x.path = m.path;
+            x.name = m.name;
+            x.start = musicAt;
+            x.in = 0;
+            x.out = m.frames - 1;
+            x.srcFrames = m.frames;
+            m_music << x;
+            musicAt += m.frames;
+        } else {
+            Clip c;
+            c.id = newId();
+            c.path = m.path;
+            c.kind = m.kind;
+            c.name = m.name;
+            c.in = 0;
+            c.out = (m.kind == QLatin1String("image") ? ImageFrames : m.frames) - 1;
+            c.srcFrames = m.kind == QLatin1String("image") ? 0 : m.frames;
+            m_clips.insert(index++, c);
+        }
+    }
+    commit();
+    return found.size();
+}
+
+QString Project::addFromMedia(const QString &path, int frame)
+{
+    const int before = m_clips.size() + m_music.size();
+    importFiles({path}, frame);
+    if (m_clips.size() + m_music.size() == before)
+        return QString();
+    // Nowy element to ten, którego nie było — najprościej: ostatnio dodany id
+    for (const Clip &c : std::as_const(m_clips))
+        if (c.path == path && clipAt(qMax(0, frame)) == c.id)
+            return c.id;
+    return QString();
+}
+
+QString Project::addText(int frame, const QString &str)
+{
+    if (m_id.isEmpty())
+        return QString();
+    snapshot();
+    Text t;
+    t.id = newId();
+    t.text = str.isEmpty() ? QStringLiteral("Twój tekst") : str;
+    t.style = QStringLiteral("klasyczny");
+    t.start = qMax(0, frame);
+    t.length = TextFrames;
+    m_texts << t;
+    commit();
+    return t.id;
+}
+
+// ——— Edycja ———
+
+void Project::trim(const QString &id, int ds, int de)
+{
+    if (ds == 0 && de == 0)
+        return;
+    if (Clip *c = clip(id)) {
+        snapshot();
+        if (c->kind == QLatin1String("image")) {
+            c->out = qMax(MinFrames - 1, c->out + de - ds);
+        } else {
+            int in = c->in + qRound(ds * c->speed);
+            int out = c->out + qRound(de * c->speed);
+            in = qBound(0, in, c->out - MinFrames);
+            out = qBound(in + MinFrames, out, c->srcFrames - 1);
+            c->in = in;
+            c->out = out;
+        }
+    } else if (Text *t = text(id)) {
+        snapshot();
+        const int end = t->start + t->length + de;
+        t->start = qBound(0, t->start + ds, end - MinFrames);
+        t->length = qMax(MinFrames, end - t->start);
+    } else if (Music *m = track(id)) {
+        snapshot();
+        int in = m->in + ds;
+        if (in < 0) { ds -= in; in = 0; }
+        if (m->start + ds < 0) { in -= m->start + ds; ds = -m->start; }
+        in = qMin(in, m->out - MinFrames);
+        m->start += in - m->in;
+        m->in = in;
+        m->out = qBound(m->in + MinFrames, m->out + de, m->srcFrames - 1);
+    } else {
+        return;
+    }
+    commit();
+}
+
+void Project::moveClip(const QString &id, int index)
+{
+    const int from = clipIndex(id);
+    if (from < 0)
+        return;
+    index = qBound(0, index, m_clips.size() - 1);
+    if (index == from)
+        return;
+    snapshot();
+    m_clips.move(from, index);
+    commit();
+}
+
+void Project::moveItem(const QString &id, int start)
+{
+    start = qMax(0, start);
+    if (Text *t = text(id)) {
+        if (t->start == start)
+            return;
+        snapshot();
+        t->start = start;
+    } else if (Music *m = track(id)) {
+        if (m->start == start)
+            return;
+        snapshot();
+        m->start = start;
+    } else {
+        return;
+    }
+    commit();
+}
+
+QString Project::split(const QString &id, int frame)
+{
+    const QString nid = newId();
+    if (Clip *c = clip(id)) {
+        const int local = frame - c->start;
+        if (local < 3 || local > c->length - 3)
+            return QString();
+        snapshot();
+        Clip second = *c;
+        second.id = nid;
+        second.fade = 0;
+        if (c->kind == QLatin1String("image")) {
+            second.out = c->length - local - 1;
+            c->out = local - 1;
+        } else {
+            const int cut = c->in + qRound(local * c->speed);
+            second.in = cut;
+            c->out = cut - 1;
+        }
+        m_clips.insert(clipIndex(id) + 1, second);
+    } else if (Text *t = text(id)) {
+        const int local = frame - t->start;
+        if (local < 3 || local > t->length - 3)
+            return QString();
+        snapshot();
+        Text second = *t;
+        second.id = nid;
+        second.start = frame;
+        second.length = t->length - local;
+        t->length = local;
+        m_texts << second;
+    } else if (Music *m = track(id)) {
+        const int local = frame - m->start;
+        if (local < 3 || local > m->out - m->in - 3)
+            return QString();
+        snapshot();
+        Music second = *m;
+        second.id = nid;
+        second.start = frame;
+        second.in = m->in + local;
+        m->out = m->in + local - 1;
+        m->fadeOut = false;
+        m_music << second;
+    } else {
+        return QString();
+    }
+    commit();
+    return nid;
+}
+
+void Project::remove(const QString &id)
+{
+    if (kindOf(id).isEmpty())
+        return;
+    snapshot();
+    m_clips.removeIf([&](const Clip &c) { return c.id == id; });
+    m_texts.removeIf([&](const Text &t) { return t.id == id; });
+    m_music.removeIf([&](const Music &m) { return m.id == id; });
+    commit();
+}
+
+void Project::setValue(const QString &id, const QString &key, const QVariant &value)
+{
+    const QString merge = id + QLatin1Char('/') + key;
+    if (Clip *c = clip(id)) {
+        snapshot(merge);
+        if (key == QLatin1String("volume"))
+            c->volume = qBound(0.0, value.toDouble(), 2.0);
+        else if (key == QLatin1String("speed"))
+            c->speed = qBound(0.25, value.toDouble(), 4.0);
+        else if (key == QLatin1String("fill"))
+            c->fill = value.toBool();
+        else if (key == QLatin1String("fade"))
+            c->fade = qMax(0, value.toInt());
+    } else if (Text *t = text(id)) {
+        snapshot(merge);
+        if (key == QLatin1String("text"))
+            t->text = value.toString();
+        else if (key == QLatin1String("style"))
+            t->style = value.toString();
+    } else if (Music *m = track(id)) {
+        snapshot(merge);
+        if (key == QLatin1String("volume"))
+            m->volume = qBound(0.0, value.toDouble(), 2.0);
+        else if (key == QLatin1String("fadeOut"))
+            m->fadeOut = value.toBool();
+    } else {
+        return;
+    }
+    commit();
+}
+
+// ——— Opis MLT ———
+
+QString Project::xml(int W, int H) const
+{
+    QString out;
+    QXmlStreamWriter x(&out);
+    x.setAutoFormatting(true);
+    auto prop = [&x](const QString &name, const QString &value) {
+        x.writeStartElement(QStringLiteral("property"));
+        x.writeAttribute(QStringLiteral("name"), name);
+        x.writeCharacters(value);
+        x.writeEndElement();
+    };
+    auto num = [](double v) { return QString::number(v, 'g', 8); };
+    auto filter = [&](const QString &service, const QList<QPair<QString, QString>> &props, int in = -1, int outF = -1) {
+        x.writeStartElement(QStringLiteral("filter"));
+        if (in >= 0) {
+            x.writeAttribute(QStringLiteral("in"), QString::number(in));
+            x.writeAttribute(QStringLiteral("out"), QString::number(outF));
+        }
+        prop(QStringLiteral("mlt_service"), service);
+        for (const auto &p : props)
+            prop(p.first, p.second);
+        x.writeEndElement();
+    };
+    const int total = qMax(1, m_duration);
+
+    x.writeStartDocument();
+    x.writeStartElement(QStringLiteral("mlt"));
+    x.writeAttribute(QStringLiteral("LC_NUMERIC"), QStringLiteral("C"));
+    x.writeAttribute(QStringLiteral("title"), m_name);
+    x.writeStartElement(QStringLiteral("profile"));
+    const int g = std::gcd(W, H);
+    for (const auto &[k, v] : QList<QPair<QString, int>>{{QStringLiteral("width"), W}, {QStringLiteral("height"), H},
+                                                           {QStringLiteral("frame_rate_num"), Fps}, {QStringLiteral("frame_rate_den"), 1},
+                                                           {QStringLiteral("progressive"), 1}, {QStringLiteral("sample_aspect_num"), 1},
+                                                           {QStringLiteral("sample_aspect_den"), 1}, {QStringLiteral("display_aspect_num"), W / g},
+                                                           {QStringLiteral("display_aspect_den"), H / g}, {QStringLiteral("colorspace"), 709}})
+        x.writeAttribute(k, QString::number(v));
+    x.writeEndElement();
+
+    // Tło
+    x.writeStartElement(QStringLiteral("producer"));
+    x.writeAttribute(QStringLiteral("id"), QStringLiteral("tlo"));
+    x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+    x.writeAttribute(QStringLiteral("out"), QString::number(total - 1));
+    prop(QStringLiteral("mlt_service"), QStringLiteral("color"));
+    prop(QStringLiteral("resource"), QStringLiteral("#FF000000"));
+    prop(QStringLiteral("length"), QString::number(total));
+    x.writeEndElement();
+
+    // Klipy (każdy jako osobne źródło; prędkość przez timewarp, wypełnienie kadru przez crop)
+    QList<int> warpIn;
+    for (int i = 0; i < m_clips.size(); ++i) {
+        const Clip &c = m_clips.at(i);
+        const bool image = c.kind == QLatin1String("image");
+        const bool warp = !image && !qFuzzyCompare(c.speed, 1.0);
+        const int len = image ? 100000 : qMax(1, int(c.srcFrames / (warp ? c.speed : 1.0)));
+        x.writeStartElement(QStringLiteral("producer"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("k%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+        x.writeAttribute(QStringLiteral("out"), QString::number(len - 1));
+        if (warp) {
+            prop(QStringLiteral("mlt_service"), QStringLiteral("timewarp"));
+            prop(QStringLiteral("resource"), num(c.speed) + QLatin1Char(':') + c.path);
+            prop(QStringLiteral("warp_pitch"), QStringLiteral("1"));
+        } else {
+            prop(QStringLiteral("resource"), c.path);
+        }
+        if (image) {
+            prop(QStringLiteral("length"), QString::number(len));
+            prop(QStringLiteral("ttl"), QStringLiteral("1"));
+        }
+        if (c.fill)
+            filter(QStringLiteral("crop"), {{QStringLiteral("center"), QStringLiteral("1")}});
+        if (!image && !qFuzzyCompare(c.volume, 1.0))
+            filter(QStringLiteral("volume"), {{QStringLiteral("gain"), num(c.volume)}});
+        x.writeEndElement();
+        warpIn << (image ? 0 : qRound(c.in / (warp ? c.speed : 1.0)));
+    }
+    // Przenikania: mały tractor z końcówką poprzedniego i początkiem następnego klipu
+    for (int i = 1; i < m_clips.size(); ++i) {
+        const Clip &c = m_clips.at(i);
+        if (c.fade <= 0)
+            continue;
+        const Clip &p = m_clips.at(i - 1);
+        const int pEnd = warpIn.at(i - 1) + p.length - 1;
+        x.writeStartElement(QStringLiteral("tractor"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("p%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+        x.writeAttribute(QStringLiteral("out"), QString::number(c.fade - 1));
+        x.writeStartElement(QStringLiteral("track"));
+        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("k%1").arg(i - 1));
+        x.writeAttribute(QStringLiteral("in"), QString::number(pEnd - c.fade + 1));
+        x.writeAttribute(QStringLiteral("out"), QString::number(pEnd));
+        x.writeEndElement();
+        x.writeStartElement(QStringLiteral("track"));
+        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("k%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QString::number(warpIn.at(i)));
+        x.writeAttribute(QStringLiteral("out"), QString::number(warpIn.at(i) + c.fade - 1));
+        x.writeEndElement();
+        for (const QString &svc : {QStringLiteral("luma"), QStringLiteral("mix")}) {
+            x.writeStartElement(QStringLiteral("transition"));
+            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+            x.writeAttribute(QStringLiteral("out"), QString::number(c.fade - 1));
+            prop(QStringLiteral("mlt_service"), svc);
+            prop(QStringLiteral("a_track"), QStringLiteral("0"));
+            prop(QStringLiteral("b_track"), QStringLiteral("1"));
+            if (svc == QLatin1String("mix")) {
+                prop(QStringLiteral("start"), QStringLiteral("0"));
+                prop(QStringLiteral("end"), QStringLiteral("1"));
+            }
+            x.writeEndElement();
+        }
+        x.writeEndElement();
+    }
+    x.writeStartElement(QStringLiteral("playlist"));
+    x.writeAttribute(QStringLiteral("id"), QStringLiteral("wideo"));
+    for (int i = 0; i < m_clips.size(); ++i) {
+        const Clip &c = m_clips.at(i);
+        const int nextFade = i + 1 < m_clips.size() ? m_clips.at(i + 1).fade : 0;
+        if (c.fade > 0) {
+            x.writeStartElement(QStringLiteral("entry"));
+            x.writeAttribute(QStringLiteral("producer"), QStringLiteral("p%1").arg(i));
+            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+            x.writeAttribute(QStringLiteral("out"), QString::number(c.fade - 1));
+            x.writeEndElement();
+        }
+        const int in = warpIn.at(i) + c.fade, outF = warpIn.at(i) + c.length - 1 - nextFade;
+        if (outF >= in) {
+            x.writeStartElement(QStringLiteral("entry"));
+            x.writeAttribute(QStringLiteral("producer"), QStringLiteral("k%1").arg(i));
+            x.writeAttribute(QStringLiteral("in"), QString::number(in));
+            x.writeAttribute(QStringLiteral("out"), QString::number(outF));
+            x.writeEndElement();
+        }
+    }
+    x.writeEndElement();
+
+    // Muzyka: każdy utwór na własnej ścieżce (mogą na siebie zachodzić)
+    for (int i = 0; i < m_music.size(); ++i) {
+        const Music &m = m_music.at(i);
+        x.writeStartElement(QStringLiteral("producer"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("m%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+        x.writeAttribute(QStringLiteral("out"), QString::number(m.srcFrames - 1));
+        prop(QStringLiteral("resource"), m.path);
+        prop(QStringLiteral("video_index"), QStringLiteral("-1"));
+        filter(QStringLiteral("volume"), {{QStringLiteral("gain"), num(m.volume)}});
+        x.writeEndElement();
+        x.writeStartElement(QStringLiteral("playlist"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("muzyka%1").arg(i));
+        if (m.start > 0) {
+            x.writeStartElement(QStringLiteral("blank"));
+            x.writeAttribute(QStringLiteral("length"), QString::number(m.start));
+            x.writeEndElement();
+        }
+        x.writeStartElement(QStringLiteral("entry"));
+        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("m%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QString::number(m.in));
+        x.writeAttribute(QStringLiteral("out"), QString::number(m.out));
+        const int len = m.out - m.in + 1;
+        if (m.fadeOut && len > 2 * Fps)          // łagodne wyciszenie przez ostatnią sekundę
+            filter(QStringLiteral("volume"), {{QStringLiteral("gain"), QStringLiteral("1")}, {QStringLiteral("end"), QStringLiteral("0")}},
+                   len - Fps, len - 1);
+        x.writeEndElement();
+        x.writeEndElement();
+    }
+
+    x.writeStartElement(QStringLiteral("tractor"));
+    x.writeAttribute(QStringLiteral("id"), QStringLiteral("film"));
+    x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+    x.writeAttribute(QStringLiteral("out"), QString::number(total - 1));
+    x.writeStartElement(QStringLiteral("multitrack"));
+    auto track = [&](const QString &producer, bool audioOnly) {
+        x.writeStartElement(QStringLiteral("track"));
+        x.writeAttribute(QStringLiteral("producer"), producer);
+        if (audioOnly)
+            x.writeAttribute(QStringLiteral("hide"), QStringLiteral("video"));
+        x.writeEndElement();
+    };
+    track(QStringLiteral("tlo"), false);
+    track(QStringLiteral("wideo"), false);
+    for (int i = 0; i < m_music.size(); ++i)
+        track(QStringLiteral("muzyka%1").arg(i), true);
+    x.writeEndElement();
+    for (int t = 1; t < 2 + m_music.size(); ++t) {
+        x.writeStartElement(QStringLiteral("transition"));
+        prop(QStringLiteral("mlt_service"), QStringLiteral("mix"));
+        prop(QStringLiteral("a_track"), QStringLiteral("0"));
+        prop(QStringLiteral("b_track"), QString::number(t));
+        prop(QStringLiteral("always_active"), QStringLiteral("1"));
+        prop(QStringLiteral("sum"), QStringLiteral("1"));
+        x.writeEndElement();
+    }
+    // Napisy — filtry na całym filmie, każdy w swoim przedziale czasu
+    const int base = qMin(W, H);
+    for (const Text &t : m_texts) {
+        if (t.text.trimmed().isEmpty())
+            continue;
+        const Style &s = styleOf(t.style);
+        const int size = qMax(8, qRound(s.size * base));
+        const int maxChars = qMax(6, int(0.86 * W / (size * 0.56)));
+        QString str = wrapText(s.upper ? t.text.toUpper() : t.text, maxChars);
+        const QString place = QString::fromLatin1(s.place);
+        QString geo = place == QLatin1String("top") ? QStringLiteral("6% 8% 88% 22%")
+                    : place == QLatin1String("middle") ? QStringLiteral("6% 30% 88% 40%")
+                    : place == QLatin1String("lower") ? QStringLiteral("6% 56% 88% 22%")
+                                                      : QStringLiteral("6% 66% 88% 24%");
+        const QString valign = place == QLatin1String("top") ? QStringLiteral("top")
+                             : place == QLatin1String("middle") || place == QLatin1String("lower") ? QStringLiteral("middle")
+                                                                                                    : QStringLiteral("bottom");
+        filter(QStringLiteral("qtext"),
+               {{QStringLiteral("argument"), str}, {QStringLiteral("geometry"), geo}, {QStringLiteral("family"), QStringLiteral("Geist")},
+                {QStringLiteral("size"), QString::number(size)}, {QStringLiteral("weight"), QString::number(s.weight)},
+                {QStringLiteral("fgcolour"), QString::fromLatin1(s.fg)}, {QStringLiteral("bgcolour"), QString::fromLatin1(s.bg)},
+                {QStringLiteral("olcolour"), QString::fromLatin1(s.ol)},
+                {QStringLiteral("outline"), QString::number(s.outline > 0 ? qMax(1, qRound(size * s.outline)) : 0)},
+                {QStringLiteral("pad"), QString::number(QByteArray(s.bg).startsWith("#00") ? 0 : qRound(size * 0.35))},
+                {QStringLiteral("halign"), QStringLiteral("center")}, {QStringLiteral("valign"), valign}},
+               t.start, t.start + t.length - 1);
+    }
+    x.writeEndElement();
+    x.writeEndElement();
+    x.writeEndDocument();
+    return out;
+}
+
+bool Project::saveMlt(const QString &pathOrUrl) const
+{
+    QSaveFile f(toPath(pathOrUrl));
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(xml(width(), height()).toUtf8());
+    return f.commit();
+}
+
+// ——— Pomocnicze ———
+
+QString Project::time(int frames, bool fine) const
+{
+    frames = qMax(0, frames);
+    const int s = frames / Fps, f = frames % Fps;
+    QString t = s >= 3600 ? QStringLiteral("%1:%2:%3").arg(s / 3600).arg(s / 60 % 60, 2, 10, QLatin1Char('0')).arg(s % 60, 2, 10, QLatin1Char('0'))
+                          : QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QLatin1Char('0'));
+    if (fine)
+        t += QStringLiteral(",%1").arg(f, 2, 10, QLatin1Char('0'));
+    return t;
+}
+
+QString Project::toPath(const QString &pathOrUrl) const
+{
+    const QUrl url(pathOrUrl);
+    return url.isLocalFile() ? url.toLocalFile() : pathOrUrl;
+}
+
+QString Project::videosDir() const
+{
+    return QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+}
+
+QString Project::when(qint64 msecs) const
+{
+    const QDate d = QDateTime::fromMSecsSinceEpoch(msecs).date();
+    const QDate today = QDate::currentDate();
+    if (d == today)
+        return QStringLiteral("dziś");
+    if (d == today.addDays(-1))
+        return QStringLiteral("wczoraj");
+    const QLocale pl(QLocale::Polish);
+    return d.year() == today.year() ? pl.toString(d, QStringLiteral("d MMMM")) : pl.toString(d, QStringLiteral("d MMMM yyyy"));
+}
+
+void Project::showInFolder(const QString &path) const
+{
+    QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.FileManager1"), QStringLiteral("/org/freedesktop/FileManager1"),
+                                                    QStringLiteral("org.freedesktop.FileManager1"), QStringLiteral("ShowItems"));
+    m << QStringList{QUrl::fromLocalFile(path).toString()} << QString();
+    if (!QDBusConnection::sessionBus().send(m))
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+}
+
+QString Project::thumbUrl(const QString &path, int frame)
+{
+    if (path.isEmpty())
+        return QString();
+    return QStringLiteral("image://mthumb/%1/").arg(qMax(0, frame))
+           + QString::fromLatin1(path.toUtf8().toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+}

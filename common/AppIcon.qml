@@ -37,6 +37,7 @@ Item {
         "org.aster.video": ["#9DB8FF", "#3A36D8", "film"],
         "org.aster.music": ["#FFA394", "#E2283E", "music"],
         "org.aster.camera": ["#B9C2D3", "#2B303C", "camera"],
+        "org.aster.montaz": ["#FFB08A", "#D9306A", "clapper"],
         "org.kde.kamoso": ["#B9C2D3", "#2B303C", "camera"],
         "org.aster.scanner": ["#A5F3FC", "#0E7490", "scanner"],
         "org.kde.skanlite": ["#A5F3FC", "#0E7490", "scanner"],
