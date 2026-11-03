@@ -50,6 +50,9 @@ podman rm "$ctr" >/dev/null
 echo "==> Obraz Aster do instalacji (bez internetu) w magazynie kontenerów nośnika"
 skopeo copy containers-storage:localhost/aster:latest \
     "containers-storage:[overlay@$WORK/rootfs/var/lib/containers/storage+$WORK/run]localhost/aster:latest"
+# Sterownik overlay podłącza swój katalog sam na siebie i zostawia go podłączonego — odłączamy wszystko
+# w katalogu nośnika (inaczej nie da się go potem usunąć)
+findmnt -rno TARGET | grep -E "^($WORK/rootfs|$WORK/run)(/|$)" | sort -r | while read -r m; do umount -l "$m" || true; done
 
 echo "==> Jądro i initramfs startujące z nośnika (dmsquash-live)"
 kver=$(ls "$WORK/rootfs/usr/lib/modules" | head -n1)
