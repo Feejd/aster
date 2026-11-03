@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kamera
+GenericName=Kamera internetowa
+Comment=Zrób zdjęcie albo nagraj film kamerą komputera
+Exec=aster-camera
+Icon=camera-web
+Terminal=false
+Categories=AudioVideo;Video;Recorder;
+Keywords=kamera;aparat;zdjęcie;selfie;nagrywanie;wideo;webcam;camera;photo;
+StartupWMClass=aster-camera

@@ -30,7 +30,7 @@ echo "==> Instaluję Aster w systemie…"
 sudo cmake --install "$BUILD" >/dev/null
 # Wersje z dev-run.sh w katalogu domowym przesłaniałyby zainstalowane
 rm -f "$HOME/.local/bin/aster-terminal"
-for app in files browser webapps store settings terminal tasks photos pdf editor calculator video music emoji; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
+for app in files browser webapps store settings terminal tasks photos pdf editor calculator video music camera emoji; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
 rm -f "$HOME/.local/share/kglobalaccel/org.aster.tasks.desktop" "$HOME/.local/share/kglobalaccel/org.aster.emoji.desktop" \
       "$HOME/.local/share/kglobalaccel/org.kde.plasma.emojier.desktop" "$HOME/.local/share/applications/org.aster.emoji.desktop"
 # Win+. — panel emoji Aster zamiast wybieraka KDE (zapamiętany skrót użytkownika też)

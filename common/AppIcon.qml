@@ -36,6 +36,8 @@ Item {
         "org.aster.photos": ["#FFB0DC", "#B23DE0", "image"],
         "org.aster.video": ["#9DB8FF", "#3A36D8", "film"],
         "org.aster.music": ["#FFA394", "#E2283E", "music"],
+        "org.aster.camera": ["#B9C2D3", "#2B303C", "camera"],
+        "org.kde.kamoso": ["#B9C2D3", "#2B303C", "camera"],
         "org.aster.tasks": ["#7EE8A8", "#0E8F5A", "activity"],
         "org.kde.plasma-systemmonitor": ["#7EE8A8", "#0E8F5A", "activity"],
         "org.kde.konsole": ["#8B93A8", "#141621", "prompt"],
