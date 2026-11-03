@@ -54,16 +54,20 @@ skopeo copy containers-storage:localhost/aster:latest \
 echo "==> Jądro i initramfs startujące z nośnika (dmsquash-live)"
 kver=$(ls "$WORK/rootfs/usr/lib/modules" | head -n1)
 cp "$WORK/rootfs/usr/lib/modules/$kver/vmlinuz" "$WORK/iso/boot/vmlinuz"
-podman run --rm -v "$WORK/iso/boot:/out" localhost/aster-installer:latest \
-    dracut --no-hostonly --reproducible --add "dmsquash-live dmsquash-live-autooverlay" \
-           --omit "plymouth" --force /out/initramfs.img "$kver"
+# /root w obrazie atomowym to dowiązanie do /var/roothome — w kontenerze trzeba go założyć, inaczej dracut się sypie
+podman run --rm -v "$WORK/iso/boot:/out" localhost/aster-installer:latest sh -c "mkdir -p /var/roothome && \
+    dracut --no-hostonly --reproducible --add 'dmsquash-live dmsquash-live-autooverlay' \
+           --omit plymouth --force /out/initramfs.img $kver"
+[ -s "$WORK/iso/boot/initramfs.img" ] || { echo "Nie powstał initramfs" >&2; exit 1; }
 chmod 644 "$WORK/iso/boot/initramfs.img"
 
 echo "==> Rozruch UEFI (shim + GRUB z obrazu, bez menu)"
-efi="$WORK/rootfs/usr/lib/bootupd/updates/EFI"
-[ -d "$efi" ] || efi="$WORK/rootfs/boot/efi/EFI"
-cp "$efi/fedora/$SHIM" "$WORK/iso/EFI/BOOT/$EFI_NAME"
-cp "$efi/fedora/$GRUB_EFI" "$WORK/iso/EFI/BOOT/$GRUB_EFI"
+# Fedora 41+ trzyma je w /usr/lib/efi/<pakiet>/<wersja>/EFI/fedora, starsze obrazy w /usr/lib/bootupd albo /boot/efi
+find_efi() { find "$WORK/rootfs/usr/lib/efi" "$WORK/rootfs/usr/lib/bootupd" "$WORK/rootfs/boot/efi" -name "$1" -path '*EFI*' 2>/dev/null | sort | tail -n1; }
+shim=$(find_efi "$SHIM"); grub=$(find_efi "$GRUB_EFI")
+[ -n "$shim" ] && [ -n "$grub" ] || { echo "Nie znaleziono $SHIM / $GRUB_EFI w obrazie" >&2; exit 1; }
+cp "$shim" "$WORK/iso/EFI/BOOT/$EFI_NAME"
+cp "$grub" "$WORK/iso/EFI/BOOT/$GRUB_EFI"
 
 echo "==> squashfs"
 mksquashfs "$WORK/rootfs" "$WORK/iso/LiveOS/squashfs.img" -comp zstd -Xcompression-level 15 -noappend -quiet
