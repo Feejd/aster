@@ -64,8 +64,9 @@ void Waveform::paint(QPainter *p)
             lo = std::min(lo, peaks[i * 2]);
             hi = std::max(hi, peaks[i * 2 + 1]);
         }
-        upper << QPointF(x, mid - std::min(1.f, hi) * amp);
-        lower << QPointF(x, mid - std::max(-1.f, lo) * amp);
+        const float g = float(m_gain);
+        upper << QPointF(x, mid - std::min(1.f, hi * g) * amp);
+        lower << QPointF(x, mid - std::max(-1.f, lo * g) * amp);
     }
     QPolygonF shape = upper;
     for (int i = int(lower.size()) - 1; i >= 0; --i)

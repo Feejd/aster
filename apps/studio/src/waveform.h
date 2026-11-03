@@ -18,6 +18,7 @@ class Waveform : public QQuickPaintedItem
     Q_PROPERTY(double from MEMBER m_from NOTIFY changed)              // czas w klipie (s) przy lewej krawędzi elementu
     Q_PROPERTY(double pxPerSec MEMBER m_pxPerSec NOTIFY changed)
     Q_PROPERTY(bool loop MEMBER m_loop NOTIFY changed)
+    Q_PROPERTY(double gain MEMBER m_gain NOTIFY changed)              // głośność klipu (liniowo) — fala rośnie i maleje
     Q_PROPERTY(bool live MEMBER m_live NOTIFY changed)
     Q_PROPERTY(QColor color MEMBER m_color NOTIFY changed)
     Q_PROPERTY(int version MEMBER m_version NOTIFY changed)           // zmiana → przerysuj (wczytane pliki, nagrywanie)
@@ -31,7 +32,7 @@ signals:
 
 private:
     QString m_file;
-    double m_srcStart = 0, m_srcLength = 0, m_offset = 0, m_from = 0, m_pxPerSec = 100;
+    double m_srcStart = 0, m_srcLength = 0, m_offset = 0, m_from = 0, m_pxPerSec = 100, m_gain = 1;
     bool m_loop = false, m_live = false;
     QColor m_color = Qt::white;
     int m_version = 0;

@@ -24,6 +24,7 @@ Window {
     // Kolory ścieżek (indeks zapisany w projekcie)
     readonly property var trackColors: ["#FF6B6B", "#FFA94D", "#F5C542", "#51CF66", "#22B8CF", "#4D8BF7", "#9775FA", "#F06595"]
     property bool showMixer: false
+    property bool showInspector: true
     readonly property bool typing: activeFocusItem instanceof TextInput
 
     onClosing: Studio.closeProject()
@@ -31,7 +32,7 @@ Window {
 
     Connections {
         target: Studio
-        function onMessage(text) { win.toast(text); }
+        function onMessage(text) { win.toast(text); console.warn(text); }
         function onExportFinished(ok, path, error) {
             exportSheet.close();
             if (ok) win.toast("Zapisano „" + path.split("/").pop() + "”", "Pokaż w folderze", () => Studio.showInFolder(path));
@@ -60,6 +61,8 @@ Window {
     Shortcut { sequences: ["Return", "Home"]; enabled: Studio.open && !win.typing; onActivated: Studio.seek(0) }
     Shortcut { sequences: ["K"]; enabled: Studio.open && !win.typing; onActivated: Studio.metronome = !Studio.metronome }
     Shortcut { sequences: ["X"]; enabled: Studio.open && !win.typing; onActivated: win.showMixer = !win.showMixer }
+    Shortcut { sequences: ["E"]; enabled: Studio.open && !win.typing; onActivated: win.showInspector = !win.showInspector }
+    Shortcut { sequences: ["C"]; enabled: Studio.open && !win.typing; onActivated: Studio.cycle = !Studio.cycle }
     Shortcut { sequences: ["M"]; enabled: Studio.open && !win.typing && Studio.tracks.length > 0; onActivated: Studio.setTrackMute(Studio.selectedTrack, !Studio.mix[Studio.selectedTrack].mute) }
     Shortcut { sequences: ["S"]; enabled: Studio.open && !win.typing && Studio.selectedClip > 0; onActivated: { if (!Studio.splitClip(Studio.selectedClip, Studio.position)) win.toast("Ustaw głowicę na zaznaczonym klipie, żeby go podzielić"); } }
     Shortcut { sequences: ["L"]; enabled: Studio.open && !win.typing && Studio.selectedClip > 0; onActivated: Studio.setClipLoop(Studio.selectedClip, !Studio.clip(Studio.selectedClip).loop) }
@@ -91,6 +94,7 @@ Window {
     function testOpen(what) {
         const clips = (i) => Studio.tracks[i] ? Studio.tracks[i].clips : [];
         if (what === "new") Studio.newProject("Pierwsza piosenka", 96, 4);
+        else if (what.startsWith("newp:")) Studio.newProject(what.substring(5), 96, 4);
         else if (what === "demo") {
             const dir = "/root/Muzyka/";
             Studio.importFiles([dir + "Neon Bałtyk/Miejskie Światła/01 Tramwaj nr 4.flac"], 0, 0);
@@ -144,6 +148,12 @@ Window {
         else if (what.startsWith("output:")) Studio.output = what.substring(7);
         else if (what === "save") Studio.save();
         else if (what === "close") Studio.closeProject();
+        else if (what.startsWith("preset:")) { const a = what.split(":"); Studio.applyPreset(Number(a[1]), a[2]); }
+        else if (what.startsWith("fade:")) { const a = what.split(":"); const c = clips(Number(a[1]))[0]; Studio.setClipFades(c.id, Number(a[2]), Number(a[3])); Studio.selectedClip = c.id; }
+        else if (what.startsWith("cycle:")) { const a = what.split(":"); Studio.setCycle(Number(a[1]), Number(a[2])); }
+        else if (what.startsWith("select:")) Studio.selectedTrack = Number(what.substring(7));
+        else if (what === "inspectorOff") showInspector = false;
+        else if (what === "dbg") console.warn("STUDIO", inspector.hasClip, JSON.stringify(inspector.cl), Studio.selectedClip, JSON.stringify(Studio.clip(Studio.selectedClip)));
     }
 
     // ——— Menu ———
@@ -157,6 +167,8 @@ Window {
             { label: "Podziel na głowicy", icon: "scissors", shortcut: "S", action: "splitHead" },
             { label: c.loop ? "Wyłącz pętlę" : "Zapętlaj", icon: "repeat", shortcut: "L", action: "loop" },
             { label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "dup" },
+            { label: "Ćwicz w pętli", icon: "repeat", action: "cycle" },
+            { label: "Zmień nazwę…", icon: "pencil", action: "renameClip" },
             { separator: true },
             { label: "Usuń klip", icon: "trash", shortcut: "Del", action: "remove", danger: true }
         ]);
@@ -196,8 +208,10 @@ Window {
         else if (a === "splitHead") { if (!Studio.splitClip(menu.clipId, Studio.position)) toast("Głowica nie stoi na tym klipie"); }
         else if (a === "loop") Studio.setClipLoop(menu.clipId, !Studio.clip(menu.clipId).loop);
         else if (a === "dup") Studio.duplicateClip(menu.clipId);
+        else if (a === "cycle") Studio.cycleClip(menu.clipId);
+        else if (a === "renameClip") { renameSheet.clipId = menu.clipId; renameField.text = Studio.clip(menu.clipId).name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "remove") Studio.removeClip(menu.clipId);
-        else if (a === "rename") { renameField.text = Studio.tracks[menu.track].name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
+        else if (a === "rename") { renameSheet.clipId = 0; renameField.text = Studio.tracks[menu.track].name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "arm") Studio.setTrackArmed(menu.track, !Studio.tracks[menu.track].armed);
         else if (a === "import") importDialog.open();
         else if (a.startsWith("in:")) Studio.setTrackInput(menu.track, Number(a.substring(3)));
@@ -376,6 +390,12 @@ Window {
                         onClicked: Studio.metronome = !Studio.metronome
                     }
                     RoundBtn {
+                        icon: "repeat"
+                        active: Studio.cycle
+                        tip: Studio.cycle ? "Pętla odtwarzania: wł. (C)" : "Pętla odtwarzania — ćwicz fragment (C)"
+                        onClicked: Studio.cycle = !Studio.cycle
+                    }
+                    RoundBtn {
                         icon: "timer"
                         active: Studio.countIn
                         tip: Studio.countIn ? "Odliczanie taktu przed nagraniem: wł." : "Odliczanie przed nagraniem: wył."
@@ -392,6 +412,7 @@ Window {
                     RoundBtn { icon: "undo"; mirror: true; enabled: Studio.canRedo; tip: "Ponów (Ctrl+Shift+Z)"; onClicked: Studio.redo() }
                     Item { width: 4; height: 1 }
                     RoundBtn { icon: "sliders"; active: win.showMixer; tip: "Mikser (X)"; onClicked: win.showMixer = !win.showMixer }
+                    RoundBtn { icon: "sparkle"; active: win.showInspector; tip: "Efekty i klip (E)"; onClicked: win.showInspector = !win.showInspector }
                     RoundBtn { icon: "speaker"; tip: "Ustawienia dźwięku"; onClicked: audioSheet.open(); warn: !Studio.audioOk || Studio.audioError !== "" }
                     Pill { anchors.verticalCenter: parent.verticalCenter; text: "Eksportuj"; icon: "upload"; primary: true; tip: "Zapisz piosenkę jako MP3, WAV… (Ctrl+E)"; onClicked: exportSheet.open() }
                 }
@@ -407,17 +428,18 @@ Window {
             GlassPane {
                 x: timeline.headerW
                 y: toolbar.height
-                width: parent.width - x
+                width: timeline.width - x
                 height: timeline.height + statusBar.height
                 topLeftRadius: 14
+                topRightRadius: inspector.width > 0 ? 14 : 0
                 leftLine: false
-                bottomRightRadius: win.showMixer ? 0 : win.r
+                bottomRightRadius: win.showMixer || inspector.width > 0 ? 0 : win.r
             }
             Rectangle { y: toolbar.height; width: parent.width; height: 1; color: Theme.line; opacity: 0.6 }
             Timeline {
                 id: timeline
                 y: toolbar.height
-                width: parent.width
+                width: parent.width - inspector.width
                 height: parent.height - y - statusBar.height - mixer.height
                 colors: win.trackColors
                 onClipMenu: (c, track, item, x, y, at) => win.clipMenu(c, track, item, x, y, at)
@@ -429,7 +451,7 @@ Window {
             Item {
                 id: statusBar
                 y: timeline.y + timeline.height
-                width: parent.width; height: 44
+                width: timeline.width; height: 44
                 Row {
                     x: 12; anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
@@ -462,6 +484,18 @@ Window {
                     RoundBtn { icon: "minus"; size: 28; tip: "Pomniejsz (Ctrl+−)"; onClicked: timeline.zoom(0.8, timeline.viewW / 2) }
                     RoundBtn { icon: "plus"; size: 28; tip: "Powiększ (Ctrl++)"; onClicked: timeline.zoom(1.25, timeline.viewW / 2) }
                 }
+            }
+
+            Inspector {
+                id: inspector
+                x: parent.width - width
+                y: toolbar.height
+                width: win.showInspector ? 300 : 0
+                height: timeline.height + statusBar.height
+                visible: width > 0
+                clip: true
+                colors: win.trackColors
+                Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
             }
 
             Mixer {
@@ -697,7 +731,8 @@ Window {
         Sheet {
             id: renameSheet
             radius: win.r
-            title: "Nazwa ścieżki"
+            property int clipId: 0              // 0 — zmiana nazwy ścieżki
+            title: clipId ? "Nazwa klipu" : "Nazwa ścieżki"
             cardWidth: 380
             Column {
                 width: parent.width
@@ -707,7 +742,7 @@ Window {
                     anchors.right: parent.right
                     spacing: 8
                     Pill { text: "Anuluj"; onClicked: renameSheet.close() }
-                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
+                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { if (renameSheet.clipId) Studio.renameClip(renameSheet.clipId, renameField.text); else Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
                 }
             }
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audiosource.h"
+#include "dsp.h"
 
 #include <QList>
 #include <QMutex>
@@ -30,6 +31,8 @@ struct ClipRT
     long long srcStart = 0;       // fragment pliku: od…
     long long srcLen = 0;         // …i ile (zapętlony klip powtarza ten fragment)
     long long offset = 0;         // przesunięcie fazy pętli (po przycięciu lub podziale zapętlonego klipu)
+    long long fadeIn = 0, fadeOut = 0;   // narastanie i wyciszanie (ramki)
+    float gain = 1.f;                     // głośność klipu
     bool loop = false;
 };
 
@@ -38,6 +41,9 @@ struct TrackRT
     std::vector<ClipRT> clips;
     float gainL = 1.f, gainR = 1.f;      // głośność × panorama
     bool audible = true;                  // po uwzględnieniu wycisz/solo
+    Biquad eq[4];                         // usuwanie dudnienia, niskie, średnie, wysokie
+    CompParams comp;
+    float send = 0;                       // ile do pogłosu (po suwaku głośności)
 };
 
 struct Snapshot
@@ -46,6 +52,8 @@ struct Snapshot
     double bpm = 120;
     int beatsPerBar = 4;
     float master = 1.f;
+    float reverbSize = 0.5f;              // mała sala … duża hala
+    float click = 0.7f;                   // głośność metronomu
     std::vector<SourcePtr> keep;          // trzyma pliki przy życiu, dopóki migawka jest w użyciu
 };
 
@@ -65,6 +73,12 @@ public:
 private:
     void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate);
     float m_l[MaxBlock], m_r[MaxBlock], m_tl[MaxBlock], m_tr[MaxBlock];
+    // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
+    BiquadState m_eq[MaxTracks][4][2];
+    CompState m_comp[MaxTracks];
+    Reverb m_reverb;
+    int m_reverbRate = 0;
+    float m_rl[MaxBlock], m_rr[MaxBlock];
     float m_limit = 1.f;          // wzmocnienie ogranicznika sumy (ochrona przed przesterowaniem)
     float m_ceiling = 0.977f;     // −0,2 dBFS
 };
@@ -117,6 +131,8 @@ public:
     long long position() const;
     bool playing() const { return m_playing.load(); }
     void setMetronome(bool on) { m_metronome.store(on); }
+    // Region pętli odtwarzania (ćwiczenie fragmentu); nie działa w trakcie nagrywania
+    void setCycle(bool on, long long start, long long end);
     void setLatencyOffset(long long frames) { m_extraLatency.store(frames); }
     void readMeters(std::vector<float> &tracks, float master[2]);   // szczyty od ostatniego odczytu
 
@@ -185,6 +201,8 @@ private:
     std::atomic<long long> m_countInEnd{NoSeek};
     std::atomic<long long> m_outDelay{0};
     std::atomic<long long> m_extraLatency{0};
+    std::atomic<bool> m_cycle{false};
+    std::atomic<long long> m_cycleStart{0}, m_cycleEnd{0};
     long long m_rtPos = 0;                 // tylko wątek audio
     Renderer m_renderer;
     Renderer::Meters m_meters{};

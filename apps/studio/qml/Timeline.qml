@@ -1,10 +1,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import Aster.Ui
 import Aster.Studio
 
 // Oś czasu: z lewej nagłówki ścieżek (nagrywanie, wycisz, solo), z prawej linijka taktów i pasy z klipami.
 // Klipy przesuwa się (także między ścieżkami), przycina za brzegi, a zapętlony klip — wydłuża prawym brzegiem.
+// Górny pasek linijki ustawia region pętli odtwarzania (przeciągnij; brzegi da się przesuwać).
 // Kółko: przewijanie w pionie, Shift+kółko — w poziomie, Ctrl+kółko — powiększenie. Pliki dźwiękowe można upuścić na pas.
 Item {
     id: tl
@@ -101,13 +103,48 @@ Item {
                 }
             }
         }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            function at(x) { return Math.max(0, (x + tl.scrollX) / tl.pps); }
-            onPressed: (e) => Studio.seek(at(e.x))
-            onPositionChanged: (e) => { if (pressed) Studio.seek(at(e.x)); }
+        // Region pętli odtwarzania
+        Rectangle {
+            readonly property real x0: Studio.cycleStart * tl.pps - tl.scrollX
+            visible: Studio.cycleEnd > Studio.cycleStart
+            x: x0; y: 2
+            width: (Studio.cycleEnd - Studio.cycleStart) * tl.pps; height: 10; radius: 4
+            color: Studio.cycle ? "#F5B83D" : Theme.fill
+            border.width: 1; border.color: Studio.cycle ? "#D9961A" : Theme.edge
         }
+        MouseArea {
+            id: rulerArea
+            anchors.fill: parent
+            hoverEnabled: true
+            readonly property bool inCycleBar: mouseY < 13
+            cursorShape: inCycleBar ? (nearEdge(mouseX) !== "" ? Qt.SizeHorCursor : Qt.CrossCursor) : Qt.PointingHandCursor
+            property string mode: ""            // seek | new | start | end
+            property real anchorT: 0
+            function at(x) { return Math.max(0, (x + tl.scrollX) / tl.pps); }
+            function nearEdge(x) {
+                if (Studio.cycleEnd <= Studio.cycleStart) return "";
+                if (Math.abs(x - (Studio.cycleStart * tl.pps - tl.scrollX)) < 6) return "start";
+                if (Math.abs(x - (Studio.cycleEnd * tl.pps - tl.scrollX)) < 6) return "end";
+                return "";
+            }
+            onPressed: (e) => {
+                if (e.y < 13) {
+                    mode = nearEdge(e.x) || "new";
+                    anchorT = mode === "start" ? Studio.cycleEnd : mode === "end" ? Studio.cycleStart : tl.snapAbs(at(e.x), e.modifiers);
+                } else {
+                    mode = "seek";
+                    Studio.seek(at(e.x));
+                }
+            }
+            onPositionChanged: (e) => {
+                if (!pressed) return;
+                if (mode === "seek") { Studio.seek(at(e.x)); return; }
+                const t = tl.snapAbs(at(e.x), e.modifiers);
+                if (Math.abs(t - anchorT) > 0.05) Studio.setCycle(Math.min(t, anchorT), Math.max(t, anchorT));
+            }
+            onReleased: mode = ""
+        }
+        Tip { shown: rulerArea.containsMouse && rulerArea.inCycleBar && !rulerArea.pressed; text: "Przeciągnij, żeby zaznaczyć fragment do ćwiczenia w pętli (C)"; below: true }
     }
 
     // ——— Ścieżki ———
@@ -542,9 +579,40 @@ Item {
             loop: ci.cl.loop
             from: ci.trimL + leftPx / tl.pps
             pxPerSec: tl.pps
+            gain: Math.pow(10, (ci.cl.gain || 0) / 20)
             color: Theme.dark ? Qt.lighter(ci.tint, 1.25) : Qt.darker(ci.tint, 1.35)
             version: Studio.sourcesVersion
         }
+        // Narastanie i wyciszanie: przyciemniony trójkąt nad krzywą
+        property real fadeInPreview: -1
+        property real fadeOutPreview: -1
+        readonly property real fadeInPx: (fadeInPreview >= 0 ? fadeInPreview : cl.fadeIn) * tl.pps
+        readonly property real fadeOutPx: (fadeOutPreview >= 0 ? fadeOutPreview : cl.fadeOut) * tl.pps
+        Shape {
+            visible: ci.fadeInPx > 1
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeColor: Theme.dark ? "white" : "#16181D"; strokeWidth: 1
+                fillColor: Qt.rgba(0, 0, 0, Theme.dark ? 0.35 : 0.12)
+                startX: 0; startY: ci.height
+                PathQuad { x: ci.fadeInPx; y: 18; controlX: ci.fadeInPx * 0.15; controlY: 18 }
+                PathLine { x: 0; y: 18 }
+                PathLine { x: 0; y: ci.height }
+            }
+        }
+        Shape {
+            visible: ci.fadeOutPx > 1
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeColor: Theme.dark ? "white" : "#16181D"; strokeWidth: 1
+                fillColor: Qt.rgba(0, 0, 0, Theme.dark ? 0.35 : 0.12)
+                startX: ci.width; startY: ci.height
+                PathQuad { x: ci.width - ci.fadeOutPx; y: 18; controlX: ci.width - ci.fadeOutPx * 0.15; controlY: 18 }
+                PathLine { x: ci.width; y: 18 }
+                PathLine { x: ci.width; y: ci.height }
+            }
+        }
+
         // Granice powtórzeń pętli
         Repeater {
             model: ci.cl.loop && ci.cl.srcLength * tl.pps > 6 ? Math.min(128, Math.floor((ci.len + ci.cl.loopOffset) / ci.cl.srcLength)) : 0
@@ -617,5 +685,46 @@ Item {
             }
             onReleased: { if (ci.trimR !== 0) Studio.trimClipEnd(ci.cl.id, ci.cl.start + ci.cl.length + ci.trimR); ci.trimR = 0; }
         }
+
+        // Uchwyty narastania (lewy górny róg) i wyciszania (prawy) — widoczne pod kursorem i na zaznaczonym klipie
+        HoverHandler { id: clipHover }
+        readonly property bool hoveredNow: clipHover.hovered
+        FadeHandle { out: false }
+        FadeHandle { out: true }
+    }
+
+    component FadeHandle: Rectangle {
+        id: fh
+        property bool out
+        readonly property var c: parent
+        visible: (c.selected || c.hoveredNow || fhArea.pressed) && c.width > 40 && !c.dragging
+        x: (out ? c.width - c.fadeOutPx : c.fadeInPx) - width / 2
+        y: 18 - height / 2
+        z: 5
+        width: 12; height: 12; radius: 6
+        color: "white"
+        border.width: 1.5; border.color: Qt.darker(c.tint, 1.4)
+        MouseArea {
+            id: fhArea
+            anchors.fill: parent; anchors.margins: -4
+            hoverEnabled: true
+            cursorShape: Qt.SizeHorCursor
+            onPressed: Studio.selectedClip = fh.c.cl.id
+            onPositionChanged: (e) => {
+                if (!pressed) return;
+                const x = mapToItem(fh.c, e.x, 0).x;
+                const max = fh.c.cl.length - (fh.out ? fh.c.cl.fadeIn : fh.c.cl.fadeOut);
+                const v = Math.max(0, Math.min(max, (fh.out ? fh.c.width - x : x) / tl.pps));
+                if (fh.out) fh.c.fadeOutPreview = v; else fh.c.fadeInPreview = v;
+            }
+            onReleased: {
+                const fi = fh.c.fadeInPreview >= 0 ? fh.c.fadeInPreview : fh.c.cl.fadeIn;
+                const fo = fh.c.fadeOutPreview >= 0 ? fh.c.fadeOutPreview : fh.c.cl.fadeOut;
+                fh.c.fadeInPreview = -1; fh.c.fadeOutPreview = -1;
+                Studio.remember();
+                Studio.setClipFades(fh.c.cl.id, fi, fo);
+            }
+        }
+        Tip { shown: fhArea.containsMouse && !fhArea.pressed; text: fh.out ? "Wyciszanie — przeciągnij w lewo" : "Narastanie — przeciągnij w prawo"; below: true }
     }
 }

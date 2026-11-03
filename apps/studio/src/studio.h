@@ -29,6 +29,12 @@ class Studio : public QObject
     Q_PROPERTY(bool metronome READ metronome WRITE setMetronome NOTIFY settingsChanged)
     Q_PROPERTY(bool countIn READ countIn WRITE setCountIn NOTIFY settingsChanged)
     Q_PROPERTY(double masterVolume READ masterVolume WRITE setMasterVolume NOTIFY settingsChanged)
+    Q_PROPERTY(double reverbSize READ reverbSize WRITE setReverbSize NOTIFY settingsChanged)     // 0 mały pokój … 1 hala
+    Q_PROPERTY(double clickVolume READ clickVolume WRITE setClickVolume NOTIFY settingsChanged)
+    Q_PROPERTY(bool cycle READ cycle WRITE setCycleOn NOTIFY cycleChanged)                       // region pętli odtwarzania
+    Q_PROPERTY(double cycleStart READ cycleStart NOTIFY cycleChanged)
+    Q_PROPERTY(double cycleEnd READ cycleEnd NOTIFY cycleChanged)
+    Q_PROPERTY(QVariantList presets READ presets CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
@@ -79,6 +85,15 @@ public:
     bool countIn() const { return m_countIn; }
     void setCountIn(bool v);
     double masterVolume() const { return m_masterDb; }
+    double reverbSize() const { return m_reverbSize; }
+    void setReverbSize(double v);
+    double clickVolume() const { return m_clickVolume; }
+    void setClickVolume(double v);
+    bool cycle() const { return m_cycle; }
+    void setCycleOn(bool on);
+    double cycleStart() const { return m_cycleStart; }
+    double cycleEnd() const { return m_cycleEnd; }
+    QVariantList presets() const;
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
     QVariantList mix() const { return m_mixView; }
@@ -133,6 +148,10 @@ public:
     Q_INVOKABLE void setTrackSolo(int index, bool on);
     Q_INVOKABLE void setTrackArmed(int index, bool on);
     Q_INVOKABLE void setTrackInput(int index, int channel);     // 0 = oba kanały, 1 = lewy, 2 = prawy
+    // key: eqLow | eqMid | eqHigh (dB) | comp | reverb (0…1) | lowCut (0/1)
+    Q_INVOKABLE void setTrackFx(int index, const QString &key, double value);
+    Q_INVOKABLE void applyPreset(int index, const QString &preset);
+    Q_INVOKABLE void remember() { checkpoint(); }               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
 
     // Klipy (id)
     Q_INVOKABLE void moveClip(int id, int track, double start);
@@ -143,6 +162,11 @@ public:
     Q_INVOKABLE void duplicateClip(int id);
     Q_INVOKABLE void removeClip(int id);
     Q_INVOKABLE QVariantMap clip(int id) const;
+    Q_INVOKABLE void setClipGain(int id, double db);
+    Q_INVOKABLE void setClipFades(int id, double fadeIn, double fadeOut);   // sekundy
+    Q_INVOKABLE void renameClip(int id, const QString &name);
+    Q_INVOKABLE void setCycle(double start, double end);
+    Q_INVOKABLE void cycleClip(int id);                         // region pętli = klip
     Q_INVOKABLE void importFiles(const QVariantList &urls, int track, double start);
 
     // Transport
@@ -184,6 +208,7 @@ signals:
     void exportChanged();
     void recentChanged();
     void sourcesChanged();
+    void cycleChanged();
     void exportFinished(bool ok, const QString &path, const QString &error);
     void message(const QString &text);
 
@@ -193,6 +218,8 @@ private:
         int id = 0;
         QString file, name;
         long long start = 0, length = 0, srcStart = 0, srcLen = 0, offset = 0;
+        long long fadeIn = 0, fadeOut = 0;
+        double gain = 0;                // dB
         bool loop = false;
     };
     struct Track
@@ -203,8 +230,14 @@ private:
         double volume = 0, pan = 0;     // dB, -1…1
         bool mute = false, solo = false, armed = false;
         int input = 0;
+        // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
+        double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0;
+        bool lowCut = false;
+        QString preset;
         QList<Clip> clips;
     };
+    static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)
+    void carve(int track, long long a, long long b, int keepId);   // wytnij [a, b) z klipów ścieżki
 
     QJsonObject toJson() const;
     void fromJson(const QJsonObject &o);
@@ -234,6 +267,9 @@ private:
     int m_beatsPerBar = 4;
     bool m_metronome = true, m_countIn = true;
     double m_masterDb = 0;
+    double m_reverbSize = 0.5, m_clickVolume = 0.7;
+    bool m_cycle = false;
+    double m_cycleStart = 0, m_cycleEnd = 0;
     double m_latencyMs = 0;
     QList<Track> m_tracks;
     QVariantList m_tracksView, m_mixView;

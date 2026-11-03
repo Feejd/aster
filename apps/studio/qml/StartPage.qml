@@ -163,12 +163,13 @@ Item {
                                     delegate: Row {
                                         id: lane
                                         required property int index
+                                        height: 17
                                         spacing: 3
                                         Repeater {
                                             model: 22
                                             delegate: Rectangle {
                                                 required property int index
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                y: (17 - height) / 2
                                                 width: 3; radius: 1.5
                                                 height: 3 + Math.abs(Math.sin((index + 1) * (lane.index + 2) * 0.9 + tile.index)) * 14
                                                 color: Qt.rgba(1, 1, 1, 0.82)

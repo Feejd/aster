@@ -33,11 +33,15 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
 {
     std::fill_n(m_l, n, 0.f);
     std::fill_n(m_r, n, 0.f);
-    const long long fade = rate / 500;      // 2 ms łagodnego wejścia i wyjścia na brzegach klipu — bez trzasków
+    std::fill_n(m_rl, n, 0.f);
+    std::fill_n(m_rr, n, 0.f);
+    const long long declick = rate / 500;   // 2 ms łagodnego wejścia i wyjścia na brzegach klipu — bez trzasków
+    bool reverb = false;
 
     if (s) {
         for (size_t ti = 0; ti < s->tracks.size(); ++ti) {
             const TrackRT &t = s->tracks[ti];
+            reverb |= t.send > 0;
             if (!t.audible)
                 continue;
             bool any = false;
@@ -52,27 +56,53 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     any = true;
                 }
                 const AudioSource &src = *c.src;
+                const long long fin = std::max(declick, c.fadeIn), fout = std::max(declick, c.fadeOut);
                 for (long long f = a; f < b; ++f) {
                     const long long t0 = f - c.start;
                     const long long si = c.srcStart + (c.loop ? (t0 + c.offset) % c.srcLen : t0);
                     if (si < 0 || si >= src.frames)
                         continue;
-                    float g = 1.f;
-                    if (t0 < fade)
-                        g = float(t0) / fade;
-                    else if (c.length - t0 < fade)
-                        g = float(c.length - t0) / fade;
+                    float g = c.gain;
+                    if (t0 < fin)
+                        g *= std::sin(1.5707963f * float(t0) / fin);
+                    if (c.length - t0 < fout)
+                        g *= std::sin(1.5707963f * float(c.length - t0) / fout);
                     m_tl[f - pos] += src.at(si, 0) * g;
                     m_tr[f - pos] += src.at(si, 1) * g;
                 }
             }
             if (!any)
                 continue;
+
+            // Efekty ścieżki: korektor → kompresor → głośność i panorama → wysyłka do pogłosu
+            if (ti < size_t(MaxTracks)) {
+                for (int k = 0; k < 4; ++k) {
+                    if (t.eq[k].flat())
+                        continue;
+                    BiquadState &zl = m_eq[ti][k][0], &zr = m_eq[ti][k][1];
+                    for (int i = 0; i < n; ++i) {
+                        m_tl[i] = zl.run(t.eq[k], m_tl[i]);
+                        m_tr[i] = zr.run(t.eq[k], m_tr[i]);
+                    }
+                }
+                if (t.comp.on) {
+                    CompState &cs = m_comp[ti];
+                    for (int i = 0; i < n; ++i) {
+                        const float g = cs.process(t.comp, std::max(std::fabs(m_tl[i]), std::fabs(m_tr[i])), rate);
+                        m_tl[i] *= g;
+                        m_tr[i] *= g;
+                    }
+                }
+            }
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {
                 const float l = m_tl[i] * t.gainL, r = m_tr[i] * t.gainR;
                 m_l[i] += l;
                 m_r[i] += r;
+                if (t.send > 0) {
+                    m_rl[i] += l * t.send;
+                    m_rr[i] += r * t.send;
+                }
                 pl = std::max(pl, std::fabs(l));
                 pr = std::max(pr, std::fabs(r));
             }
@@ -81,6 +111,16 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 raisePeak((*meters)[ti][1], pr);
             }
         }
+    }
+
+    // Wspólny pogłos (gra dalej, gdy klipy się skończą — wybrzmiewanie)
+    if (reverb) {
+        if (m_reverbRate != rate) {
+            m_reverb.setup(rate, s->reverbSize);
+            m_reverbRate = rate;
+        }
+        m_reverb.setSize(s->reverbSize);
+        m_reverb.process(m_rl, m_rr, m_l, m_r, n);
     }
 
     const float master = s ? s->master : 1.f;
@@ -125,7 +165,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             const long long bi = (long long)beat;
             const bool accent = ((bi % bpb) + bpb) % bpb == 0;
             const float tt = float(off) / rate;
-            const float v = std::sin(6.2831853f * (accent ? 1760.f : 1320.f) * tt) * std::exp(-tt * 45.f) * (accent ? 0.5f : 0.35f);
+            const float v = std::sin(6.2831853f * (accent ? 1760.f : 1320.f) * tt) * std::exp(-tt * 45.f) * (accent ? 0.7f : 0.5f) * (s ? s->click : 0.7f);
             m_l[i] += v;
             m_r[i] += v;
         }
@@ -442,8 +482,20 @@ void Engine::onPlayback()
     if (m_playing.load()) {
         const long long cie = m_countInEnd.load();
         const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
-        m_renderer.process(m_current, m_rtPos, int(n), dst, click, &m_meters, Rate);
-        m_rtPos += n;
+        // Region pętli: po dojściu do końca wracamy na początek (w środku bloku, bez przerwy)
+        const bool cycle = m_cycle.load() && !m_recActive.load();
+        const long long cs = m_cycleStart.load(), ce = m_cycleEnd.load();
+        uint32_t done = 0;
+        while (done < n) {
+            long long k = n - done;
+            if (cycle && ce > cs && m_rtPos < ce && m_rtPos + k > ce)
+                k = ce - m_rtPos;
+            m_renderer.process(m_current, m_rtPos, int(k), dst + 2 * done, click, &m_meters, Rate);
+            m_rtPos += k;
+            done += uint32_t(k);
+            if (cycle && ce > cs && m_rtPos == ce)
+                m_rtPos = cs;
+        }
     } else {
         std::memset(dst, 0, n * stride);
     }
@@ -519,6 +571,13 @@ void Engine::play(long long from, long long countInEnd)
     m_seek.store(from);
     m_pos.store(from);
     m_playing.store(true);
+}
+
+void Engine::setCycle(bool on, long long start, long long end)
+{
+    m_cycleStart.store(start);
+    m_cycleEnd.store(end);
+    m_cycle.store(on);
 }
 
 void Engine::stop()

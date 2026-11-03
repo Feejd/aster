@@ -19,6 +19,7 @@ set(STUDIO_QML
     qml/Tip.qml
     qml/Field.qml
     qml/Segmented.qml
+    qml/Inspector.qml
 )
 foreach(f ${STUDIO_QML})
     get_filename_component(name ${f} NAME)
@@ -32,6 +33,7 @@ qt_add_qml_module(aster-studio
     SOURCES
         src/audiosource.cpp
         src/audiosource.h
+        src/dsp.h
         src/engine.cpp
         src/engine.h
         src/studio.cpp
