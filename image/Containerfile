@@ -19,6 +19,7 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
 RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd \
+        glibc-langpack-pl glibc-langpack-en glibc-langpack-de glibc-langpack-uk glibc-langpack-cs glibc-langpack-fr glibc-langpack-es glibc-langpack-it \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  # Kursor Aster wszędzie: KDE/KWin, programy X11 i GTK (Firefox), ekran logowania (10-aster-sddm.conf)
@@ -29,6 +30,8 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
  && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
  && glib-compile-schemas /usr/share/glib-2.0/schemas \
  && systemctl --global enable aster-shell.service \
+ # Konto i ustawienia z instalatora przy pierwszym starcie (tools/build-iso.sh, apps/installer)
+ && systemctl enable aster-firstboot.service \
  && dnf clean all
 
 # ——— Bez zdublowanych programów: KDE-owe okna zastąpione przez Aster znikają (infrastruktura KDE zostaje) ———

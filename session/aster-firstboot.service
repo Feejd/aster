@@ -1,0 +1,13 @@
+[Unit]
+Description=Aster: konto i ustawienia z instalatora (pierwszy start)
+ConditionPathExists=/etc/aster/firstboot.env
+After=local-fs.target systemd-sysusers.service systemd-tmpfiles-setup.service
+Before=display-manager.service sddm.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/aster-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

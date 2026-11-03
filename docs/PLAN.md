@@ -106,7 +106,13 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 
 ## Etap 4 — prawdziwy system do zainstalowania
 - [ ] Obraz systemu (`image/Containerfile`) budowany automatycznie przy każdej zmianie.
-- [ ] Instalator z ekranem powitalnym („Przesiadasz się z Windowsa?”: przeniesienie plików, konto).
+- [x] Instalator Aster (`apps/installer`) — pendrive startuje od razu w instalatorze na cały ekran (KWin jako kiosk,
+      bez trybu „wypróbuj”): język, klawiatura (działa od razu), Wi‑Fi, strefa czasowa, dysk (z ostrzeżeniem o Windows),
+      konto, wygląd (jasny/ciemny, akcent, tapeta), aktualizacje automatyczne, podsumowanie; instalacja `bootc install
+      to-disk` z obrazu na nośniku (bez internetu), postęp z podpowiedziami, potem ponowne uruchomienie prosto do pulpitu.
+      Konto i wygląd zakłada `aster-firstboot` przy pierwszym starcie. ISO: `sudo tools/build-iso.sh [skąd aktualizacje]`
+- [ ] Zbudować i przetestować ISO (Linux z ~30 GB miejsca albo GitHub Actions): rozruch, instalacja, pierwszy start
+- [ ] Instalator, dalej: szyfrowanie dysku, instalacja obok Windows, „Przesiadasz się z Windowsa?” (przeniesienie plików)
 - [ ] Aktualizacje w tle z możliwością cofnięcia (atomowa Fedora), sklep aplikacji z Flathub.
 - [ ] Test na prawdziwym laptopie (x86_64).
 

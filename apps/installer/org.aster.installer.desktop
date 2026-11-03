@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Zainstaluj Aster
+Comment=Instalacja systemu Aster na dysku tego komputera
+Exec=aster-installer
+Icon=aster
+Terminal=false
+NoDisplay=true
+Categories=System;
+StartupWMClass=aster-installer

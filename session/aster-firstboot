@@ -1,0 +1,50 @@
+#!/bin/sh
+# Pierwszy start po instalacji (aster-firstboot.service, przed ekranem logowania): konto z instalatora, wygląd,
+# klawiatura i automatyczne logowanie. Dane zostawia instalator w /etc/aster/firstboot.env (ze skrótem hasła —
+# po użyciu plik znika, a usługa przy kolejnych startach już się nie uruchamia).
+set -eu
+ENV=/etc/aster/firstboot.env
+[ -f "$ENV" ] || exit 0
+# shellcheck disable=SC1090
+. "$ENV"
+
+if ! id "$USERNAME" >/dev/null 2>&1; then
+    useradd -m -c "$FULLNAME" -G wheel -p "$PASSWORD_HASH" "$USERNAME"
+fi
+home=$(getent passwd "$USERNAME" | cut -d: -f6)
+cfg="$home/.config"
+mkdir -p "$cfg/aster"
+
+# Wygląd Aster: akcent i tapeta (Ustawienia → Wygląd)
+{
+    echo "[General]"
+    [ -n "${ACCENT:-}" ] && echo "accent=$ACCENT"
+    [ -n "${WALLPAPER:-}" ] && echo "wallpaper=$WALLPAPER"
+} > "$cfg/aster/aster.conf"
+
+# Ciemny motyw: kolory KDE od razu w kdeglobals (to samo robi plasma-apply-colorscheme)
+if [ "${DARK:-0}" = 1 ] && [ -f /usr/share/color-schemes/BreezeDark.colors ]; then
+    { cat /usr/share/color-schemes/BreezeDark.colors; printf '\n[General]\nColorScheme=BreezeDark\n'; } > "$cfg/kdeglobals"
+fi
+
+# Układ klawiatury w sesji (KWin czyta kxkbrc użytkownika)
+printf '[Layout]\nLayoutList=%s\nVariantList=%s\nUse=true\nResetOldOptions=true\n' "${XKB_LAYOUT:-pl}" "${XKB_VARIANT:-}" > "$cfg/kxkbrc"
+
+# Bez ekranu powitalnego KDE — Aster wita w instalatorze
+printf '[General]\nShouldShow=false\n' > "$cfg/plasma-welcomerc"
+
+chown -R "$USERNAME:$USERNAME" "$cfg"
+
+if [ "${AUTOLOGIN:-0}" = 1 ]; then
+    mkdir -p /etc/sddm.conf.d
+    printf '[Autologin]\nUser=%s\nSession=aster.desktop\nRelogin=false\n' "$USERNAME" > /etc/sddm.conf.d/20-aster-autologin.conf
+fi
+# Ekran logowania od razu z tym kontem
+mkdir -p /var/lib/sddm
+printf '[Last]\nSession=/usr/share/wayland-sessions/aster.desktop\nUser=%s\n' "$USERNAME" > /var/lib/sddm/state.conf
+
+if [ "${AUTO_UPDATES:-1}" = 0 ]; then
+    systemctl disable --now bootc-fetch-apply-updates.timer 2>/dev/null || true
+fi
+
+rm -f "$ENV"

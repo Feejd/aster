@@ -1,0 +1,27 @@
+# Nośnik instalacyjny Aster: ten sam system co po instalacji, ale zamiast ekranu logowania i pulpitu od razu
+# instalator na cały ekran (KWin w trybie kiosku). Bez trybu „wypróbuj”.
+# Buduje go tools/build-iso.sh (razem z obrazem systemu, który trafia na dysk).
+ARG BASE=localhost/aster:latest
+FROM ${BASE}
+ARG UPDATE_REF=localhost/aster:latest
+
+COPY image/installer/aster-installer-session.service /usr/lib/systemd/system/aster-installer-session.service
+RUN dnf install -y dracut-live podman \
+ # Użytkownik sesji instalatora (bez hasła; instalacja przez sudo bez pytania — tylko na nośniku)
+ && useradd -m -c "Instalator Aster" liveuser \
+ && passwd -d liveuser \
+ && echo 'liveuser ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aster-installer \
+ && chmod 440 /etc/sudoers.d/aster-installer \
+ # Zamiast ekranu logowania i pierwszego startu — instalator
+ && systemctl disable sddm.service aster-firstboot.service \
+ && (systemctl disable bootc-fetch-apply-updates.timer 2>/dev/null || true) \
+ && systemctl enable aster-installer-session.service \
+ && systemctl set-default graphical.target \
+ # Skąd zainstalowany system będzie brał aktualizacje
+ && mkdir -p /usr/share/aster && echo "$UPDATE_REF" > /usr/share/aster/update-ref \
+ # Bez wygaszania i blokady ekranu w trakcie instalacji
+ && mkdir -p /home/liveuser/.config \
+ && printf '[Daemon]\nAutolock=false\nLockOnResume=false\nTimeout=0\n' > /home/liveuser/.config/kscreenlockerrc \
+ && printf '[AC][DimDisplay]\nDimDisplayWhenIdle=false\n[AC][Display]\nTurnOffDisplayWhenIdle=false\n[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n' > /home/liveuser/.config/powerdevilrc \
+ && chown -R liveuser:liveuser /home/liveuser \
+ && dnf clean all
