@@ -67,6 +67,10 @@ public:
     Q_INVOKABLE void remove(const QString &id);
     Q_INVOKABLE QString duplicate(const QString &id);
     Q_INVOKABLE void arrange(const QString &id, const QString &how);  // up | down | front | back
+    Q_INVOKABLE void moveTo(const QString &id, int index);             // przeciągnięcie w panelu Warstwy
+    // Kilka zaznaczonych elementów naraz — jeden krok cofania
+    Q_INVOKABLE QStringList duplicateAll(const QStringList &ids);
+    Q_INVOKABLE void removeAll(const QStringList &ids);
     Q_INVOKABLE QVariantMap get(const QString &id) const;
     Q_INVOKABLE int indexOf(const QString &id) const;
     Q_INVOKABLE QString idAt(int index) const;
@@ -81,8 +85,9 @@ public:
     // ——— Zdjęcia, schowek, eksport ———
     Q_INVOKABLE QString importImage(const QString &fileOrUrl);   // zwraca klucz zdjęcia albo ""
     Q_INVOKABLE QSize imageSize(const QString &key) const;
-    Q_INVOKABLE void copy(const QString &id) const;
-    Q_INVOKABLE QString paste();                                  // element ze schowka albo zdjęcie
+    Q_INVOKABLE void copy(const QStringList &ids) const;
+    Q_INVOKABLE QStringList paste();                              // elementy ze schowka, zdjęcie albo tekst
+    Q_INVOKABLE bool copyImage();                                 // cała strona jako obraz (do wklejenia w komunikatorze)
     Q_INVOKABLE QString exportFile(const QString &format, qreal scale, const QString &target = QString());
 
 Q_SIGNALS:
@@ -115,6 +120,7 @@ private:
     QString addAsset(const QByteArray &data, const QString &ext);
     QVariantMap prepared(QVariantMap el) const;
     QString newId();
+    QString insert(const QVariantMap &element);     // bez zamykania kroku cofania
     QString uniquePath(const QString &dir, const QString &base, const QString &ext) const;
 
     qreal m_width = 1080;

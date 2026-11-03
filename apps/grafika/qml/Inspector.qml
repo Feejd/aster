@@ -3,7 +3,7 @@ import QtQuick
 import Aster.Ui
 import Aster.Grafika
 
-// Właściwości zaznaczonego elementu (tekst, kształt, zdjęcie), a bez zaznaczenia — strony i tła
+// Właściwości zaznaczonego elementu (tekst, kształt, zdjęcie), kilku zaznaczonych (wyrównanie), a bez zaznaczenia — strony i tła
 Item {
     id: ins
     required property Project project
@@ -12,9 +12,14 @@ Item {
 
     readonly property var el: stage.current
     readonly property string id_: el.id || ""
-    readonly property string type: id_ !== "" ? el.type : "page"
+    readonly property int count: stage.selection.length
+    readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow")
     readonly property var bg: project.background
+    readonly property var filters: [
+        { id: "", label: "Brak" }, { id: "gray", label: "Czarno-białe" }, { id: "sepia", label: "Sepia" }, { id: "warm", label: "Ciepłe" },
+        { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }
+    ]
 
     function set(patch, done) { project.change(id_, patch, done === undefined ? true : done); }
     function setBg(patch, done) { project.setBackground(Object.assign({}, bg, patch), done === undefined ? true : done); }
@@ -36,7 +41,8 @@ Item {
 
     Text {
         x: 18; y: 16
-        text: ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+        text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
+            : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
     }
@@ -124,6 +130,65 @@ Item {
                 wrapMode: Text.WordWrap
                 text: "Kliknij element na stronie, żeby go zmienić. Dwuklik na tekście — pisanie. Przeciągaj z Shiftem, żeby zachować proporcje."
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+            }
+
+            // ——— Kilka elementów ———
+            Section {
+                visible: ins.type === "many"
+                title: "Wyrównaj do siebie"
+                Row {
+                    spacing: 2
+                    IconToggle { icon: "alignHLeft"; onClicked: ins.editor.alignMany("left") }
+                    IconToggle { icon: "alignHCenter"; onClicked: ins.editor.alignMany("hcenter") }
+                    IconToggle { icon: "alignHRight"; onClicked: ins.editor.alignMany("right") }
+                    Item { width: 6; height: 1 }
+                    IconToggle { icon: "alignTop"; onClicked: ins.editor.alignMany("top") }
+                    IconToggle { icon: "alignMiddle"; onClicked: ins.editor.alignMany("vcenter") }
+                    IconToggle { icon: "alignBottom"; onClicked: ins.editor.alignMany("bottom") }
+                }
+                Row {
+                    visible: ins.count > 2
+                    spacing: 8
+                    Btn { text: "Równo w poziomie"; icon: "distributeH"; height: 32; onClicked: ins.editor.alignMany("spreadH") }
+                }
+                Row {
+                    visible: ins.count > 2
+                    spacing: 8
+                    Btn { text: "Równo w pionie"; icon: "distributeV"; height: 32; onClicked: ins.editor.alignMany("spreadV") }
+                }
+            }
+            Section {
+                visible: ins.type === "many"
+                title: "Zaznaczone"
+                Row {
+                    spacing: 8
+                    Btn { text: "Duplikuj"; icon: "copy"; onClicked: ins.editor.duplicate() }
+                    Btn { text: "Zablokuj"; icon: "lock"; onClicked: ins.editor.setLocked(true) }
+                }
+                Btn { text: "Usuń zaznaczone"; icon: "trash"; onClicked: ins.editor.remove() }
+            }
+            Text {
+                visible: ins.type === "many"
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: "Przeciągnij jeden z zaznaczonych, żeby przesunąć wszystkie. Shift+klik dodaje albo odejmuje element."
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+            }
+
+            // ——— Zablokowany ———
+            Text {
+                visible: ins.type === "locked"
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: "Tego elementu nie da się przypadkiem przesunąć ani zmienić. Odblokuj go, żeby wprowadzić zmiany."
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+            }
+            Btn {
+                visible: ins.type === "locked"
+                text: "Odblokuj"
+                icon: "unlock"
+                primary: true
+                onClicked: ins.editor.setLocked(false)
             }
 
             // ——— Tekst ———
@@ -248,6 +313,20 @@ Item {
                         })
                     }
                 }
+                Row {
+                    visible: !ins.line && !!ins.el.fill && !!ins.el.fill2
+                    spacing: 6
+                    Chip { text: "Liniowe"; on: ins.el.gradient !== "radial"; onClicked: ins.set({ gradient: null }) }
+                    Chip { text: "Okrągłe"; on: ins.el.gradient === "radial"; onClicked: ins.set({ gradient: "radial" }) }
+                }
+                ValueSlider {
+                    visible: !ins.line && !!ins.el.fill && !!ins.el.fill2 && ins.el.gradient !== "radial"
+                    label: "Kierunek przejścia"
+                    from: 0; to: 360; step: 15
+                    value: ins.el.gradientAngle === undefined ? 180 : ins.el.gradientAngle
+                    suffix: "°"
+                    onMoved: (v, done) => ins.set({ gradientAngle: v }, done)
+                }
                 ValueSlider {
                     visible: ins.line || !!ins.el.stroke
                     label: ins.line ? "Grubość" : "Grubość obrysu"
@@ -295,14 +374,102 @@ Item {
                 }
                 Row {
                     spacing: 8
-                    Btn { text: "Zamień…"; icon: "image"; onClicked: ins.editor.chooseImage("replace") }
-                    Btn { text: "Jako tło"; onClicked: ins.editor.imageToBackground(ins.id_) }
+                    Btn { text: ins.el.src ? "Zamień…" : "Wybierz…"; icon: "image"; onClicked: ins.editor.chooseImage("replace") }
+                    Btn { visible: !!ins.el.src; text: "Jako tło"; onClicked: ins.editor.imageToBackground(ins.id_) }
+                }
+            }
+            Section {
+                visible: ins.type === "image" && !!ins.el.src
+                title: "Kadr"
+                Row {
+                    spacing: 8
+                    Btn {
+                        text: ins.stage.cropping === ins.id_ ? "Gotowe" : "Kadruj"
+                        icon: ins.stage.cropping === ins.id_ ? "check" : "crop"
+                        primary: ins.stage.cropping === ins.id_
+                        onClicked: ins.stage.cropping = ins.stage.cropping === ins.id_ ? "" : ins.id_
+                    }
+                    Btn { text: "Odbij"; icon: "mirror"; onClicked: ins.set({ flipX: ins.el.flipX ? null : true }) }
+                }
+                ValueSlider {
+                    label: "Powiększenie"
+                    from: 1; to: 5; step: 0.05
+                    value: ins.el.zoom || 1
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => ins.set({ zoom: v > 1.001 ? v : null }, done)
+                }
+            }
+            Section {
+                visible: ins.type === "image" && !!ins.el.src
+                title: "Filtr"
+                Grid {
+                    columns: 4
+                    spacing: 6
+                    Repeater {
+                        model: ins.filters
+                        delegate: HoverButton {
+                            id: ft
+                            required property var modelData
+                            readonly property bool on: (ins.el.filter || "") === modelData.id
+                            width: (col.width - 18) / 4; height: width + 18
+                            radius: 8
+                            baseColor: on ? Theme.accentSoft : "transparent"
+                            color: on ? baseColor : hovered ? Theme.hover : baseColor
+                            onClicked: ins.set({ filter: modelData.id === "" ? null : modelData.id })
+                            ArtView {
+                                x: 3; y: 3
+                                width: parent.width - 6; height: width
+                                project: ins.project
+                                element: ins.type === "image" ? { type: "image", src: ins.el.src, w: 100, h: 100, radius: 10,
+                                                                    focusX: ins.el.focusX, focusY: ins.el.focusY, filter: ft.modelData.id } : ({})
+                            }
+                            Text {
+                                anchors.bottom: parent.bottom; anchors.bottomMargin: 2
+                                width: parent.width
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                                text: ft.modelData.label
+                                color: ft.on ? Theme.accentText : Theme.text2
+                                font.family: Theme.font; font.pixelSize: 10
+                            }
+                        }
+                    }
+                }
+            }
+            Section {
+                visible: ins.type === "image" && !!ins.el.src
+                title: "Poprawki"
+                ValueSlider {
+                    label: "Jasność"
+                    from: -1; to: 1; step: 0.02
+                    value: ins.el.brightness || 0
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ brightness: Math.abs(v) < 0.001 ? null : v }, done)
+                }
+                ValueSlider {
+                    label: "Kontrast"
+                    from: -1; to: 1; step: 0.02
+                    value: ins.el.contrast || 0
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ contrast: Math.abs(v) < 0.001 ? null : v }, done)
+                }
+                ValueSlider {
+                    label: "Nasycenie"
+                    from: -1; to: 1; step: 0.02
+                    value: ins.el.saturation || 0
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ saturation: Math.abs(v) < 0.001 ? null : v }, done)
+                }
+                Btn {
+                    visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter)
+                    text: "Przywróć oryginał"
+                    onClicked: ins.set({ brightness: null, contrast: null, saturation: null, filter: null })
                 }
             }
 
             // ——— Wspólne ———
             Section {
-                visible: ins.type !== "page"
+                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
                 title: "Wygląd"
                 ValueSlider {
                     label: "Przezroczystość"
@@ -320,7 +487,7 @@ Item {
                 }
             }
             Section {
-                visible: ins.type !== "page"
+                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
                 title: "Na stronie"
                 Row {
                     spacing: 2
@@ -339,8 +506,9 @@ Item {
                     IconToggle { icon: "layerDown"; onClicked: ins.project.arrange(ins.id_, "down") }
                     IconToggle { icon: "sendBack"; onClicked: ins.project.arrange(ins.id_, "back") }
                     Item { width: 6; height: 1 }
-                    IconToggle { icon: "copy"; onClicked: ins.stage.selected = ins.project.duplicate(ins.id_) }
-                    IconToggle { icon: "trash"; onClicked: ins.project.remove(ins.id_) }
+                    IconToggle { icon: "copy"; onClicked: ins.editor.duplicate() }
+                    IconToggle { icon: "lock"; onClicked: ins.editor.setLocked(true) }
+                    IconToggle { icon: "trash"; onClicked: ins.editor.remove() }
                 }
             }
         }

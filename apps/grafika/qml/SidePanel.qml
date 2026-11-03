@@ -3,7 +3,8 @@ import QtQuick
 import Aster.Ui
 import Aster.Grafika
 
-// Panel po lewej: Szablony, Tekst, Kształty, Zdjęcia, Tło — kliknięcie dodaje element na środek strony
+// Panel po lewej: Szablony, Tekst, Kształty, Zdjęcia, Tło — kliknięcie dodaje element na środek strony;
+// Warstwy — lista elementów od wierzchu: zaznaczanie, ukrywanie, blokowanie i kolejność (przeciąganie)
 Item {
     id: sp
     required property Project project
@@ -17,9 +18,31 @@ Item {
         { id: "text", label: "Tekst", icon: "textT" },
         { id: "shapes", label: "Kształty", icon: "shapes" },
         { id: "photos", label: "Zdjęcia", icon: "image" },
-        { id: "background", label: "Tło", icon: "palette" }
+        { id: "background", label: "Tło", icon: "palette" },
+        { id: "layers", label: "Warstwy", icon: "layers" }
     ]
-    onTabChanged: if (tab === "photos") photos = Library.photos()
+    onTabChanged: {
+        if (tab === "photos") photos = Library.photos();
+        if (tab === "layers") refreshLayers();
+    }
+
+    // ——— Warstwy ———
+    property var layers: []                  // od wierzchu
+    function refreshLayers() { layers = project.document().elements.slice().reverse(); }
+    Timer { id: layersLater; interval: 0; onTriggered: sp.refreshLayers() }
+    Connections {
+        target: sp.project
+        enabled: sp.tab === "layers"
+        function onChanged() { layersLater.restart(); }
+        function onReset() { layersLater.restart(); }
+        function onDataChanged() { layersLater.restart(); }
+    }
+    readonly property var shapeNames: ({ rect: "Prostokąt", ellipse: "Koło", triangle: "Trójkąt", star: "Gwiazda", heart: "Serce", line: "Linia", arrow: "Strzałka" })
+    function layerName(o) {
+        if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
+        if (o.type === "image") return o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        return shapeNames[o.shape] || "Kształt";
+    }
 
     // Gotowe style tekstu: wielkość w częściach krótszego boku strony
     readonly property var textStyles: [
@@ -147,7 +170,8 @@ Item {
                 id: pages
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
-                      : sp.tab === "shapes" ? shapesGrid.height : sp.tab === "photos" ? photosCol.height : bgCol.height
+                      : sp.tab === "shapes" ? shapesGrid.height : sp.tab === "photos" ? photosCol.height
+                      : sp.tab === "layers" ? layersCol.height : bgCol.height
 
                 // Szablony
                 Column {
@@ -337,6 +361,129 @@ Item {
                                     fillMode: Image.PreserveAspectCrop
                                     asynchronous: true
                                     clip: true
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Warstwy
+                Column {
+                    id: layersCol
+                    visible: sp.tab === "layers"
+                    width: parent.width
+                    spacing: 10
+                    readonly property real rowH: 46
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.layers.length === 0 ? "Na stronie nie ma jeszcze elementów." : "Na górze listy jest to, co leży na wierzchu. Przeciągnij wiersz, żeby zmienić kolejność."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                    }
+                    Item {
+                        id: layerList
+                        width: parent.width
+                        height: sp.layers.length * layersCol.rowH
+                        property int dragFrom: -1
+                        property int dragTo: -1
+                        property real dragY: 0
+
+                        // Miejsce, w które trafi przeciągany wiersz
+                        Rectangle {
+                            visible: layerList.dragFrom >= 0 && layerList.dragTo !== layerList.dragFrom
+                            y: (layerList.dragTo > layerList.dragFrom ? layerList.dragTo + 1 : layerList.dragTo) * layersCol.rowH - 1
+                            width: parent.width; height: 2; radius: 1
+                            color: Theme.accent
+                            z: 3
+                        }
+                        Repeater {
+                            model: sp.layers
+                            delegate: Rectangle {
+                                id: row
+                                required property var modelData
+                                required property int index
+                                readonly property bool picked: sp.editor.many.indexOf(modelData.id) >= 0
+                                readonly property bool dragged: layerList.dragFrom === index
+                                y: dragged ? layerList.dragY : index * layersCol.rowH
+                                z: dragged ? 2 : 0
+                                width: layerList.width; height: layersCol.rowH - 4
+                                radius: 10
+                                color: picked ? Theme.accentSoft : rowMa.containsMouse || dragged ? Theme.hover : "transparent"
+                                opacity: modelData.hidden ? 0.5 : 1
+
+                                Rectangle {
+                                    id: thumb
+                                    x: 6; anchors.verticalCenter: parent.verticalCenter
+                                    width: 34; height: 34; radius: 7
+                                    color: sp.project.background.color || "#ffffff"     // biały tekst widać na tle strony
+                                    border.width: 1; border.color: Theme.line
+                                    clip: true
+                                    ArtView {
+                                        readonly property real k: Math.min(30 / Math.max(1, row.modelData.w), 30 / Math.max(1, row.modelData.h))
+                                        anchors.centerIn: parent
+                                        width: Math.max(2, row.modelData.w * k); height: Math.max(2, row.modelData.h * k)
+                                        rotation: row.modelData.rotation || 0
+                                        project: sp.project
+                                        element: row.modelData
+                                    }
+                                }
+                                Text {
+                                    anchors.left: thumb.right; anchors.leftMargin: 10
+                                    anchors.right: tools.left; anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    text: sp.layerName(row.modelData)
+                                    color: row.picked ? Theme.accentText : Theme.text
+                                    font.family: row.modelData.type === "text" ? (row.modelData.font || Theme.font) : Theme.font
+                                    font.pixelSize: 13
+                                }
+                                MouseArea {
+                                    id: rowMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: pressed && layerList.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                    property real startY
+                                    property real grab
+                                    onPressed: (e) => {
+                                        startY = mapToItem(layerList, e.x, e.y).y;
+                                        grab = e.y;
+                                    }
+                                    onPositionChanged: (e) => {
+                                        if (!pressed) return;
+                                        const y = mapToItem(layerList, e.x, e.y).y;
+                                        if (layerList.dragFrom < 0 && Math.abs(y - startY) < 6) return;
+                                        layerList.dragFrom = row.index;
+                                        layerList.dragY = Math.max(0, Math.min(layerList.height - layersCol.rowH, y - grab));
+                                        layerList.dragTo = Math.max(0, Math.min(sp.layers.length - 1, Math.round(layerList.dragY / layersCol.rowH)));
+                                    }
+                                    onReleased: (e) => {
+                                        if (layerList.dragFrom >= 0) {
+                                            const to = layerList.dragTo;
+                                            layerList.dragFrom = -1;
+                                            if (to !== row.index) sp.project.moveTo(row.modelData.id, sp.layers.length - 1 - to);
+                                            sp.refreshLayers();
+                                        } else {
+                                            sp.editor.selectLayer(row.modelData.id, e.modifiers & Qt.ShiftModifier);
+                                        }
+                                    }
+                                }
+                                Row {
+                                    id: tools
+                                    anchors.right: parent.right; anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    IconToggle {
+                                        width: 28; height: 28
+                                        icon: row.modelData.locked ? "lock" : "unlock"
+                                        on: !!row.modelData.locked
+                                        opacity: row.modelData.locked || rowMa.containsMouse || hovered ? 1 : 0.35
+                                        onClicked: sp.project.change(row.modelData.id, { locked: row.modelData.locked ? null : true })
+                                    }
+                                    IconToggle {
+                                        width: 28; height: 28
+                                        icon: row.modelData.hidden ? "eyeOff" : "eye"
+                                        opacity: row.modelData.hidden || rowMa.containsMouse || hovered ? 1 : 0.35
+                                        onClicked: sp.editor.setHidden(row.modelData.id, !row.modelData.hidden)
+                                    }
                                 }
                             }
                         }

@@ -76,7 +76,8 @@ Window {
     function toast(text, path) { toastBox.text = text; toastBox.path = path; toastBox.shown = true; toastTimer.restart(); }
 
     // Do testów (ASTER_OPEN): new:<rozmiar> | template:<nr> | select:<nr> | edit | tab:<karta> | export | exportfile:<format> |
-    // color | font | menu | home | custom | addtext | addshape:<kształt> | rotate:<stopnie> | image:<plik> | undo | dark
+    // color | font | menu | home | custom | addtext | addshape:<kształt> | rotate:<stopnie> | image:<plik> | undo | dark |
+    // selectmany:<nr,nr> | selectall | crop | set:<JSON zmian> | align:<jak> | dup
     function testOpen(what) {
         const [cmd, arg] = what.split(":");
         if (cmd === "new") { for (const p of presets) if (p.id === arg) newProject(p); }

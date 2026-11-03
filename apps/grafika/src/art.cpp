@@ -1,7 +1,9 @@
 #include "art.h"
 
+#include <QCache>
 #include <QGlyphRun>
 #include <QLinearGradient>
+#include <QMutex>
 #include <QPainter>
 #include <QPainterPath>
 #include <QRadialGradient>
@@ -155,11 +157,11 @@ qreal deviceScale(const QPainter *p)
 }
 
 // Zdjęcie przycięte tak, żeby wypełniło prostokąt („cover”), w kształcie `clip` (zaokrąglenie, koło)
-void paintCover(QPainter *p, const QImage &img, const QRectF &r, const QPainterPath &clip, qreal fx = 0.5, qreal fy = 0.5)
+void paintCover(QPainter *p, const QImage &img, const QRectF &r, const QPainterPath &clip, qreal fx = 0.5, qreal fy = 0.5, qreal zoom = 1)
 {
     if (img.isNull() || r.isEmpty())
         return;
-    const qreal s = qMax(r.width() / img.width(), r.height() / img.height());
+    const qreal s = qMax(r.width() / img.width(), r.height() / img.height()) * qMax(1.0, zoom);
     const QSizeF sz(img.width() * s, img.height() * s);
     const QPointF origin(r.x() - (sz.width() - r.width()) * fx, r.y() - (sz.height() - r.height()) * fy);
     p->setRenderHint(QPainter::SmoothPixmapTransform);
@@ -270,18 +272,70 @@ void paintShape(QPainter *p, const QVariantMap &el)
     p->drawPath(path);
 }
 
+// ——— Poprawki zdjęć ———
+
+// Jasność, kontrast, nasycenie (−1..1) i gotowe filtry; wynik w pamięci podręcznej, bo płótno rysuje się często.
+// `pixels` — potrzebny dłuższy bok: większe zdjęcie najpierw się zmniejsza (miniatury filtrów, suwaki bez zacinania).
+QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
+{
+    const qreal br = qBound(-1.0, num(el, "brightness", 0), 1.0);
+    const qreal ct = qBound(-1.0, num(el, "contrast", 0), 1.0);
+    const qreal sat = qBound(-1.0, num(el, "saturation", 0), 1.0);
+    const QString filter = el.value(QStringLiteral("filter")).toString();
+    if (br == 0 && ct == 0 && sat == 0 && filter.isEmpty())
+        return src;
+
+    static QMutex lock;
+    static QCache<QString, QImage> cache(160);       // koszt w MB
+    const int side = qMax(src.width(), src.height());
+    const int target = pixels * 1.25 < side ? qMax(16, qRound(pixels * 1.25)) : side;
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6").arg(src.cacheKey()).arg(target).arg(br).arg(ct).arg(sat).arg(filter);
+    {
+        QMutexLocker l(&lock);
+        if (const QImage *hit = cache.object(key))
+            return *hit;
+    }
+
+    QImage img = (target < side ? src.scaled(src.width() * target / side, src.height() * target / side, Qt::KeepAspectRatio, Qt::SmoothTransformation) : src)
+                     .convertToFormat(QImage::Format_ARGB32);
+    int lut[256];
+    for (int i = 0; i < 256; ++i)
+        lut[i] = qBound(0, qRound((i - 128) * (1 + ct) + 128 + br * 110), 255);
+    const qreal satK = filter == QLatin1String("gray") ? 0 : 1 + sat;
+    for (int y = 0; y < img.height(); ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const QRgb c = line[x];
+            qreal r = lut[qRed(c)], g = lut[qGreen(c)], b = lut[qBlue(c)];
+            const qreal gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            r = gray + (r - gray) * satK;
+            g = gray + (g - gray) * satK;
+            b = gray + (b - gray) * satK;
+            if (filter == QLatin1String("sepia")) {
+                const qreal tr = 0.393 * r + 0.769 * g + 0.189 * b, tg = 0.349 * r + 0.686 * g + 0.168 * b, tb = 0.272 * r + 0.534 * g + 0.131 * b;
+                r = tr; g = tg; b = tb;
+            } else if (filter == QLatin1String("warm")) {
+                r *= 1.08; g *= 1.02; b *= 0.88;
+            } else if (filter == QLatin1String("cool")) {
+                r *= 0.9; g *= 1.0; b *= 1.1;
+            } else if (filter == QLatin1String("fade")) {
+                r = r * 0.82 + 34; g = g * 0.82 + 30; b = b * 0.82 + 38;
+            } else if (filter == QLatin1String("vivid")) {
+                const qreal k = 1.35;
+                r = gray + (r - gray) * k; g = gray + (g - gray) * k; b = gray + (b - gray) * k;
+            }
+            line[x] = qRgba(qBound(0, qRound(r), 255), qBound(0, qRound(g), 255), qBound(0, qRound(b), 255), qAlpha(c));
+        }
+    }
+    QMutexLocker l(&lock);
+    cache.insert(key, new QImage(img), int(img.sizeInBytes() / (1024 * 1024)) + 1);
+    return img;
+}
+
 void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
     const qreal w = num(el, "w", 100), h = num(el, "h", 100);
     const QRectF r(0, 0, w, h);
-    const QImage img = images ? images->image(el.value(QStringLiteral("src")).toString(), qMax(w, h) * deviceScale(p)) : QImage();
-    if (img.isNull()) {
-        // Brak zdjęcia (np. szablon bez zdjęć) — szare pole z miejscem na zdjęcie
-        p->setPen(Qt::NoPen);
-        p->setBrush(QColor(0, 0, 0, 30));
-        p->drawRect(r);
-        return;
-    }
     QPainterPath clip;
     if (el.value(QStringLiteral("mask")).toString() == QLatin1String("ellipse")) {
         clip.addEllipse(r);
@@ -290,7 +344,40 @@ void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
         if (radius > 0)
             clip.addRoundedRect(r, radius, radius);
     }
-    paintCover(p, img, r, clip, num(el, "focusX", 0.5), num(el, "focusY", 0.5));
+    const qreal pixels = qMax(w, h) * deviceScale(p) * qMax(1.0, num(el, "zoom", 1));
+    QImage img = images ? images->image(el.value(QStringLiteral("src")).toString(), pixels) : QImage();
+    if (img.isNull()) {
+        // Miejsce na zdjęcie (np. w szablonie) — przyciemnione pole z rysunkiem zdjęcia na środku
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(0, 0, 0, 30));
+        if (clip.isEmpty())
+            p->drawRect(r);
+        else
+            p->drawPath(clip);
+        const qreal k = qMin(w, h) * 0.22;
+        const QRectF ic(r.center().x() - k / 2, r.center().y() - k * 0.4, k, k * 0.8);
+        QPen pen(QColor(255, 255, 255, 170), qMax(1.0, k * 0.07));
+        pen.setJoinStyle(Qt::RoundJoin);
+        p->setPen(pen);
+        p->setBrush(Qt::NoBrush);
+        p->drawRoundedRect(ic, k * 0.1, k * 0.1);
+        QPainterPath m;
+        m.moveTo(ic.left(), ic.bottom() - ic.height() * 0.15);
+        m.lineTo(ic.left() + ic.width() * 0.4, ic.top() + ic.height() * 0.45);
+        m.lineTo(ic.left() + ic.width() * 0.62, ic.top() + ic.height() * 0.7);
+        m.lineTo(ic.left() + ic.width() * 0.78, ic.top() + ic.height() * 0.55);
+        m.lineTo(ic.right(), ic.top() + ic.height() * 0.75);
+        p->drawPath(m);
+        return;
+    }
+    // Przy „cover” dłuższy bok zdjęcia wystaje poza ramkę — tyle pikseli naprawdę trafi na wyjście
+    const qreal cover = qMax(w / img.width(), h / img.height());
+    img = adjusted(img, el, qMax(img.width(), img.height()) * cover * pixels / qMax(w, h));
+    if (el.value(QStringLiteral("flipX")).toBool()) {
+        p->translate(w, 0);
+        p->scale(-1, 1);
+    }
+    paintCover(p, img, r, clip, num(el, "focusX", 0.5), num(el, "focusY", 0.5), num(el, "zoom", 1));
 }
 
 }
@@ -356,6 +443,8 @@ void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images)
     const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
     for (const QVariant &v : elements) {
         const QVariantMap el = v.toMap();
+        if (el.value(QStringLiteral("hidden")).toBool())
+            continue;
         const qreal w = num(el, "w", 100), h = num(el, "h", 100);
         p->save();
         p->translate(num(el, "x", 0) + w / 2, num(el, "y", 0) + h / 2);

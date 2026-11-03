@@ -395,6 +395,13 @@ QVariantMap Project::get(const QString &id) const
 
 QString Project::add(const QVariantMap &element)
 {
+    const QString id = insert(element);
+    commit();
+    return id;
+}
+
+QString Project::insert(const QVariantMap &element)
+{
     QVariantMap el = prepared(element);
     el[QStringLiteral("id")] = newId();
     if (!element.contains(QStringLiteral("x")))
@@ -405,7 +412,6 @@ QString Project::add(const QVariantMap &element)
     m_elements.append(el);
     endInsertRows();
     Q_EMIT countChanged();
-    commit();
     return el.value(QStringLiteral("id")).toString();
 }
 
@@ -440,6 +446,48 @@ void Project::remove(const QString &id)
     m_elements.removeAt(i);
     endRemoveRows();
     Q_EMIT countChanged();
+    commit();
+}
+
+QStringList Project::duplicateAll(const QStringList &ids)
+{
+    QStringList out;
+    for (const QVariant &v : std::as_const(m_elements)) {       // w kolejności warstw, nie zaznaczania
+        QVariantMap el = v.toMap();
+        if (!ids.contains(el.value(QStringLiteral("id")).toString()))
+            continue;
+        el[QStringLiteral("x")] = num(el, "x") + 24;
+        el[QStringLiteral("y")] = num(el, "y") + 24;
+        el.remove(QStringLiteral("id"));
+        out.append(insert(el));
+    }
+    commit();
+    return out;
+}
+
+void Project::removeAll(const QStringList &ids)
+{
+    for (const QString &id : ids) {
+        const int i = indexOf(id);
+        if (i < 0)
+            continue;
+        beginRemoveRows({}, i, i);
+        m_elements.removeAt(i);
+        endRemoveRows();
+    }
+    Q_EMIT countChanged();
+    commit();
+}
+
+void Project::moveTo(const QString &id, int index)
+{
+    const int i = indexOf(id);
+    const int to = qBound(0, index, int(m_elements.size()) - 1);
+    if (i < 0 || to == i)
+        return;
+    beginMoveRows({}, i, i, {}, to > i ? to + 1 : to);
+    m_elements.move(i, to);
+    endMoveRows();
     commit();
 }
 
@@ -590,43 +638,58 @@ QStringList Project::images() const
 
 // ——— Schowek ———
 
-void Project::copy(const QString &id) const
+void Project::copy(const QStringList &ids) const
 {
-    const QVariantMap el = get(id);
-    if (el.isEmpty())
+    QVariantList list;
+    QVariantMap images;
+    for (const QVariant &v : m_elements) {
+        const QVariantMap el = v.toMap();
+        if (!ids.contains(el.value(QStringLiteral("id")).toString()))
+            continue;
+        list.append(el);
+        const QString src = el.value(QStringLiteral("src")).toString();
+        if (m_assets.contains(src) && !images.contains(src))
+            images[src] = QString::fromLatin1(m_assets.value(src).data.toBase64());
+    }
+    if (list.isEmpty())
         return;
-    QVariantMap clip{{QStringLiteral("element"), el}};
-    const QString src = el.value(QStringLiteral("src")).toString();
-    if (m_assets.contains(src))
-        clip[QStringLiteral("image")] = QString::fromLatin1(m_assets.value(src).data.toBase64());
+    const QVariantMap clip{{QStringLiteral("elements"), list}, {QStringLiteral("images"), images}};
     auto *mime = new QMimeData;
     mime->setData(QLatin1String(ClipboardMime), QJsonDocument::fromVariant(clip).toJson(QJsonDocument::Compact));
-    if (el.value(QStringLiteral("type")).toString() == QLatin1String("text"))
-        mime->setText(el.value(QStringLiteral("text")).toString());
-    else if (m_assets.contains(src))
+    // Inne programy dostają tekst albo zdjęcie pojedynczego elementu
+    const QVariantMap first = list.constFirst().toMap();
+    const QString src = first.value(QStringLiteral("src")).toString();
+    if (list.size() == 1 && first.value(QStringLiteral("type")).toString() == QLatin1String("text"))
+        mime->setText(first.value(QStringLiteral("text")).toString());
+    else if (list.size() == 1 && m_assets.contains(src))
         mime->setImageData(m_assets.value(src).full);
     QGuiApplication::clipboard()->setMimeData(mime);
 }
 
-QString Project::paste()
+QStringList Project::paste()
 {
     const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
     if (!mime)
         return {};
     if (mime->hasFormat(QLatin1String(ClipboardMime))) {
         const QVariantMap clip = QJsonDocument::fromJson(mime->data(QLatin1String(ClipboardMime))).toVariant().toMap();
-        QVariantMap el = clip.value(QStringLiteral("element")).toMap();
-        if (el.isEmpty())
-            return {};
-        if (clip.contains(QStringLiteral("image"))) {
-            const QString key = addAsset(QByteArray::fromBase64(clip.value(QStringLiteral("image")).toString().toLatin1()),
-                                         QFileInfo(el.value(QStringLiteral("src")).toString()).suffix());
-            el[QStringLiteral("src")] = key;
+        const QVariantMap images = clip.value(QStringLiteral("images")).toMap();
+        QHash<QString, QString> keys;
+        for (auto it = images.cbegin(); it != images.cend(); ++it)
+            keys[it.key()] = addAsset(QByteArray::fromBase64(it.value().toString().toLatin1()), QFileInfo(it.key()).suffix());
+        QStringList out;
+        for (const QVariant &v : clip.value(QStringLiteral("elements")).toList()) {
+            QVariantMap el = v.toMap();
+            const QString src = el.value(QStringLiteral("src")).toString();
+            if (keys.contains(src))
+                el[QStringLiteral("src")] = keys.value(src);
+            el.remove(QStringLiteral("id"));
+            el[QStringLiteral("x")] = num(el, "x") + 24;
+            el[QStringLiteral("y")] = num(el, "y") + 24;
+            out.append(insert(el));
         }
-        el.remove(QStringLiteral("id"));
-        el[QStringLiteral("x")] = num(el, "x") + 24;
-        el[QStringLiteral("y")] = num(el, "y") + 24;
-        return add(el);
+        commit();
+        return out;
     }
     if (mime->hasImage()) {
         const QImage img = qvariant_cast<QImage>(mime->imageData());
@@ -638,16 +701,27 @@ QString Project::paste()
         if (key.isEmpty())
             return {};
         const qreal k = qMin(1.0, qMin(m_width * 0.7 / img.width(), m_height * 0.7 / img.height()));
-        return add({{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("src"), key},
-                    {QStringLiteral("w"), std::round(img.width() * k)}, {QStringLiteral("h"), std::round(img.height() * k)}});
+        return {add({{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("src"), key},
+                     {QStringLiteral("w"), std::round(img.width() * k)}, {QStringLiteral("h"), std::round(img.height() * k)}})};
     }
     if (mime->hasText() && !mime->text().trimmed().isEmpty()) {
         QVariantMap el{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), mime->text().trimmed()},
                        {QStringLiteral("size"), std::round(m_width / 18)}, {QStringLiteral("color"), QStringLiteral("#16181d")}};
         el[QStringLiteral("w")] = qMin(m_width * 0.8, Art::textNaturalWidth(el));
-        return add(el);
+        return {add(el)};
     }
     return {};
+}
+
+bool Project::copyImage()
+{
+    // Najwyżej 2400 px na dłuższym boku — komunikatory i tak zmniejszają większe obrazy
+    const qreal k = qMin(1.0, 2400 / qMax(m_width, m_height));
+    const QImage img = Art::renderPage(document(), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this, Qt::white);
+    if (img.isNull())
+        return false;
+    QGuiApplication::clipboard()->setImage(img.convertToFormat(QImage::Format_RGB32));
+    return true;
 }
 
 // ——— Eksport ———

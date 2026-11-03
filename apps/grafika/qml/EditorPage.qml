@@ -22,13 +22,14 @@ Item {
     }
     readonly property bool active: visible && !colorPop.shown && !fontPop.shown && !exportPop.shown
     readonly property string sel: stage.selected
+    readonly property var many: stage.selection           // zaznaczone (jeden albo kilka)
 
-    onVisibleChanged: if (visible) { stage.selected = ""; stage.fit = true; side.tab = "templates"; stage.forceActiveFocus(); }
+    onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "templates"; stage.forceActiveFocus(); }
 
     // ——— Działania ———
     function addElement(el) {
         stage.stopEditing();
-        stage.selected = project.add(el);
+        stage.select(project.add(el));
         stage.forceActiveFocus();
     }
     function addImageKey(key) {
@@ -44,6 +45,20 @@ Item {
     function chooseImage(mode) {
         imageDialog.mode = mode;
         imageDialog.open();
+    }
+    // Zdjęcia upuszczone z Plików: jedno na ramkę ze zdjęciem (albo miejsce na zdjęcie) trafia do jej środka
+    function dropImages(urls, x, y) {
+        const p = mapToItem(stage, x, y);
+        const target = urls.length === 1 ? stage.elementAt(p.x, p.y) : null;
+        if (target && target.type === "image" && !target.locked) {
+            const key = project.importImage(String(urls[0]));
+            if (key === "") return;
+            project.change(target.id, { src: key, focusX: null, focusY: null, zoom: null });
+            stage.select(target.id);
+            app.toast("Zdjęcie wstawione w ramkę — dwuklik, żeby wybrać kadr", "");
+            return;
+        }
+        for (const u of urls) addImageFile(u);
     }
     function imageChosen(url, mode) {
         const key = project.importImage(String(url));
@@ -62,8 +77,7 @@ Item {
         project.remove(id);
     }
     function applyTemplate(file) {
-        stage.stopEditing();
-        stage.selected = "";
+        stage.clearSelection();
         if (project.applyTemplate(file)) app.toast("Wstawiono szablon — Ctrl+Z przywraca poprzednią stronę", "");
     }
     function pickColor(item, value, allowNone, fn) { colorPop.open(item, value, allowNone, fn, "left"); }
@@ -75,13 +89,76 @@ Item {
         menu.openAt(pt.x - 140, pt.y, items);
     }
     function nudge(dx, dy) {
-        if (sel === "") return;
-        const el = stage.current;
-        project.change(sel, { x: el.x + dx, y: el.y + dy });
+        if (many.length === 0) return;
+        for (const id of many) {
+            const el = project.get(id);
+            if (!el.locked) project.change(id, { x: el.x + dx, y: el.y + dy }, false);
+        }
+        project.commit();
     }
-    function remove() { if (sel !== "") { project.remove(sel); stage.selected = ""; } }
-    function copy() { if (sel !== "") project.copy(sel); }
-    function paste() { const id = project.paste(); if (id !== "") stage.selected = id; }
+    function remove() {
+        if (many.length === 0) return;
+        const ids = many.filter(id => !project.get(id).locked);
+        if (ids.length === 0) return;
+        stage.clearSelection();
+        project.removeAll(ids);
+    }
+    function copy() { if (many.length > 0) project.copy(many); }
+    function paste() { const ids = project.paste(); if (ids.length > 0) stage.setSelection(ids); }
+    function duplicate() { if (many.length > 0) stage.setSelection(project.duplicateAll(many)); }
+    function arrange(how) { if (sel !== "") project.arrange(sel, how); }
+    function setLocked(on) {
+        for (const id of many) project.change(id, { locked: on ? true : null }, false);
+        project.commit();
+        stage.refresh();
+    }
+    // Kilka elementów: wyrównanie do wspólnego prostokąta i równe odstępy
+    function alignMany(how) {
+        const g = stage.group;
+        if (g.w === undefined) return;
+        const items = many.map(id => project.get(id)).filter(o => !o.locked);
+        if (how === "spreadH" || how === "spreadV") {
+            const hz = how === "spreadH";
+            const boxes = items.map(o => ({ o: o, b: stage.box(o, o.x, o.y) }));
+            boxes.sort((a, b) => hz ? a.b.xs[0] - b.b.xs[0] : a.b.ys[0] - b.b.ys[0]);
+            if (boxes.length < 3) return;
+            let total = 0;
+            for (const it of boxes) total += hz ? it.b.xs[2] - it.b.xs[0] : it.b.ys[2] - it.b.ys[0];
+            const gap = ((hz ? g.w : g.h) - total) / (boxes.length - 1);
+            let at = hz ? g.x : g.y;
+            for (const it of boxes) {
+                const size = hz ? it.b.xs[2] - it.b.xs[0] : it.b.ys[2] - it.b.ys[0];
+                const shift = at - (hz ? it.b.xs[0] : it.b.ys[0]);
+                const patch = hz ? { x: Math.round((it.o.x + shift) * 10) / 10 } : { y: Math.round((it.o.y + shift) * 10) / 10 };
+                project.change(it.o.id, patch, false);
+                at += size + gap;
+            }
+        } else {
+            for (const o of items) {
+                const b = stage.box(o, o.x, o.y);
+                let d = 0, hz = true;
+                if (how === "left") d = g.x - b.xs[0];
+                else if (how === "hcenter") d = g.x + g.w / 2 - b.xs[1];
+                else if (how === "right") d = g.x + g.w - b.xs[2];
+                else { hz = false; d = how === "top" ? g.y - b.ys[0] : how === "vcenter" ? g.y + g.h / 2 - b.ys[1] : g.y + g.h - b.ys[2]; }
+                project.change(o.id, hz ? { x: Math.round((o.x + d) * 10) / 10 } : { y: Math.round((o.y + d) * 10) / 10 }, false);
+            }
+        }
+        project.commit();
+    }
+    function selectLayer(id, additive) {
+        if (project.get(id).hidden) return;
+        if (additive) stage.toggle(id); else stage.select(id);
+        stage.forceActiveFocus();
+    }
+    function setHidden(id, on) {
+        if (on && stage.isSelected(id)) stage.setSelection(many.filter(i => i !== id));
+        project.change(id, { hidden: on ? true : null });
+    }
+    function copyImage() {
+        exportPop.close();
+        if (project.copyImage()) app.toast("Skopiowano grafikę — wklej ją w wiadomości (Ctrl+V)", "");
+    }
     function exportNow(format, scale) {
         exportPop.close();
         const path = project.exportFile(format, scale, "");
@@ -95,18 +172,38 @@ Item {
         } else if (a === "copy") copy();
         else if (a === "cut") { copy(); remove(); }
         else if (a === "paste") paste();
-        else if (a === "duplicate") stage.selected = project.duplicate(sel);
+        else if (a === "duplicate") duplicate();
         else if (a === "edit") stage.startEditing(sel);
+        else if (a === "crop") stage.cropping = sel;
+        else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
         else if (a === "bgtab") side.tab = "background";
+        else if (a === "layers") side.tab = "layers";
+        else if (a === "selectAll") stage.selectAll();
+        else if (a === "lock") setLocked(true);
+        else if (a === "unlock") setLocked(false);
         else if (a === "remove") remove();
-        else project.arrange(sel, a);
+        else arrange(a);
     }
     function showContextMenu(x, y) {
         const items = [];
-        if (sel !== "") {
+        if (many.length > 1) {
+            items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
+            items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
+            items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
+            items.push({ label: "Zablokuj", icon: "lock", action: "lock" });
+            items.push({ separator: true });
+            items.push({ label: "Usuń zaznaczone (" + many.length + ")", icon: "trash", shortcut: "Delete", action: "remove", danger: true });
+        } else if (sel !== "" && stage.current.locked) {
+            items.push({ label: "Odblokuj", icon: "unlock", action: "unlock" });
+            items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
+            items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
+            items.push({ label: "Warstwy", icon: "layers", action: "layers" });
+        } else if (sel !== "") {
             const el = stage.current;
             if (el.type === "text") items.push({ label: "Edytuj tekst", icon: "pencil", shortcut: "Enter", action: "edit" });
+            if (el.type === "image" && el.src) items.push({ label: "Kadruj", icon: "crop", shortcut: "dwuklik", action: "crop" });
+            if (el.type === "image") items.push({ label: "Odbij w poziomie", icon: "mirror", action: "flip" });
             items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
             items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
             items.push({ label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste" });
@@ -117,10 +214,12 @@ Item {
             items.push({ label: "Do tyłu", icon: "layerDown", shortcut: "Ctrl+[", action: "down" });
             items.push({ label: "Na spód", icon: "sendBack", shortcut: "Ctrl+Shift+[", action: "back" });
             if (el.type === "image") items.push({ label: "Ustaw jako tło", icon: "image", action: "background" });
+            items.push({ label: "Zablokuj", icon: "lock", action: "lock" });
             items.push({ separator: true });
             items.push({ label: "Usuń", icon: "trash", shortcut: "Delete", action: "remove", danger: true });
         } else {
             items.push({ label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste" });
+            items.push({ label: "Zaznacz wszystko", icon: "check", shortcut: "Ctrl+A", action: "selectAll" });
             items.push({ label: "Zmień tło", icon: "palette", action: "bgtab" });
         }
         const p = stage.mapToItem(ed, x, y);
@@ -129,7 +228,13 @@ Item {
 
     // Do testów (wołane z Main.testOpen)
     function testOpen(cmd, arg) {
-        if (cmd === "select") stage.selected = project.idAt(Number(arg));
+        if (cmd === "select") stage.select(project.idAt(Number(arg)));
+        else if (cmd === "selectmany") stage.setSelection(String(arg).split(",").map(i => project.idAt(Number(i))));
+        else if (cmd === "selectall") stage.selectAll();
+        else if (cmd === "crop") stage.cropping = sel;
+        else if (cmd === "set") project.change(sel, JSON.parse(arg));
+        else if (cmd === "align") alignMany(arg);
+        else if (cmd === "dup") duplicate();
         else if (cmd === "edit") stage.startEditing(sel);
         else if (cmd === "tab") side.tab = arg;
         else if (cmd === "export") exportPop.openAt(exportBtn);
@@ -152,11 +257,12 @@ Item {
     Shortcut { sequences: [StandardKey.Copy]; enabled: ed.active && !ed.typing; onActivated: ed.copy() }
     Shortcut { sequences: [StandardKey.Cut]; enabled: ed.active && !ed.typing; onActivated: { ed.copy(); ed.remove(); } }
     Shortcut { sequences: [StandardKey.Paste]; enabled: ed.active && !ed.typing; onActivated: ed.paste() }
-    Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.sel !== ""; onActivated: stage.selected = ed.project.duplicate(ed.sel) }
-    Shortcut { sequence: "Ctrl+]"; enabled: ed.active && !ed.typing; onActivated: ed.project.arrange(ed.sel, "up") }
-    Shortcut { sequence: "Ctrl+["; enabled: ed.active && !ed.typing; onActivated: ed.project.arrange(ed.sel, "down") }
-    Shortcut { sequence: "Ctrl+Shift+]"; enabled: ed.active && !ed.typing; onActivated: ed.project.arrange(ed.sel, "front") }
-    Shortcut { sequence: "Ctrl+Shift+["; enabled: ed.active && !ed.typing; onActivated: ed.project.arrange(ed.sel, "back") }
+    Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.duplicate() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: stage.selectAll() }
+    Shortcut { sequence: "Ctrl+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("up") }
+    Shortcut { sequence: "Ctrl+["; enabled: ed.active && !ed.typing; onActivated: ed.arrange("down") }
+    Shortcut { sequence: "Ctrl+Shift+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("front") }
+    Shortcut { sequence: "Ctrl+Shift+["; enabled: ed.active && !ed.typing; onActivated: ed.arrange("back") }
     Shortcut { sequence: "Left"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(-1, 0) }
     Shortcut { sequence: "Right"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(1, 0) }
     Shortcut { sequence: "Up"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(0, -1) }
@@ -165,8 +271,16 @@ Item {
     Shortcut { sequence: "Shift+Right"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(10, 0) }
     Shortcut { sequence: "Shift+Up"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(0, -10) }
     Shortcut { sequence: "Shift+Down"; enabled: ed.active && !ed.typing; onActivated: ed.nudge(0, 10) }
-    Shortcut { sequences: ["Return", "Enter"]; enabled: ed.active && !ed.typing && ed.sel !== ""; onActivated: stage.startEditing(ed.sel) }
-    Shortcut { sequence: "Escape"; enabled: ed.active && !ed.typing; onActivated: stage.selected = "" }
+    Shortcut {
+        sequences: ["Return", "Enter"]
+        enabled: ed.active && !ed.typing && ed.sel !== ""
+        onActivated: {
+            if (stage.cropping !== "") stage.cropping = "";
+            else if (stage.current.type === "image" && stage.current.src && !stage.current.locked) stage.cropping = ed.sel;
+            else stage.startEditing(ed.sel);
+        }
+    }
+    Shortcut { sequence: "Escape"; enabled: ed.active && !ed.typing; onActivated: stage.cancel() }
     Shortcut { sequences: [StandardKey.Save]; enabled: ed.visible; onActivated: { ed.app.saveNow(); ed.app.toast("Zapisano w folderze Dokumenty/Grafiki", ed.project.path); } }
     Shortcut { sequence: "Ctrl+E"; enabled: ed.visible; onActivated: exportPop.openAt(exportBtn) }
     Shortcut { sequences: ["Ctrl+=", "Ctrl++", StandardKey.ZoomIn]; enabled: ed.visible; onActivated: stage.zoomBy(1.25) }
@@ -203,7 +317,7 @@ Item {
         anchors.fill: parent
         keys: ["text/uri-list"]
         onDropped: (drop) => {
-            for (const u of drop.urls) ed.addImageFile(u);
+            ed.dropImages(drop.urls, drop.x, drop.y);
             drop.accept();
         }
     }
@@ -401,6 +515,12 @@ Item {
                     icon: "download"
                     text: exportPop.format === "pdf" ? "Zapisz PDF" : "Zapisz w Obrazy/Grafiki"
                     onClicked: ed.exportNow(exportPop.format, exportPop.format === "pdf" ? 1 : exportPop.size)
+                }
+                Btn {
+                    width: parent.width
+                    icon: "copy"
+                    text: "Kopiuj do schowka"
+                    onClicked: ed.copyImage()
                 }
                 Btn {
                     width: parent.width
