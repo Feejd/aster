@@ -95,8 +95,9 @@ void Captions::reset()
     Q_EMIT progressChanged();
 }
 
-void Captions::start(const QString &model, const QString &language, const QString &style)
+void Captions::start(const QString &model, const QString &language, const QString &style, const QString &anim)
 {
+    m_anim = anim;
     if (!available() || m_state == QLatin1String("downloading") || m_state == QLatin1String("listening"))
         return;
     m_model = model;
@@ -270,8 +271,36 @@ void Captions::transcribe()
                 // Czas w setnych sekundy → klatki osi
                 const int a = p.start + qRound(whisper_full_get_segment_t0(ctx, s) * Project::Fps / 100.0);
                 const int b = p.start + qRound(whisper_full_get_segment_t1(ctx, s) * Project::Fps / 100.0);
+                // Słowa z czasami (do napisów karaoke): tokeny sklejane w słowa, nowe słowo zaczyna się od spacji.
+                // Bajty UTF-8 skleja się przed dekodowaniem — polska litera bywa rozdzielona między tokeny.
+                QVariantList words;
+                QByteArray cur;
+                int ws = -1, we = -1;
+                auto push = [&] {
+                    const QString w = QString::fromUtf8(cur).trimmed();
+                    if (!w.isEmpty())
+                        words << QVariantMap{{QStringLiteral("text"), w},
+                                             {QStringLiteral("start"), p.start + qRound(ws * Project::Fps / 100.0)},
+                                             {QStringLiteral("end"), p.start + qRound(we * Project::Fps / 100.0)}};
+                    cur.clear();
+                    ws = -1;
+                };
+                const int nt = whisper_full_n_tokens(ctx, s);
+                for (int k = 0; k < nt; ++k) {
+                    const whisper_token_data d = whisper_full_get_token_data(ctx, s, k);
+                    if (d.id >= whisper_token_eot(ctx))
+                        continue;           // znaczniki specjalne ([_BEG_], czasy itp.)
+                    const QByteArray piece(whisper_full_get_token_text(ctx, s, k));
+                    if (piece.startsWith(' ') && !cur.trimmed().isEmpty())
+                        push();
+                    if (ws < 0)
+                        ws = int(d.t0);
+                    we = int(d.t1);
+                    cur += piece;
+                }
+                push();
                 found << QVariantMap{{QStringLiteral("start"), qMax(p.start, a)}, {QStringLiteral("end"), qMin(p.start + p.length, qMax(b, a + 1))},
-                                     {QStringLiteral("text"), text}};
+                                     {QStringLiteral("text"), text}, {QStringLiteral("words"), words}};
             }
         }
         if (ctx)
@@ -286,7 +315,7 @@ void Captions::transcribe()
                 setState(QString(), error);
                 return;
             }
-            m_added = Project::instance()->setCaptions(found, m_style);
+            m_added = Project::instance()->setCaptions(found, m_style, m_anim);
             m_progress = 1;
             Q_EMIT progressChanged();
             setState(QStringLiteral("done"), m_added == 0 ? QStringLiteral("Nie usłyszałem mowy w filmach na osi czasu.") : QString());

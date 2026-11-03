@@ -114,8 +114,9 @@ public:
     Q_INVOKABLE bool saveMlt(const QString &pathOrUrl) const;        // projekt dla Kdenlive/Shotcut
 
     QString xml(int width, int height) const;
-    // Napisy z mowy: [{start, end, text}] w klatkach osi; zastępują poprzednie napisy z mowy. Zwraca liczbę dodanych.
-    int setCaptions(const QVariantList &items, const QString &style);                         // opis MLT dla danego rozmiaru
+    // Napisy z mowy: [{start, end, text, words: [{text, start, end}]}] w klatkach osi; zastępują poprzednie
+    // napisy z mowy. anim — animacja napisów (np. „karaoke”). Zwraca liczbę dodanych.
+    int setCaptions(const QVariantList &items, const QString &style, const QString &anim = QStringLiteral("brak"));                         // opis MLT dla danego rozmiaru
 
     static QString thumbUrl(const QString &path, int frame, const QString &look = QString());   // image://mthumb/…
     // Filtry MLT „wyglądu” klipu: [(usługa, [(właściwość, wartość)])] — wspólne dla filmu i miniatur
@@ -156,7 +157,11 @@ private:
         double x = -1, y = -1;          // środek napisu w % kadru (−1 — miejsce ze stylu)
         double scale = 1;               // wielkość względem stylu
         QString color;                  // kolor liter zamiast koloru stylu
+        struct Word { QString text; int start = 0, end = 0; };   // czasy słów (klatki od początku napisu) — z rozpoznawania mowy
+        QList<Word> words;
     };
+    // Słowa napisu z czasami: zapamiętane z mowy, a gdy tekst zmieniono — rozłożone proporcjonalnie do długości
+    QList<Text::Word> wordTimings(const Text &t) const;
     struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
     struct Overlay {
         QString id, path, kind, name;

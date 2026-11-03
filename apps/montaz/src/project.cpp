@@ -58,7 +58,8 @@ const Named lookTable[] = {
 };
 const Named animationTable[] = {
     {"brak", "Bez animacji"}, {"pojawianie", "Pojawianie"}, {"wjazd", "Wjazd od dołu"},
-    {"bok", "Wjazd z boku"}, {"pisanie", "Pisanie"},
+    {"bok", "Wjazd z boku"}, {"pisanie", "Pisanie"}, {"karaoke", "Karaoke"}, {"ramka", "Ramka słowa"},
+    {"slowo", "Słowo po słowie"}, {"narastanie", "Narastanie"},
 };
 
 const Named transitionTable[] = {
@@ -502,6 +503,12 @@ QJsonObject Project::toJson() const
     for (const Text &t : m_texts)
         texts << QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
                              {QStringLiteral("anim"), t.anim}, {QStringLiteral("caption"), t.caption},
+                             {QStringLiteral("words"), [&t] {
+                                  QJsonArray a;
+                                  for (const Text::Word &w : t.words)
+                                      a << QJsonArray{w.text, w.start, w.end};
+                                  return a;
+                              }()},
                              {QStringLiteral("x"), t.x}, {QStringLiteral("y"), t.y}, {QStringLiteral("scale"), t.scale}, {QStringLiteral("color"), t.color},
                              {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
     for (const Music &m : m_music)
@@ -575,6 +582,10 @@ void Project::fromJson(const QJsonObject &o)
         t.y = m.value(QLatin1String("y")).toDouble(-1);
         t.scale = m.value(QLatin1String("scale")).toDouble(1);
         t.color = m.value(QLatin1String("color")).toString();
+        for (const QJsonValue &w : m.value(QLatin1String("words")).toArray()) {
+            const QJsonArray a = w.toArray();
+            t.words << Text::Word{a.at(0).toString(), a.at(1).toInt(), a.at(2).toInt()};
+        }
         m_texts << t;
     }
     for (const QJsonValue &v : o.value(QLatin1String("overlays")).toArray()) {
@@ -1255,7 +1266,7 @@ void Project::setValue(const QString &id, const QString &key, const QVariant &va
     commit();
 }
 
-int Project::setCaptions(const QVariantList &items, const QString &style)
+int Project::setCaptions(const QVariantList &items, const QString &style, const QString &anim)
 {
     snapshot();
     m_texts.removeIf([](const Text &t) { return t.caption; });
@@ -1271,9 +1282,14 @@ int Project::setCaptions(const QVariantList &items, const QString &style)
         t.id = newId();
         t.text = list.at(i).value(QStringLiteral("text")).toString();
         t.style = style.isEmpty() ? QStringLiteral("zolty") : style;
-        t.anim = QStringLiteral("brak");
+        t.anim = anim.isEmpty() ? QStringLiteral("brak") : anim;
         t.caption = true;
         t.start = list.at(i).value(QStringLiteral("start")).toInt();
+        for (const QVariant &w : list.at(i).value(QStringLiteral("words")).toList()) {
+            const QVariantMap m = w.toMap();
+            t.words << Text::Word{m.value(QStringLiteral("text")).toString().trimmed(), m.value(QStringLiteral("start")).toInt() - t.start,
+                                  m.value(QStringLiteral("end")).toInt() - t.start};
+        }
         // Każdy napis widać co najmniej 0,6 s, ale nie dłużej niż do następnego
         int end = qMax(list.at(i).value(QStringLiteral("end")).toInt(), t.start + Fps * 6 / 10);
         if (i + 1 < list.size())
@@ -1815,7 +1831,61 @@ QString Project::xml(int W, int H) const
             {QStringLiteral("halign"), QStringLiteral("center")}, {QStringLiteral("valign"), valign}};
         if (!opacity.isEmpty())
             props << qMakePair(QStringLiteral("opacity"), opacity);
-        if (t.anim == QLatin1String("pisanie")) {
+        const bool karaoke = t.anim == QLatin1String("karaoke") || t.anim == QLatin1String("ramka");
+        if (karaoke || t.anim == QLatin1String("slowo") || t.anim == QLatin1String("narastanie")) {
+            // Napisy „za mową”: osobny filtr na czas każdego słowa
+            const QList<Text::Word> words = wordTimings(t);
+            const QString fg = t.color.isEmpty() ? QString::fromLatin1(s.fg) : t.color;
+            const QString hl = t.anim == QLatin1String("ramka") ? QStringLiteral("#FF3B6B")
+                             : fg.compare(QLatin1String("#FFD84D"), Qt::CaseInsensitive) == 0 ? QStringLiteral("#FFFFFF") : QStringLiteral("#FFD84D");
+            // Prostokąt dla HTML (tekst od góry prostokąta): szacowana wysokość bloku jak przy układzie napisu
+            const double blockH = L.lines * size * 1.45 + size * 0.4;
+            const double top = L.valign == QLatin1String("middle") ? L.y + (L.h - blockH) / 2
+                             : L.valign == QLatin1String("bottom") ? L.y + L.h - blockH : L.y;
+            const QString htmlRect = QStringLiteral("%1 %2 %3 %4").arg(qRound(L.x)).arg(qRound(top)).arg(qRound(L.w)).arg(qRound(blockH + size));
+            for (int k = karaoke ? -1 : 0; k < words.size(); ++k) {
+                const int from = k < 0 ? 0 : words.at(k).start;
+                const int to = (k + 1 < words.size() ? words.at(k + 1).start : t.length) - 1;
+                if (to < from)
+                    continue;
+                if (karaoke) {
+                    QStringList html;
+                    for (int w = 0; w < words.size(); ++w) {
+                        const QString word = (s.upper ? words.at(w).text.toUpper() : words.at(w).text).toHtmlEscaped();
+                        if (w != k)
+                            html << word;
+                        else if (t.anim == QLatin1String("ramka"))
+                            html << QStringLiteral("<span style=\"background-color:%1\">&nbsp;%2&nbsp;</span>").arg(hl, word);
+                        else
+                            html << QStringLiteral("<span style=\"color:%1\">%2</span>").arg(hl, word);
+                    }
+                    const QString doc = QStringLiteral("<div style=\"text-align:center; font-family:Geist; font-size:%1px; font-weight:%2; color:%3; line-height:135%\">"
+                                                       "<span style=\"background-color:rgba(0,0,0,150)\">&nbsp;%4&nbsp;</span></div>")
+                                            .arg(size).arg(qMax(600, s.weight)).arg(fg, html.join(QLatin1Char(' ')));
+                    filter(QStringLiteral("qtext"), {{QStringLiteral("html"), doc}, {QStringLiteral("geometry"), htmlRect},
+                                                     {QStringLiteral("bgcolour"), QStringLiteral("#00000000")}},
+                           t.start + from, t.start + to);
+                } else {
+                    QStringList shown;
+                    for (int w = t.anim == QLatin1String("slowo") ? k : 0; w <= k; ++w)
+                        shown << words.at(w).text;
+                    QString str2 = shown.join(QLatin1Char(' '));
+                    if (s.upper)
+                        str2 = str2.toUpper();
+                    auto p = props;
+                    p.removeIf([](const QPair<QString, QString> &x) { return x.first == QLatin1String("opacity"); });
+                    const bool single = t.anim == QLatin1String("slowo");     // jedno słowo — półtora raza większe
+                    for (auto &x : p) {
+                        if (x.first == QLatin1String("geometry"))
+                            x.second = rect(0, 0);
+                        else if (single && (x.first == QLatin1String("size") || x.first == QLatin1String("outline")))
+                            x.second = QString::number(qRound(x.second.toDouble() * 1.6));
+                    }
+                    p.prepend(qMakePair(QStringLiteral("argument"), wrapText(str2, qMax(4, int(0.86 * W / (size * 0.56))))));
+                    filter(QStringLiteral("qtext"), p, t.start + from, t.start + to);
+                }
+            }
+        } else if (t.anim == QLatin1String("pisanie")) {
             // „Pisanie”: kolejne filtry z coraz dłuższym początkiem tekstu (ok. 2 klatki na znak, najwyżej 1,5 s)
             const int n = str.size();
             const int steps = qMax(1, qMin(n, qMin(24, t.length / 3)));
@@ -1848,6 +1918,31 @@ QString Project::xml(int W, int H) const
     x.writeEndElement();
     x.writeEndElement();
     x.writeEndDocument();
+    return out;
+}
+
+QList<Project::Text::Word> Project::wordTimings(const Text &t) const
+{
+    const QStringList parts = t.text.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QList<Text::Word> out;
+    if (parts.isEmpty())
+        return out;
+    if (t.words.size() == parts.size()) {
+        for (int i = 0; i < parts.size(); ++i)
+            out << Text::Word{parts.at(i), qBound(0, t.words.at(i).start, t.length - 1), qBound(1, t.words.at(i).end, t.length)};
+        return out;
+    }
+    // Bez czasów z mowy: każde słowo dostaje czas proporcjonalny do liczby liter (napis kończy się chwilą przerwy)
+    int letters = 0;
+    for (const QString &p : parts)
+        letters += p.size() + 1;
+    const double span = t.length * 0.9;
+    double at = 0;
+    for (const QString &p : parts) {
+        const double d = span * (p.size() + 1) / letters;
+        out << Text::Word{p, int(at), int(at + d)};
+        at += d;
+    }
     return out;
 }
 

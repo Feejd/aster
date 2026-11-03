@@ -36,7 +36,7 @@ public:
     int added() const { return m_added; }
 
     // model: "base" / "small"; language: "pl", "en", "auto"; style: id stylu napisów
-    Q_INVOKABLE void start(const QString &model, const QString &language, const QString &style);
+    Q_INVOKABLE void start(const QString &model, const QString &language, const QString &style, const QString &anim = QStringLiteral("brak"));
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void reset();
 
@@ -53,7 +53,7 @@ private:
     QNetworkAccessManager *m_net = nullptr;
     QPointer<QNetworkReply> m_reply;
     QFile *m_file = nullptr;
-    QString m_language, m_style, m_model;
+    QString m_language, m_style, m_model, m_anim;
 
     QString modelsDir() const;
     QString modelPath(const QString &model) const;

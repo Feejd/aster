@@ -176,7 +176,10 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       zaokrąglony, koło), pojawianie się (pojawianie, wyskok, wjazd), usuwanie zielonego/niebieskiego tła z czułością,
       głośność; nachodzące na siebie nakładki w osobnych wierszach osi; dodawanie przyciskiem, przeciągnięciem
       z multimediów albo upuszczeniem pliku na ścieżkę nakładek
-- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, gotowe naklejki i emoji w programie,
+- [x] Montaż 6: napisy karaoke — czasy słów z whisper.cpp (tokeny sklejane w słowa) zapisane w napisie; tryby
+      Karaoke (kolor wypowiadanego słowa), Ramka słowa, Słowo po słowie (jedno duże słowo), Narastanie; wybór w oknie
+      „Napisy z mowy” i w animacjach każdego napisu (napisy pisane ręcznie dostają czasy proporcjonalne do długości słów)
+- [ ] Montaż, dalej: gotowe naklejki i emoji w programie,
       klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
       płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,

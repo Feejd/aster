@@ -10,7 +10,8 @@ Item {
     property bool shown: false
     property string model: "small"
     property string language: "pl"
-    property string style: "zolty"
+    property string style: "klasyczny"
+    property string anim: "karaoke"
     readonly property bool busy: Captions.state === "downloading" || Captions.state === "listening"
     readonly property bool hasCaptions: Project.texts.some(t => t.caption)
     signal toast(string text)
@@ -121,6 +122,23 @@ Item {
                     current: sheet.style
                     onPicked: (v) => sheet.style = v
                 }
+                Text { text: "Ruch napisów"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase }
+                Pills {
+                    model: [{ id: "brak", name: "Zwykłe" }, { id: "karaoke", name: "Karaoke" }, { id: "ramka", name: "Ramka słowa" },
+                            { id: "slowo", name: "Słowo po słowie" }, { id: "narastanie", name: "Narastanie" }]
+                    current: sheet.anim
+                    onPicked: (v) => sheet.anim = v
+                }
+                Text {
+                    visible: sheet.anim !== "brak"
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: sheet.anim === "karaoke" ? "Słowo, które właśnie pada, zmienia kolor — jak w karaoke."
+                          : sheet.anim === "ramka" ? "Wypowiadane słowo dostaje kolorową ramkę."
+                          : sheet.anim === "slowo" ? "Na ekranie zawsze jedno słowo — duże i wyraźne."
+                          : "Słowa dopisują się na bieżąco, w rytm mowy."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                }
                 Text {
                     visible: sheet.hasCaptions
                     width: parent.width
@@ -171,7 +189,7 @@ Item {
                         primary: true
                         enabled: Project.clips.length > 0
                         label: Captions.models.find(m => m.id === sheet.model).ready ? "Utwórz napisy" : "Pobierz i utwórz"
-                        onClicked: Captions.start(sheet.model, sheet.language, sheet.style)
+                        onClicked: Captions.start(sheet.model, sheet.language, sheet.style, sheet.anim)
                     }
                 }
             }

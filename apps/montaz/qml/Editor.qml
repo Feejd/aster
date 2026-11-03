@@ -133,7 +133,7 @@ GlassPane {
         else if (what.startsWith("ovpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
         else if (what === "deselect") selected = "";
         else if (what === "captions") openCaptions();
-        else if (what.startsWith("captionsstart:")) { openCaptions(); Captions.start(arg, "pl", "zolty"); }
+        else if (what.startsWith("captionsstart:")) { const a = (arg + ",zolty,brak").split(","); openCaptions(); Captions.start(a[0], "pl", a[1], a[2]); }
         else if (what === "export") exportSheet.open();
         else if (what.startsWith("exportstart:")) { exportSheet.open(); exportSheet.startWhenReady(arg); }
         else if (what === "menu") itemMenu(selected, timeline, 300, 120);
