@@ -23,6 +23,8 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  # Kursor Aster wszędzie: KDE/KWin, programy X11 i GTK (Firefox), ekran logowania (10-aster-sddm.conf)
  && kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme Aster \
+ && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Bouncing false \
+ && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Blinking false \
  && mkdir -p /usr/share/icons/default && printf '[Icon Theme]\nInherits=Aster\n' > /usr/share/icons/default/index.theme \
  && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
  && glib-compile-schemas /usr/share/glib-2.0/schemas \

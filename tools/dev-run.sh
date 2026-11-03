@@ -43,6 +43,9 @@ if [ -f "$BUILD/cursors/Aster/index.theme" ]; then
     rm -rf "${HOME:?}/.local/share/icons/Aster" && cp -a "$BUILD/cursors/Aster" "$HOME/.local/share/icons/Aster"
     kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme Aster 2>/dev/null || true
     plasma-apply-cursortheme Aster >/dev/null 2>&1 || true
+    # Przy otwieraniu programu sam kursor ładowania Aster — bez podskakującej ikony KDE (KWin startupfeedback)
+    kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Bouncing false 2>/dev/null || true
+    kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Blinking false 2>/dev/null || true
     gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
 fi
 

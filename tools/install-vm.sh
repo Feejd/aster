@@ -42,6 +42,10 @@ sh "$ROOT/image/debloat.sh" --hide
 # Kursor Aster (zainstalowany w /usr/share/icons/Aster) — od razu, także w programach GTK
 kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme Aster 2>/dev/null || true
 plasma-apply-cursortheme Aster >/dev/null 2>&1 || true
+# Przy otwieraniu programu sam kursor ładowania Aster — bez podskakującej ikony KDE (KWin startupfeedback)
+kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Bouncing false 2>/dev/null || true
+kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Blinking false 2>/dev/null || true
+dbus-send --session --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/null || true
 gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
 
 echo "==> Ekran startowy Aster (przebudowa initramfs — chwilę potrwa)…"
