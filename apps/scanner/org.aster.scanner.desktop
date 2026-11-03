@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Skaner
+GenericName=Skanowanie dokumentów
+Comment=Zeskanuj dokument lub zdjęcie do PDF albo obrazu
+Exec=aster-scanner
+Icon=scanner
+Terminal=false
+Categories=Graphics;Scanning;
+Keywords=skaner;skanowanie;skan;dokument;pdf;scanner;scan;
+StartupWMClass=aster-scanner

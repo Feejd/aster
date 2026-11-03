@@ -80,10 +80,13 @@ Programy:
 - [x] Kamera (Kamoso) — `apps/camera`, jak „Aparat” w Windows: obraz na całe okno, Zdjęcie/Film, samowyzwalacz 2/5/10 s,
       siatka, lustrzane odbicie, wybór kamery, nagrywanie z dźwiękiem (MP4, a bez koderów z RPM Fusion — WebM);
       zapis do Obrazy/Z aparatu i Wideo/Z aparatu, miniatura ostatniego ujęcia otwiera Zdjęcia lub Wideo
-- [ ] Skaner, Telefon (KDE Connect z wyglądem Aster)
+- [x] Skaner (Skanlite) — `apps/scanner`, przez SANE: skanery USB i sieciowe (sane-airscan), podgląd z kadrem do
+      przeciągnięcia, szyba albo podajnik (wszystkie kartki naraz), kolor/szarości, rozdzielczość z podpowiedzią;
+      strony do obrócenia i ułożenia, zapis jako jeden PDF (Dokumenty/Skany) albo JPG/PNG (Obrazy/Skany)
+- [ ] Telefon (KDE Connect z wyglądem Aster)
 
 Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):
-- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso, kcalc, ark, discover,
+- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso, skanlite, kcalc, ark, discover,
       plasma-systemmonitor, kinfocenter, kwalletmanager, ksystemlog, kmail/kontact, akregator, gry KDE, plasma-welcome
 - [ ] Zostaje infrastruktura bez okien: KWin, biblioteki Plasmy (powiadomienia, zadania), KIO, PowerDevil, PipeWire,
       NetworkManager, BlueZ, kded; KDE-owe okna systemowe znikają dopiero po zrobieniu własnych (portal, polkit)
