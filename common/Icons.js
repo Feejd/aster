@@ -132,3 +132,9 @@ var switchCamera = "M3 8.5a2 2 0 0 1 2-2h2.5L9 4h6l1.5 2.5H19a2 2 0 0 1 2 2V18a2
 var scanner = "M4 13h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zM5 13L19 6M7 16h.01M11 16h6";
 var upload = "M12 20V9M7 14l5-5 5 5M5 4h14";
 var signal = "M5 19v-3M10 19v-6M15 19v-9M20 19V5";
+// Aster Code
+var gitBranch = "M6 3v12M18 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6M6 21a3 3 0 1 0 0-6a3 3 0 1 0 0 6M18 9a9 9 0 0 1-9 9";
+var braces = "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1";
+var files = "M15 2v4a1 1 0 0 0 1 1h4M9 18a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6l5 5v9a2 2 0 0 1-2 2zM4 7.5V20a2 2 0 0 0 2 2h9";
+var panelBottom = "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 14h18";
+var hash = "M5 9h15M4 15h15M10 3L8 21M16 3l-2 18";

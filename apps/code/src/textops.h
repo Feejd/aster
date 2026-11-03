@@ -1,0 +1,36 @@
+#pragma once
+
+#include <QObject>
+#include <QPoint>
+#include <QQmlEngine>
+#include <QQuickTextDocument>
+#include <QVariantMap>
+
+// Operacje edytora kodu na dokumencie TextEdit: wcięcia, komentarze, przenoszenie i duplikowanie
+// wierszy (każda jako jeden krok cofania), dopasowanie nawiasów, wykrywanie stylu wcięć.
+class TextOps : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+
+public:
+    explicit TextOps(QObject *parent = nullptr);
+
+    Q_INVOKABLE QPoint lineColumn(QQuickTextDocument *doc, int position) const;   // (kolumna, wiersz) od 0
+    Q_INVOKABLE int positionOfLine(QQuickTextDocument *doc, int line) const;      // początek wiersza (od 0)
+    Q_INVOKABLE int lineCount(QQuickTextDocument *doc) const;
+    Q_INVOKABLE QString lineText(QQuickTextDocument *doc, int line) const;
+
+    // op: indent | outdent | comment | moveUp | moveDown | duplicateUp | duplicateDown | deleteLine
+    // unit — jednostka wcięcia („\t” albo spacje); line, blockStart, blockEnd — znaczniki komentarza.
+    // Zwraca nowe zaznaczenie { start, end }.
+    Q_INVOKABLE QVariantMap editLines(QQuickTextDocument *doc, int selStart, int selEnd, const QString &op,
+                                      const QString &unit = QString(), const QVariantMap &comment = QVariantMap());
+    // Para nawiasów przy kursorze: [pozycja, pozycja] albo pusta lista
+    Q_INVOKABLE QVariantList matchBracket(QQuickTextDocument *doc, int position) const;
+    // { tabs: bool, size: int } — ze wcięć w tekście, domyślnie 4 spacje
+    Q_INVOKABLE QVariantMap detectIndent(const QString &text) const;
+    // { line: "//", start: "/*", end: "*/" } — z definicji języka KSyntaxHighlighting
+    Q_INVOKABLE QVariantMap commentMarkers(const QString &fileName, const QString &language) const;
+};

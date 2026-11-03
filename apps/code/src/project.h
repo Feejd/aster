@@ -1,0 +1,147 @@
+#pragma once
+
+#include "filetree.h"
+
+#include <QFileSystemWatcher>
+#include <QObject>
+#include <QPointer>
+#include <QProcess>
+#include <QQmlEngine>
+#include <QSettings>
+#include <QThread>
+#include <QVariantList>
+#include <atomic>
+#include <memory>
+
+// Otwarty folder projektu: drzewo plików, ostatnie foldery, wczytywanie i zapis plików,
+// operacje na plikach (nowy, zmiana nazwy, kosz), git w tle (gałąź, zmienione pliki, wersja z HEAD
+// do znaczników przy marginesie), lista plików do szybkiego otwierania i wyszukiwanie w całym projekcie.
+class Project : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+    Q_PROPERTY(QString root READ root NOTIFY rootChanged)
+    Q_PROPERTY(QString name READ name NOTIFY rootChanged)
+    Q_PROPERTY(FileTree *tree READ tree CONSTANT)
+    Q_PROPERTY(QVariantList recent READ recent NOTIFY recentChanged)
+    Q_PROPERTY(QStringList pendingFiles READ pendingFiles CONSTANT)       // pliki z wiersza poleceń
+    Q_PROPERTY(QString pendingFolder READ pendingFolder CONSTANT)         // folder z wiersza poleceń
+
+    Q_PROPERTY(bool isGit READ isGit NOTIFY gitChanged)
+    Q_PROPERTY(QString branch READ branch NOTIFY gitChanged)
+    Q_PROPERTY(QString head READ head NOTIFY gitChanged)
+    Q_PROPERTY(int ahead READ ahead NOTIFY gitChanged)
+    Q_PROPERTY(int behind READ behind NOTIFY gitChanged)
+    Q_PROPERTY(QVariantList changes READ changes NOTIFY gitChanged)        // [{ path, rel, name, dir, status, staged }]
+
+    Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)    // [{ path, rel, name, matches: [...] }]
+    Q_PROPERTY(int resultCount READ resultCount NOTIFY resultsChanged)
+    Q_PROPERTY(bool resultsTruncated READ resultsTruncated NOTIFY resultsChanged)
+    Q_PROPERTY(bool searching READ searching NOTIFY searchingChanged)
+    Q_PROPERTY(QString searchError READ searchError NOTIFY resultsChanged)
+    Q_PROPERTY(int fileCount READ fileCount NOTIFY filesReady)
+
+public:
+    explicit Project(QObject *parent = nullptr);
+    ~Project() override;
+
+    QString root() const { return m_root; }
+    QString name() const;
+    FileTree *tree() const { return m_tree; }
+    QVariantList recent() const;
+    QStringList pendingFiles() const { return s_pendingFiles; }
+    QString pendingFolder() const { return s_pendingFolder; }
+    static inline QStringList s_pendingFiles;                   // ustawiane w main() przed wczytaniem QML
+    static inline QString s_pendingFolder;
+
+    bool isGit() const { return !m_gitTop.isEmpty(); }
+    QString branch() const { return m_branch; }
+    QString head() const { return m_head; }
+    int ahead() const { return m_ahead; }
+    int behind() const { return m_behind; }
+    QVariantList changes() const { return m_changes; }
+    QVariantList results() const { return m_results; }
+    int resultCount() const { return m_resultCount; }
+    bool resultsTruncated() const { return m_truncated; }
+    bool searching() const { return m_searching; }
+    QString searchError() const { return m_searchError; }
+    int fileCount() const { return int(m_files.size()); }
+
+    // Folder projektu
+    Q_INVOKABLE bool open(const QString &pathOrUrl);
+    Q_INVOKABLE void close();
+    Q_INVOKABLE void forgetRecent(const QString &path);
+    Q_INVOKABLE QStringList sessionTabs() const;                 // karty otwarte ostatnio w tym projekcie
+    Q_INVOKABLE int sessionCurrent() const;
+    Q_INVOKABLE void saveSession(const QStringList &tabs, int current, bool terminal, int sidebarView);
+    Q_INVOKABLE QVariantMap sessionLayout() const;               // { terminal, sidebarView }
+
+    // Pliki
+    // { ok, path, text, encoding, eol, error, readOnly }
+    Q_INVOKABLE QVariantMap load(const QString &pathOrUrl) const;
+    Q_INVOKABLE bool save(const QString &path, const QString &text, const QString &encoding, const QString &eol);
+    Q_INVOKABLE QString toPath(const QString &pathOrUrl) const;
+    Q_INVOKABLE QString fileName(const QString &path) const;
+    Q_INVOKABLE QString folder(const QString &path) const;
+    Q_INVOKABLE QString relative(const QString &path) const;      // względem folderu projektu
+    Q_INVOKABLE QString pretty(const QString &path) const;        // ~/Projekty/aster
+    Q_INVOKABLE bool exists(const QString &path) const;
+    Q_INVOKABLE bool isDir(const QString &path) const;
+    Q_INVOKABLE QString createFile(const QString &dir, const QString &name);     // nowa ścieżka albo pusty (komunikat)
+    Q_INVOKABLE QString createFolder(const QString &dir, const QString &name);
+    Q_INVOKABLE QString rename(const QString &path, const QString &newName);
+    Q_INVOKABLE bool trash(const QString &path);
+    Q_INVOKABLE void watch(const QStringList &paths);
+    Q_INVOKABLE void showInFiles(const QString &path) const;
+    Q_INVOKABLE void copyText(const QString &text) const;
+    Q_INVOKABLE QString number(int n) const;                     // „12 345”
+
+    // Git
+    Q_INVOKABLE void refreshGit();
+    Q_INVOKABLE void requestBase(const QString &path);           // wynik: baseReady
+
+    // Szybkie otwieranie i szukanie
+    Q_INVOKABLE void refreshFiles();
+    Q_INVOKABLE QVariantList quickOpen(const QString &query, int limit = 60) const;   // [{ path, rel, name, dir, html }]
+    Q_INVOKABLE void search(const QString &query, bool matchCase, bool wholeWord, bool regex);
+    Q_INVOKABLE void cancelSearch();
+
+Q_SIGNALS:
+    void rootChanged();
+    void recentChanged();
+    void gitChanged();
+    void resultsChanged();
+    void searchingChanged();
+    void filesReady();
+    void message(const QString &text);
+    void fileChanged(const QString &path);
+    void baseReady(const QString &path, const QString &text, bool ok);
+
+private:
+    void addRecent(const QString &path);
+    void parseStatus(const QByteArray &out);
+    QString gitRelative(const QString &path) const;
+    static QStringList listFiles(const QString &root, bool git);
+
+    QString m_root, m_gitTop;
+    FileTree *m_tree;
+    mutable QSettings m_settings;
+    QFileSystemWatcher m_watcher;
+
+    QPointer<QProcess> m_status;
+    bool m_statusAgain = false;
+    QString m_branch, m_head;
+    int m_ahead = 0, m_behind = 0;
+    QVariantList m_changes;
+
+    QStringList m_files;                                          // względne ścieżki plików projektu
+    QPointer<QThread> m_filesThread;
+    QPointer<QThread> m_searchThread;
+    std::shared_ptr<std::atomic<int>> m_searchGen = std::make_shared<std::atomic<int>>(0);
+    QVariantList m_results;
+    int m_resultCount = 0;
+    bool m_truncated = false;
+    bool m_searching = false;
+    QString m_searchError;
+};

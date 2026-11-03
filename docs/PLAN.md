@@ -151,5 +151,9 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Asystent pod klawiszem.
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
-- [ ] Aster Code — edytor kodu w stylu Aster
+- [x] Aster Code — edytor kodu w stylu Aster (pierwsza wersja): okno startowe z ostatnimi folderami, `aster-code ŚCIEŻKA`, drzewo plików (nowy plik/folder, zmiana nazwy, kosz, ikony typów, stan gita), karty z podglądem i kropką niezapisanych zmian, kolorowanie składni (KSyntaxHighlighting), numery wierszy, bieżący wiersz, dopasowanie nawiasów, Tab/Shift+Tab, Ctrl+/, Alt+↑/↓, Shift+Alt+↑/↓, paleta (Ctrl+P pliki, Ctrl+Shift+P polecenia, Ctrl+G wiersz), szukanie w pliku (Ctrl+F/H) i w projekcie (Ctrl+Shift+F), terminal na dole (Ctrl+`), git w tle (gałąź, zmienione pliki, zmiany przy marginesie), pasek stanu, karty projektu wracają przy ponownym otwarciu
+- [ ] Aster Code: LSP (następny krok) — podpowiedzi, przejdź do definicji, błędy i ostrzeżenia przy wierszach, zmiana nazwy symbolu (clangd, pyright, typescript-language-server, rust-analyzer)
+- [ ] Aster Code: git — zatwierdzanie i wysyłanie w widoku zmian, podgląd różnic obok siebie, cofanie fragmentu, autor wiersza (blame)
+- [ ] Aster Code: zamiana w całym projekcie, wiele kursorów (Ctrl+D), zwijanie bloków, automatyczne domykanie nawiasów, minimapa, podział edytora
+- [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
