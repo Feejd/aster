@@ -12,7 +12,7 @@ Folder `Aster` jest udostępniony maszynie, więc nic nie trzeba kopiować.
    - procesory: 4, pamięć: 6 GB (Mac ma 16 GB),
    - dysk: 40 GB (zajmuje miejsce stopniowo, realnie ok. 15 GB — warto zwolnić trochę miejsca na Macu),
    - *Display → Accelerate 3D Graphics*: włączone (potrzebne do rozmycia i płynnych animacji),
-   - *Sharing → Shared Folders*: dodaj folder `Dokumenty/Aster`.
+   - *Sharing → Shared Folders*: dodaj folder `~/Projekty/Aster` (poza iCloud — Dokumenty synchronizowane z iCloud potrafią zablokować pliki projektu).
 5. Uruchom, wybierz *Install to Hard Drive*, przejdź instalator, zrestartuj.
 
 ## 2. Przygotowanie (raz)
