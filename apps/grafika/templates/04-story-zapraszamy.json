@@ -1,0 +1,119 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Zapraszamy",
+ "category": "Relacja",
+ "width": 1080,
+ "height": 1920,
+ "background": {
+  "type": "radial",
+  "color": "#FFB199",
+  "color2": "#E8457C"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 120,
+   "y": 220,
+   "w": 120,
+   "h": 120,
+   "fill": "#FFFFFF",
+   "opacity": 0.8,
+   "rotation": 12,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 840,
+   "y": 360,
+   "w": 80,
+   "h": 80,
+   "fill": "#FFFFFF",
+   "opacity": 0.7,
+   "rotation": -10,
+   "id": "e2"
+  },
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 780,
+   "y": 1500,
+   "w": 140,
+   "h": 140,
+   "fill": "#FFFFFF",
+   "opacity": 0.6,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Zapraszamy",
+   "x": 40,
+   "y": 580,
+   "w": 1000,
+   "size": 180,
+   "font": "Z003",
+   "weight": 400,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "shadow": true,
+   "shadowColor": "#40A01050",
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "na dzień otwarty",
+   "x": 90,
+   "y": 820,
+   "w": 900,
+   "size": 84,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e5"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 240,
+   "y": 1080,
+   "w": 600,
+   "h": 130,
+   "fill": "#FFFFFF",
+   "radius": 65,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "sobota · 12:00",
+   "x": 240,
+   "y": 1112,
+   "w": 600,
+   "size": 58,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#E8457C",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "ul. Kwiatowa 7, Kraków",
+   "x": 90,
+   "y": 1290,
+   "w": 900,
+   "size": 44,
+   "font": "Geist",
+   "weight": 500,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e8"
+  }
+ ]
+}

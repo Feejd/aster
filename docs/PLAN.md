@@ -86,6 +86,17 @@ Programy:
 - [x] Skaner (Skanlite) — `apps/scanner`, przez SANE: skanery USB i sieciowe (sane-airscan), podgląd z kadrem do
       przeciągnięcia, szyba albo podajnik (wszystkie kartki naraz), kolor/szarości, rozdzielczość z podpowiedzią;
       strony do obrócenia i ułożenia, zapis jako jeden PDF (Dokumenty/Skany) albo JPG/PNG (Obrazy/Skany)
+- [x] Grafika (nazwa robocza) — `apps/grafika`, szybkie grafiki dla zwykłych ludzi, bez internetu: ekran startowy
+      z gotowymi rozmiarami (post, relacja, A4, plakat A3, slajd, miniaturka YouTube, okładka Facebook, własny),
+      własne projekty z miniaturami i 16 szablonów (Instagram, relacje, plakaty, zaproszenia, CV, YouTube, slajdy, dyplom);
+      edytor: tekst z czcionkami systemu (rozmiar, kolor, wyrównanie, odstępy, obrys, cień), kształty (prostokąt
+      z zaokrągleniem, koło, trójkąt, gwiazda, serce, linia, strzałka), zdjęcia z dysku / przeciągnięte / wklejone,
+      tło (kolor, przejście, zdjęcie); przeciąganie z przyciąganiem do środka i krawędzi, uchwyty, obrót, warstwy,
+      cofnij/ponów, skróty; zapis sam (Dokumenty/Grafiki, `.grafika` = ZIP z JSON), eksport PNG/JPG (1×, 2×) i PDF
+      (wektorowy, w formacie do druku); jedno rysowanie (QPainter) dla ekranu i eksportu
+- [ ] Grafika, dalej: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
+      i grafik do pobrania ze Sklepu Aster, wiele stron w projekcie (karuzela, prezentacja), zaznaczanie kilku elementów
+      i grupy, przycinanie zdjęć i filtry, przyciąganie przy zmianie rozmiaru, własne kolory marki, Flatpak w Sklepie Aster
 - [x] Telefon (okna KDE Connect) — `apps/phone`, jak „Łącze z telefonem” w Windows, przez D-Bus z kdeconnectd:
       urządzenia z baterią i zasięgiem, parowanie z kodem do porównania, „Znajdź telefon”, wysyłanie plików (także
       przeciąganiem na okno) i schowka, pliki telefonu w Plikach (SFTP), powiadomienia z telefonu z zamykaniem

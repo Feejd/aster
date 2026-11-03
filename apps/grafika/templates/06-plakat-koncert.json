@@ -1,0 +1,129 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Koncert w parku",
+ "category": "Plakat",
+ "width": 3508,
+ "height": 4961,
+ "background": {
+  "type": "gradient",
+  "color": "#0F2027",
+  "color2": "#2C5364",
+  "angle": 180
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 454,
+   "y": 600,
+   "w": 2600,
+   "h": 2600,
+   "fill": "#FFB300",
+   "opacity": 0.92,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 754,
+   "y": 900,
+   "w": 2000,
+   "h": 2000,
+   "fill": "#FF7043",
+   "opacity": 0.9,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "KONCERT",
+   "x": 200,
+   "y": 1500,
+   "w": 3108,
+   "size": 620,
+   "font": "Inter Display",
+   "weight": 900,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "spacing": 0.02,
+   "shadow": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "W PARKU",
+   "x": 200,
+   "y": 2150,
+   "w": 3108,
+   "size": 380,
+   "font": "Inter Display",
+   "weight": 300,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "spacing": 0.3,
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "line",
+   "x": 1254,
+   "y": 3376.0,
+   "w": 1000,
+   "h": 88,
+   "fill": "",
+   "stroke": "#FFB300",
+   "strokeWidth": 22,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Sobota, 21 czerwca · 19:00",
+   "x": 200,
+   "y": 3580,
+   "w": 3108,
+   "size": 190,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Park Miejski, scena przy fontannie · wstęp wolny",
+   "x": 300,
+   "y": 3880,
+   "w": 2908,
+   "size": 130,
+   "font": "Geist",
+   "weight": 400,
+   "color": "#C9D6E2",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "zespoły z okolicy · strefa dla dzieci · food trucki",
+   "x": 300,
+   "y": 4400,
+   "w": 2908,
+   "size": 88,
+   "font": "Geist",
+   "weight": 500,
+   "color": "#FFB300",
+   "align": "center",
+   "lineHeight": 1.15,
+   "caps": true,
+   "spacing": 0.06,
+   "id": "e8"
+  }
+ ],
+ "print": {
+  "width": 297,
+  "height": 420
+ }
+}

@@ -1,0 +1,383 @@
+#include "art.h"
+
+#include <QGlyphRun>
+#include <QLinearGradient>
+#include <QPainter>
+#include <QPainterPath>
+#include <QRadialGradient>
+#include <QRawFont>
+#include <QTextLayout>
+#include <QtMath>
+
+namespace {
+
+qreal num(const QVariantMap &m, const char *key, qreal fallback)
+{
+    const QVariant v = m.value(QLatin1String(key));
+    return v.isValid() && !v.isNull() ? v.toDouble() : fallback;
+}
+
+QColor color(const QVariantMap &m, const char *key, const QColor &fallback = Qt::transparent)
+{
+    const QString s = m.value(QLatin1String(key)).toString();
+    if (s.isEmpty())
+        return fallback;
+    const QColor c = QColor::fromString(s);
+    return c.isValid() ? c : fallback;
+}
+
+// ——— Tekst ———
+
+QFont textFont(const QVariantMap &el)
+{
+    QFont f(el.value(QStringLiteral("font"), QStringLiteral("Geist")).toString());
+    const qreal size = qMax(1.0, num(el, "size", 48));
+    f.setPixelSize(qMax(1, qRound(size)));
+    f.setWeight(QFont::Weight(qBound(100, int(num(el, "weight", 400)), 900)));
+    f.setItalic(el.value(QStringLiteral("italic")).toBool());
+    f.setUnderline(el.value(QStringLiteral("underline")).toBool());
+    // Odstęp liter w częściach wielkości czcionki — przy skalowaniu tekstu rośnie razem z nim
+    f.setLetterSpacing(QFont::AbsoluteSpacing, num(el, "spacing", 0) * size);
+    if (el.value(QStringLiteral("caps")).toBool())
+        f.setCapitalization(QFont::AllUppercase);
+    f.setHintingPreference(QFont::PreferNoHinting);
+    f.setStyleStrategy(QFont::PreferAntialias);
+    f.setKerning(true);
+    return f;
+}
+
+Qt::Alignment textAlign(const QVariantMap &el)
+{
+    const QString a = el.value(QStringLiteral("align")).toString();
+    if (a == QLatin1String("center"))
+        return Qt::AlignHCenter;
+    if (a == QLatin1String("right"))
+        return Qt::AlignRight;
+    return Qt::AlignLeft;
+}
+
+QString layoutText(const QVariantMap &el)
+{
+    QString t = el.value(QStringLiteral("text")).toString();
+    t.replace(QLatin1Char('\n'), QChar::LineSeparator);
+    return t;
+}
+
+// Układa tekst w wiersze o wysokości size × lineHeight; zwraca wysokość bloku
+qreal layout(QTextLayout &tl, const QVariantMap &el, qreal width)
+{
+    QTextOption opt(textAlign(el));
+    opt.setWrapMode(width > 0 ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
+    opt.setUseDesignMetrics(true);
+    tl.setTextOption(opt);
+    tl.setCacheEnabled(true);
+    const qreal lineH = qMax(1.0, num(el, "size", 48)) * num(el, "lineHeight", 1.2);
+    qreal y = 0;
+    tl.beginLayout();
+    for (;;) {
+        QTextLine line = tl.createLine();
+        if (!line.isValid())
+            break;
+        if (width > 0)
+            line.setLineWidth(width);
+        line.setPosition(QPointF(0, y + (lineH - line.height()) / 2));
+        y += lineH;
+    }
+    tl.endLayout();
+    return qMax(y, lineH);
+}
+
+void paintText(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100);
+    QTextLayout tl(layoutText(el), textFont(el));
+    layout(tl, el, w);
+    const qreal size = qMax(1.0, num(el, "size", 48));
+
+    if (el.value(QStringLiteral("shadow")).toBool()) {
+        p->setPen(color(el, "shadowColor", QColor(0, 0, 0, 90)));
+        tl.draw(p, QPointF(size * 0.04, size * 0.06));
+    }
+    const qreal outline = num(el, "outline", 0) * size;
+    if (outline > 0) {
+        // Obrys z kształtów liter, pod wypełnieniem — gruby obrys nie zjada liter od środka
+        QPainterPath path;
+        for (const QGlyphRun &run : tl.glyphRuns()) {
+            const QRawFont font = run.rawFont();
+            const QList<quint32> glyphs = run.glyphIndexes();
+            const QList<QPointF> pos = run.positions();
+            for (int i = 0; i < glyphs.size(); ++i)
+                path.addPath(font.pathForGlyph(glyphs.at(i)).translated(pos.at(i)));
+        }
+        QPen pen(color(el, "outlineColor", Qt::black), outline * 2);
+        pen.setJoinStyle(Qt::RoundJoin);
+        pen.setCapStyle(Qt::RoundCap);
+        p->strokePath(path, pen);
+    }
+    p->setPen(color(el, "color", Qt::black));
+    tl.draw(p, QPointF(0, 0));
+}
+
+// ——— Wypełnienia ———
+
+// Gradient liniowy jak w CSS: kąt 0° — ku górze, 90° — w prawo, 180° — w dół
+QBrush gradientBrush(const QColor &a, const QColor &b, qreal angle, const QRectF &r, bool radial)
+{
+    if (radial) {
+        QRadialGradient g(r.center(), qMax(r.width(), r.height()) * 0.72);
+        g.setColorAt(0, a);
+        g.setColorAt(1, b);
+        return QBrush(g);
+    }
+    const qreal rad = qDegreesToRadians(angle);
+    const QPointF d(qSin(rad), -qCos(rad));
+    const qreal len = qAbs(r.width() * d.x()) + qAbs(r.height() * d.y());
+    QLinearGradient g(r.center() - d * len / 2, r.center() + d * len / 2);
+    g.setColorAt(0, a);
+    g.setColorAt(1, b);
+    return QBrush(g);
+}
+
+QBrush fillBrush(const QVariantMap &el, const QRectF &r)
+{
+    const QColor a = color(el, "fill");
+    const QColor b = color(el, "fill2");
+    if (a.alpha() > 0 && b.isValid() && b.alpha() > 0)
+        return gradientBrush(a, b, num(el, "gradientAngle", 180), r, el.value(QStringLiteral("gradient")).toString() == QLatin1String("radial"));
+    return a.alpha() > 0 ? QBrush(a) : QBrush(Qt::NoBrush);
+}
+
+// Skala rysowania (ile pikseli wyjścia na piksel projektu)
+qreal deviceScale(const QPainter *p)
+{
+    const QTransform t = p->deviceTransform();
+    return qMax(0.01, qSqrt(qAbs(t.determinant())));
+}
+
+// Zdjęcie przycięte tak, żeby wypełniło prostokąt („cover”), w kształcie `clip` (zaokrąglenie, koło)
+void paintCover(QPainter *p, const QImage &img, const QRectF &r, const QPainterPath &clip, qreal fx = 0.5, qreal fy = 0.5)
+{
+    if (img.isNull() || r.isEmpty())
+        return;
+    const qreal s = qMax(r.width() / img.width(), r.height() / img.height());
+    const QSizeF sz(img.width() * s, img.height() * s);
+    const QPointF origin(r.x() - (sz.width() - r.width()) * fx, r.y() - (sz.height() - r.height()) * fy);
+    p->setRenderHint(QPainter::SmoothPixmapTransform);
+    if (clip.isEmpty()) {
+        const QRectF src((r.x() - origin.x()) / s, (r.y() - origin.y()) / s, r.width() / s, r.height() / s);
+        p->drawImage(r, img, src);
+        return;
+    }
+    QBrush brush(img);
+    QTransform t;
+    t.translate(origin.x(), origin.y());
+    t.scale(s, s);
+    brush.setTransform(t);
+    p->setPen(Qt::NoPen);
+    p->setBrush(brush);
+    p->drawPath(clip);
+}
+
+QPainterPath starPath(const QRectF &r, int points, qreal inner)
+{
+    QPainterPath path;
+    const QPointF c = r.center();
+    for (int i = 0; i < points * 2; ++i) {
+        const qreal a = -M_PI / 2 + i * M_PI / points;
+        const qreal k = i % 2 ? inner : 1.0;
+        const QPointF pt(c.x() + qCos(a) * r.width() / 2 * k, c.y() + qSin(a) * r.height() / 2 * k);
+        if (i == 0)
+            path.moveTo(pt);
+        else
+            path.lineTo(pt);
+    }
+    path.closeSubpath();
+    return path;
+}
+
+QPainterPath heartPath(const QRectF &r)
+{
+    const qreal x = r.x(), y = r.y(), w = r.width(), h = r.height();
+    QPainterPath path;
+    path.moveTo(x + w / 2, y + h * 0.28);
+    path.cubicTo(x + w * 0.5, y + h * 0.05, x + w * 0.08, y - h * 0.02, x + w * 0.02, y + h * 0.3);
+    path.cubicTo(x - w * 0.04, y + h * 0.6, x + w * 0.35, y + h * 0.78, x + w / 2, y + h);
+    path.cubicTo(x + w * 0.65, y + h * 0.78, x + w * 1.04, y + h * 0.6, x + w * 0.98, y + h * 0.3);
+    path.cubicTo(x + w * 0.92, y - h * 0.02, x + w * 0.5, y + h * 0.05, x + w / 2, y + h * 0.28);
+    path.closeSubpath();
+    return path;
+}
+
+void paintShape(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QString shape = el.value(QStringLiteral("shape"), QStringLiteral("rect")).toString();
+    const qreal sw = num(el, "strokeWidth", 0);
+    const QColor stroke = color(el, "stroke");
+
+    if (shape == QLatin1String("line") || shape == QLatin1String("arrow")) {
+        const qreal t = qMax(1.0, sw > 0 ? sw : 6);
+        QPen pen(stroke.alpha() > 0 ? stroke : color(el, "fill", Qt::black), t);
+        pen.setCapStyle(Qt::RoundCap);
+        if (el.value(QStringLiteral("dash")).toBool())
+            pen.setDashPattern({2, 2.2});
+        const qreal cy = h / 2;
+        qreal end = w - t / 2;
+        if (shape == QLatin1String("arrow")) {
+            const qreal head = qMin(w * 0.45, t * 3.2 + 10);
+            end = w - head * 0.7;
+            QPainterPath tip;
+            tip.moveTo(w, cy);
+            tip.lineTo(w - head, cy - head * 0.62);
+            tip.lineTo(w - head, cy + head * 0.62);
+            tip.closeSubpath();
+            p->setPen(Qt::NoPen);
+            p->setBrush(pen.color());
+            p->drawPath(tip);
+        }
+        p->setPen(pen);
+        p->drawLine(QPointF(t / 2, cy), QPointF(end, cy));
+        return;
+    }
+
+    // Obrys wewnątrz pola elementu
+    const QRectF r = QRectF(0, 0, w, h).adjusted(sw / 2, sw / 2, -sw / 2, -sw / 2);
+    QPainterPath path;
+    if (shape == QLatin1String("ellipse")) {
+        path.addEllipse(r);
+    } else if (shape == QLatin1String("triangle")) {
+        path.moveTo(r.center().x(), r.top());
+        path.lineTo(r.bottomRight());
+        path.lineTo(r.bottomLeft());
+        path.closeSubpath();
+    } else if (shape == QLatin1String("star")) {
+        path = starPath(r, 5, 0.45);
+    } else if (shape == QLatin1String("heart")) {
+        path = heartPath(r);
+    } else {
+        const qreal radius = qMin(num(el, "radius", 0), qMin(r.width(), r.height()) / 2);
+        path.addRoundedRect(r, radius, radius);
+    }
+    QPen pen(Qt::NoPen);
+    if (sw > 0 && stroke.alpha() > 0) {
+        pen = QPen(stroke, sw);
+        pen.setJoinStyle(Qt::RoundJoin);
+        if (el.value(QStringLiteral("dash")).toBool())
+            pen.setDashPattern({3, 2});
+    }
+    p->setPen(pen);
+    p->setBrush(fillBrush(el, r));
+    p->drawPath(path);
+}
+
+void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QRectF r(0, 0, w, h);
+    const QImage img = images ? images->image(el.value(QStringLiteral("src")).toString(), qMax(w, h) * deviceScale(p)) : QImage();
+    if (img.isNull()) {
+        // Brak zdjęcia (np. szablon bez zdjęć) — szare pole z miejscem na zdjęcie
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(0, 0, 0, 30));
+        p->drawRect(r);
+        return;
+    }
+    QPainterPath clip;
+    if (el.value(QStringLiteral("mask")).toString() == QLatin1String("ellipse")) {
+        clip.addEllipse(r);
+    } else {
+        const qreal radius = qMin(num(el, "radius", 0), qMin(w, h) / 2);
+        if (radius > 0)
+            clip.addRoundedRect(r, radius, radius);
+    }
+    paintCover(p, img, r, clip, num(el, "focusX", 0.5), num(el, "focusY", 0.5));
+}
+
+}
+
+namespace Art {
+
+qreal textHeight(const QVariantMap &el)
+{
+    QTextLayout tl(layoutText(el), textFont(el));
+    return layout(tl, el, num(el, "w", 100));
+}
+
+qreal textNaturalWidth(const QVariantMap &el)
+{
+    QTextLayout tl(layoutText(el), textFont(el));
+    layout(tl, el, 0);
+    qreal w = 0;
+    for (int i = 0; i < tl.lineCount(); ++i)
+        w = qMax(w, tl.lineAt(i).naturalTextWidth());
+    return std::ceil(w) + 2;
+}
+
+void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
+{
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing);
+    p->setRenderHint(QPainter::TextAntialiasing);
+    const QString type = el.value(QStringLiteral("type")).toString();
+    if (type == QLatin1String("text"))
+        paintText(p, el);
+    else if (type == QLatin1String("shape"))
+        paintShape(p, el);
+    else if (type == QLatin1String("image"))
+        paintPicture(p, el, images);
+    p->restore();
+}
+
+void paintBackground(QPainter *p, const QVariantMap &bg, const QSizeF &page, const ImageSource *images)
+{
+    const QRectF r(QPointF(0, 0), page);
+    const QString type = bg.value(QStringLiteral("type"), QStringLiteral("color")).toString();
+    const QColor c = color(bg, "color", Qt::white);
+    if (type == QLatin1String("gradient") || type == QLatin1String("radial")) {
+        p->fillRect(r, gradientBrush(c, color(bg, "color2", Qt::black), num(bg, "angle", 180), r, type == QLatin1String("radial")));
+    } else {
+        p->fillRect(r, c);
+        if (type == QLatin1String("image") && images) {
+            const QImage img = images->image(bg.value(QStringLiteral("src")).toString(), qMax(page.width(), page.height()) * deviceScale(p));
+            p->save();
+            p->setOpacity(num(bg, "imageOpacity", 1));
+            paintCover(p, img, r, {});
+            p->restore();
+        }
+    }
+}
+
+void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images)
+{
+    const QSizeF page(num(doc, "width", 1080), num(doc, "height", 1080));
+    p->save();
+    p->setClipRect(QRectF(QPointF(0, 0), page));
+    paintBackground(p, doc.value(QStringLiteral("background")).toMap(), page, images);
+    const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
+    for (const QVariant &v : elements) {
+        const QVariantMap el = v.toMap();
+        const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+        p->save();
+        p->translate(num(el, "x", 0) + w / 2, num(el, "y", 0) + h / 2);
+        p->rotate(num(el, "rotation", 0));
+        p->translate(-w / 2, -h / 2);
+        p->setOpacity(qBound(0.0, num(el, "opacity", 1), 1.0));
+        paintElement(p, el, images);
+        p->restore();
+    }
+    p->restore();
+}
+
+QImage renderPage(const QVariantMap &doc, const QSize &size, const ImageSource *images, const QColor &under)
+{
+    QImage img(size, QImage::Format_ARGB32_Premultiplied);
+    img.fill(under);
+    QPainter p(&img);
+    p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+    p.scale(size.width() / num(doc, "width", 1080), size.height() / num(doc, "height", 1080));
+    paintPage(&p, doc, images);
+    p.end();
+    return img;
+}
+
+}

@@ -1,0 +1,65 @@
+# Grafika (aster-grafika) — budowana z głównego CMakeLists.txt repozytorium.
+# Rysowanie przez QPainter (to samo na ekranie i w eksporcie), PDF przez QPdfWriter, plik projektu — ZIP (QZipWriter z Qt).
+find_package(Qt6 REQUIRED COMPONENTS CorePrivate)
+
+qt_add_executable(aster-grafika src/main.cpp)
+target_include_directories(aster-grafika PRIVATE src)
+
+set(GRAFIKA_QML
+    qml/Main.qml
+    qml/StartPage.qml
+    qml/EditorPage.qml
+    qml/Stage.qml
+    qml/SidePanel.qml
+    qml/Inspector.qml
+    qml/ColorPopup.qml
+    qml/FontPopup.qml
+    qml/Popover.qml
+    qml/Btn.qml
+    qml/Chip.qml
+    qml/NumField.qml
+    qml/ValueSlider.qml
+    qml/ColorWell.qml
+    qml/IconToggle.qml
+    qml/Section.qml
+)
+foreach(f ${GRAFIKA_QML})
+    get_filename_component(name ${f} NAME)
+    set_source_files_properties(${f} PROPERTIES QT_RESOURCE_ALIAS ${name})
+endforeach()
+
+qt_add_qml_module(aster-grafika
+    URI Aster.Grafika
+    VERSION 1.0
+    QML_FILES ${GRAFIKA_QML}
+    SOURCES
+        src/art.cpp
+        src/art.h
+        src/artview.cpp
+        src/artview.h
+        src/project.cpp
+        src/project.h
+        src/library.cpp
+        src/library.h
+)
+
+# Szablony — zwykłe pliki projektu (project.json), wbudowane w program pod :/szablony
+file(GLOB GRAFIKA_TEMPLATES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS templates/*.json)
+qt_add_resources(aster-grafika "szablony"
+    PREFIX "/szablony"
+    BASE templates
+    FILES ${GRAFIKA_TEMPLATES}
+)
+
+target_link_libraries(aster-grafika PRIVATE
+    Qt6::Gui
+    Qt6::CorePrivate
+    Qt6::Quick
+    Qt6::Qml
+    Qt6::DBus
+    aster-uiplugin
+)
+
+install(TARGETS aster-grafika RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES org.aster.grafika.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES org.aster.grafika.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
