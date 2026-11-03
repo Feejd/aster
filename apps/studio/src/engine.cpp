@@ -1,0 +1,719 @@
+#include "engine.h"
+
+#include <QFile>
+#include <QMetaObject>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <pipewire/pipewire.h>
+#include <sndfile.h>
+#include <spa/param/audio/format-utils.h>
+
+// ——— Mikser ———
+
+static inline void raisePeak(std::atomic<float> &a, float v)
+{
+    if (v > a.load(std::memory_order_relaxed))
+        a.store(v, std::memory_order_relaxed);
+}
+
+void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate)
+{
+    while (n > 0) {
+        const int k = std::min(n, MaxBlock);
+        block(s, pos, k, out, click, meters, rate);
+        pos += k;
+        out += 2 * k;
+        n -= k;
+    }
+}
+
+void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate)
+{
+    std::fill_n(m_l, n, 0.f);
+    std::fill_n(m_r, n, 0.f);
+    const long long fade = rate / 500;      // 2 ms łagodnego wejścia i wyjścia na brzegach klipu — bez trzasków
+
+    if (s) {
+        for (size_t ti = 0; ti < s->tracks.size(); ++ti) {
+            const TrackRT &t = s->tracks[ti];
+            if (!t.audible)
+                continue;
+            bool any = false;
+            for (const ClipRT &c : t.clips) {
+                const long long a = std::max(pos, c.start);
+                const long long b = std::min(pos + n, c.start + c.length);
+                if (a >= b || !c.src || c.srcLen <= 0)
+                    continue;
+                if (!any) {
+                    std::fill_n(m_tl, n, 0.f);
+                    std::fill_n(m_tr, n, 0.f);
+                    any = true;
+                }
+                const AudioSource &src = *c.src;
+                for (long long f = a; f < b; ++f) {
+                    const long long t0 = f - c.start;
+                    const long long si = c.srcStart + (c.loop ? (t0 + c.offset) % c.srcLen : t0);
+                    if (si < 0 || si >= src.frames)
+                        continue;
+                    float g = 1.f;
+                    if (t0 < fade)
+                        g = float(t0) / fade;
+                    else if (c.length - t0 < fade)
+                        g = float(c.length - t0) / fade;
+                    m_tl[f - pos] += src.at(si, 0) * g;
+                    m_tr[f - pos] += src.at(si, 1) * g;
+                }
+            }
+            if (!any)
+                continue;
+            float pl = 0.f, pr = 0.f;
+            for (int i = 0; i < n; ++i) {
+                const float l = m_tl[i] * t.gainL, r = m_tr[i] * t.gainR;
+                m_l[i] += l;
+                m_r[i] += r;
+                pl = std::max(pl, std::fabs(l));
+                pr = std::max(pr, std::fabs(r));
+            }
+            if (meters && ti < size_t(MaxTracks)) {
+                raisePeak((*meters)[ti][0], pl);
+                raisePeak((*meters)[ti][1], pr);
+            }
+        }
+    }
+
+    const float master = s ? s->master : 1.f;
+    float pl = 0.f, pr = 0.f;
+    for (int i = 0; i < n; ++i) {
+        m_l[i] *= master;
+        m_r[i] *= master;
+        pl = std::max(pl, std::fabs(m_l[i]));
+        pr = std::max(pr, std::fabs(m_r[i]));
+    }
+    if (meters) {
+        raisePeak((*meters)[MaxTracks][0], pl);
+        raisePeak((*meters)[MaxTracks][1], pr);
+    }
+
+    // Ochrona przed przesterowaniem: zbyt głośny szczyt od razu ściszamy do pułapu (−0,2 dBFS), potem powoli
+    // (~0,3 s) wracamy. Wskaźnik sumy (wyżej) pokazuje poziom przed ochroną — czerwień ostrzega.
+    if (std::max(pl, pr) > m_ceiling || m_limit < 1.f) {
+        const float ceiling = m_ceiling, release = 1.f - std::exp(-1.f / (0.3f * rate));
+        for (int i = 0; i < n; ++i) {
+            const float peak = std::max(std::fabs(m_l[i]), std::fabs(m_r[i]));
+            if (peak * m_limit > ceiling)
+                m_limit = ceiling / peak;
+            else
+                m_limit = std::min(1.f, m_limit + (1.f - m_limit) * release);
+            m_l[i] *= m_limit;
+            m_r[i] *= m_limit;
+        }
+    }
+
+    // Metronom (poza miernikiem sumy): wyższy dźwięk na pierwszą miarę taktu
+    if (click) {
+        const double fpb = rate * 60.0 / (s ? s->bpm : 120.0);
+        const int bpb = s ? std::max(1, s->beatsPerBar) : 4;
+        const long long len = rate / 16;
+        for (int i = 0; i < n; ++i) {
+            const long long p = pos + i;
+            const double beat = std::floor(double(p) / fpb);
+            const long long off = p - std::llround(beat * fpb);
+            if (off < 0 || off >= len)
+                continue;
+            const long long bi = (long long)beat;
+            const bool accent = ((bi % bpb) + bpb) % bpb == 0;
+            const float tt = float(off) / rate;
+            const float v = std::sin(6.2831853f * (accent ? 1760.f : 1320.f) * tt) * std::exp(-tt * 45.f) * (accent ? 0.5f : 0.35f);
+            m_l[i] += v;
+            m_r[i] += v;
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        out[2 * i] = m_l[i];
+        out[2 * i + 1] = m_r[i];
+    }
+}
+
+// ——— Bufor pierścieniowy ———
+
+size_t SpscRing::write(const float *data, size_t n)
+{
+    const size_t cap = m_buf.size();
+    const size_t w = m_write.load(std::memory_order_relaxed), r = m_read.load(std::memory_order_acquire);
+    n = std::min(n, cap - 1 - (w - r + cap) % cap);
+    for (size_t i = 0; i < n; ++i)
+        m_buf[(w + i) % cap] = data[i];
+    m_write.store((w + n) % cap, std::memory_order_release);
+    return n;
+}
+
+size_t SpscRing::read(float *data, size_t n)
+{
+    const size_t cap = m_buf.size();
+    const size_t r = m_read.load(std::memory_order_relaxed), w = m_write.load(std::memory_order_acquire);
+    n = std::min(n, (w - r + cap) % cap);
+    for (size_t i = 0; i < n; ++i)
+        data[i] = m_buf[(r + i) % cap];
+    m_read.store((r + n) % cap, std::memory_order_release);
+    return n;
+}
+
+size_t SpscRing::available() const
+{
+    const size_t cap = m_buf.size();
+    return (m_write.load() - m_read.load() + cap) % cap;
+}
+
+// ——— PipeWire ———
+
+struct EngineHooks
+{
+    spa_hook registry{}, out{}, in{};
+};
+
+struct EngineCallbacks
+{
+    static void outProcess(void *d) { static_cast<Engine *>(d)->onPlayback(); }
+    static void inProcess(void *d) { static_cast<Engine *>(d)->onCapture(); }
+    static void stateChanged(void *d, pw_stream_state, pw_stream_state state, const char *err)
+    {
+        if (state != PW_STREAM_STATE_ERROR)
+            return;
+        auto *e = static_cast<Engine *>(d);
+        const QString msg = QString::fromUtf8(err ? err : "");
+        QMetaObject::invokeMethod(e, [e, msg] { emit e->streamError(msg); }, Qt::QueuedConnection);
+    }
+    static void global(void *d, uint32_t id, uint32_t, const char *type, uint32_t, const spa_dict *props)
+    {
+        if (!props || std::strcmp(type, PW_TYPE_INTERFACE_Node) != 0)
+            return;
+        const char *cls = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
+        if (!cls)
+            return;
+        // Mikrofony i interfejsy (także wirtualne, np. z odszumianiem) oraz głośniki/słuchawki
+        const bool in = std::strncmp(cls, "Audio/Source", 12) == 0, out = std::strcmp(cls, "Audio/Sink") == 0;
+        if (!in && !out)
+            return;
+        AudioDevice dev;
+        dev.id = id;
+        dev.input = in;
+        dev.name = QString::fromUtf8(spa_dict_lookup(props, PW_KEY_NODE_NAME));
+        const char *label = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
+        if (!label)
+            label = spa_dict_lookup(props, PW_KEY_NODE_NICK);
+        dev.label = label ? QString::fromUtf8(label) : dev.name;
+        auto *e = static_cast<Engine *>(d);
+        {
+            QMutexLocker lock(&e->m_devMutex);
+            e->m_devices.append(dev);
+        }
+        QMetaObject::invokeMethod(e, [e] { emit e->devicesChanged(); }, Qt::QueuedConnection);
+    }
+    static void globalRemove(void *d, uint32_t id)
+    {
+        auto *e = static_cast<Engine *>(d);
+        bool removed;
+        {
+            QMutexLocker lock(&e->m_devMutex);
+            removed = e->m_devices.removeIf([id](const AudioDevice &dev) { return dev.id == id; }) > 0;
+        }
+        if (removed)
+            QMetaObject::invokeMethod(e, [e] { emit e->devicesChanged(); }, Qt::QueuedConnection);
+    }
+};
+
+static const pw_stream_events s_outEvents = {
+    .version = PW_VERSION_STREAM_EVENTS,
+    .state_changed = EngineCallbacks::stateChanged,
+    .process = EngineCallbacks::outProcess,
+};
+static const pw_stream_events s_inEvents = {
+    .version = PW_VERSION_STREAM_EVENTS,
+    .state_changed = EngineCallbacks::stateChanged,
+    .process = EngineCallbacks::inProcess,
+};
+static const pw_registry_events s_registryEvents = {
+    .version = PW_VERSION_REGISTRY_EVENTS,
+    .global = EngineCallbacks::global,
+    .global_remove = EngineCallbacks::globalRemove,
+};
+
+static inline EngineHooks *hooks(void *p) { return static_cast<EngineHooks *>(p); }
+
+Engine::Engine(QObject *parent) : QObject(parent)
+{
+    m_hooks = new EngineHooks;
+}
+
+Engine::~Engine()
+{
+    if (m_recThread.joinable()) {
+        long long dummy;
+        stopRecording(&dummy);
+    }
+    if (m_loop) {
+        pw_thread_loop_lock(m_loop);
+        if (m_out) {
+            spa_hook_remove(&hooks(m_hooks)->out);
+            pw_stream_destroy(m_out);
+        }
+        if (m_in) {
+            spa_hook_remove(&hooks(m_hooks)->in);
+            pw_stream_destroy(m_in);
+        }
+        if (m_registry) {
+            spa_hook_remove(&hooks(m_hooks)->registry);
+            pw_proxy_destroy(reinterpret_cast<pw_proxy *>(m_registry));
+        }
+        if (m_core)
+            pw_core_disconnect(m_core);
+        pw_thread_loop_unlock(m_loop);
+        pw_thread_loop_stop(m_loop);
+        if (m_context)
+            pw_context_destroy(m_context);
+        pw_thread_loop_destroy(m_loop);
+    }
+    collect();
+    delete m_current;
+    delete m_next.load();
+    delete hooks(m_hooks);
+}
+
+bool Engine::start()
+{
+    pw_init(nullptr, nullptr);
+    m_loop = pw_thread_loop_new("aster-studio", nullptr);
+    m_context = m_loop ? pw_context_new(pw_thread_loop_get_loop(m_loop), nullptr, 0) : nullptr;
+    if (!m_context || pw_thread_loop_start(m_loop) < 0) {
+        m_error = QStringLiteral("Nie udało się uruchomić dźwięku.");
+        return false;
+    }
+    pw_thread_loop_lock(m_loop);
+    m_core = pw_context_connect(m_context, nullptr, 0);
+    if (!m_core) {
+        pw_thread_loop_unlock(m_loop);
+        m_error = QStringLiteral("Brak połączenia z serwerem dźwięku (PipeWire).");
+        return false;
+    }
+    m_registry = pw_core_get_registry(m_core, PW_VERSION_REGISTRY, 0);
+    pw_registry_add_listener(m_registry, &hooks(m_hooks)->registry, &s_registryEvents, this);
+    connectOutput();
+    pw_thread_loop_unlock(m_loop);
+    return true;
+}
+
+static const spa_pod *stereoFormat(spa_pod_builder *b)
+{
+    spa_audio_info_raw info{};
+    info.format = SPA_AUDIO_FORMAT_F32;
+    info.rate = Engine::Rate;
+    info.channels = 2;
+    info.position[0] = SPA_AUDIO_CHANNEL_FL;
+    info.position[1] = SPA_AUDIO_CHANNEL_FR;
+    return spa_format_audio_raw_build(b, SPA_PARAM_EnumFormat, &info);
+}
+
+// Wołane pod blokadą pętli PipeWire
+void Engine::connectOutput()
+{
+    if (m_out) {
+        spa_hook_remove(&hooks(m_hooks)->out);
+        pw_stream_destroy(m_out);
+        m_out = nullptr;
+    }
+    pw_properties *props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Playback",
+                                             PW_KEY_MEDIA_ROLE, "Production", PW_KEY_NODE_LATENCY, "256/48000",
+                                             PW_KEY_NODE_NAME, "aster-studio", PW_KEY_APP_NAME, "Studio", nullptr);
+    if (!m_outName.isEmpty())
+        pw_properties_set(props, PW_KEY_TARGET_OBJECT, m_outName.toUtf8().constData());
+    m_out = pw_stream_new(m_core, "Studio — odtwarzanie", props);
+    pw_stream_add_listener(m_out, &hooks(m_hooks)->out, &s_outEvents, this);
+    uint8_t buf[1024];
+    spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof buf);
+    const spa_pod *params[1] = {stereoFormat(&b)};
+    pw_stream_connect(m_out, PW_DIRECTION_OUTPUT, PW_ID_ANY,
+                      pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS), params, 1);
+}
+
+void Engine::connectInput()
+{
+    if (m_in) {
+        spa_hook_remove(&hooks(m_hooks)->in);
+        pw_stream_destroy(m_in);
+        m_in = nullptr;
+    }
+    pw_properties *props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, "Capture",
+                                             PW_KEY_MEDIA_ROLE, "Production", PW_KEY_NODE_LATENCY, "256/48000",
+                                             PW_KEY_NODE_NAME, "aster-studio-input", PW_KEY_APP_NAME, "Studio", nullptr);
+    if (!m_inName.isEmpty())
+        pw_properties_set(props, PW_KEY_TARGET_OBJECT, m_inName.toUtf8().constData());
+    m_in = pw_stream_new(m_core, "Studio — nagrywanie", props);
+    pw_stream_add_listener(m_in, &hooks(m_hooks)->in, &s_inEvents, this);
+    uint8_t buf[1024];
+    spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof buf);
+    const spa_pod *params[1] = {stereoFormat(&b)};
+    pw_stream_connect(m_in, PW_DIRECTION_INPUT, PW_ID_ANY,
+                      pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS), params, 1);
+}
+
+void Engine::setCapture(bool on)
+{
+    if (!m_core || on == (m_in != nullptr))
+        return;
+    pw_thread_loop_lock(m_loop);
+    if (on) {
+        connectInput();
+    } else {
+        spa_hook_remove(&hooks(m_hooks)->in);
+        pw_stream_destroy(m_in);
+        m_in = nullptr;
+    }
+    pw_thread_loop_unlock(m_loop);
+    m_inPeak[0].store(0);
+    m_inPeak[1].store(0);
+}
+
+void Engine::setOutput(const QString &name)
+{
+    if (name == m_outName)
+        return;
+    m_outName = name;
+    if (!m_core)
+        return;
+    pw_thread_loop_lock(m_loop);
+    connectOutput();
+    pw_thread_loop_unlock(m_loop);
+}
+
+void Engine::setInput(const QString &name)
+{
+    if (name == m_inName)
+        return;
+    m_inName = name;
+    if (!m_core || !m_in)
+        return;
+    pw_thread_loop_lock(m_loop);
+    connectInput();
+    pw_thread_loop_unlock(m_loop);
+}
+
+QList<AudioDevice> Engine::devices() const
+{
+    QMutexLocker lock(&m_devMutex);
+    return m_devices;
+}
+
+// ——— Wątek audio ———
+
+void Engine::onPlayback()
+{
+    pw_buffer *b = pw_stream_dequeue_buffer(m_out);
+    if (!b)
+        return;
+    spa_buffer *buf = b->buffer;
+    auto *dst = static_cast<float *>(buf->datas[0].data);
+    if (!dst) {
+        pw_stream_queue_buffer(m_out, b);
+        return;
+    }
+    constexpr uint32_t stride = 2 * sizeof(float);
+    uint32_t n = buf->datas[0].maxsize / stride;
+    if (b->requested && b->requested < n)
+        n = uint32_t(b->requested);
+
+    // Nowa migawka projektu; poprzednia wraca do wątku interfejsu
+    if (Snapshot *s = m_next.exchange(nullptr)) {
+        if (m_current) {
+            const unsigned w = m_retiredW.load(std::memory_order_relaxed);
+            if (w - m_retiredR.load(std::memory_order_acquire) < 64) {
+                m_retired[w % 64] = m_current;
+                m_retiredW.store(w + 1, std::memory_order_release);
+            }
+        }
+        m_current = s;
+    }
+    const long long seek = m_seek.exchange(NoSeek);
+    if (seek != NoSeek)
+        m_rtPos = seek;
+
+    if (m_playing.load()) {
+        const long long cie = m_countInEnd.load();
+        const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
+        m_renderer.process(m_current, m_rtPos, int(n), dst, click, &m_meters, Rate);
+        m_rtPos += n;
+    } else {
+        std::memset(dst, 0, n * stride);
+    }
+    m_pos.store(m_rtPos);
+
+    pw_time t{};
+    if (pw_stream_get_time_n(m_out, &t, sizeof t) == 0 && t.rate.denom)
+        m_outDelay.store(t.delay * Rate * t.rate.num / t.rate.denom);
+
+    buf->datas[0].chunk->offset = 0;
+    buf->datas[0].chunk->stride = stride;
+    buf->datas[0].chunk->size = n * stride;
+    pw_stream_queue_buffer(m_out, b);
+}
+
+void Engine::onCapture()
+{
+    pw_buffer *b = pw_stream_dequeue_buffer(m_in);
+    if (!b)
+        return;
+    spa_data &d = b->buffer->datas[0];
+    if (d.data) {
+        const auto *src = reinterpret_cast<const float *>(static_cast<const uint8_t *>(d.data) + d.chunk->offset);
+        const uint32_t n = d.chunk->size / (2 * sizeof(float));
+        float pl = 0.f, pr = 0.f;
+        for (uint32_t i = 0; i < n; ++i) {
+            pl = std::max(pl, std::fabs(src[2 * i]));
+            pr = std::max(pr, std::fabs(src[2 * i + 1]));
+        }
+        raisePeak(m_inPeak[0], pl);
+        raisePeak(m_inPeak[1], pr);
+        if (m_recActive.load() && m_playing.load()) {
+            // Miejsce na osi czasu: to, co muzyk słyszał, gdy grał — po odjęciu opóźnienia wyjścia i wejścia
+            if (m_recFirst.load() == NoSeek) {
+                pw_time t{};
+                long long inDelay = 0;
+                if (pw_stream_get_time_n(m_in, &t, sizeof t) == 0 && t.rate.denom)
+                    inDelay = t.delay * Rate * t.rate.num / t.rate.denom;
+                m_recFirst.store(m_pos.load() - m_outDelay.load() - inDelay - n - m_extraLatency.load());
+            }
+            m_ring.write(src, size_t(n) * 2);
+        }
+    }
+    pw_stream_queue_buffer(m_in, b);
+}
+
+// ——— Interfejs → silnik ———
+
+void Engine::setSnapshot(Snapshot *s)
+{
+    if (!m_core) {
+        m_offline.reset(s);
+        return;
+    }
+    delete m_next.exchange(s);       // poprzednia, której wątek audio nie zdążył wziąć
+}
+
+void Engine::collect()
+{
+    unsigned r = m_retiredR.load(std::memory_order_relaxed);
+    const unsigned w = m_retiredW.load(std::memory_order_acquire);
+    while (r != w) {
+        delete m_retired[r % 64];
+        m_retired[r % 64] = nullptr;
+        ++r;
+    }
+    m_retiredR.store(r, std::memory_order_release);
+}
+
+void Engine::play(long long from, long long countInEnd)
+{
+    m_countInEnd.store(countInEnd);
+    m_seek.store(from);
+    m_pos.store(from);
+    m_playing.store(true);
+}
+
+void Engine::stop()
+{
+    m_playing.store(false);
+    m_countInEnd.store(NoSeek);
+}
+
+void Engine::seek(long long frame)
+{
+    m_seek.store(frame);
+    m_pos.store(frame);
+    if (!m_core)
+        m_rtPos = frame;
+}
+
+long long Engine::position() const
+{
+    return m_pos.load();
+}
+
+void Engine::readMeters(std::vector<float> &tracks, float master[2])
+{
+    for (size_t i = 0; i < tracks.size() && i < size_t(Renderer::MaxTracks); ++i)
+        tracks[i] = std::max(m_meters[i][0].exchange(0.f), m_meters[i][1].exchange(0.f));
+    master[0] = m_meters[Renderer::MaxTracks][0].exchange(0.f);
+    master[1] = m_meters[Renderer::MaxTracks][1].exchange(0.f);
+}
+
+void Engine::readInputLevel(float level[2])
+{
+    level[0] = m_inPeak[0].exchange(0.f);
+    level[1] = m_inPeak[1].exchange(0.f);
+}
+
+// ——— Nagrywanie ———
+
+bool Engine::startRecording(const QString &path, long long start, int channel)
+{
+    if (!m_in || m_recThread.joinable())
+        return false;
+    m_ring.clear();
+    m_recFirst.store(NoSeek);
+    m_recStart = start;
+    m_recClipStart.store(start);
+    m_recData.clear();
+    {
+        QMutexLocker lock(&m_liveMutex);
+        m_livePeaks.clear();
+    }
+    m_recStop.store(false);
+    m_recThread = std::thread(&Engine::writerLoop, this, path, channel);
+    m_recActive.store(true);
+    return true;
+}
+
+void Engine::writerLoop(QString path, int channel)
+{
+    SF_INFO info{};
+    info.samplerate = Rate;
+    info.channels = 1;
+    info.format = SF_FORMAT_WAV | SF_FORMAT_PCM_24;
+    SNDFILE *sf = sf_open(QFile::encodeName(path).constData(), SFM_WRITE, &info);
+    std::vector<float> buf(8192), mono;
+    mono.reserve(4096);
+    long long seen = 0;             // ramki odebrane od początku nagrania
+    float lo = 0.f, hi = 0.f;
+    int inPeak = 0;
+    bool started = false;
+    for (;;) {
+        const bool stopping = m_recStop.load();
+        const size_t want = std::min(buf.size(), m_ring.available() & ~size_t(1));
+        const size_t got = want ? m_ring.read(buf.data(), want) : 0;
+        if (got == 0) {
+            if (stopping)
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        const long long first = m_recFirst.load();
+        mono.clear();
+        std::vector<float> peaks;
+        for (size_t i = 0; i + 1 < got; i += 2, ++seen) {
+            const long long pos = first + seen;
+            if (pos < m_recStart)
+                continue;               // odliczanie — nie nagrywamy
+            if (!started) {
+                m_recClipStart.store(pos);
+                started = true;
+            }
+            const float v = channel == 1 ? buf[i] : channel == 2 ? buf[i + 1] : 0.5f * (buf[i] + buf[i + 1]);
+            mono.push_back(v);
+            lo = std::min(lo, v);
+            hi = std::max(hi, v);
+            if (++inPeak == AudioSource::PeakStep) {
+                peaks.push_back(lo);
+                peaks.push_back(hi);
+                lo = hi = 0.f;
+                inPeak = 0;
+            }
+        }
+        if (mono.empty())
+            continue;
+        if (sf)
+            sf_writef_float(sf, mono.data(), sf_count_t(mono.size()));
+        m_recData.insert(m_recData.end(), mono.begin(), mono.end());
+        if (!peaks.empty()) {
+            QMutexLocker lock(&m_liveMutex);
+            m_livePeaks.insert(m_livePeaks.end(), peaks.begin(), peaks.end());
+        }
+    }
+    if (sf)
+        sf_close(sf);
+}
+
+std::shared_ptr<AudioSource> Engine::stopRecording(long long *start)
+{
+    if (!m_recThread.joinable())
+        return {};
+    m_recActive.store(false);
+    m_recStop.store(true);
+    m_recThread.join();
+    *start = m_recClipStart.load();
+    if (m_recData.empty())
+        return {};
+    auto src = std::make_shared<AudioSource>();
+    src->channels = 1;
+    src->data = std::move(m_recData);
+    src->frames = (long long)src->data.size();
+    src->computePeaks();
+    m_recData = {};
+    return src;
+}
+
+std::vector<float> Engine::livePeaks() const
+{
+    QMutexLocker lock(&m_liveMutex);
+    return m_livePeaks;
+}
+
+// ——— Eksport ———
+
+bool Engine::exportMix(const Snapshot &s, long long frames, const QString &path, const QString &format,
+                       const std::function<bool(double)> &progress, QString *error)
+{
+    SF_INFO info{};
+    info.samplerate = Rate;
+    info.channels = 2;
+    if (format == QLatin1String("mp3"))
+        info.format = SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III;
+    else if (format == QLatin1String("ogg"))
+        info.format = SF_FORMAT_OGG | SF_FORMAT_VORBIS;
+    else if (format == QLatin1String("flac"))
+        info.format = SF_FORMAT_FLAC | SF_FORMAT_PCM_24;
+    else
+        info.format = SF_FORMAT_WAV | SF_FORMAT_PCM_16;
+    SNDFILE *sf = sf_open(QFile::encodeName(path).constData(), SFM_WRITE, &info);
+    if (!sf) {
+        if (error)
+            *error = QString::fromUtf8(sf_strerror(nullptr));
+        return false;
+    }
+    if (format == QLatin1String("mp3")) {
+        int mode = SF_BITRATE_MODE_VARIABLE;
+        sf_command(sf, SFC_SET_BITRATE_MODE, &mode, sizeof mode);
+    }
+    if (format == QLatin1String("mp3") || format == QLatin1String("ogg")) {
+        double level = 0.25;        // wysoka jakość (0 = najlepsza, 1 = najmniejszy plik)
+        sf_command(sf, SFC_SET_COMPRESSION_LEVEL, &level, sizeof level);
+    }
+    sf_command(sf, SFC_SET_CLIPPING, nullptr, SF_TRUE);
+
+    auto renderer = std::make_unique<Renderer>();
+    if (format == QLatin1String("mp3") || format == QLatin1String("ogg"))
+        renderer->setCeiling(0.84f);        // −1,5 dBFS
+    std::vector<float> buf(size_t(Renderer::MaxBlock) * 2);
+    bool ok = true;
+    for (long long pos = 0; pos < frames; pos += Renderer::MaxBlock) {
+        const int n = int(std::min<long long>(Renderer::MaxBlock, frames - pos));
+        renderer->process(&s, pos, n, buf.data(), false, nullptr, Rate);
+        for (int i = 0; i < 2 * n; ++i)
+            buf[size_t(i)] = std::clamp(buf[size_t(i)], -1.f, 1.f);
+        if (sf_writef_float(sf, buf.data(), n) != n) {
+            if (error)
+                *error = QString::fromUtf8(sf_strerror(sf));
+            ok = false;
+            break;
+        }
+        if (progress && (pos / Renderer::MaxBlock) % 64 == 0 && !progress(double(pos) / frames)) {
+            ok = false;
+            break;
+        }
+    }
+    sf_close(sf);
+    if (!ok)
+        QFile::remove(path);
+    return ok;
+}

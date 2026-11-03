@@ -152,4 +152,50 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
 - [ ] Aster Code — edytor kodu w stylu Aster
+- [x] Studio (nazwa robocza) — `apps/studio`, proste studio nagrań dla amatorów (nagrać wokal i gitarę, ułożyć pętle,
+      zmiksować piosenkę); pierwsza wersja w drzewie, docelowo Flatpak w Sklepie Aster:
+  - [x] projekt = folder w Muzyka/Studio: `projekt.json` (tempo, metrum, ścieżki, klipy w ramkach 48 kHz) + `audio/`
+        (nagrania i kopie importowanych plików) + `Eksport/`; ostatnie projekty na ekranie startowym, zapis przy zamknięciu
+  - [x] tempo (z „Wystukaj”), metrum, metronom (akcent na raz), odliczanie taktu przed nagraniem
+  - [x] nagrywanie na zaznaczoną ścieżkę (jedna gotowa naraz, kanał wejścia: oba/lewy/prawy), kształt fali na żywo,
+        kompensacja opóźnień wejścia i wyjścia z PipeWire + ręczna korekta; nagranie zapisuje się od razu (WAV 24 bity)
+  - [x] oś czasu z siatką taktów: przesuwanie klipów (także między ścieżkami), przycinanie, dzielenie, pętla
+        (wydłużanie prawym brzegiem, faza pętli zachowana przy przycinaniu i dzieleniu), duplikowanie, przyciąganie
+        do taktu/miary/ósemki/szesnastki (Shift — bez), powiększanie, cofanie i ponawianie
+  - [x] import WAV/FLAC/OGG/Opus/MP3 przeciąganiem lub z okna (libsndfile; przepróbkowanie libsamplerate)
+  - [x] mikser: głośność (−∞…+6 dB), panorama, wycisz/solo, wskaźniki poziomu, suma z ochroną przed przesterowaniem
+  - [x] wybór wyjścia i wejścia dźwięku (urządzenia z PipeWire), poziom wejścia
+  - [x] eksport miksu (ten sam kod co odsłuch) do MP3, WAV 16 bit, OGG Vorbis, FLAC
+  - [ ] Nazwa programu (propozycje: „Próba”, „Scena”, „Nuta”)
+  - [ ] Dalej: efekty na ścieżkach (pogłos, korektor, kompresor, bramka szumów), wtyczki LV2 (lilv)
+  - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
+        na wolnej licencji), ścieżki MIDI z edytorem nut
+  - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
+        do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
+  - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
+        nagranie zastępujące fragment pod spodem, region pętli odtwarzania, automatyka głośności, wyciszanie/narastanie klipów
+  - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
+        stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
+  - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,
+        przełączanie urządzeń w trakcie, zachowanie przy niedoborach bufora (xrun)
+
+### Studio — wybór silnika dźwięku
+Wybór: **bezpośrednio PipeWire** (`pw_stream`, wątek czasu rzeczywistego PipeWire) + **libsndfile** (odczyt i zapis
+WAV/FLAC/OGG/Opus/MP3) + **libsamplerate** (przepróbkowanie importu do 48 kHz). Wszystko w repozytoriach Fedory 44
+(`pipewire-devel`, `libsndfile-devel`, `libsamplerate-devel`), małe, na licencjach MIT/LGPL/BSD.
+
+Dlaczego nie gotowy silnik: Tracktion Engine stoi na JUCE (GPLv3 albo licencja komercyjna, JUCE nie ma w Fedorze),
+dokłada kilkaset tysięcy wierszy C++ i własny model projektu — za dużo jak na pierwsze proste studio. Własny silnik
+wystarczy do ścieżek audio, a efekty dołożymy przez LV2 (lilv, też w Fedorze). Rubberband (GPL, w Fedorze) wejdzie
+przy dopasowaniu pętli do tempa. JACK API niepotrzebne — PipeWire i tak je emuluje, a natywny `pw_stream` daje wybór
+urządzenia (`target.object`) i opóźnienia (`pw_stream_get_time_n`).
+
+Zasady w kodzie (`apps/studio/src/engine.*`):
+- dźwięk w wątku czasu rzeczywistego PipeWire (`PW_STREAM_FLAG_RT_PROCESS`), bez blokad i bez alokacji;
+- stan miksu to niezmienna migawka (`Snapshot`) budowana w wątku interfejsu i podawana przez wymianę wskaźnika
+  atomowego; starą migawkę wątek audio oddaje przez kolejkę i zwalnia ją wątek interfejsu;
+- nagranie: wątek audio wkłada próbki do bufora pierścieniowego (jeden pisze, jeden czyta), osobny wątek zapisuje WAV;
+- odtwarzanie i eksport używają tego samego miksera (`Renderer`), więc eksport brzmi jak odsłuch;
+- test w kontenerze (wirtualne głośniki i pętla zwrotna z wyjścia do wejścia): nagrany metronom wypada 5 ms
+  (jeden kwant pętli zwrotnej) po mierze.
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
