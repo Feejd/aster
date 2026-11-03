@@ -5,6 +5,25 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
+# Same wybrane aplikacje, bez powłoki i reszty systemu (np. Grafika jako Flatpak na dowolnym Linuksie):
+#   cmake -DASTER_APPS=grafika
+set(ASTER_APPS "" CACHE STRING "Zbuduj tylko te aplikacje z apps/ (rozdzielone średnikami), bez powłoki")
+if(ASTER_APPS)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS Gui Quick Qml DBus)
+    find_package(KF6WindowSystem REQUIRED)
+    qt_standard_project_setup(REQUIRES 6.9)
+    qt_policy(SET QTP0004 NEW)
+    set(QT_QML_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/qml)
+    include_directories(${CMAKE_SOURCE_DIR}/common)
+    add_subdirectory(common)
+    foreach(app IN LISTS ASTER_APPS)
+        add_subdirectory(apps/${app})
+    endforeach()
+    # Czcionka interfejsu — w systemie Aster instaluje ją powłoka
+    install(DIRECTORY data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
+    return()
+endif()
+
 find_package(Qt6 6.6 REQUIRED COMPONENTS Gui Quick Qml DBus Widgets)
 find_package(LayerShellQt REQUIRED)
 find_package(KF6WindowSystem REQUIRED)

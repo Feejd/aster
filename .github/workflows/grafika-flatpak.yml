@@ -1,0 +1,66 @@
+# Grafika jako Flatpak dla dowolnego Linuksa (x86_64 i ARM). Paczki trafiają do wydania „grafika”
+# na GitHubie, skąd pobiera je tools/install-grafika.sh (instalacja jedną komendą).
+name: Grafika (Flatpak)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/grafika/**"
+      - "common/**"
+      - "data/fonts/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/grafika-flatpak.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: grafika-flatpak
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flatpak i flatpak-builder
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q flatpak flatpak-builder
+          # Ubuntu 24.04 domyślnie blokuje przestrzenie nazw użytkownika, których potrzebuje bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Budowa
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean \
+            --repo=repo build apps/grafika/flatpak/org.aster.grafika.yml
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            repo grafika-${{ matrix.arch }}.flatpak org.aster.grafika
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grafika-${{ matrix.arch }}
+          path: grafika-${{ matrix.arch }}.flatpak
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Wydanie „grafika”
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view grafika > /dev/null 2>&1 || gh release create grafika --title "Grafika (Flatpak)" \
+            --notes "Instalacja na dowolnym Linuksie: curl -fsSL https://raw.githubusercontent.com/${GH_REPO}/main/tools/install-grafika.sh | sh"
+          gh release upload grafika grafika-x86_64.flatpak grafika-aarch64.flatpak --clobber

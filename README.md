@@ -3,6 +3,19 @@
 Prosty i ładny system dla osób przesiadających się z Windowsa.
 Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**.
 
+## Grafika na dowolnym Linuksie
+
+Program Grafika (posty, plakaty, zaproszenia, CV) działa też poza Astrem — na Fedorze, Ubuntu, Mincie,
+Debianie, Archu i innych. Instalacja jedną komendą w terminalu:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Feejd/aster/main/tools/install-grafika.sh | sh
+```
+
+Skrypt w razie potrzeby instaluje Flatpak, a potem Grafikę (paczka z wydania „grafika”, budowana przez
+`.github/workflows/grafika-flatpak.yml`). Ponowne uruchomienie aktualizuje program.
+Odinstalowanie: `flatpak uninstall --user org.aster.grafika`.
+
 ## Co gdzie jest
 
 | Folder | Zawartość |
