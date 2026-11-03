@@ -28,7 +28,8 @@ Item {
 
     signal clipMenu(var clip, int track, Item item, real x, real y, real at)
     signal trackMenu(int track, Item item, real x, real y)
-    signal addTrackRequested()
+    signal addTrackRequested(Item item, real x, real y)
+    signal editPattern(int track)
 
     onScrollXChanged: if (scrollX > maxScroll || scrollX < 0) scrollX = Math.max(0, Math.min(maxScroll, scrollX))
 
@@ -69,7 +70,7 @@ Item {
             anchors.right: parent.right; anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
             width: 24; height: 24; radius: 7
-            onClicked: tl.addTrackRequested()
+            onClicked: tl.addTrackRequested(this, 0, height + 4)
             Icon { anchors.centerIn: parent; d: Icons.plus; size: 14; stroke: 2; color: Theme.text2 }
             Tip { shown: parent.hovered; text: "Nowa ścieżka (Ctrl+T)"; below: true }
         }
@@ -348,8 +349,9 @@ Item {
                 }
             }
             HoverButton {
+                id: addRow
                 x: 10; width: tl.headerW - 20; height: 40; radius: 10
-                onClicked: tl.addTrackRequested()
+                onClicked: tl.addTrackRequested(addRow, 0, height)
                 Row {
                     x: 12; anchors.verticalCenter: parent.verticalCenter
                     spacing: 10
@@ -460,7 +462,22 @@ Item {
         Row {
             x: 14; y: 40
             spacing: 6
+            // Ścieżka Beat Makera: zamiast nagrywania — edycja wzoru
+            HoverButton {
+                visible: th.track.kind !== "audio"
+                width: editRow.implicitWidth + 16; height: 24; radius: 7
+                baseColor: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.3)
+                onClicked: tl.editPattern(th.trackIndex)
+                Row {
+                    id: editRow
+                    x: 8; anchors.verticalCenter: parent.verticalCenter
+                    spacing: 5
+                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.grid; size: 13; stroke: 2; color: Theme.text }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                }
+            }
             MiniBtn {
+                visible: th.track.kind === "audio"
                 tip: th.track.armed ? "Gotowa do nagrania" : "Nagrywaj na tę ścieżkę"
                 on: th.track.armed
                 onColor: "#E5484D"
@@ -649,6 +666,7 @@ Item {
                 if (ci.dragging) Studio.moveClip(ci.cl.id, ci.trackIndex + ci.dTrack, ci.cl.start + ci.dx);
                 ci.dragging = false; ci.dx = 0; ci.dTrack = 0;
             }
+            onDoubleClicked: { if (Studio.tracks[ci.trackIndex] && Studio.tracks[ci.trackIndex].kind !== "audio") tl.editPattern(ci.trackIndex); }
             onClicked: (e) => {
                 if (e.button === Qt.RightButton)
                     tl.clipMenu(ci.cl, ci.trackIndex, ci, e.x + 8, e.y, ci.cl.start + (e.x + 8) / tl.pps);

@@ -35,6 +35,9 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
     std::fill_n(m_r, n, 0.f);
     std::fill_n(m_rl, n, 0.f);
     std::fill_n(m_rr, n, 0.f);
+    std::fill_n(m_el, n, 0.f);
+    std::fill_n(m_er, n, 0.f);
+    bool echo = false;
     const long long declick = rate / 500;   // 2 ms łagodnego wejścia i wyjścia na brzegach klipu — bez trzasków
     bool reverb = false;
 
@@ -42,6 +45,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         for (size_t ti = 0; ti < s->tracks.size(); ++ti) {
             const TrackRT &t = s->tracks[ti];
             reverb |= t.send > 0;
+            echo |= t.echo > 0;
             if (!t.audible)
                 continue;
             bool any = false;
@@ -85,6 +89,14 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                         m_tr[i] = zr.run(t.eq[k], m_tr[i]);
                     }
                 }
+                if (t.drive > 0) {
+                    // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
+                    const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
+                    for (int i = 0; i < n; ++i) {
+                        m_tl[i] = std::tanh(m_tl[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tl[i] * 0.35f * t.drive;
+                        m_tr[i] = std::tanh(m_tr[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tr[i] * 0.35f * t.drive;
+                    }
+                }
                 if (t.comp.on) {
                     CompState &cs = m_comp[ti];
                     for (int i = 0; i < n; ++i) {
@@ -102,6 +114,10 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 if (t.send > 0) {
                     m_rl[i] += l * t.send;
                     m_rr[i] += r * t.send;
+                }
+                if (t.echo > 0) {
+                    m_el[i] += l * t.echo;
+                    m_er[i] += r * t.echo;
                 }
                 pl = std::max(pl, std::fabs(l));
                 pr = std::max(pr, std::fabs(r));
@@ -122,33 +138,48 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         m_reverb.setSize(s->reverbSize);
         m_reverb.process(m_rl, m_rr, m_l, m_r, n);
     }
+    if (echo || (s && s->echoDelay > 0)) {
+        if (s)
+            m_echo.process(m_el, m_er, m_l, m_r, n, int(s->echoDelay * (rate / 48000.0)), s->echoFeedback);
+    }
 
+    // Suma: głośność → mastering (korektor, kompresor, szerokość, dociśnięcie) → ogranicznik z wyprzedzeniem
     const float master = s ? s->master : 1.f;
+    const MasterParams mp = s ? s->mastering : MasterParams{};
+    const float release = 1.f - std::exp(-1.f / (0.15f * rate));
     float pl = 0.f, pr = 0.f;
     for (int i = 0; i < n; ++i) {
-        m_l[i] *= master;
-        m_r[i] *= master;
-        pl = std::max(pl, std::fabs(m_l[i]));
-        pr = std::max(pr, std::fabs(m_r[i]));
+        float l = m_l[i] * master, r = m_r[i] * master;
+        if (!mp.low.flat()) {
+            l = m_mEq[0][0].run(mp.low, l);
+            r = m_mEq[0][1].run(mp.low, r);
+        }
+        if (!mp.high.flat()) {
+            l = m_mEq[1][0].run(mp.high, l);
+            r = m_mEq[1][1].run(mp.high, r);
+        }
+        if (mp.comp.on) {
+            const float g = m_mComp.process(mp.comp, std::max(std::fabs(l), std::fabs(r)), rate);
+            l *= g;
+            r *= g;
+        }
+        if (mp.width != 1.f) {
+            const float mid = 0.5f * (l + r), side = 0.5f * (l - r) * mp.width;
+            l = mid + side;
+            r = mid - side;
+        }
+        l *= mp.drive;
+        r *= mp.drive;
+        m_limiter.process(l, r, m_ceiling, release);
+        m_l[i] = l;
+        m_r[i] = r;
+        pl = std::max(pl, std::fabs(l));
+        pr = std::max(pr, std::fabs(r));
     }
+    // Wskaźnik sumy po ograniczniku (to, co naprawdę wychodzi)
     if (meters) {
         raisePeak((*meters)[MaxTracks][0], pl);
         raisePeak((*meters)[MaxTracks][1], pr);
-    }
-
-    // Ochrona przed przesterowaniem: zbyt głośny szczyt od razu ściszamy do pułapu (−0,2 dBFS), potem powoli
-    // (~0,3 s) wracamy. Wskaźnik sumy (wyżej) pokazuje poziom przed ochroną — czerwień ostrzega.
-    if (std::max(pl, pr) > m_ceiling || m_limit < 1.f) {
-        const float ceiling = m_ceiling, release = 1.f - std::exp(-1.f / (0.3f * rate));
-        for (int i = 0; i < n; ++i) {
-            const float peak = std::max(std::fabs(m_l[i]), std::fabs(m_r[i]));
-            if (peak * m_limit > ceiling)
-                m_limit = ceiling / peak;
-            else
-                m_limit = std::min(1.f, m_limit + (1.f - m_limit) * release);
-            m_l[i] *= m_limit;
-            m_r[i] *= m_limit;
-        }
     }
 
     // Metronom (poza miernikiem sumy): wyższy dźwięk na pierwszą miarę taktu

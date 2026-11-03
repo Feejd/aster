@@ -59,11 +59,19 @@ Item {
                 spacing: 10
                 visible: !!insp.track
                 Caption { text: "GOTOWE BRZMIENIE" }
+                Repeater {
+                    model: ["", "Wokal", "Instrumenty", "Efekty"]
+                    delegate: Column {
+                        id: group
+                        required property string modelData
+                        width: col.width
+                        spacing: 6
+                        Text { visible: group.modelData !== ""; text: group.modelData; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
                 Flow {
                     width: col.width
                     spacing: 6
                     Repeater {
-                        model: Studio.presets
+                        model: Studio.presets.filter(p => p.group === group.modelData)
                         delegate: HoverButton {
                             id: chip
                             required property var modelData
@@ -83,6 +91,8 @@ Item {
                         }
                     }
                 }
+                    }
+                }
 
                 Caption { text: "KOREKTOR"; topPadding: 6 }
                 FxSlider { label: "Niskie (bas)"; from: -12; to: 12; centered: true; value: insp.mx.eqLow || 0; shown: insp.db(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "eqLow", v) }
@@ -97,6 +107,8 @@ Item {
                 Caption { text: "DYNAMIKA I PRZESTRZEŃ"; topPadding: 6 }
                 FxSlider { label: "Kompresja"; hint: "Wyrównuje ciche i głośne fragmenty"; from: 0; to: 1; value: insp.mx.comp || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "comp", v) }
                 FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "reverb", v) }
+                FxSlider { label: "Echo"; hint: "Powtórzenia w rytm piosenki"; from: 0; to: 1; value: insp.mx.echo || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "echo", v) }
+                FxSlider { label: "Ciepło / przester"; hint: "Nasycenie — 808 i głos słychać nawet w telefonie"; from: 0; to: 1; value: insp.mx.drive || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "drive", v) }
             }
 
             Rectangle { width: col.width; height: 1; color: Theme.line; visible: insp.hasClip }
@@ -143,8 +155,52 @@ Item {
 
             Rectangle { width: col.width; height: 1; color: Theme.line }
 
+            // ——— Mastering (suma) ———
+            Caption { text: "MASTERING" }
+            Text {
+                width: col.width
+                wrapMode: Text.WordWrap
+                text: "Ostatni szlif całej piosenki: brzmienie, sklejenie i głośność jak w radiu."
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+            }
+            Flow {
+                width: col.width
+                spacing: 6
+                Repeater {
+                    model: Studio.masteringPresets
+                    delegate: HoverButton {
+                        id: mchip
+                        required property var modelData
+                        readonly property bool on: (Studio.mastering.preset || "none") === modelData.id
+                        width: mchipText.implicitWidth + 22; height: 28; radius: 14
+                        baseColor: on ? Theme.accent : Theme.fill
+                        color: on ? baseColor : (hovered ? Theme.hover : baseColor)
+                        onClicked: Studio.applyMastering(modelData.id)
+                        Text { id: mchipText; anchors.centerIn: parent; text: mchip.modelData.label; color: mchip.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                        Tip { shown: mchip.hovered; text: mchip.modelData.hint }
+                    }
+                }
+            }
+            FxSlider { label: "Dół"; from: -12; to: 12; centered: true; value: Studio.mastering.eqLow; shown: insp.db(value); onMoved: (v) => Studio.setMastering("eqLow", v) }
+            FxSlider { label: "Góra"; from: -12; to: 12; centered: true; value: Studio.mastering.eqHigh; shown: insp.db(value); onMoved: (v) => Studio.setMastering("eqHigh", v) }
+            FxSlider { label: "Sklejenie (kompresja)"; from: 0; to: 1; value: Studio.mastering.comp; shown: insp.pct(value); onMoved: (v) => Studio.setMastering("comp", v) }
+            FxSlider { label: "Szerokość stereo"; from: 0; to: 2; origin: 1; centered: true; value: Studio.mastering.width; shown: Math.round(value * 100) + "%"; onMoved: (v) => Studio.setMastering("width", v) }
+            FxSlider { label: "Głośność (dociśnięcie)"; from: 0; to: 12; value: Studio.mastering.drive; shown: "+" + value.toFixed(1) + " dB"; onMoved: (v) => Studio.setMastering("drive", v) }
+
+            Rectangle { width: col.width; height: 1; color: Theme.line }
+
             // ——— Projekt ———
             Caption { text: "PROJEKT" }
+            Item {
+                width: col.width; height: 34
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "Echo co"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                Segmented {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    model: [{ label: "1/4", value: "1/4" }, { label: "1/8", value: "1/8" }, { label: "1/8 z kropką", value: "3/16" }]
+                    value: Studio.echoTime
+                    onPicked: (v) => Studio.echoTime = v
+                }
+            }
             FxSlider {
                 label: "Wielkość sali (pogłos)"; from: 0; to: 1
                 value: Studio.reverbSize

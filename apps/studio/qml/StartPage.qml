@@ -9,7 +9,7 @@ Item {
     id: start
     required property Window window
     required property real radius
-    signal newRequested()
+    signal newRequested(string genre)
     signal openRequested()
     signal menuRequested(var project, Item item, real x, real y)
 
@@ -113,7 +113,7 @@ Item {
                     hint: "Pusta piosenka z metronomem — ścieżki na wokal i gitarę"
                     icon: "plus"
                     colors: ["#FF9F7A", "#E5484D"]
-                    onClicked: start.newRequested()
+                    onClicked: start.newRequested("")
                 }
                 StarterCard {
                     title: "Otwórz projekt"
@@ -125,9 +125,58 @@ Item {
             }
 
             Text {
+                id: genreLabel
+                x: 28; y: starters.y + starters.height + 30
+                text: "Zacznij od gatunku"
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
+            }
+            Text {
+                x: 28; y: genreLabel.y + genreLabel.height + 2
+                text: "Gotowy bit, 808, ścieżki na wokal z efektami i mastering — wystarczy nagrać głos"
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+            Flow {
+                id: genresFlow
+                x: 28; y: genreLabel.y + genreLabel.height + 26
+                width: parent.width - 56
+                spacing: 12
+                Repeater {
+                    model: Studio.genres
+                    delegate: HoverButton {
+                        id: gcard
+                        required property var modelData
+                        required property int index
+                        readonly property var shades: [["#8E5CFF", "#3A1C8C"], ["#5C6CFF", "#1C2A8C"], ["#FFB86B", "#C2410C"], ["#7CE0C3", "#16806A"], ["#FF6BD5", "#9D1C7A"], ["#FF9F7A", "#E5484D"]]
+                        width: 138; height: 96; radius: 16
+                        gradient: Gradient {
+                            GradientStop { position: 0; color: gcard.shades[gcard.index % 6][0] }
+                            GradientStop { position: 1; color: gcard.shades[gcard.index % 6][1] }
+                        }
+                        onClicked: start.newRequested(modelData.id)
+                        Text { x: 14; y: 12; text: gcard.modelData.label; color: "white"; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold }
+                        Text { x: 14; y: 36; text: gcard.modelData.bpm + " BPM"; color: Qt.rgba(1, 1, 1, 0.85); font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                        Row {
+                            x: 14; anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+                            spacing: 3
+                            Repeater {
+                                model: 16
+                                delegate: Rectangle {
+                                    required property int index
+                                    width: 5; height: 5 + ((index * 7 + gcard.index * 3) % 5) * 3; radius: 2
+                                    anchors.bottom: parent ? parent.bottom : undefined
+                                    color: Qt.rgba(1, 1, 1, index % 4 === 0 ? 0.95 : 0.55)
+                                }
+                            }
+                        }
+                        Tip { shown: gcard.hovered; text: gcard.modelData.hint }
+                    }
+                }
+            }
+
+            Text {
                 id: recentLabel
                 visible: Studio.recent.length > 0
-                x: 28; y: starters.y + starters.height + 30
+                x: 28; y: genresFlow.y + genresFlow.height + 30
                 text: "Ostatnie projekty"
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
             }

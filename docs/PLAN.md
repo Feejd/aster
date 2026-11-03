@@ -174,7 +174,23 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] region pętli odtwarzania do ćwiczenia (C, przeciąganie po linijce, „Ćwicz w pętli” z menu klipu) —
         zawijanie w środku bloku audio, sprawdzone przez PipeWire w kontenerze
   - [x] nowe nagranie zastępuje to, co było pod nim na ścieżce (stare klipy przycięte/podzielone, Ctrl+Z przywraca)
-  - [ ] Dalej: bramka szumów, de-esser, efekty na sumie, wtyczki LV2 (lilv)
+  - [x] Kierunek „zrób kawałek, który brzmi”: Beat Maker (`src/beatsynth.*`) — perkusja i bas 808 syntezowane
+        w programie (bez sampli, nic obcego), zestawy Trap / Drill / Boom bap / Lo-fi / House / Pop, siatka szesnastek
+        z malowaniem, rolki hi-hatów ×2–×4, ciche uderzenia, swing, 1/2/4 takty; 808 z mini-pianinem w skali molowej,
+        tonacją i ślizgiem; wzór → pętla audio w `audio/_bit-N.wav` (gra z mikserem, efektami, eksportem; zmiana tempa
+        przelicza pętle)
+  - [x] szablony gatunków przy nowym projekcie i na ekranie startowym: bit, 808, dwie ścieżki wokalu z łańcuchem
+        efektów, mastering gatunku — wystarczy nagrać głos (podkład Trap: −8,6 dBFS RMS, szczyt −0,2 dBFS)
+  - [x] efekty jak w trapie: echo zgrane z tempem (1/4, 1/8, 1/8 z kropką, ping-pong), ciepło/przester;
+        presety w grupach (Wokal pop, Wokal trap, Rap, Chórki; Gitara, Bas, Perkusja, 808; Radio, Lo-fi, Daleko)
+  - [x] mastering sumy: korektor, kompresor „sklejający”, szerokość stereo, dociśnięcie do ogranicznika z wyprzedzeniem;
+        presety Trap / hip-hop, Pop, Ciepły, Głośny, Lo-fi
+  - [ ] Dalej: korekcja wysokości głosu (autotune: wykrywanie YIN + przesunięcie PSOLA, tonacja z 808), de-esser,
+        bramka szumów, wtyczki LV2 (lilv)
+  - [ ] Dalej: więcej instrumentów (klawisze/pad/lead z tym samym syntezatorem, wzory akordów), piano roll dla dłuższych
+        fraz, biblioteka pętli generowanych w programie, „mastering” porównujący z/bez (przełącznik A/B)
+  - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
+        wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli

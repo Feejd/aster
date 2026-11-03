@@ -44,6 +44,8 @@ struct TrackRT
     Biquad eq[4];                         // usuwanie dudnienia, niskie, średnie, wysokie
     CompParams comp;
     float send = 0;                       // ile do pogłosu (po suwaku głośności)
+    float echo = 0;                       // ile do echa
+    float drive = 0;                      // przester / ciepło (0 = brak)
 };
 
 struct Snapshot
@@ -54,6 +56,9 @@ struct Snapshot
     float master = 1.f;
     float reverbSize = 0.5f;              // mała sala … duża hala
     float click = 0.7f;                   // głośność metronomu
+    int echoDelay = 24000;                // ramki (z tempa)
+    float echoFeedback = 0.35f;
+    MasterParams mastering;
     std::vector<SourcePtr> keep;          // trzyma pliki przy życiu, dopóki migawka jest w użyciu
 };
 
@@ -78,8 +83,11 @@ private:
     CompState m_comp[MaxTracks];
     Reverb m_reverb;
     int m_reverbRate = 0;
-    float m_rl[MaxBlock], m_rr[MaxBlock];
-    float m_limit = 1.f;          // wzmocnienie ogranicznika sumy (ochrona przed przesterowaniem)
+    float m_rl[MaxBlock], m_rr[MaxBlock], m_el[MaxBlock], m_er[MaxBlock];
+    Echo m_echo;
+    BiquadState m_mEq[2][2];
+    CompState m_mComp;
+    Limiter m_limiter;
     float m_ceiling = 0.977f;     // −0,2 dBFS
 };
 

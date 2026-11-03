@@ -16,6 +16,8 @@ Item {
     function meterPos(level) { return level <= 0 ? 0 : Math.max(0, Math.min(1, (20 * Math.log(level) / Math.LN10 + 60) / 66)); }
     function dbText(db) { return db <= -60 ? "−∞" : (db > 0 ? "+" : db < 0 ? "−" : "") + Math.abs(db).toFixed(1); }
 
+    // Pełne tło: pasy osi czasu nie prześwitują (ikony wektorowe nie zawsze są przycinane)
+    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
 
     Flickable {

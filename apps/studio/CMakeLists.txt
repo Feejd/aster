@@ -20,6 +20,7 @@ set(STUDIO_QML
     qml/Field.qml
     qml/Segmented.qml
     qml/Inspector.qml
+    qml/PatternEditor.qml
 )
 foreach(f ${STUDIO_QML})
     get_filename_component(name ${f} NAME)
@@ -34,6 +35,8 @@ qt_add_qml_module(aster-studio
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
+        src/beatsynth.cpp
+        src/beatsynth.h
         src/engine.cpp
         src/engine.h
         src/studio.cpp

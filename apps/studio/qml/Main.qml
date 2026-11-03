@@ -25,6 +25,7 @@ Window {
     readonly property var trackColors: ["#FF6B6B", "#FFA94D", "#F5C542", "#51CF66", "#22B8CF", "#4D8BF7", "#9775FA", "#F06595"]
     property bool showMixer: false
     property bool showInspector: true
+    property int editTrack: -1                  // ścieżka otwarta w Beat Makerze (-1 — zamknięty)
     readonly property bool typing: activeFocusItem instanceof TextInput
 
     onClosing: Studio.closeProject()
@@ -79,9 +80,11 @@ Window {
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: Studio.open; onActivated: timeline.zoom(1.25, timeline.viewW / 2) }
     Shortcut { sequences: [StandardKey.ZoomOut]; enabled: Studio.open; onActivated: timeline.zoom(0.8, timeline.viewW / 2) }
 
-    function newProject() {
+    function newProject(genre) {
         newName.text = Studio.suggestName();
-        newSheet.bpm = 100;
+        newSheet.template = genre || "";
+        const g = Studio.genres.find(x => x.id === newSheet.template);
+        newSheet.bpm = g ? g.bpm : 100;
         newSheet.beats = 4;
         newSheet.open();
         newName.input.forceActiveFocus();
@@ -95,6 +98,8 @@ Window {
         const clips = (i) => Studio.tracks[i] ? Studio.tracks[i].clips : [];
         if (what === "new") Studio.newProject("Pierwsza piosenka", 96, 4);
         else if (what.startsWith("newp:")) Studio.newProject(what.substring(5), 96, 4);
+        else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
+        else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));
         else if (what === "demo") {
             const dir = "/root/Muzyka/";
             Studio.importFiles([dir + "Neon Bałtyk/Miejskie Światła/01 Tramwaj nr 4.flac"], 0, 0);
@@ -194,6 +199,14 @@ Window {
             { label: "Usuń ścieżkę", icon: "trash", action: "removeTrack", danger: true }
         ]);
     }
+    function addTrackMenu(item, x, y) {
+        const p = item.mapToItem(frame, x, y);
+        menu.openAt(p.x, p.y, [
+            { label: "Nagranie — głos, gitara", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
+            { label: "Bit — Beat Maker", icon: "grid", action: "addDrums" },
+            { label: "Bas 808", icon: "music", action: "addBass" }
+        ]);
+    }
     function projectMenu(project, item, x, y) {
         menu.folder = project.folder;
         const p = item.mapToItem(frame, x, y);
@@ -222,6 +235,10 @@ Window {
         else if (a === "openProject") Studio.openProject(menu.folder);
         else if (a === "showProject") Studio.showInFolder(menu.folder);
         else if (a === "forget") Studio.forgetRecent(menu.folder);
+        else if (a === "addAudio") Studio.addTrack();
+        else if (a === "addDrums") { const i = Studio.addPatternTrack("drums", "trap"); if (i >= 0) editTrack = i; }
+        else if (a === "addBass") { const i = Studio.addPatternTrack("bass", "trap"); if (i >= 0) editTrack = i; }
+        else if (a.startsWith("genre:") && editTrack >= 0) Studio.setPattern(editTrack, Studio.genrePattern(Studio.tracks[editTrack].kind, a.substring(6)));
     }
 
     function toast(text, action, callback) {
@@ -261,7 +278,7 @@ Window {
             visible: !Studio.open
             window: win
             radius: win.r
-            onNewRequested: win.newProject()
+            onNewRequested: (genre) => win.newProject(genre)
             onOpenRequested: openDialog.open()
             onMenuRequested: (project, item, x, y) => win.projectMenu(project, item, x, y)
         }
@@ -441,11 +458,12 @@ Window {
                 id: timeline
                 y: toolbar.height
                 width: parent.width - inspector.width
-                height: parent.height - y - statusBar.height - mixer.height
+                height: parent.height - y - statusBar.height - mixer.height - beatMaker.height
                 colors: win.trackColors
                 onClipMenu: (c, track, item, x, y, at) => win.clipMenu(c, track, item, x, y, at)
                 onTrackMenu: (track, item, x, y) => win.trackMenu(track, item, x, y)
-                onAddTrackRequested: Studio.addTrack()
+                onAddTrackRequested: (item, x, y) => win.addTrackMenu(item, x, y)
+                onEditPattern: (track) => { win.editTrack = track; Studio.selectedTrack = track; }
             }
 
             // Pasek pod osią: dodawanie dźwięku, siatka, powiększenie
@@ -501,14 +519,36 @@ Window {
 
             Mixer {
                 id: mixer
+                z: 20
                 anchors.bottom: parent.bottom
                 width: parent.width
-                height: win.showMixer ? Math.min(300, parent.height * 0.42) : 0
+                height: win.showMixer && win.editTrack < 0 ? Math.min(300, parent.height * 0.42) : 0
                 visible: height > 0
                 clip: true
                 colors: win.trackColors
                 Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
             }
+        }
+
+        // Beat Maker (zamiast miksera, gdy otwarty)
+        PatternEditor {
+            id: beatMaker
+            parent: project
+            z: 20
+            anchors.bottom: parent ? parent.bottom : undefined
+            width: project.width
+            track: win.editTrack
+            colors: win.trackColors
+            readonly property bool bassMode: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "bass"
+            height: win.editTrack >= 0 && !!Studio.tracks[win.editTrack] ? Math.min(bassMode ? 450 : 330, project.height * 0.55) : 0
+            visible: height > 0
+            clip: true
+            onCloseRequested: win.editTrack = -1
+            onGenreMenuRequested: (x, y) => {
+                const p = beatMaker.mapToItem(frame, x, y);
+                menu.openAt(p.x, Math.min(p.y, frame.height - 320), Studio.genres.map(g => ({ label: g.label + " · " + g.bpm + " BPM", icon: "sparkle", action: "genre:" + g.id })));
+            }
+            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         }
 
         // ——— Arkusze ———
@@ -519,9 +559,36 @@ Window {
             cardWidth: 480
             property real bpm: 100
             property int beats: 4
+            property string template: ""
             Column {
                 width: parent.width
                 spacing: 14
+                Label { text: "Na czym zaczynasz?" }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "", label: "Pusty projekt", hint: "Ścieżki na wokal i gitarę" }].concat(Studio.genres)
+                        delegate: HoverButton {
+                            id: tplChip
+                            required property var modelData
+                            readonly property bool on: newSheet.template === modelData.id
+                            width: tplText.implicitWidth + 24; height: 30; radius: 15
+                            baseColor: on ? Theme.accent : Theme.fill
+                            color: on ? baseColor : (hovered ? Theme.hover : baseColor)
+                            onClicked: { newSheet.template = modelData.id; if (modelData.bpm) newSheet.bpm = modelData.bpm; }
+                            Text { id: tplText; anchors.centerIn: parent; text: tplChip.modelData.label; color: tplChip.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                            Tip { shown: tplChip.hovered; text: tplChip.modelData.hint }
+                        }
+                    }
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    visible: newSheet.template !== ""
+                    text: "Gotowy bit i 808 (do zmiany w Beat Makerze), dwie ścieżki na wokal z efektami i mastering gatunku. Wystarczy nagrać głos."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                }
                 Label { text: "Nazwa piosenki" }
                 Field { id: newName; width: parent.width; onAccepted: createBtn.clicked() }
                 Row {
@@ -554,7 +621,7 @@ Window {
                     Pill {
                         id: createBtn
                         text: "Utwórz"; primary: true
-                        onClicked: { newSheet.close(); Studio.newProject(newName.text, newSheet.bpm, newSheet.beats); }
+                        onClicked: { newSheet.close(); Studio.newProject(newName.text, newSheet.bpm, newSheet.beats, newSheet.template); if (newSheet.template && Studio.bpm !== newSheet.bpm) Studio.bpm = newSheet.bpm; }
                     }
                 }
             }

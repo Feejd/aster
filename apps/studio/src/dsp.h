@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <vector>
 
 // Proste efekty Studia — bez alokacji i blokad, do użycia w wątku audio.
 // Współczynniki liczy wątek interfejsu (w migawce), stan filtrów trzyma Renderer.
@@ -171,4 +172,79 @@ private:
     Comb m_comb[2][Combs];
     Allpass m_ap[2][Allpasses];
     float m_feedback = 0.84f, m_damp = 0.25f;
+};
+
+// Echo wspólne dla ścieżek, zgrane z tempem (np. ósemka z kropką). Każde powtórzenie ciemniejsze;
+// lewy i prawy kanał na zmianę („ping-pong”). Bufor przydzielany raz, poza wątkiem audio.
+class Echo
+{
+public:
+    static constexpr int MaxDelay = 2 * 48000;
+    Echo() : m_l(MaxDelay, 0.f), m_r(MaxDelay, 0.f) {}
+    void process(const float *inL, const float *inR, float *outL, float *outR, int n, int delay, float feedback)
+    {
+        delay = std::clamp(delay, 1, MaxDelay - 1);
+        for (int i = 0; i < n; ++i) {
+            int rp = m_pos - delay;
+            if (rp < 0)
+                rp += MaxDelay;
+            const float dl = m_l[size_t(rp)], dr = m_r[size_t(rp)];
+            m_lpL += 0.35f * (dr - m_lpL);              // ping-pong: lewy dostaje prawy i odwrotnie
+            m_lpR += 0.35f * (dl - m_lpR);
+            m_l[size_t(m_pos)] = (inL[i] + inR[i]) * 0.5f + m_lpL * feedback;
+            m_r[size_t(m_pos)] = m_lpR * feedback;
+            if (++m_pos >= MaxDelay)
+                m_pos = 0;
+            outL[i] += dl;
+            outR[i] += dr;
+        }
+    }
+
+private:
+    std::vector<float> m_l, m_r;
+    int m_pos = 0;
+    float m_lpL = 0, m_lpR = 0;
+};
+
+// Ogranicznik z wyprzedzeniem (~1,3 ms): widzi szczyt, zanim ten dojdzie do wyjścia, i łagodnie ścisza,
+// więc nawet mocno „dociśnięty” mastering nie trzeszczy. Na końcu twarde cięcie na pułapie (bezpiecznik).
+class Limiter
+{
+public:
+    static constexpr int Look = 64;
+    float gain = 1.f;
+    float process(float &l, float &r, float ceiling, float release)
+    {
+        m_bl[m_pos] = l;
+        m_br[m_pos] = r;
+        m_pk[m_pos] = std::max(std::fabs(l), std::fabs(r));
+        float peak = 0;
+        for (float p : m_pk)
+            peak = std::max(peak, p);
+        const float target = peak > ceiling ? ceiling / peak : 1.f;
+        if (target < gain)
+            gain += (target - gain) * 0.25f;
+        else
+            gain += (target - gain) * release;
+        int rp = m_pos + 1;
+        if (rp >= Look)
+            rp = 0;
+        l = std::clamp(m_bl[rp] * gain, -ceiling, ceiling);
+        r = std::clamp(m_br[rp] * gain, -ceiling, ceiling);
+        m_pos = rp;
+        return gain;
+    }
+
+private:
+    std::array<float, Look> m_bl{}, m_br{}, m_pk{};
+    int m_pos = 0;
+};
+
+// Mastering sumy: korektor (dół/góra), kompresor „sklejający”, szerokość stereo i dociśnięcie do ogranicznika
+struct MasterParams
+{
+    Biquad low, high;
+    CompParams comp;
+    float width = 1.f;     // 1 = bez zmian, >1 szerzej
+    float drive = 1.f;     // wzmocnienie przed ogranicznikiem (głośność)
 };

@@ -35,6 +35,11 @@ class Studio : public QObject
     Q_PROPERTY(double cycleStart READ cycleStart NOTIFY cycleChanged)
     Q_PROPERTY(double cycleEnd READ cycleEnd NOTIFY cycleChanged)
     Q_PROPERTY(QVariantList presets READ presets CONSTANT)
+    Q_PROPERTY(QVariantMap mastering READ mastering NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList masteringPresets READ masteringPresets CONSTANT)
+    Q_PROPERTY(QString echoTime READ echoTime WRITE setEchoTime NOTIFY settingsChanged)   // 1/4 | 1/8 | 3/16
+    Q_PROPERTY(QVariantList kits READ kits CONSTANT)
+    Q_PROPERTY(QVariantList genres READ genres CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
@@ -94,6 +99,12 @@ public:
     double cycleStart() const { return m_cycleStart; }
     double cycleEnd() const { return m_cycleEnd; }
     QVariantList presets() const;
+    QVariantMap mastering() const;
+    QVariantList masteringPresets() const;
+    QString echoTime() const { return m_echoTime; }
+    void setEchoTime(const QString &t);
+    QVariantList kits() const;
+    QVariantList genres() const;
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
     QVariantList mix() const { return m_mixView; }
@@ -130,7 +141,8 @@ public:
     int sourcesVersion() const { return m_sourcesVersion; }
 
     // Projekt
-    Q_INVOKABLE bool newProject(const QString &name, double bpm, int beatsPerBar);
+    // template: "" (pusty) albo gatunek z genres — gotowy bit, 808, ścieżka wokalu z efektami i mastering
+    Q_INVOKABLE bool newProject(const QString &name, double bpm, int beatsPerBar, const QString &templ = {});
     Q_INVOKABLE bool openProject(const QString &pathOrUrl);
     Q_INVOKABLE bool save();
     Q_INVOKABLE void closeProject();
@@ -151,7 +163,14 @@ public:
     // key: eqLow | eqMid | eqHigh (dB) | comp | reverb (0…1) | lowCut (0/1)
     Q_INVOKABLE void setTrackFx(int index, const QString &key, double value);
     Q_INVOKABLE void applyPreset(int index, const QString &preset);
-    Q_INVOKABLE void remember() { checkpoint(); }               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
+    Q_INVOKABLE void remember() { checkpoint(); }
+    // Beat Maker: kind = drums | bass; genre — wzór startowy
+    Q_INVOKABLE int addPatternTrack(const QString &kind, const QString &genre);
+    Q_INVOKABLE void setPattern(int index, const QVariantMap &pattern);
+    Q_INVOKABLE QVariantMap genrePattern(const QString &kind, const QString &genre) const;
+    Q_INVOKABLE QString noteName(int root, int degree) const;     // „Fis1”
+    Q_INVOKABLE void setMastering(const QString &key, double value);
+    Q_INVOKABLE void applyMastering(const QString &preset);               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
 
     // Klipy (id)
     Q_INVOKABLE void moveClip(int id, int track, double start);
@@ -231,11 +250,22 @@ private:
         bool mute = false, solo = false, armed = false;
         int input = 0;
         // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
-        double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0;
+        double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0;
         bool lowCut = false;
         QString preset;
+        // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
+        QString kind = QStringLiteral("audio");
+        QJsonObject pattern;
         QList<Clip> clips;
     };
+    struct Mastering
+    {
+        double eqLow = 0, eqHigh = 0, comp = 0, width = 1, drive = 0;   // dB, dB, 0…1, ×, dB
+        QString preset;
+    };
+    void renderPattern(int index);                  // wzór → plik audio/_bit-N.wav → klipy ścieżki
+    void applyPresetTo(Track &t, const QString &preset);
+    void applyMasteringPreset(const QString &preset);
     static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)
     void carve(int track, long long a, long long b, int keepId);   // wytnij [a, b) z klipów ścieżki
 
@@ -268,6 +298,8 @@ private:
     bool m_metronome = true, m_countIn = true;
     double m_masterDb = 0;
     double m_reverbSize = 0.5, m_clickVolume = 0.7;
+    Mastering m_mastering;
+    QString m_echoTime = QStringLiteral("3/16");
     bool m_cycle = false;
     double m_cycleStart = 0, m_cycleEnd = 0;
     double m_latencyMs = 0;
