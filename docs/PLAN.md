@@ -91,7 +91,8 @@ Programy:
 Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [x] Programy zastąpione przez Aster: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso,
       skanlite, kcalc, ark, filelight, partitionmanager, kcharselect, discover, plasma-systemmonitor, kinfocenter,
-      kwalletmanager, ksystemlog, kmail/kontact/akregator, khelpcenter, plasma-welcome, drkonqi, gry KDE
+      kwalletmanager, ksystemlog, kmail/kontact/akregator i reszta PIM, Kleopatra, NeoChat, Qrca, Skanpage, KDebugSettings,
+      khelpcenter, plasma-welcome, drkonqi, ABRT, Fedora Media Writer, LibreOffice, gry KDE
       — bez sprzątania „niepotrzebnych” zależności (dnf zabrałby flatpak, fwupd, sshfs); próba: `--dry-run`
 - [x] Zostaje infrastruktura bez okien (sprawdzane po usunięciu — inaczej budowa obrazu się przerywa): KWin, Plasma,
       KIO z kio-extras, PowerDevil, PipeWire, NetworkManager, BlueZ, kdeconnectd (z pakietem kde-connect), flatpak, fwupd

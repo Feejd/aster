@@ -12,7 +12,11 @@ REPLACED="dolphin dolphin-plugins konsole kate kate-plugins kwrite okular gwenvi
 kamoso skanlite kcalc ark filelight kde-partitionmanager kcharselect
 plasma-discover plasma-discover-* plasma-systemmonitor kinfocenter ksystemlog kjournald kwalletmanager5 kfind
 kmail kontact akregator korganizer kaddressbook kdepim kdepim-* khelpcenter plasma-welcome plasma-welcome-fedora
-plasma-drkonqi kmahjongg kmines kpat ksudoku kolourpaint krdc krfb kmousetool kmag kmouth"
+plasma-drkonqi kmahjongg kmines kpat ksudoku kolourpaint krdc krfb kmousetool kmag kmouth
+pim-sieve-editor pim-data-exporter akonadi-import-wizard akonadiconsole kmail-account-wizard grantlee-editor
+kleopatra kgpg neochat qrca skanpage kdebugsettings mediawriter gnome-abrt abrt-gui abrt-desktop setroubleshoot
+libreoffice libreoffice-*"
+# LibreOffice też: biuro to w Asterze aplikacje webowe (Dokumenty, Arkusze) albo Flatpak ze Sklepu
 
 # Infrastruktura bez własnych okien (albo potrzebna Asterowi) — po usuwaniu musi zostać
 KEEP="kwin plasma-workspace kdeconnectd kio-extras kf6-kio-core kf6-kio-widgets sddm plasma-nm powerdevil
@@ -25,7 +29,15 @@ HIDE="systemsettings kdesystemsettings org.kde.kmenuedit org.kde.keditbookmarks 
 org.kde.kdeconnect.app org.kde.kdeconnect.sms org.kde.kdeconnect-settings org.kde.kdeconnect.nonplasma
 org.kde.drkonqi.coredump.gui org.kde.kwalletd6 org.kde.klipper org.kde.kscreen org.kde.plasma-welcome
 org.kde.discover org.kde.discover.notifier org.kde.dolphin org.kde.konsole org.kde.kwrite org.kde.kate
-org.kde.okular org.kde.gwenview org.kde.ark org.kde.kcalc org.kde.kinfocenter org.kde.plasma-systemmonitor"
+org.kde.okular org.kde.gwenview org.kde.ark org.kde.kcalc org.kde.kinfocenter org.kde.plasma-systemmonitor
+org.kde.spectacle org.kde.skanpage org.kde.kdebugsettings org.kde.kleopatra org.kde.kwatchgnupg org.kde.neochat
+org.kde.qrca org.kde.sieveeditor org.kde.pimdataexporter org.kde.akonadiimportwizard org.kde.contactthemeeditor
+org.kde.contactprintthemeeditor org.kde.headerthemeeditor org.fedoraproject.MediaWriter org.freedesktop.GnomeAbrt
+org.freedesktop.problems.applet setroubleshoot im-chooser firewall-config qt6-designer qt6-linguist qt6-assistant
+kwalletmanager5-kwalletd org.kde.kwalletmanager libreoffice-startcenter libreoffice-writer libreoffice-calc
+libreoffice-impress libreoffice-draw libreoffice-math libreoffice-base libreoffice-xsltfilter"
+# Zrzuty ekranu (Spectacle) działają dalej pod Print Screen i z centrum sterowania — tylko bez ikony w Starcie.
+# Qt Designer/Linguist przychodzą z pakietami do budowania (maszyna wirtualna), zapora i metody wprowadzania z Fedory.
 
 hide_system() {
     for id in $HIDE; do
