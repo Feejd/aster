@@ -162,3 +162,11 @@ var distributeH = "M4 4v16M20 4v16M10 8h4v8h-4z";
 var distributeV = "M4 4h16M4 20h16M8 10h8v4H8z";
 var ruler = "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4";
 var clapper = "M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10l-.7-3.6a1 1 0 0 1 .8-1.2l13.6-2.5a1 1 0 0 1 1.2.8l.5 2.6zM8.4 4.4l2.2 3.4M13.6 3.5l2.2 3.4";
+// Aster Code
+var gitBranch = "M6 3v12M18 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6M6 21a3 3 0 1 0 0-6a3 3 0 1 0 0 6M18 9a9 9 0 0 1-9 9";
+var braces = "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1";
+var files = "M15 2v4a1 1 0 0 0 1 1h4M9 18a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6l5 5v9a2 2 0 0 1-2 2zM4 7.5V20a2 2 0 0 0 2 2h9";
+var panelBottom = "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM3 14h18";
+var hash = "M5 9h15M4 15h15M10 3L8 21M16 3l-2 18";
+var alertCircle = "M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0M12 7.5v5M12 16.5h.01";
+var warning = "M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01";
