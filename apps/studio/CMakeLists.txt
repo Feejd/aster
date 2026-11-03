@@ -1,11 +1,14 @@
 # Studio (aster-studio) — budowane z głównego CMakeLists.txt repozytorium.
 # Dźwięk: PipeWire (pipewire-devel) w wątku czasu rzeczywistego; pliki: libsndfile (WAV/FLAC/OGG/MP3);
-# przepróbkowanie importu: libsamplerate; klawiatury MIDI: sekwencer ALSA (alsa-lib-devel).
+# przepróbkowanie importu: libsamplerate; klawiatury MIDI: sekwencer ALSA (alsa-lib-devel);
+# udostępnianie: okładka w tagach MP3 (taglib-devel), paczka projektu (libarchive-devel).
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 pkg_check_modules(SNDFILE REQUIRED IMPORTED_TARGET sndfile)
 pkg_check_modules(SAMPLERATE REQUIRED IMPORTED_TARGET samplerate)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
+pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
 
 qt_add_executable(aster-studio src/main.cpp)
 target_include_directories(aster-studio PRIVATE src)
@@ -38,6 +41,8 @@ qt_add_qml_module(aster-studio
         src/audiosource.h
         src/dsp.h
         src/midiinput.cpp
+        src/share.cpp
+        src/share.h
         src/midiinput.h
         src/tune.h
         src/synthvoice.h
@@ -60,6 +65,8 @@ target_link_libraries(aster-studio PRIVATE
     PkgConfig::SNDFILE
     PkgConfig::SAMPLERATE
     PkgConfig::ALSA
+    PkgConfig::TAGLIB
+    PkgConfig::LIBARCHIVE
     KF6::WindowSystem
     aster-uiplugin
 )

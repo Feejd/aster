@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QVariantList>
 #include <atomic>
+#include <functional>
 
 // Studio: projekt piosenki (tempo, metrum, ścieżki z klipami), edycja z cofaniem, zapis i odczyt,
 // a pod spodem silnik dźwięku (Engine). Projekt to folder: projekt.json + audio/ (nagrania i zaimportowane pliki)
@@ -47,6 +48,8 @@ class Studio : public QObject
     Q_PROPERTY(QVariantList genres READ genres CONSTANT)
     Q_PROPERTY(QVariantList instruments READ instruments CONSTANT)
     Q_PROPERTY(QStringList midiDevices READ midiDevices NOTIFY midiDevicesChanged)     // podłączone klawiatury MIDI
+    Q_PROPERTY(QString artist READ artist WRITE setArtist NOTIFY artistChanged)       // podpis na okładce i w tagach
+    Q_PROPERTY(bool sharing READ sharing NOTIFY sharingChanged)
     Q_PROPERTY(QVariantList rhythms READ rhythms CONSTANT)
     Q_PROPERTY(QVariantList progressions READ progressions CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
@@ -121,6 +124,9 @@ public:
     QVariantList genres() const;
     QVariantList instruments() const;
     QStringList midiDevices() const { return m_midi.devices(); }
+    QString artist() const;
+    void setArtist(const QString &a);
+    bool sharing() const { return m_sharing; }
     QVariantList rhythms() const;
     QVariantList progressions() const;
     void setMasterVolume(double db);
@@ -230,6 +236,16 @@ public:
     Q_INVOKABLE void exportMix(const QString &format);
     Q_INVOKABLE void cancelExport() { m_cancelExport.store(true); }
 
+    // Udostępnianie: piosenka (MP3 z okładką i tagami) albo projekt do remiksu (paczka ZIP) w <projekt>/Udostępnione;
+    // wynik w shareReady. Potem: na telefon (KDE Connect), e-mailem, do schowka, w folderze
+    Q_INVOKABLE QString coverPreview(const QString &title, const QString &artist);   // adres pliku z okładką
+    Q_INVOKABLE void shareSong(const QString &title, const QString &artist);
+    Q_INVOKABLE void shareProject();
+    Q_INVOKABLE QVariantList phones() const;
+    Q_INVOKABLE bool sendToPhone(const QString &id, const QString &path);
+    Q_INVOKABLE void sendEmail(const QString &path, const QString &subject);
+    Q_INVOKABLE void copyFile(const QString &path);
+
     // Pomocnicze dla interfejsu
     Q_INVOKABLE double snap(double seconds, int division) const;   // do siatki: division części miary (1 = miara, 0 = takt)
     Q_INVOKABLE QString barBeat(double seconds) const;              // „12.3”
@@ -257,6 +273,10 @@ signals:
     void sourcesChanged();
     void cycleChanged();
     void midiDevicesChanged();
+    void artistChanged();
+    void sharingChanged();
+    void shareReady(const QString &path, const QString &kind);
+    void shareFailed(const QString &error);
     void midiNote(int pitch, int velocity, bool on);            // nuta z klawiatury MIDI (siła 1…127)
     void exportFinished(bool ok, const QString &path, const QString &error);
     void message(const QString &text);
@@ -318,8 +338,14 @@ private:
     void updateCapture();
     void setDirty(bool d);
     void finishRecording();
+    using ExportDone = std::function<void(bool ok, const QString &path, const QString &error)>;
+    void startExport(const QString &format, const QString &path, ExportDone done);
+    std::vector<float> roughWave(int bins) const;   // przybliżony kształt piosenki z klipów (do okładki)
+    QString shareFolder() const;
 
     static inline Studio *s_instance = nullptr;
+    bool m_sharing = false;
+    int m_coverVersion = 0;
     Engine m_engine;
     MidiInput m_midi;
     QTimer m_timer;

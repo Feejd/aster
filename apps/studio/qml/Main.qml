@@ -71,6 +71,12 @@ Window {
         onAccepted: Studio.openProject(String(selectedFolder))
     }
     FileDialog {
+        id: bundleDialog
+        title: "Otwórz paczkę projektu"
+        nameFilters: ["Paczka projektu Studia (*.zip)"]
+        onAccepted: Studio.openProject(String(selectedFile))
+    }
+    FileDialog {
         id: importDialog
         title: "Dodaj dźwięk do projektu"
         fileMode: FileDialog.OpenFiles
@@ -127,6 +133,9 @@ Window {
         else if (what.startsWith("kd:")) pianoRoll.keyDown(what.substring(3));
         else if (what.startsWith("ku:")) pianoRoll.keyUp(what.substring(3));
         else if (what === "recNotes") pianoRoll.recNotes = true;
+        else if (what === "shareSheet") shareSheet.start();
+        else if (what === "shareSong") Studio.shareSong("Nocna jazda", "Dominik");
+        else if (what === "shareProject") { shareSheet.kind = "project"; Studio.shareProject(); }
         else if (what.startsWith("midi:")) { const a = what.split(":"); Studio.simulateMidi(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("toNotes:")) Studio.chordsToNotes(Number(what.substring(8)));
         else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
@@ -320,6 +329,7 @@ Window {
             radius: win.r
             onNewRequested: (genre) => win.newProject(genre)
             onOpenRequested: openDialog.open()
+            onBundleRequested: bundleDialog.open()
             onMenuRequested: (project, item, x, y) => win.projectMenu(project, item, x, y)
         }
 
@@ -472,7 +482,8 @@ Window {
                     RoundBtn { icon: "sliders"; active: win.showMixer; tip: "Mikser (X)"; onClicked: win.showMixer = !win.showMixer }
                     RoundBtn { icon: "sparkle"; active: win.showInspector; tip: "Efekty i klip (E)"; onClicked: win.showInspector = !win.showInspector }
                     RoundBtn { icon: "speaker"; tip: "Ustawienia dźwięku"; onClicked: audioSheet.open(); warn: !Studio.audioOk || Studio.audioError !== "" }
-                    Pill { anchors.verticalCenter: parent.verticalCenter; text: "Eksportuj"; icon: "upload"; primary: true; tip: "Zapisz piosenkę jako MP3, WAV… (Ctrl+E)"; onClicked: exportSheet.open() }
+                    RoundBtn { icon: "download"; tip: "Eksportuj do MP3, WAV, OGG, FLAC (Ctrl+E)"; onClicked: exportSheet.open() }
+                    Pill { anchors.verticalCenter: parent.verticalCenter; text: "Udostępnij"; icon: "upload"; primary: true; tip: "Piosenka z okładką albo projekt do remiksu — na telefon, e-mailem, w komunikatorze"; onClicked: shareSheet.start() }
                 }
                 WindowButtons {
                     id: winButtons
@@ -734,6 +745,141 @@ Window {
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
                 }
                 Pill { anchors.right: parent.right; text: "Gotowe"; primary: true; onClicked: tempoSheet.close() }
+            }
+        }
+
+        // ——— Udostępnianie ———
+        Sheet {
+            id: shareSheet
+            radius: win.r
+            title: "Udostępnij"
+            cardWidth: 720
+            closable: !Studio.sharing && !Studio.exporting
+            property string kind: "song"
+            property string result: ""                 // przygotowany plik
+            property string cover: ""
+            property var phones: []
+            function start() {
+                result = "";
+                shareTitle.text = Studio.name;
+                shareArtist.text = Studio.artist;
+                phones = Studio.phones();
+                refreshCover();
+                open();
+            }
+            function refreshCover() { cover = Studio.coverPreview(shareTitle.text || Studio.name, shareArtist.text); }
+            Timer { id: coverTimer; interval: 350; onTriggered: shareSheet.refreshCover() }
+            Connections {
+                target: Studio
+                function onShareReady(path, kind) { shareSheet.result = path; shareSheet.phones = Studio.phones(); }
+                function onShareFailed(error) { win.toast(error); }
+            }
+            Row {
+                width: parent.width
+                spacing: 22
+                Rectangle {
+                    width: 260; height: 260; radius: 14
+                    color: Theme.fill
+                    clip: true
+                    Image {
+                        anchors.fill: parent
+                        source: shareSheet.cover
+                        visible: shareSheet.kind === "song"
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true
+                    }
+                    Column {
+                        visible: shareSheet.kind === "project"
+                        anchors.centerIn: parent
+                        spacing: 10
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.archive; size: 64; stroke: 1.4; color: Theme.text2 }
+                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: Studio.tracksLabel(Studio.tracks.length); color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
+                    }
+                }
+                Column {
+                    width: parent.width - 282
+                    spacing: 12
+                    Segmented {
+                        model: [{ label: "Piosenka (MP3)", value: "song" }, { label: "Projekt do remiksu", value: "project" }]
+                        value: shareSheet.kind
+                        onPicked: (v) => { shareSheet.kind = v; shareSheet.result = ""; }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: shareSheet.kind === "song"
+                              ? "Gotowa piosenka z okładką, tytułem i wykonawcą — tak widać ją na telefonie i w odtwarzaczach."
+                              : "Cały projekt w jednej paczce: ścieżki, nagrania, bity, efekty. Znajomy otworzy ją w swoim Studiu i zrobi własną wersję."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                    }
+                    Column {
+                        visible: shareSheet.kind === "song"
+                        width: parent.width
+                        spacing: 8
+                        Label { text: "Tytuł" }
+                        Field { id: shareTitle; width: parent.width; input.onTextChanged: coverTimer.restart() }
+                        Label { text: "Wykonawca" }
+                        Field { id: shareArtist; width: parent.width; placeholder: "Twój pseudonim"; input.onTextChanged: coverTimer.restart() }
+                    }
+                    Rectangle {
+                        visible: Studio.exporting || Studio.sharing
+                        width: parent.width; height: 6; radius: 3
+                        color: Theme.fill
+                        Rectangle { width: parent.width * (Studio.exporting ? Studio.exportProgress : 0.6); height: parent.height; radius: 3; color: Theme.accent }
+                    }
+                    // Po przygotowaniu: gdzie wysłać
+                    Column {
+                        visible: shareSheet.result !== ""
+                        width: parent.width
+                        spacing: 8
+                        Row {
+                            spacing: 8
+                            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.check; size: 16; stroke: 2.4; color: "#30C26B" }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: shareSheet.cardWidth - 340
+                                text: "Gotowe: " + shareSheet.result.split("/").pop()
+                                elide: Text.ElideMiddle
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                            }
+                        }
+                        Flow {
+                            width: parent.width
+                            spacing: 8
+                            Repeater {
+                                model: shareSheet.phones
+                                delegate: Pill {
+                                    required property var modelData
+                                    text: "Na telefon: " + modelData.name
+                                    icon: "phone"
+                                    onClicked: Studio.sendToPhone(modelData.id, shareSheet.result)
+                                }
+                            }
+                            Pill { text: "E-mail"; icon: "mail"; onClicked: Studio.sendEmail(shareSheet.result, shareTitle.text || Studio.name) }
+                            Pill { text: "Kopiuj plik"; icon: "copy"; tip: "Wklej w komunikatorze, przeglądarce albo w Plikach"; onClicked: Studio.copyFile(shareSheet.result) }
+                            Pill { text: "Pokaż w folderze"; icon: "folder"; onClicked: Studio.showInFolder(shareSheet.result) }
+                        }
+                        Text {
+                            visible: shareSheet.phones.length === 0
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Telefon połączysz w programie Telefon — potem pliki wyślesz jednym kliknięciem."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                        }
+                    }
+                    Row {
+                        anchors.right: parent.right
+                        spacing: 8
+                        Pill { text: shareSheet.result ? "Gotowe" : "Anuluj"; enabled: !Studio.sharing && !Studio.exporting; onClicked: shareSheet.close() }
+                        Pill {
+                            visible: shareSheet.result === ""
+                            text: Studio.exporting || Studio.sharing ? "Przygotowuję…" : (shareSheet.kind === "song" ? "Przygotuj piosenkę" : "Spakuj projekt")
+                            primary: true
+                            enabled: !Studio.exporting && !Studio.sharing
+                            onClicked: shareSheet.kind === "song" ? Studio.shareSong(shareTitle.text, shareArtist.text) : Studio.shareProject()
+                        }
+                    }
+                }
             }
         }
 

@@ -217,8 +217,13 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         zatrzymanym transporcie (bez klipów), więc słychać ogony pogłosu i echa; wycisz/solo obowiązują
   - [ ] Dalej: pedał sustain, pokrętła klawiatury do suwaków, kopiowanie taktów, biblioteka pętli,
         przełącznik A/B masteringu
-  - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
-        wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
+  - [x] udostępnianie bez serwera (`src/share.*`): arkusz „Udostępnij” z okładką generowaną z kształtu fali piosenki,
+        tytułu i wykonawcy; piosenka jako MP3 z tagami i okładką (TagLib) w <projekt>/Udostępnione; projekt do remiksu
+        jako paczka ZIP (libarchive, tylko używane pliki); wysyłka na sparowany telefon (KDE Connect), e-mailem
+        (xdg-email z załącznikiem), schowek (wklejenie w komunikatorze/Plikach), „Pokaż w folderze”; otwarcie paczki
+        od znajomego (ekran startowy) tworzy nowy projekt „(remiks)” — bez nadpisywania
+  - [ ] Dalej (społecznościowo, jak BandLab): link do odsłuchu i wspólna praca na żywo — wymaga serwera Aster;
+        wideo z okładką i falą do social mediów (ffmpeg); typ pliku paczki w systemie (dwuklik otwiera Studio)
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli

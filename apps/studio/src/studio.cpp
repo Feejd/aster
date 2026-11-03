@@ -1,12 +1,17 @@
 #include "studio.h"
 #include "beatsynth.h"
+#include "share.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QClipboard>
 #include <QDir>
+#include <QGuiApplication>
+#include <QMimeData>
+#include <QProcess>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -279,6 +284,20 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
 bool Studio::openProject(const QString &pathOrUrl)
 {
     QString path = localPath(pathOrUrl);
+    if (path.endsWith(QLatin1String(".zip"), Qt::CaseInsensitive)) {
+        // Paczka od znajomego: rozpakowanie do Muzyka/Studio jako nowy projekt (remiks)
+        QDir().mkpath(projectsFolder());
+        QString err;
+        const QString folder = Share::unpackProject(path, projectsFolder(), &err);
+        if (folder.isEmpty()) {
+            emit message(err);
+            return false;
+        }
+        if (!openProject(folder))
+            return false;
+        emit message(QStringLiteral("Otworzono projekt z paczki — możesz go zmieniać i remiksować"));
+        return true;
+    }
     if (QFileInfo(path).isDir())
         path += QLatin1Char('/') + ProjectFile;
     QFile f(path);
@@ -1405,16 +1424,24 @@ void Studio::tick()
 
 void Studio::exportMix(const QString &format)
 {
+    const QString ext = format == QLatin1String("mp3") || format == QLatin1String("ogg") || format == QLatin1String("flac") ? format : QStringLiteral("wav");
+    QDir().mkpath(m_folder + QStringLiteral("/Eksport"));
+    startExport(ext, m_folder + QStringLiteral("/Eksport/") + m_name + QLatin1Char('.') + ext, {});
+}
+
+void Studio::startExport(const QString &ext, const QString &path, ExportDone done)
+{
     if (!isOpen() || m_exporting)
         return;
     const long long end = frames(duration());
     if (end <= 0) {
-        emit exportFinished(false, QString(), QStringLiteral("Projekt jest pusty — nagraj albo dodaj dźwięk."));
+        const QString err = QStringLiteral("Projekt jest pusty — nagraj albo dodaj dźwięk.");
+        if (done)
+            done(false, QString(), err);
+        else
+            emit exportFinished(false, QString(), err);
         return;
     }
-    const QString ext = format == QLatin1String("mp3") || format == QLatin1String("ogg") || format == QLatin1String("flac") ? format : QStringLiteral("wav");
-    QDir().mkpath(m_folder + QStringLiteral("/Eksport"));
-    const QString path = m_folder + QStringLiteral("/Eksport/") + m_name + QLatin1Char('.') + ext;
     std::shared_ptr<Snapshot> snap(buildSnapshot());
     m_exporting = true;
     m_exportProgress = 0;
@@ -1427,18 +1454,22 @@ void Studio::exportMix(const QString &format)
         reverb |= t.reverb > 0 && !t.mute;
     const long long total = end + llround(Engine::Rate * (reverb ? 1.5 + 3.0 * m_reverbSize : 0.5));
     QPointer<Studio> self(this);
-    QThreadPool::globalInstance()->start([self, snap, total, path, ext, this] {
+    QThreadPool::globalInstance()->start([self, snap, total, path, ext, done, this] {
         QString err;
         const bool ok = Engine::exportMix(*snap, total, path, ext, [this](double p) {
             m_exportShared.store(p);
             return !m_cancelExport.load();
         }, &err);
-        QMetaObject::invokeMethod(qApp, [self, ok, path, err] {
+        QMetaObject::invokeMethod(qApp, [self, ok, path, err, done] {
             if (!self)
                 return;
             self->m_exporting = false;
             emit self->exportChanged();
-            emit self->exportFinished(ok, path, ok || err.isEmpty() ? err : QStringLiteral("Nie udało się zapisać miksu: ") + err);
+            const QString msg = ok || err.isEmpty() ? err : QStringLiteral("Nie udało się zapisać miksu: ") + err;
+            if (done)
+                done(ok, path, msg);
+            else
+                emit self->exportFinished(ok, path, msg);
         });
     });
 }
@@ -2017,4 +2048,170 @@ void Studio::liveNoteOn(int index, int pitch, double velocity)
 void Studio::liveNoteOff(int pitch)
 {
     m_engine.liveNoteOff(pitch);
+}
+
+// ——— Udostępnianie ———
+
+QString Studio::artist() const
+{
+    QString a = QSettings().value(QStringLiteral("share/artist")).toString();
+    if (a.isEmpty()) {
+        a = qEnvironmentVariable("USER");
+        if (!a.isEmpty())
+            a[0] = a[0].toUpper();
+    }
+    return a;
+}
+
+void Studio::setArtist(const QString &a)
+{
+    QSettings().setValue(QStringLiteral("share/artist"), a.trimmed());
+    emit artistChanged();
+}
+
+QString Studio::shareFolder() const
+{
+    const QString dir = m_folder + QStringLiteral("/Udostępnione");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+// Przybliżony kształt piosenki: w każdym kawałku osi czasu najgłośniejszy szczyt klipów (z pętlami)
+std::vector<float> Studio::roughWave(int bins) const
+{
+    std::vector<float> wave(size_t(bins), 0.f);
+    const long long end = frames(duration());
+    if (end <= 0)
+        return wave;
+    for (const Track &t : m_tracks) {
+        if (t.mute)
+            continue;
+        const float g = float(dbToGain(t.volume));
+        for (const Clip &c : t.clips) {
+            const SourcePtr src = m_sources.value(c.file);
+            if (!src || src->peaks.empty())
+                continue;
+            for (int b = 0; b < bins; ++b) {
+                const long long at = end * b / bins + end / bins / 2;
+                if (at < c.start || at >= c.start + c.length)
+                    continue;
+                const long long t0 = at - c.start;
+                const long long si = c.srcStart + (c.loop ? (t0 + c.offset) % c.srcLen : t0);
+                const size_t pi = size_t(si / AudioSource::PeakStep) * 2;
+                if (pi + 1 < src->peaks.size())
+                    wave[size_t(b)] = std::max(wave[size_t(b)], std::max(-src->peaks[pi], src->peaks[pi + 1]) * g);
+            }
+        }
+    }
+    float peak = 0;
+    for (float v : wave)
+        peak = std::max(peak, v);
+    if (peak > 0)
+        for (float &v : wave)
+            v /= peak;
+    return wave;
+}
+
+QString Studio::coverPreview(const QString &title, const QString &artist)
+{
+    if (!isOpen())
+        return {};
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(dir);
+    // Nowa nazwa przy każdej zmianie — QML nie trzyma starego obrazka z pamięci podręcznej
+    QFile::remove(dir + QStringLiteral("/okladka-%1.png").arg(m_coverVersion));
+    const QString path = dir + QStringLiteral("/okladka-%1.png").arg(++m_coverVersion);
+    Share::cover(title, artist, roughWave(72)).scaled(480, 480, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(path);
+    return QUrl::fromLocalFile(path).toString();
+}
+
+void Studio::shareSong(const QString &rawTitle, const QString &rawArtist)
+{
+    if (!isOpen() || m_exporting)
+        return;
+    const QString title = rawTitle.trimmed().isEmpty() ? m_name : rawTitle.trimmed();
+    const QString artistName = rawArtist.trimmed();
+    setArtist(artistName);
+    QString fileName = title;
+    fileName.replace(QLatin1Char('/'), QLatin1Char('-'));
+    const QString path = shareFolder() + QLatin1Char('/') + fileName + QStringLiteral(".mp3");
+    m_sharing = true;
+    emit sharingChanged();
+    const std::vector<float> wave = roughWave(72);
+    QPointer<Studio> self(this);
+    startExport(QStringLiteral("mp3"), path, [self, title, artistName, wave](bool ok, const QString &p, const QString &err) {
+        if (!self)
+            return;
+        self->m_sharing = false;
+        emit self->sharingChanged();
+        if (!ok) {
+            emit self->shareFailed(err.isEmpty() ? QStringLiteral("Nie udało się przygotować piosenki.") : err);
+            return;
+        }
+        const QImage img = Share::cover(title, artistName, wave);
+        img.save(QFileInfo(p).absolutePath() + QLatin1Char('/') + QFileInfo(p).completeBaseName() + QStringLiteral(" — okładka.jpg"), "JPEG", 92);
+        Share::tagMp3(p, title, artistName, img);
+        emit self->shareReady(p, QStringLiteral("song"));
+    });
+}
+
+void Studio::shareProject()
+{
+    if (!isOpen() || m_sharing)
+        return;
+    save();
+    QStringList files{ProjectFile};
+    for (const Track &t : m_tracks)
+        for (const Clip &c : t.clips)
+            if (!files.contains(QStringLiteral("audio/") + c.file))
+                files << QStringLiteral("audio/") + c.file;
+    const QString zip = shareFolder() + QLatin1Char('/') + m_name + QStringLiteral(" — projekt.zip");
+    m_sharing = true;
+    emit sharingChanged();
+    const QString folder = m_folder;
+    QPointer<Studio> self(this);
+    QThreadPool::globalInstance()->start([self, folder, files, zip] {
+        QString err;
+        const bool ok = Share::packProject(folder, files, zip, &err);
+        QMetaObject::invokeMethod(qApp, [self, ok, zip, err] {
+            if (!self)
+                return;
+            self->m_sharing = false;
+            emit self->sharingChanged();
+            if (ok)
+                emit self->shareReady(zip, QStringLiteral("project"));
+            else
+                emit self->shareFailed(QStringLiteral("Nie udało się spakować projektu: ") + err);
+        });
+    });
+}
+
+QVariantList Studio::phones() const
+{
+    return Share::phones();
+}
+
+bool Studio::sendToPhone(const QString &id, const QString &path)
+{
+    const bool ok = Share::sendToPhone(id, path);
+    emit message(ok ? QStringLiteral("Wysłano na telefon — plik pojawi się w Pobranych") : QStringLiteral("Nie udało się wysłać na telefon"));
+    return ok;
+}
+
+void Studio::sendEmail(const QString &path, const QString &subject)
+{
+    // Program pocztowy z załącznikiem (xdg-email zna Thunderbirda, Evolution i aplikacje webowe z mailto)
+    if (!QProcess::startDetached(QStringLiteral("xdg-email"), {QStringLiteral("--subject"), subject, QStringLiteral("--attach"), path}))
+        emit message(QStringLiteral("Nie znaleziono programu pocztowego — plik jest w folderze Udostępnione"));
+}
+
+void Studio::copyFile(const QString &path)
+{
+    // Wklejenie w Plikach, komunikatorze albo przeglądarce (lista adresów + format menedżerów plików)
+    auto *mime = new QMimeData;
+    const QUrl url = QUrl::fromLocalFile(path);
+    mime->setUrls({url});
+    mime->setData(QStringLiteral("x-special/gnome-copied-files"), "copy\n" + url.toEncoded());
+    QGuiApplication::clipboard()->setMimeData(mime);
+    emit message(QStringLiteral("Skopiowano „%1” — wklej w komunikatorze albo w Plikach").arg(QFileInfo(path).fileName()));
 }

@@ -11,6 +11,7 @@ Item {
     required property real radius
     signal newRequested(string genre)
     signal openRequested()
+    signal bundleRequested()
     signal menuRequested(var project, Item item, real x, real y)
 
     // ——— Pasek boczny ———
@@ -48,6 +49,12 @@ Item {
                 onClicked: start.openRequested()
                 Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.folder; size: 15; color: Theme.text2 }
                 Text { x: 38; anchors.verticalCenter: parent.verticalCenter; text: "Otwórz projekt…"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
+            }
+            HoverButton {
+                width: parent.width; height: 32; radius: 9
+                onClicked: start.bundleRequested()
+                Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.archive; size: 15; color: Theme.text2 }
+                Text { x: 38; anchors.verticalCenter: parent.verticalCenter; text: "Otwórz paczkę od znajomego…"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
             }
         }
         // Stan dźwięku — od razu widać, gdy coś nie działa
