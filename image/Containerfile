@@ -18,7 +18,7 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
 
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
-RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan \
+RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \
  && systemctl --global enable aster-shell.service \

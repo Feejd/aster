@@ -23,6 +23,7 @@ Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**
 | `apps/music/` | Muzyka — albumy z okładkami, wykonawcy, utwory, kolejka, losowo i powtarzanie; biblioteka z tagów (TagLib). |
 | `apps/camera/` | Kamera — zdjęcia i filmy z kamery internetowej, samowyzwalacz, siatka, lustro; zapis do „Z aparatu” (zamiast Kamoso). |
 | `apps/scanner/` | Skaner — SANE (USB i sieciowe przez sane-airscan): podgląd z kadrem, szyba lub podajnik, strony do PDF albo JPG/PNG (zamiast Skanlite). |
+| `apps/phone/` | Telefon — KDE Connect przez D-Bus: bateria i zasięg, parowanie z kodem, znajdź telefon, pliki i schowek, pliki telefonu, powiadomienia. |
 | `apps/emoji/` | Panel emoji i znaków (Win+.) — szukanie po polsku, odcienie skóry, kaomoji, symbole; wstawia do aktywnego programu. Dane: `tools/make-emoji-data.py` (Unicode + CLDR). |
 | `common/mediasession.*` | Wspólne dla Wideo i Muzyki: MPRIS (Centrum sterowania, klawisze multimedialne) i blokada wygaszacza podczas filmu. |
 | `apps/portal/` | Okna systemowe dla xdg-desktop-portal — na razie „Otwórz / Zapisz” dla wszystkich programów (Flathub, Qt/KDE, GTK). |

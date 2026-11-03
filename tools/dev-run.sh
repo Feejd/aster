@@ -17,7 +17,7 @@ cmake --build "$BUILD"
 # Aplikacje z katalogu budowania widoczne w systemie (dok, Start, „Otwórz za pomocą”)
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
-for app in files browser webapps store settings tasks photos pdf editor calculator video music camera scanner; do
+for app in files browser webapps store settings tasks photos pdf editor calculator video music camera scanner phone; do
     sed "s|^Exec=aster-$app|Exec=env ASTER_DATA_DIR=$ROOT/data $BUILD/apps/$app/aster-$app|" "$ROOT/apps/$app/org.aster.$app.desktop" > "$APPS/org.aster.$app.desktop"
 done
 # Terminal: polecenie aster-terminal w ~/.local/bin (wołają je Pliki, KDE i xdg-terminal-exec)

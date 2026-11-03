@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Telefon
+GenericName=Połączenie z telefonem
+Comment=Powiadomienia z telefonu, wysyłanie plików i schowka, znajdowanie telefonu
+Exec=aster-phone
+Icon=kdeconnect
+Terminal=false
+Categories=Network;Utility;
+Keywords=telefon;android;iphone;kde connect;powiadomienia;pliki;schowek;łącze z telefonem;phone;
+StartupWMClass=aster-phone

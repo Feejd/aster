@@ -83,10 +83,13 @@ Programy:
 - [x] Skaner (Skanlite) — `apps/scanner`, przez SANE: skanery USB i sieciowe (sane-airscan), podgląd z kadrem do
       przeciągnięcia, szyba albo podajnik (wszystkie kartki naraz), kolor/szarości, rozdzielczość z podpowiedzią;
       strony do obrócenia i ułożenia, zapis jako jeden PDF (Dokumenty/Skany) albo JPG/PNG (Obrazy/Skany)
-- [ ] Telefon (KDE Connect z wyglądem Aster)
+- [x] Telefon (okna KDE Connect) — `apps/phone`, jak „Łącze z telefonem” w Windows, przez D-Bus z kdeconnectd:
+      urządzenia z baterią i zasięgiem, parowanie z kodem do porównania, „Znajdź telefon”, wysyłanie plików (także
+      przeciąganiem na okno) i schowka, pliki telefonu w Plikach (SFTP), powiadomienia z telefonu z zamykaniem
+- [ ] Telefon, dalej: SMS-y i rozmowy, odpowiadanie na powiadomienia, sterowanie muzyką na telefonie
 
 Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):
-- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso, skanlite, kcalc, ark, discover,
+- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso, skanlite, kdeconnect-app/sms (zostaje kdeconnectd), kcalc, ark, discover,
       plasma-systemmonitor, kinfocenter, kwalletmanager, ksystemlog, kmail/kontact, akregator, gry KDE, plasma-welcome
 - [ ] Zostaje infrastruktura bez okien: KWin, biblioteki Plasmy (powiadomienia, zadania), KIO, PowerDevil, PipeWire,
       NetworkManager, BlueZ, kded; KDE-owe okna systemowe znikają dopiero po zrobieniu własnych (portal, polkit)
