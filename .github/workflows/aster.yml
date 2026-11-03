@@ -1,7 +1,8 @@
 # Aster na GitHub Actions:
-# - każda zmiana na main → obraz systemu (image/Containerfile) w ghcr.io/<konto>/aster:latest — z niego
-#   zainstalowane komputery biorą aktualizacje,
-# - „Run workflow” z zaznaczonym ISO albo tag v* → także plik ISO z instalatorem (do pobrania w Artifacts).
+# - każda zmiana na main → obraz systemu (image/Containerfile) na x86_64 i ARM w ghcr.io/<konto>/aster:latest
+#   (jeden adres dla obu, każdy komputer bierze swoją wersję) — z niego zainstalowane komputery biorą aktualizacje,
+# - „Run workflow” z zaznaczonym ISO albo tag v* → także plik ISO z instalatorem (do pobrania w Artifacts):
+#   aster-install-x86_64 (laptopy, PC) i aster-install-aarch64 (Mac z Apple Silicon w VMware Fusion / UTM).
 name: Aster
 
 on:
@@ -15,44 +16,75 @@ on:
         description: "Zbuduj też plik ISO z instalatorem"
         type: boolean
         default: true
+      arch:
+        description: "Dla jakich procesorów"
+        type: choice
+        options: [oba, x86_64, aarch64]
+        default: oba
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: aster-${{ github.ref }}
+  group: aster-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  plan:
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      image: ${{ steps.m.outputs.image }}
+    steps:
+      - id: m
+        run: |
+          x86='{"arch":"x86_64","runner":"ubuntu-24.04","tag":"amd64"}'
+          arm='{"arch":"aarch64","runner":"ubuntu-24.04-arm","tag":"arm64"}'
+          case "${{ inputs.arch }}" in
+            x86_64) list="[$x86]" ;;
+            aarch64) list="[$arm]" ;;
+            *) list="[$x86,$arm]" ;;
+          esac
+          echo "matrix={\"include\":$list}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/aster" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      IMAGE: ${{ needs.plan.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
-      # Obraz systemu z ISO potrzebuje ok. 40 GB — miejsce z dysku /mnt i po zbędnych narzędziach runnera
+      # Obraz systemu z ISO potrzebuje ok. 40 GB — tam, gdzie runner ma najwięcej miejsca, po zbędnych narzędziach
       - name: Miejsce na dysku
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
           sudo docker system prune -af >/dev/null 2>&1 || true
-          sudo mkdir -p /mnt/containers /mnt/iso
-          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/mnt/containers/storage"\n' | sudo tee /etc/containers/storage.conf
-          df -h / /mnt
-
-      - name: Nazwa obrazu
-        id: ref
-        run: echo "image=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/aster" >> "$GITHUB_OUTPUT"
+          root_free=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
+          mnt_free=$(df --output=avail -BG /mnt 2>/dev/null | tail -1 | tr -dc 0-9)
+          if [ "${mnt_free:-0}" -gt "$root_free" ]; then base=/mnt; else base=/var/tmp/aster; fi
+          sudo mkdir -p "$base/containers" "$base/iso"
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "%s/containers/storage"\n' "$base" | sudo tee /etc/containers/storage.conf
+          df -h / /mnt 2>/dev/null || df -h /
 
       - name: Obraz systemu Aster
-        run: sudo podman build -f image/Containerfile -t localhost/aster:latest .
+        run: |
+          sudo podman build -f image/Containerfile -t localhost/aster:latest .
+          sudo podman image prune -f
 
       - name: Wyślij obraz do ghcr.io
         if: github.event_name != 'pull_request'
         run: |
           echo '${{ secrets.GITHUB_TOKEN }}' | sudo podman login ghcr.io -u '${{ github.actor }}' --password-stdin
-          sudo podman push localhost/aster:latest "${{ steps.ref.outputs.image }}:latest"
-          sudo podman push localhost/aster:latest "${{ steps.ref.outputs.image }}:${{ github.sha }}"
+          sudo podman push localhost/aster:latest "$IMAGE:latest-${{ matrix.tag }}"
+          sudo podman push localhost/aster:latest "$IMAGE:${{ github.sha }}-${{ matrix.tag }}"
 
       - name: Narzędzia do ISO
         if: inputs.iso || startsWith(github.ref, 'refs/tags/')
@@ -62,13 +94,28 @@ jobs:
 
       - name: ISO z instalatorem
         if: inputs.iso || startsWith(github.ref, 'refs/tags/')
-        run: sudo env ASTER_PREBUILT=1 WORK=/mnt/iso tools/build-iso.sh "${{ steps.ref.outputs.image }}:latest"
+        run: sudo env ASTER_PREBUILT=1 WORK="$BASE/iso" tools/build-iso.sh "$IMAGE:latest"
 
       - name: Pobierz ISO
         if: inputs.iso || startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: aster-install-x86_64
-          path: /mnt/iso/aster-install-x86_64.iso
+          name: aster-install-${{ matrix.arch }}
+          path: ${{ env.BASE }}/iso/aster-install-${{ matrix.arch }}.iso
           compression-level: 0
           retention-days: 7
+
+  # Jeden adres obrazu dla obu procesorów (aktualizacje: ghcr.io/<konto>/aster:latest)
+  manifest:
+    needs: [plan, build]
+    if: github.event_name != 'pull_request' && !cancelled()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          img='${{ needs.plan.outputs.image }}'
+          echo '${{ secrets.GITHUB_TOKEN }}' | podman login ghcr.io -u '${{ github.actor }}' --password-stdin
+          podman manifest create aster-latest
+          for tag in amd64 arm64; do
+              podman manifest add aster-latest "docker://$img:latest-$tag" 2>/dev/null || echo "Brak $tag — pomijam"
+          done
+          podman manifest push --all aster-latest "docker://$img:latest"

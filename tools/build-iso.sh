@@ -59,14 +59,16 @@ podman run --rm -v "$WORK/iso/boot:/out" localhost/aster-installer:latest \
            --omit "plymouth" --force /out/initramfs.img "$kver"
 chmod 644 "$WORK/iso/boot/initramfs.img"
 
-echo "==> squashfs"
-mksquashfs "$WORK/rootfs" "$WORK/iso/LiveOS/squashfs.img" -comp zstd -Xcompression-level 15 -noappend -quiet
-
 echo "==> Rozruch UEFI (shim + GRUB z obrazu, bez menu)"
 efi="$WORK/rootfs/usr/lib/bootupd/updates/EFI"
 [ -d "$efi" ] || efi="$WORK/rootfs/boot/efi/EFI"
 cp "$efi/fedora/$SHIM" "$WORK/iso/EFI/BOOT/$EFI_NAME"
 cp "$efi/fedora/$GRUB_EFI" "$WORK/iso/EFI/BOOT/$GRUB_EFI"
+
+echo "==> squashfs"
+mksquashfs "$WORK/rootfs" "$WORK/iso/LiveOS/squashfs.img" -comp zstd -Xcompression-level 15 -noappend -quiet
+# System plików nośnika jest już w squashfs — miejsce na dysku wraca od razu (runner GitHuba ma go mało)
+rm -rf "${WORK:?}/rootfs" "${WORK:?}/run"
 cat > "$WORK/iso/EFI/BOOT/grub.cfg" <<EOF
 set default=0
 set timeout=0
