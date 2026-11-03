@@ -48,6 +48,8 @@ qt_add_qml_module(aster-code
         src/lsp.cpp
         src/lsp.h
         src/searchregex.h
+        src/minimap.cpp
+        src/minimap.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

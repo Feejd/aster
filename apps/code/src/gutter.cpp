@@ -185,7 +185,7 @@ void Gutter::paint(QPainter *painter)
     if (block.previous().isValid())
         block = block.previous();
     const qreal markX = width() - 8;
-    const qreal right = markX - 8;
+    const qreal right = markX - 22;                 // między numerem a znacznikiem zmian — strzałka zwijania
     const int marked = int(m_marks.size());
     for (; block.isValid(); block = block.next()) {
         const QRectF r = layout->blockBoundingRect(block);
@@ -194,6 +194,8 @@ void Gutter::paint(QPainter *painter)
             break;
         if (y + r.height() < 0)
             continue;
+        if (!block.isVisible())
+            continue;                                   // wiersz w zwiniętym bloku
         const int n = block.blockNumber();
         const bool current = n == m_currentLine;
         painter->setPen(current ? m_currentColor : m_color);

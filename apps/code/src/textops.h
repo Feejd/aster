@@ -47,6 +47,16 @@ public:
     // Następne wystąpienie tekstu od pozycji (z zawinięciem do początku); −1 — brak
     Q_INVOKABLE int findNext(QQuickTextDocument *doc, const QString &needle, int from, bool wholeWord) const;
     Q_INVOKABLE QVariantList findAll(QQuickTextDocument *doc, const QString &needle, bool wholeWord) const;
+    // Zwijanie: zakresy z wcięć [{ start, end }] (wiersze od 0; zwija się start+1…end), stan i przełączanie
+    Q_INVOKABLE QVariantList foldRanges(QQuickTextDocument *doc) const;
+    Q_INVOKABLE QVariantList foldedLines(QQuickTextDocument *doc) const;          // wiersze-nagłówki zwiniętych bloków
+    Q_INVOKABLE bool setFolded(QQuickTextDocument *doc, int line, bool folded);
+    Q_INVOKABLE void unfoldAll(QQuickTextDocument *doc);
+    Q_INVOKABLE void foldAll(QQuickTextDocument *doc);
+    // Po edycji: ukryte wiersze bez zwiniętego nagłówka nad sobą wracają na wierzch; true — coś się zmieniło
+    Q_INVOKABLE bool repairFolds(QQuickTextDocument *doc);
+    Q_INVOKABLE bool lineVisible(QQuickTextDocument *doc, int line) const;
+    Q_INVOKABLE void revealLine(QQuickTextDocument *doc, int line);              // rozwija bloki nad ukrytym wierszem
     // Zamiana w projekcie, dla otwartej karty: wszystkie trafienia albo jedno w wierszu i kolumnie (jeden krok cofania)
     Q_INVOKABLE int replaceAll(QQuickTextDocument *doc, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement);
     Q_INVOKABLE bool replaceAt(QQuickTextDocument *doc, int line, int col, const QString &query, bool matchCase, bool wholeWord, bool regex,

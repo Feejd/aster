@@ -162,6 +162,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aster Code: git dalej — różnice obok siebie, historia pliku i zatwierdzenia z podglądem, logowanie do GitHuba bez terminala
 - [x] Aster Code: wiele kursorów — Ctrl+D (następne wystąpienie), Ctrl+Shift+L (wszystkie), Alt+klik, Ctrl+Alt+↑/↓; pisanie, kasowanie, strzałki, Home/End, Enter, Tab i nawiasy przy wszystkich naraz (jeden krok cofania); kopiowanie i wklejanie po jednym wierszu na kursor; licznik kursorów na pasku stanu; domykanie nawiasów
 - [x] Aster Code: zamiana w całym projekcie — pole „Zamień na” w szukaniu (grupy $1 przy wyrażeniach), podgląd w wynikach, zamiana wszystkiego (z potwierdzeniem), w pliku i pojedynczego trafienia; otwarte karty zmieniane w edytorze (do cofnięcia), pozostałe pliki na dysku z zachowaniem kodowania; szukanie widzi treść niezapisanych kart
-- [ ] Aster Code: zwijanie bloków, minimapa, podział edytora, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie)
+- [x] Aster Code: zwijanie bloków (z wcięć, klamra w osobnym wierszu — nagłówkiem wiersz nad nią): strzałki w marginesie, „⋯” za zwiniętym wierszem, Ctrl+Shift+[ / ], Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J, rozwijanie przy wejściu kursorem; minimapa w kolorach składni z widoczną częścią, błędami i trafieniami szukania (klik i przeciąganie przewijają)
+- [ ] Aster Code: podział edytora, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie), zwijanie z serwera języka (foldingRange), zwinięte bloki widoczne w minimapie
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)

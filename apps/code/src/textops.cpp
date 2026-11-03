@@ -555,3 +555,211 @@ bool TextOps::replaceAt(QQuickTextDocument *doc, int line, int col, const QStrin
     c.insertText(expandReplacement(m, replacement, regex));
     return true;
 }
+
+namespace {
+
+int indentOf(const QString &t)
+{
+    int n = 0;
+    for (QChar c : t) {
+        if (c == QLatin1Char(' '))
+            ++n;
+        else if (c == QLatin1Char('\t'))
+            n += 4;
+        else
+            break;
+    }
+    return n;
+}
+
+// Zakres od wiersza line: kolejne wiersze z większym wcięciem (puste nie przerywają); −1 — nie da się zwinąć
+int foldEnd(QTextDocument *d, int line)
+{
+    const QTextBlock b = d->findBlockByNumber(line);
+    if (!b.isValid() || b.text().trimmed().isEmpty())
+        return -1;
+    // Klamra w osobnym wierszu (styl C/C++): nagłówkiem jest wiersz nad nią, zwija się klamra i treść
+    const QTextBlock n = b.next();
+    if (n.isValid() && n.text().trimmed() == QLatin1String("{") && indentOf(n.text()) == indentOf(b.text())) {
+        const int inner = foldEnd(d, n.blockNumber());
+        return inner > 0 ? inner : -1;
+    }
+    const int base = indentOf(b.text());
+    int end = -1;
+    for (QTextBlock n = b.next(); n.isValid(); n = n.next()) {
+        const QString t = n.text();
+        if (t.trimmed().isEmpty())
+            continue;
+        if (indentOf(t) <= base)
+            break;
+        end = n.blockNumber();
+    }
+    return end;
+}
+
+void relayout(QTextDocument *d, const QTextBlock &from, const QTextBlock &to)
+{
+    const int a = from.position(), b = to.position() + to.length();
+    d->markContentsDirty(a, b - a);
+    // TextEdit przebudowuje swoje węzły tekstu tylko po contentsChange — bez zmiany treści
+    Q_EMIT d->contentsChange(a, b - a, b - a);
+}
+
+} // namespace
+
+QVariantList TextOps::foldRanges(QQuickTextDocument *doc) const
+{
+    if (!doc || !doc->textDocument())
+        return {};
+    QTextDocument *d = doc->textDocument();
+    if (d->blockCount() > 20000)
+        return {};
+    // Jedno przejście ze stosem wcięć zamiast szukania końca od każdego wiersza
+    QVariantList out;
+    struct Open { int line, indent; };
+    QList<Open> stack;
+    int lastNonEmpty = -1;
+    for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
+        const QString t = b.text();
+        if (t.trimmed().isEmpty())
+            continue;
+        const int ind = indentOf(t);
+        while (!stack.isEmpty() && ind <= stack.last().indent) {
+            const Open o = stack.takeLast();
+            if (lastNonEmpty > o.line)
+                out << QVariantMap{{QStringLiteral("start"), o.line}, {QStringLiteral("end"), lastNonEmpty}};
+        }
+        stack.append({b.blockNumber(), ind});
+        lastNonEmpty = b.blockNumber();
+    }
+    while (!stack.isEmpty()) {
+        const Open o = stack.takeLast();
+        if (lastNonEmpty > o.line)
+            out << QVariantMap{{QStringLiteral("start"), o.line}, {QStringLiteral("end"), lastNonEmpty}};
+    }
+    // Blok zaczynający się samą klamrą — nagłówkiem jest wiersz nad nią (jak w foldEnd)
+    for (QVariant &v : out) {
+        QVariantMap m = v.toMap();
+        const QTextBlock b = d->findBlockByNumber(m.value(QStringLiteral("start")).toInt());
+        const QTextBlock p = b.previous();
+        if (b.text().trimmed() == QLatin1String("{") && p.isValid() && !p.text().trimmed().isEmpty() && indentOf(p.text()) == indentOf(b.text())) {
+            m.insert(QStringLiteral("start"), p.blockNumber());
+            v = m;
+        }
+    }
+    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("start")).toInt() < b.toMap().value(QStringLiteral("start")).toInt();
+    });
+    return out;
+}
+
+QVariantList TextOps::foldedLines(QQuickTextDocument *doc) const
+{
+    QVariantList out;
+    if (!doc || !doc->textDocument())
+        return out;
+    QTextDocument *d = doc->textDocument();
+    for (QTextBlock b = d->begin(); b.isValid(); b = b.next())
+        if (b.isVisible() && b.next().isValid() && !b.next().isVisible())
+            out << b.blockNumber();
+    return out;
+}
+
+bool TextOps::setFolded(QQuickTextDocument *doc, int line, bool folded)
+{
+    if (!doc || !doc->textDocument())
+        return false;
+    QTextDocument *d = doc->textDocument();
+    const int end = foldEnd(d, line);
+    if (end < 0)
+        return false;
+    const QTextBlock first = d->findBlockByNumber(line + 1), last = d->findBlockByNumber(end);
+    for (QTextBlock b = first; b.isValid() && b.blockNumber() <= end; b = b.next())
+        b.setVisible(!folded);
+    // Rozwinięcie zostawia zwinięte bloki wewnątrz rozwiniętego (jak w VS Code) — tu prościej: wszystko widoczne
+    relayout(d, first, last);
+    return true;
+}
+
+void TextOps::unfoldAll(QQuickTextDocument *doc)
+{
+    if (!doc || !doc->textDocument())
+        return;
+    QTextDocument *d = doc->textDocument();
+    bool any = false;
+    for (QTextBlock b = d->begin(); b.isValid(); b = b.next())
+        if (!b.isVisible()) {
+            b.setVisible(true);
+            any = true;
+        }
+    if (any)
+        relayout(d, d->begin(), d->lastBlock());
+}
+
+void TextOps::foldAll(QQuickTextDocument *doc)
+{
+    if (!doc || !doc->textDocument())
+        return;
+    QTextDocument *d = doc->textDocument();
+    // Zwija bloki najwyższego poziomu wewnątrz pliku (pierwszy poziom zagnieżdżenia), żeby był zarys
+    const QVariantList ranges = foldRanges(doc);
+    int minIndent = INT_MAX;
+    for (const QVariant &v : ranges)
+        minIndent = std::min(minIndent, indentOf(d->findBlockByNumber(v.toMap().value(QStringLiteral("start")).toInt()).text()));
+    for (const QVariant &v : ranges) {
+        const int s = v.toMap().value(QStringLiteral("start")).toInt();
+        const int ind = indentOf(d->findBlockByNumber(s).text());
+        // Najpłytsze bloki zostają otwarte, jeśli jest tylko jeden (np. cała klasa / główny obiekt QML)
+        const bool single = std::count_if(ranges.begin(), ranges.end(), [&](const QVariant &r) {
+            return indentOf(d->findBlockByNumber(r.toMap().value(QStringLiteral("start")).toInt()).text()) == minIndent; }) == 1;
+        if (ind == minIndent && single)
+            continue;
+        const int e = v.toMap().value(QStringLiteral("end")).toInt();
+        for (QTextBlock b = d->findBlockByNumber(s + 1); b.isValid() && b.blockNumber() <= e; b = b.next())
+            b.setVisible(false);
+    }
+    relayout(d, d->begin(), d->lastBlock());
+}
+
+bool TextOps::repairFolds(QQuickTextDocument *doc)
+{
+    if (!doc || !doc->textDocument())
+        return false;
+    QTextDocument *d = doc->textDocument();
+    bool changed = false;
+    int coverEnd = -1;
+    for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
+        const int n = b.blockNumber();
+        if (b.isVisible()) {
+            if (n > coverEnd && b.next().isValid() && !b.next().isVisible())
+                coverEnd = foldEnd(d, n);
+            continue;
+        }
+        if (n > coverEnd) {
+            b.setVisible(true);
+            changed = true;
+        }
+    }
+    if (changed)
+        relayout(d, d->begin(), d->lastBlock());
+    return changed;
+}
+
+bool TextOps::lineVisible(QQuickTextDocument *doc, int line) const
+{
+    return doc && doc->textDocument() && doc->textDocument()->findBlockByNumber(line).isVisible();
+}
+
+void TextOps::revealLine(QQuickTextDocument *doc, int line)
+{
+    if (!doc || !doc->textDocument())
+        return;
+    QTextDocument *d = doc->textDocument();
+    for (int guard = 0; guard < 50 && !d->findBlockByNumber(line).isVisible(); ++guard) {
+        QTextBlock h = d->findBlockByNumber(line);
+        while (h.isValid() && !h.isVisible())
+            h = h.previous();
+        if (!h.isValid() || !setFolded(doc, h.blockNumber(), false))
+            break;
+    }
+}

@@ -34,6 +34,7 @@ Window {
         property bool wrap: false
         property bool sidebar: true
         property bool blame: true
+        property bool minimap: true
     }
 
     // ——— Karty ———
@@ -567,6 +568,11 @@ Window {
         { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
+        { label: "Zwiń blok", shortcut: "Ctrl+Shift+[", action: "fold", icon: "chevronRight" },
+        { label: "Rozwiń blok", shortcut: "Ctrl+Shift+]", action: "unfold", icon: "chevronDown" },
+        { label: "Zwiń wszystko", shortcut: "Ctrl+K Ctrl+0", action: "foldAll", icon: "chevronRight" },
+        { label: "Rozwiń wszystko", shortcut: "Ctrl+K Ctrl+J", action: "unfoldAll", icon: "chevronDown" },
+        { label: "Minimapa", shortcut: "", action: "minimap", icon: "sidebar" },
         { label: "Dodaj następne wystąpienie", shortcut: "Ctrl+D", action: "nextOccurrence", icon: "cursor" },
         { label: "Zaznacz wszystkie wystąpienia", shortcut: "Ctrl+Shift+L", action: "allOccurrences", icon: "cursor" },
         { label: "Dodaj kursor powyżej", shortcut: "Ctrl+Alt+↑", action: "cursorAbove", icon: "up" },
@@ -634,6 +640,11 @@ Window {
         else if (a === "selectAll") { if (cur) cur.edit.selectAll(); }
         else if (a === "duplicate") { if (cur) cur.lines("duplicateDown"); }
         else if (a === "nextOccurrence") { if (cur) cur.addNextOccurrence(); }
+        else if (a === "fold") { if (cur) cur.foldAtCursor(true); }
+        else if (a === "unfold") { if (cur) cur.foldAtCursor(false); }
+        else if (a === "foldAll") { if (cur) cur.foldAllBlocks(); }
+        else if (a === "unfoldAll") { if (cur) cur.unfoldAllBlocks(); }
+        else if (a === "minimap") prefs.minimap = !prefs.minimap;
         else if (a === "allOccurrences") { if (cur) cur.selectAllOccurrences(); }
         else if (a === "cursorAbove") { if (cur) cur.addCursorVertical(-1); }
         else if (a === "cursorBelow") { if (cur) cur.addCursorVertical(1); }
@@ -707,6 +718,7 @@ Window {
             { label: "Terminal", icon: win.terminalShown ? "check" : "", shortcut: "Ctrl+`", action: "terminal" },
             { label: "Zawijaj wiersze", icon: prefs.wrap ? "check" : "", shortcut: "Alt+Z", action: "wrap" },
             { label: "Autor wiersza (git)", icon: prefs.blame ? "check" : "", action: "blame" },
+            { label: "Minimapa", icon: prefs.minimap ? "check" : "", action: "minimap" },
             { separator: true },
             { label: "Zamknij folder", icon: "close", action: "closeFolder" }
         ]);
@@ -780,6 +792,8 @@ Window {
         else if (what === "commit") changesView.commitNow();
         else if (what === "push") Project.push();
         else if (what === "save") save(current);
+        else if (what.startsWith("fold:")) { if (cur) cur.toggleFold(Number(arg) - 1); }
+        else if (what === "foldAll") { if (cur) cur.foldAllBlocks(); }
         else if (what === "ctrlD") { if (cur) cur.addNextOccurrence(); }
         else if (what === "allOcc") { if (cur) cur.selectAllOccurrences(); }
         else if (what === "cursorBelow") { if (cur) cur.addCursorVertical(1); }
@@ -830,6 +844,10 @@ Window {
     Shortcut { sequence: "F12"; enabled: !!win.cur; onActivated: win.goToDefinition() }
     Shortcut { sequence: "Shift+F12"; enabled: !!win.cur; onActivated: win.findReferences() }
     Shortcut { sequence: "Ctrl+."; enabled: !!win.cur; onActivated: win.quickFix() }
+    Shortcut { sequences: ["Ctrl+Shift+[", "Ctrl+{"]; enabled: !!win.cur; onActivated: win.cur.foldAtCursor(true) }
+    Shortcut { sequences: ["Ctrl+Shift+]", "Ctrl+}"]; enabled: !!win.cur; onActivated: win.cur.foldAtCursor(false) }
+    Shortcut { sequence: "Ctrl+K,Ctrl+0"; enabled: !!win.cur; onActivated: win.cur.foldAllBlocks() }
+    Shortcut { sequence: "Ctrl+K,Ctrl+J"; enabled: !!win.cur; onActivated: win.cur.unfoldAllBlocks() }
     Shortcut { sequence: "Ctrl+Shift+O"; enabled: !!win.cur; onActivated: palette.open("@") }
     Shortcut { sequence: "Ctrl+T"; enabled: win.hasProject; onActivated: palette.open("#") }
     Shortcut { sequence: "F2"; enabled: !!win.cur; onActivated: win.startRename() }
@@ -1006,6 +1024,7 @@ Window {
                         visible: index === win.current
                         wrap: prefs.wrap
                         showBlame: prefs.blame
+                        showMinimap: prefs.minimap
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)

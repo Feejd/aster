@@ -9,6 +9,7 @@ import Aster.Code
 // Serwer języka (Lsp): podpowiedzi przy pisaniu i Ctrl+Spacja, opis po najechaniu, Ctrl+klik — definicja,
 // podkreślone błędy i kropki przy numerach wierszy. Nawiasy i cudzysłowy domykają się same.
 // Wiele kursorów: Ctrl+D (następne wystąpienie), Ctrl+Shift+L (wszystkie), Alt+klik, Ctrl+Alt+↑/↓, Esc — jeden.
+// Zwijanie bloków (z wcięć): strzałki w marginesie, Ctrl+Shift+[ / ], „⋯” za zwiniętym wierszem; minimapa po prawej.
 Item {
     id: page
     property string path
@@ -39,6 +40,41 @@ Item {
     signal edited()
     signal definitionRequested(int seq)
     signal quickFixRequested()
+    // ——— Zwijanie i minimapa ———
+    property var foldRanges: []
+    property var folded: []                         // wiersze-nagłówki zwiniętych bloków
+    property bool showMinimap: true
+    function updateFolds() {
+        TextOps.repairFolds(te.textDocument);
+        foldRanges = TextOps.foldRanges(te.textDocument);
+        folded = TextOps.foldedLines(te.textDocument);
+    }
+    function toggleFold(line) {
+        TextOps.setFolded(te.textDocument, line, folded.indexOf(line) < 0);
+        folded = TextOps.foldedLines(te.textDocument);
+        // Kursor nie zostaje w ukrytym wierszu
+        if (!TextOps.lineVisible(te.textDocument, lineCol.y)) te.cursorPosition = TextOps.positionOfLine(te.textDocument, line);
+    }
+    // Najmniejszy blok obejmujący wiersz kursora (albo zaczynający się w nim)
+    function foldAtCursor(fold) {
+        const l = lineCol.y;
+        let best = null;
+        for (const r of foldRanges) {
+            if (r.start <= l && r.end >= l && (fold ? folded.indexOf(r.start) < 0 : folded.indexOf(r.start) >= 0))
+                if (!best || r.start > best.start) best = r;
+        }
+        if (fold && !best) return;
+        if (!fold) {
+            const f = folded.find(h => h === l);
+            if (f !== undefined) { toggleFold(f); return; }
+            if (!best) return;
+        }
+        toggleFold(best.start);
+    }
+    function foldAllBlocks() { TextOps.foldAll(te.textDocument); folded = TextOps.foldedLines(te.textDocument); TextOps.revealLine(te.textDocument, lineCol.y); }
+    function unfoldAllBlocks() { TextOps.unfoldAll(te.textDocument); folded = []; }
+    Timer { id: foldTimer; interval: 300; onTriggered: page.updateFolds() }
+
     // ——— Wiele kursorów ———
     // TextEdit ma jeden kursor (główny); dodatkowe są tu: [{ a: kotwica, p: pozycja }], rysowane i obsługiwane ręcznie
     property var extras: []
@@ -216,6 +252,7 @@ Item {
         Lsp.open(path, text);
         serverInfo = Lsp.serverFor(path);
         updateConflicts();
+        updateFolds();
     }
     onPathChanged: {
         // Zmiana nazwy pliku — serwer języka dostaje „nowy” dokument
@@ -241,6 +278,11 @@ Item {
     // Zaznacza fragment i pokazuje go w jednej trzeciej wysokości (wyniki szukania, przejście do wiersza)
     function reveal(start, end) {
         clearExtras();
+        // Cel w zwiniętym bloku — najpierw rozwiń, potem licz położenie
+        if (folded.length) {
+            TextOps.revealLine(te.textDocument, TextOps.lineColumn(te.textDocument, start).y);
+            folded = TextOps.foldedLines(te.textDocument);
+        }
         te.select(start, end);
         const r = te.positionToRectangle(start);
         if (r.y < flick.contentY + 20 || r.y > flick.contentY + flick.height - 40)
@@ -425,7 +467,7 @@ Item {
     // ——— Margines ———
     Gutter {
         id: gutter
-        width: Math.max(3, String(lineCount).length) * fm.averageCharacterWidth + 34
+        width: Math.max(3, String(lineCount).length) * fm.averageCharacterWidth + 48
         height: parent.height
         document: te.textDocument
         offset: flick.contentY - te.topPadding
@@ -443,7 +485,9 @@ Item {
         FontMetrics { id: fm; font: te.font }
         // Klik w numer — zaznacza wiersz
         MouseArea {
+            id: gutterArea
             anchors.fill: parent
+            hoverEnabled: true
             onPressed: (e) => {
                 const p = te.positionAt(0, e.y + flick.contentY);
                 const l = TextOps.lineColumn(te.textDocument, p).y;
@@ -455,10 +499,38 @@ Item {
         }
     }
 
+    // Strzałki zwijania w marginesie (pokazują się po najechaniu; zwinięte — zawsze)
+    Item {
+        id: foldMarks
+        x: gutter.x + gutter.width - 30
+        width: 16; height: parent.height
+        clip: true
+        HoverHandler { id: gutterHover; target: null }
+        Repeater {
+            model: {
+                flick.contentY; flick.height; te.length; page.folded;
+                const first = TextOps.lineColumn(te.textDocument, te.positionAt(0, flick.contentY)).y;
+                const last = TextOps.lineColumn(te.textDocument, te.positionAt(0, flick.contentY + flick.height)).y;
+                return page.foldRanges.filter(r => r.start >= first - 1 && r.start <= last + 1 && TextOps.lineVisible(te.textDocument, r.start));
+            }
+            delegate: HoverButton {
+                id: fb
+                required property var modelData
+                readonly property bool isFolded: page.folded.indexOf(modelData.start) >= 0
+                readonly property rect r: { te.length; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, modelData.start)); }
+                visible: isFolded || gutterHover.hovered || gutterArea.containsMouse
+                x: 0; y: r.y + te.y - flick.contentY + (r.height - height) / 2
+                width: 16; height: 16; radius: 4
+                onClicked: page.toggleFold(modelData.start)
+                Icon { anchors.centerIn: parent; d: fb.isFolded ? Icons.chevronRight : Icons.chevronDown; size: 11; stroke: 2; color: fb.isFolded ? Theme.accentText : Theme.text2 }
+            }
+        }
+    }
+
     Flickable {
         id: flick
         anchors.left: gutter.right
-        width: parent.width - gutter.width
+        width: parent.width - gutter.width - (page.showMinimap ? minimap.width + 6 : 0)
         height: parent.height
         contentWidth: page.wrap ? width : Math.max(width, te.contentWidth + te.leftPadding + te.rightPadding + 40)
         contentHeight: Math.max(height, te.contentHeight + te.topPadding + te.bottomPadding + height * 0.5)
@@ -479,12 +551,14 @@ Item {
         // Trafienia szukania w widocznej części
         Repeater {
             model: {
-                flick.contentY; flick.height; te.length;
+                flick.contentY; flick.height; te.length; page.folded;
                 if (!page.matches.length || page.matchLength <= 0) return [];
                 const a = te.positionAt(0, flick.contentY - 40), b = te.positionAt(flick.contentX + flick.width, flick.contentY + flick.height + 40);
                 const out = [];
                 for (let i = 0; i < page.matches.length && out.length < 400; ++i)
-                    if (page.matches[i] >= a && page.matches[i] <= b) out.push({ pos: page.matches[i], cur: i === page.currentMatch });
+                    if (page.matches[i] >= a && page.matches[i] <= b
+                        && (!page.folded.length || TextOps.lineVisible(te.textDocument, TextOps.lineColumn(te.textDocument, page.matches[i]).y)))
+                        out.push({ pos: page.matches[i], cur: i === page.currentMatch });
                 return out;
             }
             delegate: Rectangle {
@@ -554,14 +628,14 @@ Item {
         // Błędy i ostrzeżenia z serwera języka — podkreślenie fragmentu (w widocznej części)
         Repeater {
             model: {
-                flick.contentY; flick.height; te.length;
+                flick.contentY; flick.height; te.length; page.folded;
                 const d = page.diagnostics;
                 if (!d.length) return [];
                 const first = TextOps.lineColumn(te.textDocument, te.positionAt(0, flick.contentY)).y - 1;
                 const last = TextOps.lineColumn(te.textDocument, te.positionAt(0, flick.contentY + flick.height)).y + 1;
                 const out = [];
                 for (let i = 0; i < d.length && out.length < 300; ++i) {
-                    if (d[i].line < first || d[i].line > last || d[i].severity > 2) continue;
+                    if (d[i].line < first || d[i].line > last || d[i].severity > 2 || !TextOps.lineVisible(te.textDocument, d[i].line)) continue;
                     const lineStart = TextOps.positionOfLine(te.textDocument, d[i].line);
                     const lineLen = TextOps.lineText(te.textDocument, d[i].line).length;
                     const a = lineStart + Math.min(d[i].col, lineLen);
@@ -627,6 +701,11 @@ Item {
             onCursorRectangleChanged: page.ensureVisible()
             onCursorPositionChanged: {
                 Qt.callLater(page.updateBracket);
+                // Kursor wszedł w zwinięty blok (strzałki, szukanie) — rozwiń
+                if (page.folded.length && !TextOps.lineVisible(te.textDocument, page.lineCol.y)) {
+                    TextOps.revealLine(te.textDocument, page.lineCol.y);
+                    page.folded = TextOps.foldedLines(te.textDocument);
+                }
                 if (sig.text && page.lineCol.y !== sig.line) sig.text = "";
                 if (completion.visible && page.lineCol.y !== completion.line) completion.hide();
             }
@@ -634,6 +713,7 @@ Item {
             onTextChanged: {
                 if (page.lspOn) lspTimer.restart();
                 conflictTimer.restart();
+                foldTimer.restart();
                 if (page.showBlame && page.blameLines.length) blameTimer.restart();
             }
             onActiveFocusChanged: if (!activeFocus) { completion.hide(); sig.text = ""; }
@@ -686,7 +766,7 @@ Item {
 
         // Żarówka przy wierszu z problemem — szybkie poprawki (Ctrl+.)
         HoverButton {
-            readonly property rect endRect: { te.length; page.lineCol; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
+            readonly property rect endRect: { te.length; page.lineCol; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
             visible: page.lspOn && page.lineHasProblem && te.activeFocus
             z: 3
             x: te.x + endRect.x + 12; y: te.y + endRect.y + (endRect.height - height) / 2
@@ -696,9 +776,24 @@ Item {
             Icon { anchors.centerIn: parent; d: Icons.bolt; size: 13; stroke: 1.8; color: Theme.dark ? "#E3B341" : "#9A6700" }
         }
 
+        // „⋯” za zwiniętym wierszem — klik rozwija
+        Repeater {
+            model: page.folded
+            delegate: HoverButton {
+                required property int modelData
+                readonly property rect endRect: { te.length; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, modelData) + TextOps.lineText(te.textDocument, modelData).length); }
+                z: 3
+                x: te.x + endRect.x + 8; y: te.y + endRect.y + (endRect.height - height) / 2
+                width: 30; height: 16; radius: 5
+                baseColor: Theme.accentAlpha(Theme.dark ? 0.22 : 0.12)
+                onClicked: page.toggleFold(modelData)
+                Text { anchors.centerIn: parent; anchors.verticalCenterOffset: -3; text: "⋯"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Bold }
+            }
+        }
+
         // Autor bieżącego wiersza (git blame) — szary dopisek za końcem wiersza
         Text {
-            readonly property rect endRect: { te.length; page.lineCol; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
+            readonly property rect endRect: { te.length; page.lineCol; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
             visible: page.blameText !== "" && te.activeFocus && te.selectedText === "" && !page.conflicts.length && !page.extras.length
             x: te.x + endRect.x + (page.lspOn && page.lineHasProblem ? 48 : 28)
             y: te.y + endRect.y + (endRect.height - height) / 2
@@ -941,10 +1036,44 @@ Item {
         }
     }
 
+    // Minimapa
+    Minimap {
+        id: minimap
+        visible: page.showMinimap
+        anchors.right: parent.right; anchors.rightMargin: 4
+        width: 74; height: parent.height
+        document: te.textDocument
+        firstLine: { flick.contentY; return TextOps.lineColumn(te.textDocument, te.positionAt(0, flick.contentY)).y; }
+        visibleLines: Math.max(1, Math.floor(flick.height / Math.max(1, fm.height)))
+        textColor: Theme.text2
+        sliderColor: Theme.dark ? Qt.rgba(1, 1, 1, mapArea.containsMouse || mapArea.pressed ? 0.12 : 0.07) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, mapArea.containsMouse || mapArea.pressed ? 0.10 : 0.06)
+        marks: {
+            const out = [];
+            for (const d of page.diagnostics) if (d.severity <= 2) out.push({ line: d.line, color: d.severity === 1 ? String(Theme.danger) : "#D29922" });
+            for (let i = 0; i < page.matches.length && i < 2000; ++i)
+                out.push({ line: TextOps.lineColumn(te.textDocument, page.matches[i]).y, color: "#F5A623" });
+            return out;
+        }
+        MouseArea {
+            id: mapArea
+            anchors.fill: parent
+            hoverEnabled: true
+            // Klik i przeciąganie: wskazany wiersz na środku widoku
+            function scrollTo(y) {
+                const line = Math.max(0, minimap.lineAt(y) - Math.floor(minimap.visibleLines / 2));
+                const r = te.positionToRectangle(TextOps.positionOfLine(te.textDocument, line));
+                flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, r.y + te.y));
+            }
+            onPressed: (e) => scrollTo(e.y)
+            onPositionChanged: (e) => { if (pressed) scrollTo(e.y); }
+            onWheel: (w) => { flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY - w.angleDelta.y / 120 * 60)); }
+        }
+    }
+
     // Suwaki
     Rectangle {
         visible: flick.contentHeight > flick.height + 1
-        anchors.right: parent.right; anchors.rightMargin: 3
+        anchors.right: flick.right; anchors.rightMargin: 3
         y: flick.visibleArea.yPosition * flick.height
         width: vArea.containsMouse || vArea.pressed ? 8 : 5; radius: width / 2
         height: Math.max(30, flick.visibleArea.heightRatio * flick.height)
