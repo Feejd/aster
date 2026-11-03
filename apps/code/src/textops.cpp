@@ -1,4 +1,5 @@
 #include "textops.h"
+#include "searchregex.h"
 
 #include <KSyntaxHighlighting/Definition>
 #include <KSyntaxHighlighting/Repository>
@@ -504,4 +505,53 @@ QVariantList TextOps::findAll(QQuickTextDocument *doc, const QString &needle, bo
             out << i;
     }
     return out;
+}
+
+int TextOps::replaceAll(QQuickTextDocument *doc, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement)
+{
+    if (!doc || !doc->textDocument() || query.isEmpty())
+        return 0;
+    QTextDocument *d = doc->textDocument();
+    const QString text = d->toPlainText();
+    const QRegularExpression re = searchRegex(query, matchCase, wholeWord, regex);
+    struct R { int a, b; QString t; };
+    QList<R> list;
+    auto it = re.globalMatch(text);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        if (m.capturedLength())
+            list.append({int(m.capturedStart()), int(m.capturedEnd()), expandReplacement(m, replacement, regex)});
+    }
+    if (list.isEmpty())
+        return 0;
+    QTextCursor c(d);
+    c.beginEditBlock();
+    for (int i = int(list.size()) - 1; i >= 0; --i) {
+        c.setPosition(list[i].a);
+        c.setPosition(list[i].b, QTextCursor::KeepAnchor);
+        c.insertText(list[i].t);
+    }
+    c.endEditBlock();
+    return int(list.size());
+}
+
+bool TextOps::replaceAt(QQuickTextDocument *doc, int line, int col, const QString &query, bool matchCase, bool wholeWord, bool regex,
+                        const QString &replacement)
+{
+    if (!doc || !doc->textDocument() || query.isEmpty())
+        return false;
+    QTextDocument *d = doc->textDocument();
+    const QTextBlock b = d->findBlockByNumber(line);
+    if (!b.isValid())
+        return false;
+    // Trafienie musi zaczynać się dokładnie tam, gdzie pokazał wynik szukania (wiersz mógł się zmienić)
+    const QRegularExpression re = searchRegex(query, matchCase, wholeWord, regex);
+    const QRegularExpressionMatch m = re.match(b.text(), col);
+    if (!m.hasMatch() || m.capturedStart() != col || !m.capturedLength())
+        return false;
+    QTextCursor c(d);
+    c.setPosition(b.position() + col);
+    c.setPosition(b.position() + int(m.capturedEnd()), QTextCursor::KeepAnchor);
+    c.insertText(expandReplacement(m, replacement, regex));
+    return true;
 }

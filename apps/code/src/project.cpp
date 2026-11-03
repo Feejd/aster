@@ -1,4 +1,5 @@
 #include "project.h"
+#include "searchregex.h"
 
 #include <QClipboard>
 #include <QCryptographicHash>
@@ -1129,6 +1130,19 @@ void Project::stash(bool pop)
     });
 }
 
+int Project::replaceInFile(const QString &path, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement)
+{
+    // Plik spoza kart: zamiana na dysku z zachowaniem kodowania i końców wierszy
+    const QVariantMap f = load(path);
+    if (!f.value(QStringLiteral("ok")).toBool())
+        return 0;
+    QString text = f.value(QStringLiteral("text")).toString();
+    const int n = replaceInText(text, searchRegex(query, matchCase, wholeWord, regex), replacement, regex);
+    if (n && !save(path, text, f.value(QStringLiteral("encoding")).toString(), f.value(QStringLiteral("eol")).toString()))
+        return 0;
+    return n;
+}
+
 // ——— Lista plików, szybkie otwieranie, szukanie ———
 
 QStringList Project::listFiles(const QString &root, bool git)
@@ -1238,7 +1252,7 @@ QVariantList Project::quickOpen(const QString &query, int limit) const
     return out;
 }
 
-void Project::search(const QString &query, bool matchCase, bool wholeWord, bool regex)
+void Project::search(const QString &query, bool matchCase, bool wholeWord, bool regex, const QVariantMap &buffers)
 {
     const int gen = m_searchGen->fetch_add(1) + 1;
     m_searchError.clear();
@@ -1251,11 +1265,7 @@ void Project::search(const QString &query, bool matchCase, bool wholeWord, bool 
         Q_EMIT searchingChanged();
         return;
     }
-    QString pattern = regex ? query : QRegularExpression::escape(query);
-    if (wholeWord)
-        pattern = QStringLiteral("\\b(?:") + pattern + QStringLiteral(")\\b");
-    QRegularExpression re(pattern, (matchCase ? QRegularExpression::NoPatternOption : QRegularExpression::CaseInsensitiveOption)
-                                       | QRegularExpression::UseUnicodePropertiesOption);
+    const QRegularExpression re = searchRegex(query, matchCase, wholeWord, regex);
     if (!re.isValid()) {
         m_searchError = QStringLiteral("Błędne wyrażenie: ") + re.errorString();
         m_results.clear();
@@ -1268,7 +1278,10 @@ void Project::search(const QString &query, bool matchCase, bool wholeWord, bool 
     const QString root = m_root;
     const bool git = isGit();
     auto token = m_searchGen;
-    QThread *t = QThread::create([this, root, git, re, gen, token] {
+    QHash<QString, QString> open;
+    for (auto it = buffers.cbegin(); it != buffers.cend(); ++it)
+        open.insert(it.key(), it.value().toString());
+    QThread *t = QThread::create([this, root, git, re, gen, token, open] {
         const QStringList files = listFiles(root, git);
         QVariantList results;
         int total = 0;
@@ -1276,13 +1289,19 @@ void Project::search(const QString &query, bool matchCase, bool wholeWord, bool 
         for (const QString &rel : files) {
             if (token->load() != gen)
                 return;
-            QFile f(root + QLatin1Char('/') + rel);
-            if (f.size() > SearchFileLimit || !f.open(QIODevice::ReadOnly))
-                continue;
-            const QByteArray data = f.readAll();
-            if (data.left(8192).contains('\0'))
-                continue;
-            const QString text = QString::fromUtf8(data);
+            const QString full = root + QLatin1Char('/') + rel;
+            QString text;
+            if (open.contains(full)) {
+                text = open.value(full);
+            } else {
+                QFile f(full);
+                if (f.size() > SearchFileLimit || !f.open(QIODevice::ReadOnly))
+                    continue;
+                const QByteArray data = f.readAll();
+                if (data.left(8192).contains('\0'))
+                    continue;
+                text = QString::fromUtf8(data);
+            }
             QVariantList matches;
             int lineNo = 0;
             for (QStringView line : QStringView(text).split(QLatin1Char('\n'))) {

@@ -346,6 +346,30 @@ Window {
         if (mode === "delete") { Project.deleteBranch(name); return; }
         whenSaved(() => { if (isNew) Project.createBranch(name); else Project.checkout(name, remote); });
     }
+    // Zamiana w projekcie: otwarte karty — w edytorze (do cofnięcia i zapisania), reszta plików — od razu na dysku
+    function replaceInPaths(paths) {
+        const q = searchView.query, r = searchView.replacement;
+        const mc = searchView.matchCase, ww = searchView.wholeWord, re = searchView.regex;
+        let total = 0, files = 0, inTabs = 0;
+        for (const p of paths) {
+            const i = indexOfPath(p);
+            const n = i >= 0 ? TextOps.replaceAll(page(i).edit.textDocument, q, mc, ww, re, r) : Project.replaceInFile(p, q, mc, ww, re, r);
+            if (n) { total += n; files++; if (i >= 0) inTabs++; }
+        }
+        revision++;
+        toast(total ? "Zamieniono " + total + (files > 1 ? " razy w " + files + " plikach" : total === 1 ? " raz" : " razy")
+                      + (inTabs ? " — otwarte karty zapisz (Ctrl+Alt+S)" : "") : "Nic nie zamieniono");
+        searchView.run();
+    }
+    function replaceMatch(path, line, col) {
+        openFile(path, { preview: true, line: line, col: col, length: 0 });
+        const i = indexOfPath(path);
+        if (i < 0) return;
+        if (!TextOps.replaceAt(page(i).edit.textDocument, line, col, searchView.query, searchView.matchCase, searchView.wholeWord, searchView.regex, searchView.replacement))
+            toast("To miejsce już się zmieniło — szukam ponownie");
+        pin(i);
+        searchView.run();
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -739,6 +763,10 @@ Window {
         else if (what === "terminal") { terminalShown = true; }
         else if (what.startsWith("term:")) { if (terminalPanel.term) terminalPanel.term.sendText(arg + "\r"); }
         else if (what.startsWith("search:")) { showView(1); searchView.focusField(arg); searchView.run(); }
+        else if (what.startsWith("replaceWith:")) searchView.setReplacement(arg);
+        else if (what === "regexOn") searchView.regex = true;
+        else if (what === "replaceAllAsk") { win.confirm = { kind: "replace", count: Project.resultCount, files: Project.results.length, paths: Project.results.map(r => r.path) }; }
+        else if (what === "replaceAllNow") replaceInPaths(Project.results.map(r => r.path));
         else if (what.startsWith("palette:")) palette.open(arg);
         else if (what.startsWith("find:")) { openFind(false); findField.text = arg; findAll(); }
         else if (what.startsWith("view:")) { prefs.sidebar = true; sidebarView = Number(arg); }
@@ -1321,10 +1349,21 @@ Window {
 
             SearchView {
                 id: searchView
+                buffers: () => {
+                    const b = {};
+                    for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified) b[tabs.get(i).path] = win.page(i).edit.text;
+                    return b;
+                }
                 visible: win.sidebarView === 1
                 y: sideTop.height
                 width: parent.width; height: parent.height - y
                 onOpenMatch: (path, line, col, length) => win.openFile(path, { preview: true, line: line, col: col, length: length })
+                onReplaceAllRequested: {
+                    const files = Project.results.length;
+                    win.confirm = { kind: "replace", count: Project.resultCount, files: files, paths: Project.results.map(r => r.path) };
+                }
+                onReplaceFileRequested: (path) => win.replaceInPaths([path])
+                onReplaceMatchRequested: (path, line, col) => win.replaceMatch(path, line, col)
             }
             ChangesView {
                 id: changesView
@@ -1384,7 +1423,9 @@ Window {
                     spacing: 8
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: !win.confirm ? "" : win.confirm.kind === "discard"
+                        text: !win.confirm ? "" : win.confirm.kind === "replace"
+                              ? "Zamienić " + win.confirm.count + " wystąpień w " + win.confirm.files + (win.confirm.files === 1 ? " pliku?" : " plikach?")
+                            : win.confirm.kind === "discard"
                               ? (win.confirm.hunk !== undefined ? "Odrzucić ten fragment zmian w „" + win.confirm.name + "”?"
                                  : win.confirm.paths.length === 1 ? "Odrzucić zmiany w „" + win.confirm.name + "”?" : "Odrzucić zmiany w " + win.confirm.paths.length + " plikach?")
                             : win.confirm.kind === "tab" ? "Zapisać zmiany w „" + win.confirm.name + "”?"
@@ -1393,7 +1434,8 @@ Window {
                     }
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: win.confirm && win.confirm.kind === "discard" ? "Pliki wrócą do ostatniej zatwierdzonej wersji — tego nie da się cofnąć. Nowe pliki trafią do Kosza."
+                        text: win.confirm && win.confirm.kind === "replace" ? "„" + searchView.query + "” → „" + searchView.replacement + "”. Otwarte karty zmienią się w edytorze (do cofnięcia), pozostałe pliki zostaną zapisane od razu."
+                            : win.confirm && win.confirm.kind === "discard" ? "Pliki wrócą do ostatniej zatwierdzonej wersji — tego nie da się cofnąć. Nowe pliki trafią do Kosza."
                                                                            : "Jeśli nie zapiszesz, zmiany przepadną."
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
                     }
@@ -1401,7 +1443,7 @@ Window {
                     Item {
                         width: parent.width; height: 34
                         Pill {
-                            visible: !!win.confirm && win.confirm.kind !== "discard"
+                            visible: !!win.confirm && win.confirm.kind !== "discard" && win.confirm.kind !== "replace"
                             text: "Nie zapisuj"; danger: true
                             onClicked: {
                                 const c = win.confirm;
@@ -1426,7 +1468,12 @@ Window {
                                 }
                             }
                             Pill {
-                                visible: !win.confirm || win.confirm.kind !== "discard"
+                                visible: !!win.confirm && win.confirm.kind === "replace"
+                                text: "Zamień wszystko"; primary: true
+                                onClicked: { const c = win.confirm; win.confirm = null; win.replaceInPaths(c.paths); }
+                            }
+                            Pill {
+                                visible: !win.confirm || (win.confirm.kind !== "discard" && win.confirm.kind !== "replace")
                                 text: win.confirm && win.confirm.kind === "all" ? "Zapisz wszystkie" : "Zapisz"; primary: true
                                 onClicked: {
                                     const c = win.confirm;

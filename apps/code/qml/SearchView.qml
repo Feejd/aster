@@ -4,7 +4,8 @@ import Aster.Ui
 import Aster.Code
 
 // Szukanie w całym projekcie (Ctrl+Shift+F): pole z opcjami (wielkość liter, całe słowa, wyrażenie
-// regularne), wyniki pogrupowane według plików — klik otwiera plik w miejscu trafienia.
+// regularne), wyniki pogrupowane według plików — klik otwiera plik w miejscu trafienia. Zamiana: pole
+// „Zamień na” (grupy $1 przy wyrażeniach), podgląd w wynikach, zamiana wszystkiego, w pliku albo jednego trafienia.
 Item {
     id: sv
     property bool matchCase: false
@@ -12,13 +13,22 @@ Item {
     property bool regex: false
     property var collapsed: ({})
     signal openMatch(string path, int line, int col, int length)
+    signal replaceAllRequested()
+    signal replaceFileRequested(string path)
+    signal replaceMatchRequested(string path, int line, int col)
+    property bool replaceOpen: false
+    readonly property string query: field.text
+    readonly property string replacement: replaceField.text
 
     function focusField(text) {
         if (text) field.text = text;
         field.forceActiveFocus();
         field.selectAll();
     }
-    function run() { Project.search(field.text, matchCase, wholeWord, regex); }
+    // Treść niezapisanych kart (ścieżka → tekst) — szukanie widzi to, co w edytorze, nie na dysku
+    property var buffers: () => ({})
+    function run() { Project.search(field.text, matchCase, wholeWord, regex, buffers()); }
+    function setReplacement(t) { replaceOpen = true; replaceField.text = t; }
 
     // Wyniki jako płaska lista: nagłówek pliku, potem jego trafienia
     readonly property var rows: {
@@ -43,9 +53,19 @@ Item {
         id: head
         x: 10; y: 0
         width: parent.width - 20
-        spacing: 8
+        spacing: 6
+        Item {
+        width: parent.width; height: 34
+        // Strzałka: pokaż / schowaj zamianę (jak w VS Code)
+        HoverButton {
+            x: 0; y: 5
+            width: 22; height: 24; radius: 6
+            onClicked: { sv.replaceOpen = !sv.replaceOpen; if (sv.replaceOpen) Qt.callLater(() => replaceField.forceActiveFocus()); }
+            Icon { anchors.centerIn: parent; d: sv.replaceOpen ? Icons.chevronDown : Icons.chevronRight; size: 12; stroke: 2; color: Theme.text2 }
+        }
         Rectangle {
-            width: parent.width; height: 34; radius: 9
+            id: findBox
+            x: 26; width: parent.width - 26; height: 34; radius: 9
             color: Theme.fill
             border.width: field.activeFocus ? 1.5 : 0
             border.color: Theme.accent
@@ -69,6 +89,38 @@ Item {
                 Opt { text: "Aa"; on: sv.matchCase; onClicked: { sv.matchCase = !sv.matchCase; sv.run(); } }
                 Opt { text: "ab"; underline: true; on: sv.wholeWord; onClicked: { sv.wholeWord = !sv.wholeWord; sv.run(); } }
                 Opt { text: ".*"; on: sv.regex; onClicked: { sv.regex = !sv.regex; sv.run(); } }
+            }
+        }
+        }
+        Item {
+            visible: sv.replaceOpen
+            x: 26; width: parent.width - 26; height: 34
+            Rectangle {
+                width: parent.width - replaceAllBtn.width - 6; height: 34; radius: 9
+                color: Theme.fill
+                border.width: replaceField.activeFocus ? 1.5 : 0
+                border.color: Theme.accent
+                Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons.pencil; size: 14; color: Theme.text2 }
+                TextInput {
+                    id: replaceField
+                    x: 32; width: parent.width - 40
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.text; selectionColor: Theme.accentSoft; selectedTextColor: Theme.text
+                    font.family: Theme.font; font.pixelSize: 13
+                    clip: true
+                    onAccepted: if (Project.resultCount) sv.replaceAllRequested()
+                    Text { anchors.verticalCenter: parent.verticalCenter; visible: !replaceField.text; text: sv.regex ? "Zamień na ($1 — grupa)" : "Zamień na"; color: Theme.text2; font: replaceField.font }
+                }
+            }
+            HoverButton {
+                id: replaceAllBtn
+                anchors.right: parent.right
+                width: 34; height: 34; radius: 9
+                enabled: Project.resultCount > 0 && !Project.searching
+                opacity: enabled ? 1 : 0.4
+                baseColor: Theme.fill
+                onClicked: sv.replaceAllRequested()
+                Icon { anchors.centerIn: parent; d: Icons.check; size: 15; stroke: 2; color: Theme.text }
             }
         }
         Text {
@@ -107,6 +159,7 @@ Item {
             // Nagłówek pliku
             Item {
                 visible: row.modelData.kind === "file"
+                z: 2                            // przycisk „zamień w pliku” nad obszarem kliknięcia wiersza
                 anchors.fill: parent
                 Icon {
                     x: 12; anchors.verticalCenter: parent.verticalCenter
@@ -125,6 +178,15 @@ Item {
                     elide: Text.ElideLeft
                     text: row.modelData.dir || ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
                 }
+                HoverButton {
+                    visible: sv.replaceOpen && (rowArea.containsMouse || hovered)
+                    z: 2
+                    anchors.right: countBadge.left; anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 22; height: 22; radius: 6
+                    onClicked: sv.replaceFileRequested(row.modelData.path)
+                    Icon { anchors.centerIn: parent; d: Icons.check; size: 12; stroke: 2; color: Theme.text2 }
+                }
                 Rectangle {
                     id: countBadge
                     anchors.right: parent.right; anchors.rightMargin: 12
@@ -137,13 +199,26 @@ Item {
             // Trafienie: fragment wiersza z wyróżnionym tekstem
             Text {
                 visible: row.modelData.kind === "match"
-                x: 50; width: parent.width - 50 - 12
+                x: 50; width: parent.width - 50 - 12 - (sv.replaceOpen ? 26 : 0)
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
                 textFormat: Text.StyledText
+                // Z zamianą: stare przekreślone na czerwono, nowe na zielono
                 text: row.modelData.kind !== "match" ? ""
-                    : sv.esc(row.modelData.before) + "<font color=\"" + Theme.text + "\"><b>" + sv.esc(row.modelData.match) + "</b></font>" + sv.esc(row.modelData.after)
+                    : sv.replaceOpen && sv.replacement !== "" || sv.replaceOpen && replaceField.activeFocus
+                      ? sv.esc(row.modelData.before) + "<s><font color=\"" + Theme.danger + "\">" + sv.esc(row.modelData.match) + "</font></s>"
+                        + "<font color=\"" + (Theme.dark ? "#56D364" : "#1A7F37") + "\"><b>" + sv.esc(sv.replacement) + "</b></font>" + sv.esc(row.modelData.after)
+                      : sv.esc(row.modelData.before) + "<font color=\"" + Theme.text + "\"><b>" + sv.esc(row.modelData.match) + "</b></font>" + sv.esc(row.modelData.after)
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+            HoverButton {
+                visible: row.modelData.kind === "match" && sv.replaceOpen && (rowArea.containsMouse || hovered)
+                z: 2
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                width: 22; height: 20; radius: 6
+                onClicked: sv.replaceMatchRequested(row.modelData.path, row.modelData.line, row.modelData.col)
+                Icon { anchors.centerIn: parent; d: Icons.check; size: 12; stroke: 2; color: Theme.text2 }
             }
             MouseArea {
                 id: rowArea

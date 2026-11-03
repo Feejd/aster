@@ -137,8 +137,10 @@ public:
     // Szybkie otwieranie i szukanie
     Q_INVOKABLE void refreshFiles();
     Q_INVOKABLE QVariantList quickOpen(const QString &query, int limit = 60) const;   // [{ path, rel, name, dir, html }]
-    Q_INVOKABLE void search(const QString &query, bool matchCase, bool wholeWord, bool regex);
+    Q_INVOKABLE void search(const QString &query, bool matchCase, bool wholeWord, bool regex, const QVariantMap &buffers = QVariantMap());
     Q_INVOKABLE void cancelSearch();
+    // Zamiana w pliku na dysku (dla plików bez otwartej karty); zwraca liczbę zamian
+    Q_INVOKABLE int replaceInFile(const QString &path, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement);
 
 Q_SIGNALS:
     void rootChanged();

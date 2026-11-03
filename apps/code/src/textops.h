@@ -47,4 +47,8 @@ public:
     // Następne wystąpienie tekstu od pozycji (z zawinięciem do początku); −1 — brak
     Q_INVOKABLE int findNext(QQuickTextDocument *doc, const QString &needle, int from, bool wholeWord) const;
     Q_INVOKABLE QVariantList findAll(QQuickTextDocument *doc, const QString &needle, bool wholeWord) const;
+    // Zamiana w projekcie, dla otwartej karty: wszystkie trafienia albo jedno w wierszu i kolumnie (jeden krok cofania)
+    Q_INVOKABLE int replaceAll(QQuickTextDocument *doc, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement);
+    Q_INVOKABLE bool replaceAt(QQuickTextDocument *doc, int line, int col, const QString &query, bool matchCase, bool wholeWord, bool regex,
+                               const QString &replacement);
 };
