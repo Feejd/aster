@@ -12,7 +12,7 @@ Item {
     property var editor            // Editor (typ rekurencyjny — qmllint go nie przyjmuje)
     readonly property var info: Project.revision >= 0 && selected ? Project.item(selected) : ({})
 
-    property string clipTab: "basic"           // klip: „basic” (dźwięk, prędkość, kadr) albo „look” (kolory)
+    property string clipTab: "basic"           // klip: basic (dźwięk, prędkość), frame (kadr i ruch), look (kolory), trans (przejście)
     function focusText() { Qt.callLater(() => { textEdit.forceActiveFocus(); textEdit.selectAll(); }) }
 
     Rectangle { width: 1; height: parent.height; color: Theme.line }
@@ -51,7 +51,13 @@ Item {
                 visible: insp.kind === ""
                 width: parent.width
                 spacing: 8
-                InfoRow { label: "Format"; value: Project.format + "  ·  " + Project.width + "×" + Project.height }
+                Label { text: "Format" }
+                Chips {
+                    model: ["9:16", "16:9", "1:1"]
+                    labelOf: (v) => v === "9:16" ? "9:16 pionowy" : v === "16:9" ? "16:9 poziomy" : "1:1 kwadrat"
+                    current: Project.format
+                    onPicked: (v) => Project.setOption("format", v)
+                }
                 InfoRow { label: "Długość"; value: Project.time(Project.duration, false) }
                 InfoRow { label: "Klipy"; value: String(Project.clips.length) }
                 Label { text: "Początek i koniec filmu" }
@@ -78,9 +84,91 @@ Item {
             // ——— Klip ———
             Segmented {
                 visible: insp.kind === "clip"
-                model: [{ id: "basic", name: "Ustawienia" }, { id: "look", name: "Kolory" }]
-                current: insp.clipTab
+                model: (insp.info.index ?? 0) > 0
+                       ? [{ id: "basic", name: "Klip" }, { id: "frame", name: "Kadr" }, { id: "look", name: "Kolory" }, { id: "trans", name: "Przejście" }]
+                       : [{ id: "basic", name: "Klip" }, { id: "frame", name: "Kadr" }, { id: "look", name: "Kolory" }]
+                current: insp.clipTab === "trans" && (insp.info.index ?? 0) === 0 ? "basic" : insp.clipTab
                 onPicked: (v) => insp.clipTab = v
+            }
+            // ——— Kadr: dopasowanie, ruch kamery, odbicie ———
+            Column {
+                visible: insp.kind === "clip" && insp.clipTab === "frame"
+                width: parent.width
+                spacing: 10
+                Label { text: "Dopasowanie" }
+                Chips {
+                    model: ["fill", "fit", "blur"]
+                    labelOf: (v) => v === "fill" ? "Wypełnij" : v === "fit" ? "Zmieść" : "Rozmyte tło"
+                    current: insp.info.fit ?? "fill"
+                    onPicked: (v) => Project.setValue(insp.selected, "fit", v)
+                }
+                Label { text: "Ruch kamery" }
+                Grid {
+                    columns: 3
+                    spacing: 8
+                    Repeater {
+                        model: Project.motions
+                        delegate: AnimTile {
+                            required property var modelData
+                            width: (col.width - 16) / 3
+                            kind: "motion"
+                            effect: modelData.id
+                            name: modelData.name
+                            current: (insp.info.motion ?? "") === modelData.id
+                            onClicked: Project.setValue(insp.selected, "motion", modelData.id)
+                        }
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Toggle { label: "Odbicie lustrzane"; on: insp.info.flip ?? false; onToggled: Project.setValue(insp.selected, "flip", !insp.info.flip) }
+                }
+            }
+            // ——— Przejście z poprzedniego klipu ———
+            Column {
+                visible: insp.kind === "clip" && insp.clipTab === "trans" && (insp.info.index ?? 0) > 0
+                width: parent.width
+                spacing: 10
+                Grid {
+                    columns: 3
+                    spacing: 8
+                    AnimTile {
+                        width: (col.width - 16) / 3
+                        kind: "trans"
+                        effect: ""
+                        name: "Cięcie"
+                        current: (insp.info.fade ?? 0) === 0
+                        onClicked: Project.setValue(insp.selected, "fade", 0)
+                    }
+                    Repeater {
+                        model: Project.transitions
+                        delegate: AnimTile {
+                            required property var modelData
+                            width: (col.width - 16) / 3
+                            kind: "trans"
+                            effect: modelData.id
+                            name: modelData.name
+                            current: (insp.info.fade ?? 0) > 0 && insp.info.trans === modelData.id
+                            onClicked: Project.setValue(insp.selected, "trans", modelData.id)
+                        }
+                    }
+                }
+                Label { text: "Długość"; visible: (insp.info.fade ?? 0) > 0 }
+                Chips {
+                    visible: (insp.info.fade ?? 0) > 0
+                    model: [9, 15, 24, 30]
+                    labelOf: (v) => (v / Project.fps).toFixed(1).replace(".", ",") + " s"
+                    current: insp.info.fade ?? 0
+                    onPicked: (v) => Project.setValue(insp.selected, "fade", v)
+                }
+                HoverButton {
+                    visible: (insp.info.fade ?? 0) > 0 && Project.clips.length > 2
+                    width: allText.implicitWidth + 24; height: 30; radius: 15
+                    baseColor: Theme.fill
+                    onClicked: Project.applyTransitionToAll(insp.selected)
+                    Text { id: allText; anchors.centerIn: parent; text: "Zastosuj do wszystkich klipów"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                }
             }
             Column {
                 visible: insp.kind === "clip" && insp.clipTab === "look"
@@ -146,22 +234,6 @@ Item {
                     onPicked: (v) => Project.setValue(insp.selected, "speed", v)
                 }
 
-                Label { text: "Kadr" }
-                Chips {
-                    model: [true, false]
-                    labelOf: (v) => v ? "Wypełnij" : "Zmieść całość"
-                    current: insp.info.fill ?? true
-                    onPicked: (v) => Project.setValue(insp.selected, "fill", v)
-                }
-
-                Label { text: "Przejście z poprzedniego klipu"; visible: (insp.info.index ?? 0) > 0 }
-                Chips {
-                    visible: (insp.info.index ?? 0) > 0
-                    model: [0, 15, 30]
-                    labelOf: (v) => v === 0 ? "Cięcie" : "Przenikanie " + (v === 15 ? "0,5 s" : "1 s")
-                    current: insp.info.fade ?? 0
-                    onPicked: (v) => Project.setValue(insp.selected, "fade", v)
-                }
                 InfoRow { label: "Długość"; value: Project.time(insp.info.length ?? 0) }
             }
 
@@ -179,7 +251,7 @@ Item {
                     TextEdit {
                         id: textEdit
                         x: 10; y: 10; width: parent.width - 20
-                        text: insp.kind === "text" ? insp.info.text : ""
+                        text: insp.kind === "text" ? (insp.info.text ?? "") : ""
                         wrapMode: TextEdit.Wrap
                         color: Theme.text
                         selectionColor: Theme.accentSoft
@@ -187,6 +259,43 @@ Item {
                         onTextChanged: if (activeFocus && insp.kind === "text" && text !== insp.info.text) Project.setValue(insp.selected, "text", text)
                         Keys.onEscapePressed: focus = false
                     }
+                }
+                Label { text: "Kolor liter" }
+                Flow {
+                    width: parent.width
+                    spacing: 7
+                    Repeater {
+                        model: ["", "#FFFFFF", "#FFD84D", "#FF9F1C", "#FF4D6D", "#C77DFF", "#4DA3FF", "#3DDC97", "#111111"]
+                        delegate: Rectangle {
+                            id: sw
+                            required property string modelData
+                            readonly property bool on: (insp.info.color ?? "") === modelData
+                            width: 24; height: 24; radius: 12
+                            color: modelData === "" ? "transparent" : modelData
+                            border.width: on ? 3 : 1
+                            border.color: on ? Theme.accent : Theme.line
+                            Icon { visible: sw.modelData === ""; anchors.centerIn: parent; d: Icons.sparkle; size: 13; color: Theme.text2 }
+                            MouseArea { anchors.fill: parent; anchors.margins: -2; cursorShape: Qt.PointingHandCursor; onClicked: Project.setValue(insp.selected, "color", sw.modelData) }
+                        }
+                    }
+                }
+                ValueSlider {
+                    label: "Wielkość"; from: 0.4; to: 3; neutral: 1
+                    value: insp.info.scale ?? 1
+                    onMoved: (v) => Project.setValue(insp.selected, "scale", v)
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: (insp.info.x ?? -1) >= 0 ? "Napis stoi tam, gdzie go przeciągnięto na podglądzie." : "Przeciągnij napis na podglądzie, żeby go przesunąć."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                }
+                HoverButton {
+                    visible: (insp.info.x ?? -1) >= 0 || (insp.info.scale ?? 1) !== 1
+                    width: posText.implicitWidth + 24; height: 28; radius: 14
+                    baseColor: Theme.fill
+                    onClicked: Project.setValue(insp.selected, "resetPos", true)
+                    Text { id: posText; anchors.centerIn: parent; text: "Miejsce i wielkość ze stylu"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
                 }
                 Label { text: "Animacja" }
                 Chips {
@@ -248,6 +357,115 @@ Item {
         }
     }
 
+    // Kafelek z małą animacją: jak działa przejście (A → B) albo ruch kamery. Animuje się po najechaniu i gdy jest wybrany.
+    component AnimTile: Item {
+        id: at
+        property string kind                // "trans" albo "motion"
+        property string effect
+        property string name
+        property bool current: false
+        signal clicked()
+        height: width * 0.75 + 18
+        property real t: 0
+        NumberAnimation on t {
+            from: 0; to: 1; duration: 1300; loops: Animation.Infinite
+            running: at.visible && (atArea.containsMouse || at.current)
+            onRunningChanged: if (!running) at.t = 0.35
+        }
+        Component.onCompleted: t = 0.35
+        // postęp przejścia z pauzą na końcach
+        readonly property real p: Math.max(0, Math.min(1, (t - 0.2) / 0.6))
+        Rectangle {
+            id: box
+            width: parent.width; height: parent.width * 0.75
+            radius: 8
+            color: "#1E2230"
+            clip: true
+            // A — poprzedni klip
+            Rectangle {
+                id: ra
+                readonly property string e: at.effect
+                z: e === "zoomin" ? 2 : 0          // przy przybliżeniu poprzedni klip jest na wierzchu
+                width: box.width; height: box.height
+                color: "#4F7BFF"
+                x: at.kind === "trans" ? (e === "pushleft" || e === "whip" ? -at.p * box.width : 0) : 0
+                y: at.kind === "trans" && e === "pushup" ? -at.p * box.height : 0
+                scale: at.kind === "trans" && e === "zoomin" ? 1 + at.p : 1
+                opacity: at.kind === "motion" ? 0 : (e === "zoomin" ? 1 - at.p : 1)
+                Text { anchors.centerIn: parent; text: "A"; color: "white"; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold }
+            }
+            // B — następny klip (dla ruchu kamery: sam kadr)
+            Item {
+                id: rbBox
+                anchors.fill: parent
+                Rectangle {
+                    id: rb
+                    readonly property string e: at.effect
+                    readonly property real p: at.p
+                    width: box.width; height: box.height
+                    radius: e === "circle" && at.kind === "trans" ? width : 0
+                    color: "#FF5C8A"
+                    // ruch kamery: zoom, przesunięcie, puls, drgania
+                    x: at.kind === "motion" ? (e === "panleft" ? -p * width * 0.16 : e === "panright" ? (p - 1) * width * 0.16
+                                               : e === "shake" ? Math.sin(at.t * 60) * 2 : 0)
+                       : (e === "pushleft" || e === "whip" || e === "slide" ? (1 - p) * box.width : 0)
+                    y: at.kind === "motion" ? (e === "shake" ? Math.cos(at.t * 47) * 2 : 0) : (e === "pushup" ? (1 - p) * box.height : 0)
+                    scale: at.kind === "motion" ? (e === "zoomin" ? 1 + 0.16 * p : e === "zoomout" ? 1.16 - 0.16 * p : e === "pulse" ? 1 + 0.06 * Math.abs(Math.sin(at.t * Math.PI * 4))
+                                                   : e === "panleft" || e === "panright" || e === "shake" ? 1.16 : 1)
+                           : e === "zoomout" ? 1.6 - 0.6 * p : e === "spin" ? 0.4 + 0.6 * p : e === "circle" ? 1.5 * p : 1
+                    rotation: at.kind === "trans" && e === "spin" ? -180 * (1 - p) : 0
+                    opacity: at.kind === "motion" ? 1
+                             : e === "" ? (at.t > 0.5 ? 1 : 0)
+                             : e === "fade" || e === "blur" || e === "zoomout" || e === "spin" ? p
+                             : e === "black" || e === "white" ? (p > 0.5 ? 1 : 0)
+                             : 1
+                    Text { visible: at.kind === "trans"; anchors.centerIn: parent; text: "B"; color: "white"; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold }
+                    Icon {
+                        visible: at.kind === "motion"
+                        anchors.centerIn: parent
+                        readonly property var glyphs: ({ "": "close", zoomin: "plus", zoomout: "minus", panleft: "back", panright: "chevronRight", pulse: "activity", shake: "signal" })
+                        d: Icons[glyphs[at.effect] || "close"]
+                        size: 18; stroke: 2.2; color: "white"
+                    }
+                }
+            }
+            Rectangle {      // maska kurtyny (zakrywa nieodsłoniętą część B)
+                visible: at.kind === "trans" && at.effect === "wipe"
+                x: at.p * box.width; width: box.width - x; height: box.height
+                color: "#4F7BFF"
+                Text { visible: at.p < 0.5; anchors.centerIn: parent; text: "A"; color: "white"; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold }
+            }
+            Rectangle {      // błysk, czerń
+                anchors.fill: parent
+                visible: at.kind === "trans" && (at.effect === "white" || at.effect === "black")
+                color: at.effect === "white" ? "white" : "black"
+                opacity: 1 - Math.abs(at.p * 2 - 1)
+            }
+            Rectangle {      // smuga, rozmycie — przybliżenie ruchu
+                anchors.fill: parent
+                visible: at.kind === "trans" && (at.effect === "whip" || at.effect === "blur")
+                color: "white"
+                opacity: 0.35 * (1 - Math.abs(at.p * 2 - 1))
+            }
+            Rectangle {
+                anchors.fill: parent; radius: 8
+                color: "transparent"
+                border.width: at.current ? 2 : (atArea.containsMouse ? 1 : 0)
+                border.color: at.current ? Theme.accent : Theme.line
+            }
+        }
+        Text {
+            y: box.height + 3
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: at.name
+            elide: Text.ElideRight
+            color: at.current ? Theme.accentText : Theme.text2
+            font.family: Theme.font; font.pixelSize: 10; font.weight: at.current ? Font.DemiBold : Font.Normal
+        }
+        MouseArea { id: atArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: at.clicked() }
+    }
+
     // Przełącznik dwóch-trzech widoków (jak karty)
     component Segmented: Rectangle {
         id: seg
@@ -271,7 +489,7 @@ Item {
                         anchors.centerIn: parent
                         text: segItem.modelData.name
                         color: segItem.on ? Theme.text : Theme.text2
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: seg.model.length > 3 ? 11 : 12; font.weight: Font.DemiBold
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: seg.picked(segItem.modelData.id) }
                 }

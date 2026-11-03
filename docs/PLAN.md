@@ -166,7 +166,14 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       ok. 150 MB) albo „Dokładny” (small, ok. 490 MB) pobierany przy pierwszym użyciu do ~/.local/share/Aster/aster-montaz/models;
       polski, angielski albo wykrywanie języka; krótkie napisy (do ~34 znaków) w wybranym stylu, zwykłe i edytowalne,
       ponowne rozpoznanie zastępuje poprzednie; pomijanie ciszy i typowych „halucynacji” Whispera (np. Amara.org)
-- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, przejścia (przesunięcie, zoom),
+- [x] Montaż 4: 13 nowoczesnych przejść (przenikanie, przez czerń, błysk, rozmycie, przesunięcie, w górę, wsunięcie,
+      smuga, przybliżenie, oddalenie, obrót, kurtyna, koło) z animowanymi podglądami, długością 0,3–1 s, „Zastosuj do
+      wszystkich” i rombami przejść na osi; ruch kamery (najazd, odjazd, w lewo/prawo, puls, drgania); rozmyte tło
+      (poziomy film w pionowym kadrze i odwrotnie); odbicie lustrzane; napisy przeciągane po podglądzie (przyciąganie
+      do środka), wielkość i kolor liter; zmiana formatu projektu w każdej chwili
+- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, druga ścieżka obrazu (obraz w obrazie,
+      naklejki, zielone tło), klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
+      płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
 - [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264

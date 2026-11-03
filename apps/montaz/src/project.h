@@ -33,6 +33,8 @@ class Project : public QObject
     Q_PROPERTY(QVariantList textStyles READ textStyles CONSTANT)
     Q_PROPERTY(QVariantList looks READ looks CONSTANT)
     Q_PROPERTY(QVariantList textAnimations READ textAnimations CONSTANT)
+    Q_PROPERTY(QVariantList transitions READ transitions CONSTANT)
+    Q_PROPERTY(QVariantList motions READ motions CONSTANT)
     Q_PROPERTY(bool fadeIn READ fadeIn NOTIFY changed)
     Q_PROPERTY(bool fadeOut READ fadeOut NOTIFY changed)
 
@@ -64,6 +66,10 @@ public:
     QVariantList textStyles() const;
     QVariantList looks() const;
     QVariantList textAnimations() const;
+    QVariantList transitions() const;
+    QVariantList motions() const;
+    Q_INVOKABLE void applyTransitionToAll(const QString &fromId);    // to samo przejście między wszystkimi klipami
+    Q_INVOKABLE QVariantMap textBox(const QString &id) const;        // prostokąt napisu w ułamkach kadru {x, y, w, h}
     bool fadeIn() const { return m_fadeIn; }
     bool fadeOut() const { return m_fadeOut; }
 
@@ -128,6 +134,10 @@ private:
         double speed = 1.0;
         double volume = 1.0;
         bool fill = true;              // wypełnij kadr (przytnij) zamiast pasów
+        bool blurBg = false;           // zmieść całość na rozmytym tle z tego samego klipu
+        bool flip = false;             // odbicie lustrzane
+        QString motion;                // ruch kadru: zoomin, zoomout, panleft, panright, pulse, shake
+        QString trans = QStringLiteral("fade");   // rodzaj przejścia z poprzedniego klipu (gdy fade > 0)
         QString look;                  // filtr kolorów („zywy”, „cieply”…; puste — bez)
         double brightness = 0, contrast = 1, saturation = 1;
         int fade = 0;                  // przenikanie z poprzedniego klipu (klatki osi)
@@ -135,8 +145,19 @@ private:
         // wyliczane
         int start = 0, length = 0;
     };
-    struct Text { QString id, text, style, anim = QStringLiteral("wjazd"); int start = 0, length = 0; bool caption = false; };
+    struct Text {
+        QString id, text, style, anim = QStringLiteral("wjazd");
+        int start = 0, length = 0;
+        bool caption = false;
+        double x = -1, y = -1;          // środek napisu w % kadru (−1 — miejsce ze stylu)
+        double scale = 1;               // wielkość względem stylu
+        QString color;                  // kolor liter zamiast koloru stylu
+    };
     struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
+
+    // Ułożenie napisu w kadrze (w pikselach danego rozmiaru)
+    struct TextLayout { QString text, valign; int size = 0, lines = 1, longest = 0; double x = 0, y = 0, w = 0, h = 0; };
+    TextLayout layoutText(const Text &t, int width, int height) const;
 
     QString m_id, m_name, m_format = QStringLiteral("9:16");
     bool m_fadeIn = false, m_fadeOut = false;   // rozjaśnienie z czerni na początku, ściemnienie na końcu

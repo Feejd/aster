@@ -227,6 +227,38 @@ Item {
                 delegate: Block { required property var modelData; info: modelData; kind: "music"; y: tl.musicY; height: tl.musicH }
             }
 
+            // Przyciski przejść na styku klipów
+            Repeater {
+                model: Project.clips.slice(1)
+                delegate: Rectangle {
+                    id: junction
+                    required property var modelData
+                    readonly property bool on: modelData.fade > 0
+                    readonly property bool sel: tl.editor.selected === modelData.id && tl.editor.clipTab === "trans"
+                    x: tl.xOf(modelData.start + modelData.fade / 2) - width / 2
+                    y: tl.videoY + (tl.videoH - height) / 2
+                    width: 22; height: 22; radius: 7
+                    z: 15
+                    rotation: 45
+                    color: on ? (sel ? "#FFD84D" : "white") : (jArea.containsMouse ? "white" : Qt.rgba(1, 1, 1, 0.75))
+                    border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.3)
+                    Icon {
+                        anchors.centerIn: parent
+                        rotation: -45
+                        d: junction.on ? Icons.contrast : Icons.plus
+                        size: 12; stroke: 2
+                        color: "#1E2230"
+                    }
+                    MouseArea {
+                        id: jArea
+                        anchors.fill: parent; anchors.margins: -3
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: tl.editor.showTransition(junction.modelData.id)
+                    }
+                }
+            }
+
             // Miejsce wstawienia przesuwanego klipu
             Rectangle {
                 id: insertMark

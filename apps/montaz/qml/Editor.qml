@@ -27,6 +27,16 @@ GlassPane {
         active: ed.visible && !exportSheet.running
     }
 
+    // Zaznaczony napis ma być widać na podglądzie — głowica wskakuje do jego środka
+    onSelectedChanged: {
+        if (selectedKind !== "text") return;
+        const t = Project.item(selected);
+        if (player.position < t.start || player.position >= t.start + t.length) {
+            player.pause();
+            player.seek(t.start + Math.min(t.length - 1, Math.round(t.length / 2)));
+        }
+    }
+
     Connections {
         target: Project
         function onOpenChanged() { ed.selected = ""; timeline.fit(); }
@@ -58,6 +68,8 @@ GlassPane {
         inspector.focusText();
     }
     function addTextFocus() { inspector.focusText() }
+    readonly property string clipTab: inspector.clipTab
+    function showTransition(id) { selected = id; inspector.clipTab = "trans"; }
     function runMenu(a) {
         if (a === "split") splitAtPlayhead();
         else if (a === "delete") removeSelected();
@@ -103,6 +115,13 @@ GlassPane {
         else if (what.startsWith("anim:")) Project.setValue(selected, "anim", arg);
         else if (what.startsWith("option:")) Project.setOption(arg, true);
         else if (what.startsWith("tab:")) inspector.clipTab = arg;
+        else if (what.startsWith("trans:")) { Project.setValue(selected, "trans", arg); inspector.clipTab = "trans"; }
+        else if (what.startsWith("motion:")) { Project.setValue(selected, "motion", arg); inspector.clipTab = "frame"; }
+        else if (what.startsWith("fit:")) { Project.setValue(selected, "fit", arg); inspector.clipTab = "frame"; }
+        else if (what.startsWith("format:")) Project.setOption("format", arg);
+        else if (what.startsWith("textpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
+        else if (what.startsWith("textscale:")) Project.setValue(selected, "scale", Number(arg));
+        else if (what.startsWith("textcolor:")) Project.setValue(selected, "color", arg);
         else if (what === "deselect") selected = "";
         else if (what === "captions") openCaptions();
         else if (what.startsWith("captionsstart:")) { openCaptions(); Captions.start(arg, "pl", "zolty"); }
@@ -297,6 +316,10 @@ GlassPane {
                     player: player
                     visible: Project.duration > 0
                 }
+                TextHandle {
+                    anchors.fill: parent
+                    visible: ed.selectedKind === "text"
+                }
                 Column {
                     visible: Project.duration === 0
                     anchors.centerIn: parent
@@ -391,6 +414,86 @@ GlassPane {
         anchors.fill: parent
         z: 50
         onToast: (text) => ed.toast(text)
+    }
+
+    // Ramka zaznaczonego napisu na podglądzie: przeciągnij, żeby przesunąć (przyciąga do środka kadru),
+    // uchwyt w rogu zmienia wielkość
+    component TextHandle: Item {
+        id: th
+        readonly property var box: ed.selectedKind === "text" && Project.revision >= 0 ? Project.textBox(ed.selected) : ({ x: 0.5, y: 0.5, w: 0, h: 0 })
+        property real dx: 0
+        property real dy: 0
+        property real dscale: 1
+        property bool snapX: false
+        property bool snapY: false
+        readonly property real cx: box.x * width + dx
+        readonly property real cy: box.y * height + dy
+        Rectangle {      // linie środka kadru przy przyciąganiu
+            visible: th.snapX
+            x: th.width / 2 - 0.5; width: 1; height: th.height
+            color: "#FFD84D"
+        }
+        Rectangle {
+            visible: th.snapY
+            y: th.height / 2 - 0.5; height: 1; width: th.width
+            color: "#FFD84D"
+        }
+        Rectangle {
+            id: frameRect
+            width: Math.max(30, th.box.w * th.width * th.dscale + 12)
+            height: Math.max(20, th.box.h * th.height * th.dscale + 8)
+            x: th.cx - width / 2
+            y: th.cy - height / 2
+            color: moveArea.pressed ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+            radius: 6
+            border.width: 1.5
+            border.color: "white"
+            MouseArea {
+                id: moveArea
+                anchors.fill: parent
+                cursorShape: pressed ? Qt.ClosedHandCursor : Qt.SizeAllCursor
+                preventStealing: true
+                property point start
+                onPressed: (e) => { start = mapToItem(th, e.x, e.y); }
+                onPositionChanged: (e) => {
+                    const p = mapToItem(th, e.x, e.y);
+                    let nx = th.box.x * th.width + p.x - start.x, ny = th.box.y * th.height + p.y - start.y;
+                    th.snapX = Math.abs(nx - th.width / 2) < 6;
+                    th.snapY = Math.abs(ny - th.height / 2) < 6;
+                    if (th.snapX) nx = th.width / 2;
+                    if (th.snapY) ny = th.height / 2;
+                    th.dx = nx - th.box.x * th.width;
+                    th.dy = ny - th.box.y * th.height;
+                }
+                onReleased: {
+                    if (Math.abs(th.dx) > 1 || Math.abs(th.dy) > 1)
+                        Project.setValue(ed.selected, "pos", { x: th.cx / th.width * 100, y: th.cy / th.height * 100 });
+                    th.dx = 0; th.dy = 0; th.snapX = false; th.snapY = false;
+                }
+            }
+            Rectangle {      // uchwyt wielkości
+                x: parent.width - width / 2; y: parent.height - height / 2
+                width: 14; height: 14; radius: 7
+                color: "white"
+                border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.3)
+                MouseArea {
+                    anchors.fill: parent; anchors.margins: -4
+                    cursorShape: Qt.SizeFDiagCursor
+                    preventStealing: true
+                    property real startX
+                    onPressed: (e) => { startX = mapToItem(th, e.x, 0).x; }
+                    onPositionChanged: (e) => {
+                        const d = mapToItem(th, e.x, 0).x - startX;
+                        th.dscale = Math.max(0.3, 1 + 2 * d / Math.max(40, frameRect.width));
+                    }
+                    onReleased: {
+                        const info = Project.item(ed.selected);
+                        if (Math.abs(th.dscale - 1) > 0.02) Project.setValue(ed.selected, "scale", (info.scale || 1) * th.dscale);
+                        th.dscale = 1;
+                    }
+                }
+            }
+        }
     }
 
     // Kafelek w multimediach: klik — zaznacz, dwuklik albo przeciągnięcie na oś — dodaj

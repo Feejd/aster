@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -18,6 +19,8 @@
 #include <QUuid>
 #include <QXmlStreamWriter>
 #include <QtMath>
+
+#include <cmath>
 
 #include <mlt++/Mlt.h>
 
@@ -57,6 +60,40 @@ const Named animationTable[] = {
     {"brak", "Bez animacji"}, {"pojawianie", "Pojawianie"}, {"wjazd", "Wjazd od dołu"},
     {"bok", "Wjazd z boku"}, {"pisanie", "Pisanie"},
 };
+
+const Named transitionTable[] = {
+    {"fade", "Przenikanie"}, {"black", "Przez czerń"}, {"white", "Błysk"}, {"blur", "Rozmycie"},
+    {"pushleft", "Przesunięcie"}, {"pushup", "W górę"}, {"slide", "Wsunięcie"}, {"whip", "Smuga"},
+    {"zoomin", "Przybliżenie"}, {"zoomout", "Oddalenie"}, {"spin", "Obrót"}, {"wipe", "Kurtyna"},
+    {"circle", "Koło"},
+};
+const Named motionTable[] = {
+    {"", "Bez ruchu"}, {"zoomin", "Najazd"}, {"zoomout", "Odjazd"}, {"panleft", "W lewo"},
+    {"panright", "W prawo"}, {"pulse", "Puls"}, {"shake", "Drgania"},
+};
+
+// Obraz przejścia „luma” (ciemne miejsca zmieniają się pierwsze): kurtyna od lewej albo koło od środka.
+// Rysowany raz dla danego rozmiaru, w pamięci podręcznej programu.
+QString lumaFile(const QString &kind, int w, int h)
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/lumas");
+    const int lw = qMax(16, w / 4), lh = qMax(16, h / 4);
+    const QString path = dir + QStringLiteral("/%1-%2x%3.png").arg(kind).arg(lw).arg(lh);
+    if (QFileInfo::exists(path))
+        return path;
+    QDir().mkpath(dir);
+    QImage img(lw, lh, QImage::Format_Grayscale8);
+    const double maxR = std::hypot(lw / 2.0, lh / 2.0);
+    for (int yy = 0; yy < lh; ++yy) {
+        uchar *line = img.scanLine(yy);
+        for (int xx = 0; xx < lw; ++xx) {
+            const double v = kind == QLatin1String("circle") ? std::hypot(xx - lw / 2.0, yy - lh / 2.0) / maxR : double(xx) / (lw - 1);
+            line[xx] = uchar(qBound(0, int(v * 255), 255));
+        }
+    }
+    img.save(path);
+    return path;
+}
 
 const Style &styleOf(const QString &id)
 {
@@ -169,6 +206,8 @@ QVariantList Project::clips() const
                          {QStringLiteral("speed"), c.speed}, {QStringLiteral("volume"), c.volume}, {QStringLiteral("fill"), c.fill},
                          {QStringLiteral("fade"), c.fade}, {QStringLiteral("srcFrames"), c.srcFrames},
                          {QStringLiteral("look"), c.look}, {QStringLiteral("brightness"), c.brightness},
+                         {QStringLiteral("fit"), c.blurBg ? QStringLiteral("blur") : c.fill ? QStringLiteral("fill") : QStringLiteral("fit")},
+                         {QStringLiteral("flip"), c.flip}, {QStringLiteral("motion"), c.motion}, {QStringLiteral("trans"), c.trans},
                          {QStringLiteral("contrast"), c.contrast}, {QStringLiteral("saturation"), c.saturation},
                          {QStringLiteral("start"), c.start}, {QStringLiteral("length"), c.length}, {QStringLiteral("index"), i}};
     }
@@ -181,7 +220,8 @@ QVariantList Project::texts() const
     for (const Text &t : m_texts)
         l << QVariantMap{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
                          {QStringLiteral("anim"), t.anim}, {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length},
-                         {QStringLiteral("caption"), t.caption}};
+                         {QStringLiteral("caption"), t.caption}, {QStringLiteral("x"), t.x}, {QStringLiteral("y"), t.y},
+                         {QStringLiteral("scale"), t.scale}, {QStringLiteral("color"), t.color}};
     return l;
 }
 
@@ -200,6 +240,22 @@ QVariantList Project::looks() const
 {
     QVariantList l;
     for (const Named &n : lookTable)
+        l << QVariantMap{{QStringLiteral("id"), QString::fromLatin1(n.id)}, {QStringLiteral("name"), QString::fromUtf8(n.name)}};
+    return l;
+}
+
+QVariantList Project::transitions() const
+{
+    QVariantList l;
+    for (const Named &n : transitionTable)
+        l << QVariantMap{{QStringLiteral("id"), QString::fromLatin1(n.id)}, {QStringLiteral("name"), QString::fromUtf8(n.name)}};
+    return l;
+}
+
+QVariantList Project::motions() const
+{
+    QVariantList l;
+    for (const Named &n : motionTable)
         l << QVariantMap{{QStringLiteral("id"), QString::fromLatin1(n.id)}, {QStringLiteral("name"), QString::fromUtf8(n.name)}};
     return l;
 }
@@ -417,10 +473,12 @@ QJsonObject Project::toJson() const
                              {QStringLiteral("volume"), c.volume}, {QStringLiteral("fill"), c.fill}, {QStringLiteral("fade"), c.fade},
                              {QStringLiteral("srcFrames"), c.srcFrames}, {QStringLiteral("look"), c.look},
                              {QStringLiteral("brightness"), c.brightness}, {QStringLiteral("contrast"), c.contrast},
-                             {QStringLiteral("saturation"), c.saturation}};
+                             {QStringLiteral("saturation"), c.saturation}, {QStringLiteral("blurBg"), c.blurBg},
+                             {QStringLiteral("flip"), c.flip}, {QStringLiteral("motion"), c.motion}, {QStringLiteral("trans"), c.trans}};
     for (const Text &t : m_texts)
         texts << QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
                              {QStringLiteral("anim"), t.anim}, {QStringLiteral("caption"), t.caption},
+                             {QStringLiteral("x"), t.x}, {QStringLiteral("y"), t.y}, {QStringLiteral("scale"), t.scale}, {QStringLiteral("color"), t.color},
                              {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
     for (const Music &m : m_music)
         music << QJsonObject{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("start"), m.start},
@@ -472,14 +530,27 @@ void Project::fromJson(const QJsonObject &o)
         c.brightness = m.value(QLatin1String("brightness")).toDouble(0);
         c.contrast = m.value(QLatin1String("contrast")).toDouble(1);
         c.saturation = m.value(QLatin1String("saturation")).toDouble(1);
+        c.blurBg = m.value(QLatin1String("blurBg")).toBool();
+        c.flip = m.value(QLatin1String("flip")).toBool();
+        c.motion = m.value(QLatin1String("motion")).toString();
+        c.trans = m.value(QLatin1String("trans")).toString(QStringLiteral("fade"));
         m_clips << c;
     }
     for (const QJsonValue &v : o.value(QLatin1String("texts")).toArray()) {
         const QJsonObject m = v.toObject();
-        m_texts << Text{m.value(QLatin1String("id")).toString(), m.value(QLatin1String("text")).toString(),
-                        m.value(QLatin1String("style")).toString(), m.value(QLatin1String("anim")).toString(QStringLiteral("brak")),
-                        m.value(QLatin1String("start")).toInt(), m.value(QLatin1String("length")).toInt(),
-                        m.value(QLatin1String("caption")).toBool()};
+        Text t;
+        t.id = m.value(QLatin1String("id")).toString();
+        t.text = m.value(QLatin1String("text")).toString();
+        t.style = m.value(QLatin1String("style")).toString();
+        t.anim = m.value(QLatin1String("anim")).toString(QStringLiteral("brak"));
+        t.start = m.value(QLatin1String("start")).toInt();
+        t.length = m.value(QLatin1String("length")).toInt();
+        t.caption = m.value(QLatin1String("caption")).toBool();
+        t.x = m.value(QLatin1String("x")).toDouble(-1);
+        t.y = m.value(QLatin1String("y")).toDouble(-1);
+        t.scale = m.value(QLatin1String("scale")).toDouble(1);
+        t.color = m.value(QLatin1String("color")).toString();
+        m_texts << t;
     }
     for (const QJsonValue &v : o.value(QLatin1String("music")).toArray()) {
         const QJsonObject m = v.toObject();
@@ -955,6 +1026,18 @@ void Project::setValue(const QString &id, const QString &key, const QVariant &va
             c->speed = qBound(0.25, value.toDouble(), 4.0);
         else if (key == QLatin1String("fill"))
             c->fill = value.toBool();
+        else if (key == QLatin1String("fit")) {
+            c->fill = value.toString() == QLatin1String("fill");
+            c->blurBg = value.toString() == QLatin1String("blur");
+        } else if (key == QLatin1String("flip"))
+            c->flip = value.toBool();
+        else if (key == QLatin1String("motion"))
+            c->motion = value.toString();
+        else if (key == QLatin1String("trans")) {
+            c->trans = value.toString();
+            if (c->fade <= 0)
+                c->fade = Fps / 2;        // wybór przejścia od razu je włącza
+        }
         else if (key == QLatin1String("fade"))
             c->fade = qMax(0, value.toInt());
         else if (key == QLatin1String("look"))
@@ -978,6 +1061,18 @@ void Project::setValue(const QString &id, const QString &key, const QVariant &va
             t->style = value.toString();
         else if (key == QLatin1String("anim"))
             t->anim = value.toString();
+        else if (key == QLatin1String("pos")) {           // {x, y} w % kadru
+            const QVariantMap p = value.toMap();
+            t->x = qBound(5.0, p.value(QStringLiteral("x")).toDouble(), 95.0);
+            t->y = qBound(5.0, p.value(QStringLiteral("y")).toDouble(), 95.0);
+        } else if (key == QLatin1String("scale"))
+            t->scale = qBound(0.4, value.toDouble(), 3.0);
+        else if (key == QLatin1String("color"))
+            t->color = value.toString();
+        else if (key == QLatin1String("resetPos")) {
+            t->x = t->y = -1;
+            t->scale = 1;
+        }
     } else if (Music *m = track(id)) {
         snapshot(merge);
         if (key == QLatin1String("volume"))
@@ -1023,10 +1118,29 @@ int Project::setCaptions(const QVariantList &items, const QString &style)
     return added;
 }
 
+void Project::applyTransitionToAll(const QString &fromId)
+{
+    const Clip *from = clip(fromId);
+    if (!from || m_clips.size() < 2)
+        return;
+    const QString trans = from->trans;
+    const int fade = from->fade > 0 ? from->fade : Fps / 2;
+    snapshot();
+    for (int i = 1; i < m_clips.size(); ++i) {
+        m_clips[i].trans = trans;
+        m_clips[i].fade = fade;
+    }
+    commit();
+}
+
 void Project::setOption(const QString &key, const QVariant &value)
 {
     snapshot();
-    if (key == QLatin1String("fadeIn"))
+    if (key == QLatin1String("format")) {
+        const QString f = value.toString();
+        if (f == QLatin1String("9:16") || f == QLatin1String("16:9") || f == QLatin1String("1:1"))
+            m_format = f;
+    } else if (key == QLatin1String("fadeIn"))
         m_fadeIn = value.toBool();
     else if (key == QLatin1String("fadeOut"))
         m_fadeOut = value.toBool();
@@ -1084,71 +1198,239 @@ QString Project::xml(int W, int H) const
     prop(QStringLiteral("length"), QString::number(total));
     x.writeEndElement();
 
-    // Klipy (każdy jako osobne źródło; prędkość przez timewarp, wypełnienie kadru przez crop)
+    // Kolorowe plansze do przejść (przez czerń, błysk, tło przesunięć)
+    for (const auto &[id, colour] : QList<QPair<QString, QString>>{{QStringLiteral("czern"), QStringLiteral("#FF000000")},
+                                                                     {QStringLiteral("biel"), QStringLiteral("#FFFFFFFF")}}) {
+        x.writeStartElement(QStringLiteral("producer"));
+        x.writeAttribute(QStringLiteral("id"), id);
+        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+        x.writeAttribute(QStringLiteral("out"), QStringLiteral("99999"));
+        prop(QStringLiteral("mlt_service"), QStringLiteral("color"));
+        prop(QStringLiteral("resource"), colour);
+        prop(QStringLiteral("length"), QStringLiteral("100000"));
+        x.writeEndElement();
+    }
+    auto rectPx = [&](double fx, double fy, double fw, double fh, double opacity = 1) {
+        return QStringLiteral("%1 %2 %3 %4 %5").arg(qRound(fx * W)).arg(qRound(fy * H)).arg(qRound(fw * W)).arg(qRound(fh * H)).arg(num(opacity));
+    };
+
+    // Klipy (każdy jako osobne źródło; prędkość przez timewarp, wypełnienie kadru przez crop,
+    // rozmyte tło jako mały tractor: rozmyta kopia pod klipem zmieszczonym w kadrze)
     QList<int> warpIn;
     for (int i = 0; i < m_clips.size(); ++i) {
         const Clip &c = m_clips.at(i);
         const bool image = c.kind == QLatin1String("image");
         const bool warp = !image && !qFuzzyCompare(c.speed, 1.0);
         const int len = image ? 100000 : qMax(1, int(c.srcFrames / (warp ? c.speed : 1.0)));
-        x.writeStartElement(QStringLiteral("producer"));
-        x.writeAttribute(QStringLiteral("id"), QStringLiteral("k%1").arg(i));
-        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
-        x.writeAttribute(QStringLiteral("out"), QString::number(len - 1));
-        if (warp) {
-            prop(QStringLiteral("mlt_service"), QStringLiteral("timewarp"));
-            prop(QStringLiteral("resource"), num(c.speed) + QLatin1Char(':') + c.path);
-            prop(QStringLiteral("warp_pitch"), QStringLiteral("1"));
+        const int wi = image ? 0 : qRound(c.in / (warp ? c.speed : 1.0));
+        warpIn << wi;
+        // Ruch kadru: klatki kluczowe w pozycjach źródła (od wi do wi + długość)
+        QString motion;
+        const int a = wi, e = wi + c.length - 1;
+        if (c.motion == QLatin1String("zoomin"))
+            motion = QStringLiteral("%1=%2;%3=%4").arg(a).arg(rectPx(0, 0, 1, 1)).arg(e).arg(rectPx(-0.08, -0.08, 1.16, 1.16));
+        else if (c.motion == QLatin1String("zoomout"))
+            motion = QStringLiteral("%1=%2;%3=%4").arg(a).arg(rectPx(-0.08, -0.08, 1.16, 1.16)).arg(e).arg(rectPx(0, 0, 1, 1));
+        else if (c.motion == QLatin1String("panleft"))
+            motion = QStringLiteral("%1=%2;%3=%4").arg(a).arg(rectPx(0, -0.08, 1.16, 1.16)).arg(e).arg(rectPx(-0.16, -0.08, 1.16, 1.16));
+        else if (c.motion == QLatin1String("panright"))
+            motion = QStringLiteral("%1=%2;%3=%4").arg(a).arg(rectPx(-0.16, -0.08, 1.16, 1.16)).arg(e).arg(rectPx(0, -0.08, 1.16, 1.16));
+        else if (c.motion == QLatin1String("pulse") || c.motion == QLatin1String("shake")) {
+            QStringList keys;
+            const bool pulse = c.motion == QLatin1String("pulse");
+            const int step = pulse ? Fps / 4 : 2;
+            quint32 seed = 12345;
+            for (int f = a, k = 0; f <= e; f += step, ++k) {
+                if (pulse) {
+                    const double z = k % 2 ? 0.05 : 0;          // uderzenie co pół sekundy
+                    keys << QStringLiteral("%1=%2").arg(f).arg(rectPx(-z / 2, -z / 2, 1 + z, 1 + z));
+                } else {
+                    seed = seed * 1103515245 + 12345;
+                    const double dx = ((seed >> 16) % 100) / 100.0 * 0.03 - 0.015;
+                    seed = seed * 1103515245 + 12345;
+                    const double dy = ((seed >> 16) % 100) / 100.0 * 0.03 - 0.015;
+                    keys << QStringLiteral("%1=%2").arg(f).arg(rectPx(-0.03 + dx, -0.03 + dy, 1.06, 1.06));
+                }
+            }
+            motion = keys.join(QLatin1Char(';'));
+        }
+        auto clipFilters = [&] {
+            if (!motion.isEmpty())
+                filter(QStringLiteral("affine"), {{QStringLiteral("transition.rect"), motion}, {QStringLiteral("transition.fill"), QStringLiteral("1")},
+                                                  {QStringLiteral("transition.distort"), QStringLiteral("0")}});
+            if (!image && !qFuzzyCompare(c.volume, 1.0))
+                filter(QStringLiteral("volume"), {{QStringLiteral("gain"), num(c.volume)}});
+        };
+        auto source = [&](const QString &id, bool crop, bool blurred, bool effects, bool own = false) {
+            x.writeStartElement(QStringLiteral("producer"));
+            x.writeAttribute(QStringLiteral("id"), id);
+            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+            x.writeAttribute(QStringLiteral("out"), QString::number(len - 1));
+            if (warp) {
+                prop(QStringLiteral("mlt_service"), QStringLiteral("timewarp"));
+                prop(QStringLiteral("resource"), num(c.speed) + QLatin1Char(':') + c.path);
+                prop(QStringLiteral("warp_pitch"), QStringLiteral("1"));
+            } else {
+                prop(QStringLiteral("resource"), c.path);
+            }
+            if (image) {
+                prop(QStringLiteral("length"), QString::number(len));
+                prop(QStringLiteral("ttl"), QStringLiteral("1"));
+            }
+            if (crop)
+                filter(QStringLiteral("crop"), {{QStringLiteral("center"), QStringLiteral("1")}});
+            if (blurred) {
+                const QString radius = QString::number(qMax(4, W / 28));
+                filter(QStringLiteral("box_blur"), {{QStringLiteral("hradius"), radius}, {QStringLiteral("vradius"), radius}});
+                filter(QStringLiteral("brightness"), {{QStringLiteral("level"), QStringLiteral("0.8")}});
+                filter(QStringLiteral("volume"), {{QStringLiteral("gain"), QStringLiteral("0")}});
+            }
+            if (effects) {
+                for (const auto &f : lookFilters(c.look, c.brightness, c.contrast, c.saturation))
+                    filter(f.first, f.second);
+                if (c.flip)
+                    filter(QStringLiteral("avfilter.hflip"), {});
+            }
+            if (own)
+                clipFilters();
+            x.writeEndElement();
+        };
+        const QString id = QStringLiteral("k%1").arg(i);
+        if (c.blurBg) {
+            source(id + QStringLiteral("t"), true, true, true);
+            source(id + QStringLiteral("p"), false, false, true);
+            x.writeStartElement(QStringLiteral("tractor"));
+            x.writeAttribute(QStringLiteral("id"), id);
+            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+            x.writeAttribute(QStringLiteral("out"), QString::number(len - 1));
+            for (const QString &t : {id + QStringLiteral("t"), id + QStringLiteral("p")}) {
+                x.writeStartElement(QStringLiteral("track"));
+                x.writeAttribute(QStringLiteral("producer"), t);
+                x.writeEndElement();
+            }
+            x.writeStartElement(QStringLiteral("transition"));
+            prop(QStringLiteral("mlt_service"), QStringLiteral("affine"));
+            prop(QStringLiteral("a_track"), QStringLiteral("0"));
+            prop(QStringLiteral("b_track"), QStringLiteral("1"));
+            prop(QStringLiteral("rect"), rectPx(0, 0, 1, 1));
+            prop(QStringLiteral("fill"), QStringLiteral("1"));
+            prop(QStringLiteral("distort"), QStringLiteral("0"));
+            prop(QStringLiteral("always_active"), QStringLiteral("1"));
+            x.writeEndElement();
+            x.writeStartElement(QStringLiteral("transition"));
+            prop(QStringLiteral("mlt_service"), QStringLiteral("mix"));
+            prop(QStringLiteral("a_track"), QStringLiteral("0"));
+            prop(QStringLiteral("b_track"), QStringLiteral("1"));
+            prop(QStringLiteral("always_active"), QStringLiteral("1"));
+            prop(QStringLiteral("sum"), QStringLiteral("1"));
+            x.writeEndElement();
+            clipFilters();
+            x.writeEndElement();
         } else {
-            prop(QStringLiteral("resource"), c.path);
+            source(id, c.fill, false, true, true);
         }
-        if (image) {
-            prop(QStringLiteral("length"), QString::number(len));
-            prop(QStringLiteral("ttl"), QStringLiteral("1"));
-        }
-        if (c.fill)
-            filter(QStringLiteral("crop"), {{QStringLiteral("center"), QStringLiteral("1")}});
-        for (const auto &f : lookFilters(c.look, c.brightness, c.contrast, c.saturation))
-            filter(f.first, f.second);
-        if (!image && !qFuzzyCompare(c.volume, 1.0))
-            filter(QStringLiteral("volume"), {{QStringLiteral("gain"), num(c.volume)}});
-        x.writeEndElement();
-        warpIn << (image ? 0 : qRound(c.in / (warp ? c.speed : 1.0)));
     }
-    // Przenikania: mały tractor z końcówką poprzedniego i początkiem następnego klipu
+    // Przejścia: mały tractor z końcówką poprzedniego i początkiem następnego klipu.
+    // Ścieżki: A (koniec poprzedniego), B (początek następnego), czasem plansza; ruch przez affine,
+    // obrót i błysk przez qtblend, kurtyna i koło przez luma z narysowanym obrazem.
     for (int i = 1; i < m_clips.size(); ++i) {
         const Clip &c = m_clips.at(i);
-        if (c.fade <= 0)
+        const int f = c.fade;
+        if (f <= 0)
             continue;
         const Clip &p = m_clips.at(i - 1);
         const int pEnd = warpIn.at(i - 1) + p.length - 1;
+        struct Track { QString producer; int in, out; };
+        const Track A{QStringLiteral("k%1").arg(i - 1), pEnd - f + 1, pEnd};
+        const Track B{QStringLiteral("k%1").arg(i), warpIn.at(i), warpIn.at(i) + f - 1};
+        const QString type = c.trans;
+        const int mid = (f - 1) / 2, last = f - 1;
+        QList<Track> tracks;
+        struct Tr { QString service; int a, b; QList<QPair<QString, QString>> props; };
+        QList<Tr> trs;
+        QList<QPair<QString, QList<QPair<QString, QString>>>> filters;
+        const auto full = rectPx(0, 0, 1, 1);
+        auto anim = [&](const QString &from, const QString &to) { return QStringLiteral("0=%1;%2=%3").arg(from).arg(last).arg(to); };
+        auto anim3 = [&](const QString &from, const QString &middle, const QString &to) {
+            return QStringLiteral("0=%1;%2=%3;%4=%5").arg(from).arg(mid).arg(middle).arg(last).arg(to);
+        };
+        const QList<QPair<QString, QString>> crossMix = {{QStringLiteral("start"), QStringLiteral("0")}, {QStringLiteral("end"), QStringLiteral("1")}};
+        const QList<QPair<QString, QString>> keep = {{QStringLiteral("fill"), QStringLiteral("1")}, {QStringLiteral("distort"), QStringLiteral("0")},
+                                                     {QStringLiteral("always_active"), QStringLiteral("1")}};
+        if (type == QLatin1String("black") || type == QLatin1String("white")) {
+            tracks = {A, B, Track{type == QLatin1String("black") ? QStringLiteral("czern") : QStringLiteral("biel"), 0, last}};
+            trs << Tr{QStringLiteral("luma"), 0, 1, {}}
+                << Tr{QStringLiteral("qtblend"), 0, 2, {{QStringLiteral("rect"), anim3(rectPx(0, 0, 1, 1, 0), full, rectPx(0, 0, 1, 1, 0))}}}
+                << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+        } else if (type == QLatin1String("pushleft") || type == QLatin1String("pushup") || type == QLatin1String("whip")) {
+            const bool up = type == QLatin1String("pushup");
+            tracks = {Track{QStringLiteral("czern"), 0, last}, A, B};
+            auto r1 = up ? rectPx(0, -1, 1, 1) : rectPx(-1, 0, 1, 1);
+            auto r2 = up ? rectPx(0, 1, 1, 1) : rectPx(1, 0, 1, 1);
+            trs << Tr{QStringLiteral("affine"), 0, 1, keep + QList<QPair<QString, QString>>{{QStringLiteral("rect"), anim(full, r1)}}}
+                << Tr{QStringLiteral("affine"), 0, 2, keep + QList<QPair<QString, QString>>{{QStringLiteral("rect"), anim(r2, full)}}}
+                << Tr{QStringLiteral("mix"), 1, 2, crossMix}
+                << Tr{QStringLiteral("mix"), 0, 1, {{QStringLiteral("always_active"), QStringLiteral("1")}, {QStringLiteral("sum"), QStringLiteral("1")}}};
+            if (type == QLatin1String("whip")) {
+                const QString r = QString::number(qMax(6, W / 12));
+                filters << qMakePair(QStringLiteral("box_blur"), QList<QPair<QString, QString>>{
+                    {QStringLiteral("hradius"), anim3(QStringLiteral("0"), r, QStringLiteral("0"))}, {QStringLiteral("vradius"), QStringLiteral("0")}});
+            }
+        } else if (type == QLatin1String("slide")) {
+            tracks = {A, B};
+            trs << Tr{QStringLiteral("affine"), 0, 1, keep + QList<QPair<QString, QString>>{{QStringLiteral("rect"), anim(rectPx(1, 0, 1, 1), full)}}}
+                << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+        } else if (type == QLatin1String("zoomin")) {
+            tracks = {B, A};          // poprzedni klip na wierzchu rośnie i znika
+            trs << Tr{QStringLiteral("affine"), 0, 1, keep + QList<QPair<QString, QString>>{{QStringLiteral("rect"), anim(full, rectPx(-0.5, -0.5, 2, 2, 0))}}}
+                << Tr{QStringLiteral("mix"), 0, 1, {{QStringLiteral("start"), QStringLiteral("1")}, {QStringLiteral("end"), QStringLiteral("0")}}};
+        } else if (type == QLatin1String("zoomout")) {
+            tracks = {A, B};
+            trs << Tr{QStringLiteral("affine"), 0, 1, keep + QList<QPair<QString, QString>>{{QStringLiteral("rect"), anim(rectPx(-0.3, -0.3, 1.6, 1.6, 0), full)}}}
+                << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+        } else if (type == QLatin1String("spin")) {
+            tracks = {A, B};
+            trs << Tr{QStringLiteral("qtblend"), 0, 1, {{QStringLiteral("rect"), anim(rectPx(0.3, 0.3, 0.4, 0.4, 0), full)},
+                                                         {QStringLiteral("rotation"), anim(QStringLiteral("-180"), QStringLiteral("0"))}}}
+                << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+        } else if (type == QLatin1String("wipe") || type == QLatin1String("circle")) {
+            tracks = {A, B};
+            trs << Tr{QStringLiteral("luma"), 0, 1, {{QStringLiteral("resource"), lumaFile(type == QLatin1String("wipe") ? QStringLiteral("wipe") : QStringLiteral("circle"), W, H)},
+                                                      {QStringLiteral("softness"), QStringLiteral("0.12")}}}
+                << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+        } else {          // przenikanie i rozmycie
+            tracks = {A, B};
+            trs << Tr{QStringLiteral("luma"), 0, 1, {}} << Tr{QStringLiteral("mix"), 0, 1, crossMix};
+            if (type == QLatin1String("blur")) {
+                const QString r = QString::number(qMax(4, W / 30));
+                filters << qMakePair(QStringLiteral("box_blur"), QList<QPair<QString, QString>>{
+                    {QStringLiteral("hradius"), anim3(QStringLiteral("0"), r, QStringLiteral("0"))}, {QStringLiteral("vradius"), anim3(QStringLiteral("0"), r, QStringLiteral("0"))}});
+            }
+        }
         x.writeStartElement(QStringLiteral("tractor"));
         x.writeAttribute(QStringLiteral("id"), QStringLiteral("p%1").arg(i));
         x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
-        x.writeAttribute(QStringLiteral("out"), QString::number(c.fade - 1));
-        x.writeStartElement(QStringLiteral("track"));
-        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("k%1").arg(i - 1));
-        x.writeAttribute(QStringLiteral("in"), QString::number(pEnd - c.fade + 1));
-        x.writeAttribute(QStringLiteral("out"), QString::number(pEnd));
-        x.writeEndElement();
-        x.writeStartElement(QStringLiteral("track"));
-        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("k%1").arg(i));
-        x.writeAttribute(QStringLiteral("in"), QString::number(warpIn.at(i)));
-        x.writeAttribute(QStringLiteral("out"), QString::number(warpIn.at(i) + c.fade - 1));
-        x.writeEndElement();
-        for (const QString &svc : {QStringLiteral("luma"), QStringLiteral("mix")}) {
-            x.writeStartElement(QStringLiteral("transition"));
-            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
-            x.writeAttribute(QStringLiteral("out"), QString::number(c.fade - 1));
-            prop(QStringLiteral("mlt_service"), svc);
-            prop(QStringLiteral("a_track"), QStringLiteral("0"));
-            prop(QStringLiteral("b_track"), QStringLiteral("1"));
-            if (svc == QLatin1String("mix")) {
-                prop(QStringLiteral("start"), QStringLiteral("0"));
-                prop(QStringLiteral("end"), QStringLiteral("1"));
-            }
+        x.writeAttribute(QStringLiteral("out"), QString::number(last));
+        for (const Track &t : std::as_const(tracks)) {
+            x.writeStartElement(QStringLiteral("track"));
+            x.writeAttribute(QStringLiteral("producer"), t.producer);
+            x.writeAttribute(QStringLiteral("in"), QString::number(t.in));
+            x.writeAttribute(QStringLiteral("out"), QString::number(t.out));
             x.writeEndElement();
         }
+        for (const Tr &t : std::as_const(trs)) {
+            x.writeStartElement(QStringLiteral("transition"));
+            x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+            x.writeAttribute(QStringLiteral("out"), QString::number(last));
+            prop(QStringLiteral("mlt_service"), t.service);
+            prop(QStringLiteral("a_track"), QString::number(t.a));
+            prop(QStringLiteral("b_track"), QString::number(t.b));
+            for (const auto &pp : t.props)
+                prop(pp.first, pp.second);
+            x.writeEndElement();
+        }
+        for (const auto &fl : std::as_const(filters))
+            filter(fl.first, fl.second);
         x.writeEndElement();
     }
     x.writeStartElement(QStringLiteral("playlist"));
@@ -1231,37 +1513,30 @@ QString Project::xml(int W, int H) const
         x.writeEndElement();
     }
     // Napisy — filtry na całym filmie, każdy w swoim przedziale czasu
-    const int base = qMin(W, H);
     for (const Text &t : m_texts) {
         if (t.text.trimmed().isEmpty())
             continue;
         const Style &s = styleOf(t.style);
-        const int size = qMax(8, qRound(s.size * base));
-        const int maxChars = qMax(6, int(0.86 * W / (size * 0.56)));
-        QString str = wrapText(s.upper ? t.text.toUpper() : t.text, maxChars);
-        const QString place = QString::fromLatin1(s.place);
-        // Prostokąt napisu w procentach kadru: x, y, szerokość, wysokość
-        const double gx = 6, gw = 88;
-        const double gy = place == QLatin1String("top") ? 8 : place == QLatin1String("middle") ? 30 : place == QLatin1String("lower") ? 56 : 66;
-        const double gh = place == QLatin1String("middle") ? 40 : place == QLatin1String("bottom") ? 24 : 22;
-        auto rect = [&](double x, double y) { return QStringLiteral("%1% %2% %3% %4%").arg(num(x), num(y), num(gw), num(gh)); };
-        const QString valign = place == QLatin1String("top") ? QStringLiteral("top")
-                             : place == QLatin1String("middle") || place == QLatin1String("lower") ? QStringLiteral("middle")
-                                                                                                    : QStringLiteral("bottom");
+        const TextLayout L = layoutText(t, W, H);
+        const int size = L.size;
+        const QString str = L.text, valign = L.valign;
+        auto rect = [&](double dx, double dy) {
+            return QStringLiteral("%1 %2 %3 %4").arg(qRound(L.x + dx * W)).arg(qRound(L.y + dy * H)).arg(qRound(L.w)).arg(qRound(L.h));
+        };
         // Animacja: wejście i wyjście po ok. 0,3 s (krócej przy krótkim napisie)
         const int ramp = qBound(2, t.length / 4, 9);
-        QString geometry = rect(gx, gy), opacity;
+        QString geometry = rect(0, 0), opacity;
         if (t.anim != QLatin1String("brak") && t.anim != QLatin1String("pisanie"))
             opacity = QStringLiteral("0=0;%1=1;-%2=1;-1=0").arg(ramp).arg(ramp + 1);
         if (t.anim == QLatin1String("wjazd"))
-            geometry = QStringLiteral("0=%1;%2=%3").arg(rect(gx, gy + 7)).arg(ramp).arg(rect(gx, gy));
+            geometry = QStringLiteral("0=%1;%2=%3").arg(rect(0, 0.07)).arg(ramp).arg(rect(0, 0));
         else if (t.anim == QLatin1String("bok"))
-            geometry = QStringLiteral("0=%1;%2=%3").arg(rect(gx + 30, gy)).arg(ramp + 3).arg(rect(gx, gy));   // z prawej (MLT nie przyjmuje ujemnych %)
+            geometry = QStringLiteral("0=%1;%2=%3").arg(rect(0.3, 0)).arg(ramp + 3).arg(rect(0, 0));      // wjazd z prawej
         QList<QPair<QString, QString>> props = {
             {QStringLiteral("geometry"), geometry}, {QStringLiteral("family"), QStringLiteral("Geist")},
             {QStringLiteral("size"), QString::number(size)}, {QStringLiteral("weight"), QString::number(s.weight)},
-            {QStringLiteral("fgcolour"), QString::fromLatin1(s.fg)}, {QStringLiteral("bgcolour"), QString::fromLatin1(s.bg)},
-            {QStringLiteral("olcolour"), QString::fromLatin1(s.ol)},
+            {QStringLiteral("fgcolour"), t.color.isEmpty() ? QString::fromLatin1(s.fg) : t.color},
+            {QStringLiteral("bgcolour"), QString::fromLatin1(s.bg)}, {QStringLiteral("olcolour"), QString::fromLatin1(s.ol)},
             {QStringLiteral("outline"), QString::number(s.outline > 0 ? qMax(1, qRound(size * s.outline)) : 0)},
             {QStringLiteral("pad"), QString::number(QByteArray(s.bg).startsWith("#00") ? 0 : qRound(size * 0.35))},
             {QStringLiteral("halign"), QStringLiteral("center")}, {QStringLiteral("valign"), valign}};
@@ -1301,6 +1576,51 @@ QString Project::xml(int W, int H) const
     x.writeEndElement();
     x.writeEndDocument();
     return out;
+}
+
+Project::TextLayout Project::layoutText(const Text &t, int W, int H) const
+{
+    const Style &s = styleOf(t.style);
+    TextLayout L;
+    L.size = qMax(8, qRound(s.size * qMin(W, H) * t.scale));
+    const int maxChars = qMax(4, int(0.86 * W / (L.size * 0.56)));
+    L.text = wrapText(s.upper ? t.text.toUpper() : t.text, maxChars);
+    const QStringList lines = L.text.split(QLatin1Char('\n'));
+    L.lines = lines.size();
+    for (const QString &l : lines)
+        L.longest = qMax(L.longest, int(l.size()));
+    const QString place = QString::fromLatin1(s.place);
+    L.w = 0.88 * W;
+    if (t.x >= 0 && t.y >= 0) {
+        // Miejsce wybrane przeciągnięciem na podglądzie: środek napisu w (x, y)
+        L.h = L.lines * L.size * 1.4 + L.size;
+        L.x = t.x / 100.0 * W - L.w / 2;
+        L.y = t.y / 100.0 * H - L.h / 2;
+        L.valign = QStringLiteral("middle");
+    } else {
+        L.x = 0.06 * W;
+        L.y = (place == QLatin1String("top") ? 0.08 : place == QLatin1String("middle") ? 0.30 : place == QLatin1String("lower") ? 0.56 : 0.66) * H;
+        L.h = (place == QLatin1String("middle") ? 0.40 : place == QLatin1String("bottom") ? 0.24 : 0.22) * H;
+        L.valign = place == QLatin1String("top") ? QStringLiteral("top")
+                 : place == QLatin1String("bottom") ? QStringLiteral("bottom") : QStringLiteral("middle");
+    }
+    return L;
+}
+
+QVariantMap Project::textBox(const QString &id) const
+{
+    for (const Text &t : m_texts) {
+        if (t.id != id)
+            continue;
+        const int W = width(), H = height();
+        const TextLayout L = layoutText(t, W, H);
+        const Style &s = styleOf(t.style);
+        const double pad = QByteArray(s.bg).startsWith("#00") ? 0 : L.size * 0.35;
+        const double tw = qMin(L.w, L.longest * L.size * 0.56 + 2 * pad + L.size * 0.4), th = L.lines * L.size * 1.25 + 2 * pad;
+        const double cy = L.valign == QLatin1String("middle") ? L.y + L.h / 2 : L.valign == QLatin1String("bottom") ? L.y + L.h - th / 2 : L.y + th / 2;
+        return {{QStringLiteral("x"), (L.x + L.w / 2) / W}, {QStringLiteral("y"), cy / H}, {QStringLiteral("w"), tw / W}, {QStringLiteral("h"), th / H}};
+    }
+    return {};
 }
 
 bool Project::saveMlt(const QString &pathOrUrl) const
