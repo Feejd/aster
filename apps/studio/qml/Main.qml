@@ -46,9 +46,9 @@ Window {
         function onMidiNote(pitch, velocity, on) {
             if (!Studio.open) return;
             if (pianoRoll.visible) { if (on) pianoRoll.midiDown(pitch, velocity); else pianoRoll.midiUp(pitch); return; }
-            if (!on) return;
+            if (!on) { Studio.liveNoteOff(pitch); return; }
             const i = win.midiTrack();
-            if (i >= 0) Studio.previewNote(i, pitch, velocity / 127);
+            if (i >= 0) Studio.liveNoteOn(i, pitch, velocity / 127);
             else if (!win.midiHintShown) { win.midiHintShown = true; win.toast("Dodaj ścieżkę Melodia, żeby grać i nagrywać z klawiatury MIDI"); }
         }
         function onMidiDevicesChanged() { if (Studio.midiDevices.length) win.toast("Podłączono klawiaturę MIDI: " + Studio.midiDevices.join(", ")); }

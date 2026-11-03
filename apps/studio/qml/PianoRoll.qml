@@ -41,7 +41,7 @@ Item {
     function midiDown(pitch, velocity) { if (pat) noteDown("m" + pitch, pitch, velocity / 127); }
     function midiUp(pitch) { keyUp("m" + pitch); }
     function noteDown(id, pitch, vel) {
-        Studio.previewNote(track, pitch, vel);
+        Studio.liveNoteOn(track, pitch, vel);
         const h = Object.assign({}, held);
         h[id] = { pitch: pitch, start: absStep(), vel: vel };
         held = h;
@@ -53,6 +53,7 @@ Item {
         const h = Object.assign({}, held);
         delete h[ch];
         held = h;
+        Studio.liveNoteOff(n.pitch);
         if (!recNotes || !Studio.playing) return true;
         // Nagranie: początek i długość wyrównane do szesnastek, w pętli wzoru
         const len = Math.max(1, Math.min(steps, absStep() - n.start));
@@ -229,7 +230,13 @@ Item {
                         width: pr.keyW - 4; height: pr.rowH
                         color: pr.heldPitches.indexOf(midi) >= 0 || keyArea.pressed ? Theme.accent
                              : pr.black(midi) ? (Theme.dark ? "#2A2C33" : "#3A3D45") : (Theme.dark ? "#D8DAE0" : "white")
-                        MouseArea { id: keyArea; anchors.fill: parent; onPressed: { Studio.previewNote(pr.track, key.midi); pr.forceActiveFocus(); } }
+                        MouseArea {
+                            id: keyArea
+                            anchors.fill: parent
+                            onPressed: { Studio.liveNoteOn(pr.track, key.midi, 0.85); pr.forceActiveFocus(); }
+                            onReleased: Studio.liveNoteOff(key.midi)
+                            onCanceled: Studio.liveNoteOff(key.midi)
+                        }
                         border.width: 1; border.color: Theme.dark ? Qt.rgba(0, 0, 0, 0.5) : Qt.rgba(0, 0, 0, 0.12)
                         Text {
                             visible: key.midi % 12 === 0 || Studio.inKey(key.midi) && key.midi % 12 === Studio.keyRoot

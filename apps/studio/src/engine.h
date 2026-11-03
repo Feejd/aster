@@ -3,6 +3,7 @@
 #include "audiosource.h"
 #include "dsp.h"
 #include "tune.h"
+#include "synthvoice.h"
 
 #include <QList>
 #include <QMutex>
@@ -160,6 +161,10 @@ public:
     // Dźwięk trzymany jest po stronie interfejsu jeszcze kilka sekund, więc wątek audio nigdy go nie zwalnia.
     void preview(SourcePtr sound, float gain);
 
+    // Granie na żywo (klawiatura komputera, MIDI): nuta brzmi, dopóki nie przyjdzie liveNoteOff z tym samym id
+    void liveNoteOn(int id, SynthVoice::Inst inst, double freq, float gain);
+    void liveNoteOff(int id);
+
     // Wejście włączone tylko, gdy jakaś ścieżka czeka na nagranie (inaczej system pokazuje używany mikrofon)
     void setCapture(bool on);
     bool capturing() const { return m_in != nullptr; }
@@ -246,6 +251,26 @@ private:
         long long pos = 0;               // tylko wątek audio
     };
     PreviewSlot m_preview[PreviewVoices];
+
+    // Polecenia nut na żywo: kolejka jeden-pisze-jeden-czyta (interfejs → wątek audio), bez blokad
+    struct LiveCmd
+    {
+        int id = 0;
+        int inst = 0;
+        float freq = 0, gain = 0;
+        bool on = false;
+    };
+    static constexpr unsigned LiveQueue = 256;
+    LiveCmd m_liveCmds[LiveQueue];
+    std::atomic<unsigned> m_liveW{0}, m_liveR{0};
+    static constexpr int LiveVoices = 16;
+    SynthVoice m_voices[LiveVoices];              // tylko wątek audio
+    int m_voiceId[LiveVoices] = {};
+    long long m_voiceAge[LiveVoices] = {};
+    long long m_voiceClock = 0;
+    uint32_t m_voiceSeed = 12345;
+    void pushLive(const LiveCmd &c);
+    void renderLive(float *dst, uint32_t n);      // wątek audio
     int m_previewNext = 0;
     QList<QPair<qint64, SourcePtr>> m_previewKeep;
 };

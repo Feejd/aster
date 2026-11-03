@@ -1,5 +1,6 @@
 #include "beatsynth.h"
 #include "dsp.h"
+#include "synthvoice.h"
 
 #include <QJsonArray>
 #include <QVariantMap>
@@ -338,86 +339,18 @@ int scaleSemis(int degree, bool minor)
 
 double midiHz(double m) { return 440.0 * std::pow(2.0, (m - 69) / 12.0); }
 
-// Piła i prostokąt z wygładzonymi skokami (PolyBLEP) — bez „cyfrowego” aliasingu
-double blep(double t, double dt)
-{
-    if (t < dt) {
-        t /= dt;
-        return t + t - t * t - 1;
-    }
-    if (t > 1 - dt) {
-        t = (t - 1) / dt;
-        return t * t + t + t + 1;
-    }
-    return 0;
-}
-
 std::vector<float> keyVoice(const QString &inst, double f, long long len, int rate, Noise &rnd)
 {
-    const bool ring = inst == QLatin1String("bells") || inst == QLatin1String("pluck");
-    const double rel = inst == QLatin1String("pad") ? 0.45 : ring ? 1.2 : 0.25;
-    const long long n = len + llround(rel * rate);
-    std::vector<float> v(static_cast<size_t>(n), 0.f);
-    const double dt = f / rate;
-    double ph = 0, ph2 = 0, ph3 = 0, lp = 0;
-    std::vector<float> ks;
-    size_t ksPos = 0;
-    if (inst == QLatin1String("pluck")) {
-        ks.resize(static_cast<size_t>(std::max(2.0, rate / f)));
-        for (float &s : ks)
-            s = rnd.next();
-    }
+    SynthVoice v;
+    v.start(instrumentOf(inst), f, rate, uint32_t(int32_t(rnd.next() * 2e9f)) ^ 0x9E3779B9u);
+    const long long n = len + llround(v.releaseSeconds() * rate);
+    std::vector<float> out(static_cast<size_t>(n), 0.f);
     for (long long i = 0; i < n; ++i) {
-        const double t = double(i) / rate;
-        const double off = i < len ? 1.0 : std::exp(-(double(i - len) / rate) * (3.0 / rel) * 2.3);
-        double y = 0;
-        if (inst == QLatin1String("piano")) {
-            for (int h = 1; h <= 8; ++h) {
-                const double hf = h * std::sqrt(1 + 0.0004 * h * h);
-                y += std::sin(2 * M_PI * f * hf * t) * std::pow(h, -1.1) * std::exp(-t * (0.7 + 0.55 * h));
-            }
-            y *= 0.55 * std::min(1.0, t / 0.002);
-            y += rnd.next() * std::exp(-t * 300) * 0.05;
-        } else if (inst == QLatin1String("epiano")) {
-            const double index = 1.6 * std::exp(-t * 4) + 0.25;
-            y = std::sin(2 * M_PI * f * t + index * std::sin(2 * M_PI * f * t)) * std::exp(-t * 0.9);
-            y += 0.12 * std::sin(2 * M_PI * f * 7.0 * t) * std::exp(-t * 14);
-            y *= 0.6 * std::min(1.0, t / 0.003);
-        } else if (inst == QLatin1String("pad")) {
-            // Trzy rozstrojone piły przez łagodny filtr; powolne narastanie
-            const double d2 = dt * 1.0046, d3 = dt * 0.9954;
-            ph += dt; ph -= std::floor(ph);
-            ph2 += d2; ph2 -= std::floor(ph2);
-            ph3 += d3; ph3 -= std::floor(ph3);
-            const double saw = (2 * ph - 1 - blep(ph, dt)) + (2 * ph2 - 1 - blep(ph2, d2)) + (2 * ph3 - 1 - blep(ph3, d3));
-            const double cutoff = 900 + 900 * std::min(1.0, t / 1.5);
-            lp += (1 - std::exp(-2 * M_PI * cutoff / rate)) * (saw / 3 - lp);
-            y = lp * 0.9 * std::min(1.0, t / 0.35);
-        } else if (inst == QLatin1String("pluck")) {
-            // Karplus–Strong: szum w pętli opóźniającej z uśrednianiem — szarpana struna
-            const size_t N = ks.size();
-            const float a = ks[ksPos], b2 = ks[(ksPos + 1) % N];
-            ks[ksPos] = 0.5f * (a + b2) * 0.996f;
-            ksPos = (ksPos + 1) % N;
-            y = a * 0.7;
-        } else if (inst == QLatin1String("bells")) {
-            const double index = 2.4 * std::exp(-t * 2.2);
-            y = std::sin(2 * M_PI * f * t + index * std::sin(2 * M_PI * f * 3.5 * t)) * std::exp(-t * 1.6) * 0.6;
-            y += 0.2 * std::sin(2 * M_PI * f * 2 * t) * std::exp(-t * 3);
-        } else {   // lead
-            const double vib = t > 0.2 ? 1 + 0.005 * std::sin(2 * M_PI * 5.2 * t) : 1;
-            const double d = dt * vib;
-            ph += d; ph -= std::floor(ph);
-            double q = ph < 0.5 ? 1 : -1;
-            q += blep(ph, d);
-            double p2 = ph + 0.5; p2 -= std::floor(p2);
-            q -= blep(p2, d);
-            lp += (1 - std::exp(-2 * M_PI * 2600 / rate)) * (q - lp);
-            y = lp * 0.4 * std::min(1.0, t / 0.01);
-        }
-        v[size_t(i)] = float(y * off);
+        if (i == len)
+            v.release();
+        out[size_t(i)] = v.next();
     }
-    return v;
+    return out;
 }
 
 // Prowadzenie głosów: przewrót akordu najbliższy poprzedniemu (palce nie skaczą po klawiaturze)
@@ -469,6 +402,21 @@ QVariantList genres()
         list.append(QVariantMap{{QStringLiteral("id"), QString::fromUtf8(g.id)}, {QStringLiteral("label"), QString::fromUtf8(g.label)},
                                 {QStringLiteral("bpm"), g.bpm}, {QStringLiteral("hint"), QString::fromUtf8(g.hint)}});
     return list;
+}
+
+SynthVoice::Inst instrumentOf(const QString &id)
+{
+    if (id == QLatin1String("epiano"))
+        return SynthVoice::EPiano;
+    if (id == QLatin1String("pad"))
+        return SynthVoice::Pad;
+    if (id == QLatin1String("pluck"))
+        return SynthVoice::Pluck;
+    if (id == QLatin1String("bells"))
+        return SynthVoice::Bells;
+    if (id == QLatin1String("lead"))
+        return SynthVoice::Lead;
+    return SynthVoice::Piano;
 }
 
 QVariantList instruments()

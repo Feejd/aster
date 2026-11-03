@@ -551,6 +551,7 @@ void Engine::onPlayback()
         }
         v.pos += k;
     }
+    renderLive(dst, n);
     m_pos.store(m_rtPos);
 
     pw_time t{};
@@ -610,6 +611,68 @@ void Engine::preview(SourcePtr sound, float gain)
     v.gain.store(gain);
     v.src.store(sound.get(), std::memory_order_release);
     v.gen.fetch_add(1, std::memory_order_acq_rel);
+}
+
+void Engine::pushLive(const LiveCmd &c)
+{
+    if (!m_core)
+        return;
+    const unsigned w = m_liveW.load(std::memory_order_relaxed);
+    if (w - m_liveR.load(std::memory_order_acquire) >= LiveQueue)
+        return;                                 // kolejka pełna (nie powinno się zdarzyć) — nutę pomijamy
+    m_liveCmds[w % LiveQueue] = c;
+    m_liveW.store(w + 1, std::memory_order_release);
+}
+
+void Engine::liveNoteOn(int id, SynthVoice::Inst inst, double freq, float gain)
+{
+    pushLive({id, int(inst), float(freq), gain, true});
+}
+
+void Engine::liveNoteOff(int id)
+{
+    pushLive({id, 0, 0, 0, false});
+}
+
+void Engine::renderLive(float *dst, uint32_t n)
+{
+    // Polecenia od interfejsu
+    unsigned r = m_liveR.load(std::memory_order_relaxed);
+    const unsigned w = m_liveW.load(std::memory_order_acquire);
+    for (; r != w; ++r) {
+        const LiveCmd &c = m_liveCmds[r % LiveQueue];
+        if (c.on) {
+            // Wolny głos, a gdy brak — najstarszy (zwykle już cichnący)
+            int slot = 0;
+            for (int i = 0; i < LiveVoices; ++i) {
+                if (!m_voices[i].active()) {
+                    slot = i;
+                    break;
+                }
+                if (m_voiceAge[i] < m_voiceAge[slot])
+                    slot = i;
+            }
+            m_voiceSeed = m_voiceSeed * 1664525u + 1013904223u;
+            m_voices[slot].start(SynthVoice::Inst(c.inst), c.freq, Rate, m_voiceSeed, c.gain);
+            m_voiceId[slot] = c.id;
+            m_voiceAge[slot] = ++m_voiceClock;
+        } else {
+            for (int i = 0; i < LiveVoices; ++i)
+                if (m_voiceId[i] == c.id && m_voices[i].active() && !m_voices[i].released())
+                    m_voices[i].release();
+        }
+    }
+    m_liveR.store(r, std::memory_order_release);
+    // Głosy
+    for (SynthVoice &v : m_voices) {
+        if (!v.active())
+            continue;
+        for (uint32_t i = 0; i < n; ++i) {
+            const float y = v.next();
+            dst[2 * i] += y;
+            dst[2 * i + 1] += y;
+        }
+    }
 }
 
 void Engine::setSnapshot(Snapshot *s)

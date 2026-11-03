@@ -191,7 +191,10 @@ public:
     Q_INVOKABLE void chordsToNotes(int index);
     // Odsłuch: Melodia/Akordy — value = nuta MIDI, 808 — stopień skali, Bit — numer wiersza (stopa, werbel…)
     Q_INVOKABLE void previewNote(int index, int value, double velocity = 1.0);
-    Q_INVOKABLE void simulateMidi(int pitch, int velocity);     // do testów: jak nuta z klawiatury (0 = puszczenie)                    // ścieżka Akordy → Melodia (piano roll)
+    Q_INVOKABLE void simulateMidi(int pitch, int velocity);
+    // Granie na żywo instrumentem ścieżki Melodia/Akordy — brzmi, dopóki nie przyjdzie liveNoteOff
+    Q_INVOKABLE void liveNoteOn(int index, int pitch, double velocity = 1.0);
+    Q_INVOKABLE void liveNoteOff(int pitch);     // do testów: jak nuta z klawiatury (0 = puszczenie)                    // ścieżka Akordy → Melodia (piano roll)
     Q_INVOKABLE bool inKey(int midi) const;                         // nuta należy do tonacji projektu
     Q_INVOKABLE void setMastering(const QString &key, double value);
     Q_INVOKABLE void applyMastering(const QString &preset);

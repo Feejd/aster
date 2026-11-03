@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audiosource.h"
+#include "synthvoice.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -25,6 +26,7 @@ QJsonObject genrePattern(const QString &genre, Kind kind); // gotowy wzór gatun
 QJsonObject emptyPattern(Kind kind, const QString &kit, int bars);
 QStringList rowNames();                                    // kick, snare, clap, hat, openhat, perc
 // Akordy: { instrument, rhythm, chords: [stopień 0…6 na takt], octave, seventh } — tonację (keyRoot, keyMinor) wstawia Studio
+SynthVoice::Inst instrumentOf(const QString &id);           // „piano”, „pad”… → głos syntezatora
 QVariantList instruments();                                // [{ id, label, hint }]
 QVariantList rhythms();                                    // [{ id, label }]
 QVariantList progressions();                               // [{ id, label, hint, chords }]

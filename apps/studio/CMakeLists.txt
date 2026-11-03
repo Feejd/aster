@@ -40,6 +40,7 @@ qt_add_qml_module(aster-studio
         src/midiinput.cpp
         src/midiinput.h
         src/tune.h
+        src/synthvoice.h
         src/beatsynth.cpp
         src/beatsynth.h
         src/engine.cpp

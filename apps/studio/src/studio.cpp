@@ -1996,3 +1996,25 @@ void Studio::simulateMidi(int pitch, int velocity)
 {
     emit midiNote(pitch, velocity, velocity > 0);
 }
+
+void Studio::liveNoteOn(int index, int pitch, double velocity)
+{
+    if (index < 0 || index >= m_tracks.size())
+        return;
+    const Track &t = m_tracks[index];
+    if (t.kind != QLatin1String("melody") && t.kind != QLatin1String("keys")) {
+        previewNote(index, pitch, velocity);    // bit i 808 — pojedyncze uderzenie
+        return;
+    }
+    // Ta sama głośność co nuta w ścieżce (wzór normalizowany ~0,6) i ten sam instrument
+    const double vel = 0.25 + 0.75 * std::clamp(velocity, 0.0, 1.0);
+    const double gain = 0.45 * vel * dbToGain(t.volume) * dbToGain(m_masterDb);
+    m_engine.liveNoteOff(pitch);
+    m_engine.liveNoteOn(pitch, BeatSynth::instrumentOf(t.pattern.value(QStringLiteral("instrument")).toString()),
+                        440.0 * std::pow(2.0, (std::clamp(pitch, 12, 120) - 69) / 12.0), float(gain));
+}
+
+void Studio::liveNoteOff(int pitch)
+{
+    m_engine.liveNoteOff(pitch);
+}

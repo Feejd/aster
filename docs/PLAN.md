@@ -209,8 +209,11 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         i nagrywania w piano rollu (bez otwartego piano rolla — odsłuch na ścieżce Melodia/Akordy); lista klawiatur
         w ustawieniach dźwięku; bez sekwencera po cichu nic nie robi. W kontenerze nie ma /dev/snd/seq — prawdziwą
         klawiaturę sprawdzić w maszynie wirtualnej (przekazanie USB)
-  - [ ] Dalej: dźwięk trzymany tak długo jak klawisz (głos syntezatora w wątku audio z puszczeniem nuty), pedał
-        sustain, pokrętła klawiatury do suwaków, kopiowanie taktów, biblioteka pętli, przełącznik A/B masteringu
+  - [x] granie na żywo: 16 głosów syntezatora w wątku audio (`src/synthvoice.h` — ten sam głos liczy też nuty
+        ścieżek), polecenia przez kolejkę bez blokad; nuta brzmi, dopóki klawisz (komputer, MIDI, klawiatura ekranowa)
+        jest wciśnięty, potem wybrzmiewa jak instrument; przy braku wolnego głosu zabierany najstarszy
+  - [ ] Dalej: efekty ścieżki także na graniu na żywo, pedał sustain, pokrętła klawiatury do suwaków, kopiowanie
+        taktów, biblioteka pętli, przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
