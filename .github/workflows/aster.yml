@@ -1,0 +1,74 @@
+# Aster na GitHub Actions:
+# - każda zmiana na main → obraz systemu (image/Containerfile) w ghcr.io/<konto>/aster:latest — z niego
+#   zainstalowane komputery biorą aktualizacje,
+# - „Run workflow” z zaznaczonym ISO albo tag v* → także plik ISO z instalatorem (do pobrania w Artifacts).
+name: Aster
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "README.md", "prototype/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      iso:
+        description: "Zbuduj też plik ISO z instalatorem"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: aster-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      # Obraz systemu z ISO potrzebuje ok. 40 GB — miejsce z dysku /mnt i po zbędnych narzędziach runnera
+      - name: Miejsce na dysku
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker system prune -af >/dev/null 2>&1 || true
+          sudo mkdir -p /mnt/containers /mnt/iso
+          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/mnt/containers/storage"\n' | sudo tee /etc/containers/storage.conf
+          df -h / /mnt
+
+      - name: Nazwa obrazu
+        id: ref
+        run: echo "image=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/aster" >> "$GITHUB_OUTPUT"
+
+      - name: Obraz systemu Aster
+        run: sudo podman build -f image/Containerfile -t localhost/aster:latest .
+
+      - name: Wyślij obraz do ghcr.io
+        if: github.event_name != 'pull_request'
+        run: |
+          echo '${{ secrets.GITHUB_TOKEN }}' | sudo podman login ghcr.io -u '${{ github.actor }}' --password-stdin
+          sudo podman push localhost/aster:latest "${{ steps.ref.outputs.image }}:latest"
+          sudo podman push localhost/aster:latest "${{ steps.ref.outputs.image }}:${{ github.sha }}"
+
+      - name: Narzędzia do ISO
+        if: inputs.iso || startsWith(github.ref, 'refs/tags/')
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq skopeo squashfs-tools xorriso dosfstools mtools
+
+      - name: ISO z instalatorem
+        if: inputs.iso || startsWith(github.ref, 'refs/tags/')
+        run: sudo env ASTER_PREBUILT=1 WORK=/mnt/iso tools/build-iso.sh "${{ steps.ref.outputs.image }}:latest"
+
+      - name: Pobierz ISO
+        if: inputs.iso || startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: aster-install-x86_64
+          path: /mnt/iso/aster-install-x86_64.iso
+          compression-level: 0
+          retention-days: 7

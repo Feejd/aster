@@ -2,6 +2,8 @@
 # Buduje plik ISO z instalatorem Aster (pendrive: start → instalator na cały ekran → instalacja → pulpit).
 #   sudo tools/build-iso.sh [UPDATE_REF]
 # UPDATE_REF — skąd zainstalowany system weźmie aktualizacje (np. ghcr.io/twoje-konto/aster:latest).
+# ASTER_IMAGE — gotowy obraz systemu zamiast budowania; ASTER_PREBUILT=1 — użyj już zbudowanego localhost/aster:latest
+# (GitHub Actions: .github/workflows/aster.yml).
 # Wymaga Linuksa z podman, skopeo, squashfs-tools, xorriso, dosfstools, mtools (jako root) i ok. 30 GB miejsca.
 # Wynik: build/iso/aster-install-<arch>.iso — UEFI (x86_64 albo aarch64), na pendrive przez `dd` albo Fedora Media Writer.
 set -euo pipefail
@@ -21,8 +23,17 @@ for tool in podman skopeo mksquashfs xorriso mkfs.vfat mcopy; do
     command -v "$tool" >/dev/null || { echo "Brakuje: $tool" >&2; exit 1; }
 done
 
-echo "==> Obraz systemu Aster"
-podman build -f "$ROOT/image/Containerfile" -t localhost/aster:latest "$ROOT"
+# ASTER_IMAGE=rejestr/aster:tag — gotowy obraz (np. z GitHub Actions) zamiast budowania od zera
+if [ "${ASTER_PREBUILT:-0}" = 1 ]; then
+    echo "==> Obraz systemu Aster: już zbudowany (localhost/aster:latest)"
+elif [ -n "${ASTER_IMAGE:-}" ]; then
+    echo "==> Obraz systemu Aster: $ASTER_IMAGE"
+    podman pull "$ASTER_IMAGE"
+    podman tag "$ASTER_IMAGE" localhost/aster:latest
+else
+    echo "==> Obraz systemu Aster"
+    podman build -f "$ROOT/image/Containerfile" -t localhost/aster:latest "$ROOT"
+fi
 
 echo "==> Obraz nośnika (instalator zamiast pulpitu)"
 podman build -f "$ROOT/image/installer/Containerfile" --build-arg UPDATE_REF="$UPDATE_REF" \
