@@ -18,6 +18,7 @@ set(MONTAZ_QML
     qml/Inspector.qml
     qml/ExportSheet.qml
     qml/CaptionsSheet.qml
+    qml/StickerPanel.qml
 )
 foreach(f ${MONTAZ_QML})
     get_filename_component(name ${f} NAME)
@@ -35,6 +36,8 @@ qt_add_qml_module(aster-montaz
         src/engine.h
         src/captions.cpp
         src/captions.h
+        src/stickers.cpp
+        src/stickers.h
 )
 
 target_link_libraries(aster-montaz PRIVATE
@@ -46,6 +49,9 @@ target_link_libraries(aster-montaz PRIVATE
     PkgConfig::MLT
     aster-uiplugin
 )
+
+# Emoji do naklejek: te same dane co panel emoji Aster (polskie nazwy z CLDR)
+qt_add_resources(aster-montaz montazemoji PREFIX /emoji BASE ${CMAKE_SOURCE_DIR}/apps/emoji/data FILES ${CMAKE_SOURCE_DIR}/apps/emoji/data/emoji.json)
 
 install(TARGETS aster-montaz RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES org.aster.montaz.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

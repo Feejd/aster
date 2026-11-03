@@ -74,6 +74,14 @@ GlassPane {
         inspector.focusText();
     }
     function addTextFocus() { inspector.focusText() }
+    // Naklejka (PNG) jako nakładka w miejscu głowicy; scale — szerokość względem kadru
+    function addSticker(path, name, scale) {
+        if (Project.duration === 0) { toast("Najpierw dodaj film albo zdjęcie"); return; }
+        const id = Project.addOverlay(path, Math.min(player.position, Project.duration - 1), name);
+        if (!id) return;
+        Project.setValue(id, "scale", Project.width > Project.height ? scale * 0.6 : scale);
+        selected = id;
+    }
     readonly property string clipTab: inspector.clipTab
     function showTransition(id) { selected = id; inspector.clipTab = "trans"; }
     function runMenu(a) {
@@ -129,6 +137,10 @@ GlassPane {
         else if (what.startsWith("textscale:")) Project.setValue(selected, "scale", Number(arg));
         else if (what.startsWith("textcolor:")) Project.setValue(selected, "color", arg);
         else if (what.startsWith("overlay:")) selected = Project.addOverlay(arg, player.position);
+        else if (what.startsWith("sticker:")) addSticker(Stickers.builtinFile(arg), Stickers.builtinName(arg), 0.5);
+        else if (what.startsWith("emoji:")) addSticker(Stickers.emojiFile(arg), Stickers.emojiName(arg), 0.3);
+        else if (what.startsWith("lefttab:")) mediaPanel.tab = arg;
+        else if (what.startsWith("emojisearch:")) { mediaPanel.tab = "stickers"; stickerPanel.query = arg; }
         else if (what.startsWith("ov:")) { const kv = arg.split("="); Project.setValue(selected, kv[0], isNaN(Number(kv[1])) ? (kv[1] === "true" ? true : kv[1]) : Number(kv[1])); }
         else if (what.startsWith("ovpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
         else if (what === "deselect") selected = "";
@@ -256,16 +268,41 @@ GlassPane {
         Item {
             id: mediaPanel
             width: 232; height: parent.height
-            Text {
-                x: 18; y: 6
-                text: "Multimedia"
-                color: Theme.text
-                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+            property string tab: "media"          // "media" albo "stickers"
+            Row {
+                x: 12; y: 2
+                spacing: 2
+                Repeater {
+                    model: [{ id: "media", name: "Multimedia" }, { id: "stickers", name: "Naklejki" }]
+                    delegate: HoverButton {
+                        id: tabBtn
+                        required property var modelData
+                        readonly property bool on: mediaPanel.tab === modelData.id
+                        width: tabText.implicitWidth + 18; height: 30
+                        baseColor: on ? Theme.fill : "transparent"
+                        onClicked: mediaPanel.tab = modelData.id
+                        Text {
+                            id: tabText
+                            anchors.centerIn: parent
+                            text: tabBtn.modelData.name
+                            color: tabBtn.on ? Theme.text : Theme.text2
+                            font.family: Theme.font; font.pixelSize: 13; font.weight: tabBtn.on ? Font.DemiBold : Font.Medium
+                        }
+                    }
+                }
             }
-            ToolBtn { x: parent.width - width - 10; y: 0; icon: "plus"; onClicked: ed.importRequested() }
+            ToolBtn { visible: mediaPanel.tab === "media"; x: parent.width - width - 10; y: 0; icon: "plus"; onClicked: ed.importRequested() }
+            StickerPanel {
+                id: stickerPanel
+                visible: mediaPanel.tab === "stickers"
+                y: 40
+                width: parent.width - 1; height: parent.height - 40
+                editor: ed
+            }
 
             GridView {
                 id: mediaGrid
+                visible: mediaPanel.tab === "media"
                 x: 12; y: 40
                 width: parent.width - 18; height: parent.height - 48
                 cellWidth: Math.floor(width / 2); cellHeight: 96
@@ -279,7 +316,7 @@ GlassPane {
                 }
             }
             Column {
-                visible: Project.media.length === 0
+                visible: Project.media.length === 0 && mediaPanel.tab === "media"
                 anchors.centerIn: mediaGrid
                 width: parent.width - 40
                 spacing: 10

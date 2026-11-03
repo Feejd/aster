@@ -483,6 +483,7 @@ QJsonObject Project::toJson() const
     QJsonArray media, clips, texts, music, overlays;
     for (const Overlay &o : m_overlays)
         overlays << QJsonObject{{QStringLiteral("id"), o.id}, {QStringLiteral("path"), o.path}, {QStringLiteral("kind"), o.kind},
+                                {QStringLiteral("name"), o.name},
                                 {QStringLiteral("start"), o.start}, {QStringLiteral("in"), o.in}, {QStringLiteral("out"), o.out},
                                 {QStringLiteral("srcFrames"), o.srcFrames}, {QStringLiteral("aspect"), o.aspect}, {QStringLiteral("x"), o.x},
                                 {QStringLiteral("y"), o.y}, {QStringLiteral("scale"), o.scale}, {QStringLiteral("rotation"), o.rotation},
@@ -594,7 +595,7 @@ void Project::fromJson(const QJsonObject &o)
         n.id = m.value(QLatin1String("id")).toString();
         n.path = m.value(QLatin1String("path")).toString();
         n.kind = m.value(QLatin1String("kind")).toString();
-        n.name = QFileInfo(n.path).completeBaseName();
+        n.name = m.value(QLatin1String("name")).toString(QFileInfo(n.path).completeBaseName());
         n.start = m.value(QLatin1String("start")).toInt();
         n.in = m.value(QLatin1String("in")).toInt();
         n.out = m.value(QLatin1String("out")).toInt();
@@ -945,7 +946,7 @@ QString Project::addFromMedia(const QString &path, int frame)
     return QString();
 }
 
-QString Project::addOverlay(const QString &pathOrUrl, int frame)
+QString Project::addOverlay(const QString &pathOrUrl, int frame, const QString &name)
 {
     if (m_id.isEmpty())
         return QString();
@@ -959,13 +960,13 @@ QString Project::addOverlay(const QString &pathOrUrl, int frame)
     bool known = false;
     for (const Media &x : std::as_const(m_media))
         known |= x.path == media.path;
-    if (!known)
+    if (!known && name.isEmpty())          // naklejki (z nazwą) nie trafiają do multimediów projektu
         m_media << media;
     Overlay o;
     o.id = newId();
     o.path = media.path;
     o.kind = media.kind;
-    o.name = media.name;
+    o.name = name.isEmpty() ? media.name : name;
     o.start = qMax(0, frame);
     o.srcFrames = media.kind == QLatin1String("image") ? 0 : media.frames;
     o.out = (media.kind == QLatin1String("image") ? ImageFrames : media.frames) - 1;

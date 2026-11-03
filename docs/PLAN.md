@@ -179,7 +179,11 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [x] Montaż 6: napisy karaoke — czasy słów z whisper.cpp (tokeny sklejane w słowa) zapisane w napisie; tryby
       Karaoke (kolor wypowiadanego słowa), Ramka słowa, Słowo po słowie (jedno duże słowo), Narastanie; wybór w oknie
       „Napisy z mowy” i w animacjach każdego napisu (napisy pisane ręcznie dostają czasy proporcjonalne do długości słów)
-- [ ] Montaż, dalej: gotowe naklejki i emoji w programie,
+- [x] Montaż 7: naklejki — 12 własnych wzorów Aster rysowanych w programie (Subskrybuj, Obserwuj, Polub, Link
+      w opisie, Nowość, Część 1, strzałka, kółko, dymek, Wow, serce, iskry) i wszystkie emoji z polskim wyszukiwaniem
+      (dane panelu emoji Aster, rysowane z Noto Color Emoji do PNG); karta „Naklejki” obok multimediów, klik dodaje
+      naklejkę jako nakładkę w miejscu głowicy (z wyskokiem, przeciąganiem, obrotem)
+- [ ] Montaż, dalej: naklejki animowane (GIF/WebP, Lottie), własne naklejki użytkownika z wycinaniem tła,
       klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
       płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,

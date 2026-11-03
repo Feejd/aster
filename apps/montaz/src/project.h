@@ -87,7 +87,7 @@ public:
     Q_INVOKABLE QString addFromMedia(const QString &path, int frame);                 // z biblioteki na oś czasu
     Q_INVOKABLE QString addText(int frame, const QString &text = QString());
     // Druga ścieżka obrazu: film albo zdjęcie (naklejka PNG) nad głównym obrazem; zwraca id albo ""
-    Q_INVOKABLE QString addOverlay(const QString &pathOrUrl, int frame);
+    Q_INVOKABLE QString addOverlay(const QString &pathOrUrl, int frame, const QString &name = QString());
     Q_INVOKABLE void trim(const QString &id, int deltaStart, int deltaEnd);          // przesunięcie krawędzi w klatkach osi
     Q_INVOKABLE void moveClip(const QString &id, int index);                         // ścieżka wideo: nowa kolejność
     Q_INVOKABLE void moveItem(const QString &id, int start);                         // tekst/muzyka: nowe miejsce
