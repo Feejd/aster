@@ -26,7 +26,8 @@ cleanup:
 modules:
   - name: libsamplerate
     buildsystem: cmake-ninja
-    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DBUILD_SHARED_LIBS=ON, -DBUILD_TESTING=OFF, -DLIBSAMPLERATE_EXAMPLES=OFF]
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DBUILD_SHARED_LIBS=ON, -DBUILD_TESTING=OFF, -DLIBSAMPLERATE_EXAMPLES=OFF,
+                  -DCMAKE_POLICY_VERSION_MINIMUM=3.5]
     sources:
       - type: git
         url: https://github.com/libsndfile/libsamplerate.git

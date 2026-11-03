@@ -3,6 +3,9 @@ app-id: org.aster.pdf
 runtime: org.kde.Platform
 runtime-version: "6.11"
 sdk: org.kde.Sdk
+# QtPdf jest częścią QtWebEngine — z gotowej warstwy Flathuba
+base: io.qt.qtwebengine.BaseApp
+base-version: "6.11"
 command: aster-pdf
 finish-args:
   - --socket=wayland
