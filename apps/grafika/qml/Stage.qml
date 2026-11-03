@@ -39,6 +39,8 @@ Item {
     readonly property real ruler: rulers ? 20 : 0
     property string hint: ""                    // np. wymiary albo kąt podczas zmiany
     signal menuRequested(real x, real y)
+    signal quickAction(string action)           // pasek przy zaznaczeniu i pusta strona → EditorPage.runMenu
+    property bool dragging: false               // przesuwanie elementów myszą (pasek szybkich działań znika)
 
     clip: true
 
@@ -582,6 +584,7 @@ Item {
                                 }
                                 if (starts.length === 0) return;
                                 moved = true;
+                                stage.dragging = true;
                                 if (starts.length === 1) {
                                     const s = stage.snapMove(d.element, starts[0].x + dx, starts[0].y + dy);
                                     stage.project.change(starts[0].id, { x: s.x, y: s.y }, false);
@@ -593,6 +596,7 @@ Item {
                             }
                             onReleased: {
                                 stage.endSnap();
+                                stage.dragging = false;
                                 if (moved) stage.project.commit();
                                 else if (pickOne) stage.select(d.uid);
                             }
@@ -916,6 +920,91 @@ Item {
                 }
             }
 
+            // ——— Pasek szybkich działań nad zaznaczeniem ———
+            Rectangle {
+                id: quickBar
+                readonly property var b: { stage.current; stage.group; return stage.selection.length > 0 ? stage.bounds(stage.selection) : ({}); }
+                readonly property var el: stage.current
+                readonly property bool single: stage.selection.length === 1
+                visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null
+                // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
+                readonly property real above: (b.y || 0) * stage.zoom - height - 14
+                readonly property real roof: flick.contentY - page.y + 6
+                x: Math.max(flick.contentX - page.x + 6, Math.min(flick.contentX - page.x + flick.width - width - 6,
+                                                                   ((b.x || 0) + (b.w || 0) / 2) * stage.zoom - width / 2))
+                y: above >= roof ? above : ((b.y || 0) + (b.h || 0)) * stage.zoom + 52
+                width: quickRow.implicitWidth + 10; height: 40
+                radius: 12
+                color: Theme.surface
+                border.width: 1; border.color: Theme.line
+                z: 5
+                Row {
+                    id: quickRow
+                    anchors.centerIn: parent
+                    spacing: 2
+                    ToolBtn { visible: quickBar.single && quickBar.el.type === "text"; icon: "pencil"; tip: "Edytuj tekst (Enter)"; onClicked: stage.quickAction("edit") }
+                    ToolBtn {
+                        visible: quickBar.single && quickBar.el.type === "image" && !!quickBar.el.src && Magic.available
+                        icon: "sparkles"; tip: "Usuń tło (AI)"; enabled: !Magic.busy
+                        onClicked: stage.quickAction("aiBackground")
+                    }
+                    ToolBtn {
+                        visible: quickBar.single && quickBar.el.type === "image" && !!quickBar.el.src && Magic.available
+                        icon: "brush"; tip: "Gumka i wyodrębnianie"; enabled: !Magic.busy
+                        onClicked: stage.quickAction("aiMagic")
+                    }
+                    ToolBtn { visible: quickBar.single && quickBar.el.type === "image" && !!quickBar.el.src; icon: "crop"; tip: "Kadruj (dwuklik)"; onClicked: stage.quickAction("crop") }
+                    Rectangle {
+                        visible: quickBar.single && (quickBar.el.type === "text" || (quickBar.el.type === "image" && !!quickBar.el.src))
+                        width: 1; height: 20; anchors.verticalCenter: parent.verticalCenter; color: Theme.line
+                    }
+                    ToolBtn { visible: !quickBar.single; icon: "layers"; tip: "Grupuj (Ctrl+G)"; onClicked: stage.quickAction("group") }
+                    ToolBtn { icon: "copy"; tip: "Duplikuj (Ctrl+D)"; onClicked: stage.quickAction("duplicate") }
+                    ToolBtn { icon: "lock"; tip: "Zablokuj"; onClicked: stage.quickAction("lock") }
+                    ToolBtn { icon: "trash"; tip: "Usuń (Delete)"; onClicked: stage.quickAction("remove") }
+                    ToolBtn {
+                        icon: "more"; tip: "Więcej (prawy przycisk)"
+                        onClicked: { const p = mapToItem(stage, width / 2, height); stage.menuRequested(p.x, p.y + 4); }
+                    }
+                }
+            }
+
+            // ——— Pusta strona: od czego zacząć ———
+            Rectangle {
+                visible: stage.project.count === 0 && stage.editing === ""
+                anchors.centerIn: parent
+                width: emptyCol.implicitWidth + 48; height: emptyCol.implicitHeight + 40
+                radius: 20
+                color: Theme.surface
+                border.width: 1; border.color: Theme.line
+                opacity: 0.97
+                Column {
+                    id: emptyCol
+                    anchors.centerIn: parent
+                    spacing: 14
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "Od czego zaczniesz?"
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 18; font.weight: Font.Bold
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "Dodaj pierwszy element albo przeciągnij tu zdjęcie z Plików."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                    }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 8
+                        Btn { primary: true; icon: "layout"; text: "Szablon"; onClicked: stage.quickAction("templates") }
+                        Btn { icon: "textT"; text: "Tekst"; onClicked: stage.quickAction("addText") }
+                        Btn { icon: "image"; text: "Zdjęcie"; onClicked: stage.quickAction("addPhoto") }
+                        Btn { icon: "shapes"; text: "Kształt"; onClicked: stage.quickAction("shapesTab") }
+                    }
+                }
+            }
+
             // ——— Narzędzia AI: zaznaczanie na zdjęciu ———
             Item {
                 id: magicBox
@@ -1176,7 +1265,7 @@ Item {
                 Btn { primary: true; icon: "sparkles"; text: "Usuń"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("erase") }
                 Btn { text: "Wyodrębnij"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("extract") }
                 Btn { text: "Przenieś"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("move") }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.undoMask() }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij zaznaczenie (Ctrl+Z)"; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.undoMask() }
                 Btn { text: "Gotowe"; height: 34; onClicked: Magic.end() }
             }
         }

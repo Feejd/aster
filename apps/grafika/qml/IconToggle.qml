@@ -7,7 +7,6 @@ HoverButton {
     property string icon
     property string label            // zamiast ikony, np. „Aa”
     property bool on: false
-    property string tip
     width: 32
     height: 32
     radius: 8

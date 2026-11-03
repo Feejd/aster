@@ -20,7 +20,7 @@ Item {
         const f = Window.activeFocusItem;
         return f !== null && (f instanceof TextInput || f instanceof TextEdit);
     }
-    readonly property bool active: visible && !colorPop.shown && !fontPop.shown && !exportPop.shown
+    readonly property bool active: visible && !colorPop.shown && !fontPop.shown && !exportPop.shown && !shortcutsSheet.open
     readonly property string sel: stage.selected
     readonly property var many: stage.selection           // zaznaczone (jeden albo kilka)
 
@@ -409,6 +409,11 @@ Item {
         else if (a === "copyStyle") copyStyle();
         else if (a === "saveElements") saveElements();
         else if (a === "aiBackground") Magic.removeBackground(project, sel);
+        else if (a === "templates") side.tab = "templates";
+        else if (a === "shapesTab") side.tab = "shapes";
+        else if (a === "addText") side.addTextStyle(side.textStyles[0]);
+        else if (a === "addPhoto") { side.tab = "photos"; chooseImage("element"); }
+        else if (a === "shortcuts") shortcutsSheet.open = true;
         else if (a === "aiMagic") startMagic();
         else if (a === "pasteStyle") pasteStyle();
         else if (a === "ungroup") ungroup();
@@ -523,6 +528,7 @@ Item {
         else if (cmd === "magicstroke") { const a = JSON.parse(arg); Magic.addStroke(a.points, a.width || 0, !!a.lasso, false); }
         else if (cmd === "magicapply") Magic.apply(arg);
         else if (cmd === "magictool") stage.magicTool = arg;
+        else if (cmd === "shortcuts") shortcutsSheet.open = true;
         else if (cmd === "insertsaved") insertSaved(side.saved[Number(arg)].file);
         else if (cmd === "replacecolor") { const [a, b] = arg.split(","); project.commit(); project.replaceColor(a, b); }
         else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
@@ -580,6 +586,21 @@ Item {
     Shortcut { sequence: "Ctrl+E"; enabled: ed.visible; onActivated: exportPop.openAt(exportBtn) }
     Shortcut { sequences: ["Ctrl+=", "Ctrl++", StandardKey.ZoomIn]; enabled: ed.visible; onActivated: stage.zoomBy(1.25) }
     Shortcut { sequences: ["Ctrl+-", StandardKey.ZoomOut]; enabled: ed.visible; onActivated: stage.zoomBy(0.8) }
+    // Formatowanie zaznaczonych tekstów
+    function toggleText(key) {
+        const texts = many.map(id => project.get(id)).filter(o => o.type === "text" && !o.locked);
+        if (texts.length === 0) return;
+        const on = key === "weight" ? (texts[0].weight || 400) >= 600 : !!texts[0][key];
+        for (const o of texts) {
+            const patch = {};
+            patch[key] = key === "weight" ? (on ? 400 : 700) : (on ? null : true);
+            project.change(o.id, patch, false);
+        }
+        project.commit();
+    }
+    Shortcut { sequence: StandardKey.Bold; enabled: ed.active && !ed.typing; onActivated: ed.toggleText("weight") }
+    Shortcut { sequence: StandardKey.Italic; enabled: ed.active && !ed.typing; onActivated: ed.toggleText("italic") }
+    Shortcut { sequence: StandardKey.Underline; enabled: ed.active && !ed.typing; onActivated: ed.toggleText("underline") }
     Shortcut { sequence: "Ctrl+R"; enabled: ed.visible; onActivated: stage.rulers = !stage.rulers }
     Shortcut { sequence: "Ctrl+0"; enabled: ed.visible; onActivated: stage.fit = true }
     Shortcut { sequence: "Ctrl+1"; enabled: ed.visible; onActivated: stage.zoomTo(1) }
@@ -696,16 +717,18 @@ Item {
                 anchors.right: parent.right; anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: ed.project.canUndo; onClicked: ed.undo() }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
                 Item { width: 8; height: 1 }
                 ToolBtn {
                     anchors.verticalCenter: parent.verticalCenter
                     icon: "ruler"
+                    tip: "Linijki i prowadnice (Ctrl+R)"
                     baseColor: stage.rulers ? Theme.accentSoft : "transparent"
                     onClicked: stage.rulers = !stage.rulers
                 }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; onClicked: stage.zoomBy(0.8) }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
                 HoverButton {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 58; height: 32
@@ -716,7 +739,7 @@ Item {
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.features: { "tnum": 1 }
                     }
                 }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; onClicked: stage.zoomBy(1.25) }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
                 Item { width: 8; height: 1 }
                 Btn {
                     id: exportBtn
@@ -741,6 +764,7 @@ Item {
             rulers: viewSettings.rulers
             onRulersChanged: viewSettings.rulers = rulers
             onMenuRequested: (x, y) => ed.showContextMenu(x, y)
+            onQuickAction: (a) => ed.runMenu(a)
         }
 
         // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
@@ -987,4 +1011,82 @@ Item {
             }
         }
     }
+
+    // ——— Skróty klawiszowe (Ctrl+/ albo przycisk na pasku) ———
+    Item {
+        id: shortcutsSheet
+        property bool open: false
+        anchors.fill: parent
+        visible: open
+        z: 100
+        readonly property var groups: [
+            { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
+                                         ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
+            { title: "Elementy", items: [["T", "Nowy tekst"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+                                         ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
+                                         ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
+            { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],
+                                               ["Spacja+przeciąganie", "Przesuń widok"], ["Ctrl+R", "Linijki i prowadnice"],
+                                               ["Ctrl+Enter", "Nowa strona"], ["PgUp / PgDn", "Poprzednia / następna strona"], ["Ctrl+/", "Ta ściąga"]] }
+        ]
+        Rectangle { anchors.fill: parent; color: Qt.rgba(0, 0, 0, 0.35); radius: ed.radius }
+        MouseArea { anchors.fill: parent; onClicked: shortcutsSheet.open = false }
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 48, sheetRow.implicitWidth + 56)
+            height: sheetCol.implicitHeight + 48
+            radius: 20
+            color: Theme.surface
+            border.width: 1; border.color: Theme.line
+            MouseArea { anchors.fill: parent }
+            Column {
+                id: sheetCol
+                anchors.centerIn: parent
+                spacing: 18
+                Item {
+                    width: sheetRow.implicitWidth; height: 28
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: "Skróty klawiszowe"; color: Theme.text; font.family: Theme.font; font.pixelSize: 19; font.weight: Font.Bold }
+                    ToolBtn { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Zamknij (Esc)"; onClicked: shortcutsSheet.open = false }
+                }
+                Row {
+                    id: sheetRow
+                    spacing: 32
+                    Repeater {
+                        model: shortcutsSheet.groups
+                        delegate: Column {
+                            id: grp
+                            required property var modelData
+                            spacing: 9
+                            Text { text: grp.modelData.title; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                            Repeater {
+                                model: grp.modelData.items
+                                delegate: Row {
+                                    required property var modelData
+                                    spacing: 10
+                                    Rectangle {
+                                        width: 128; height: 24; radius: 6
+                                        color: Theme.fill
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter; x: 8
+                                            width: parent.width - 12; elide: Text.ElideRight
+                                            text: modelData[0]
+                                            color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                                        }
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 170; wrapMode: Text.WordWrap
+                                        text: modelData[1]
+                                        color: Theme.text; font.family: Theme.font; font.pixelSize: 12
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Shortcut { sequences: ["Ctrl+/", "F1"]; enabled: ed.visible; onActivated: shortcutsSheet.open = !shortcutsSheet.open }
+    Shortcut { sequence: "Escape"; enabled: shortcutsSheet.open; onActivated: shortcutsSheet.open = false }
 }

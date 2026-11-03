@@ -131,7 +131,7 @@ Item {
                 }
             }
             Section {
-                visible: ins.type === "page" && ins.projectColors.length > 0
+                visible: ins.type === "page" && ins.projectColors.length > 1
                 title: "Kolory projektu"
                 Text {
                     width: parent.width
@@ -174,13 +174,13 @@ Item {
                 title: "Wyrównaj do siebie"
                 Row {
                     spacing: 2
-                    IconToggle { icon: "alignHLeft"; onClicked: ins.editor.alignMany("left") }
-                    IconToggle { icon: "alignHCenter"; onClicked: ins.editor.alignMany("hcenter") }
-                    IconToggle { icon: "alignHRight"; onClicked: ins.editor.alignMany("right") }
+                    IconToggle { icon: "alignHLeft"; onClicked: ins.editor.alignMany("left"); tip: "Do lewej" }
+                    IconToggle { icon: "alignHCenter"; onClicked: ins.editor.alignMany("hcenter"); tip: "Do środka w poziomie" }
+                    IconToggle { icon: "alignHRight"; onClicked: ins.editor.alignMany("right"); tip: "Do prawej" }
                     Item { width: 6; height: 1 }
-                    IconToggle { icon: "alignTop"; onClicked: ins.editor.alignMany("top") }
-                    IconToggle { icon: "alignMiddle"; onClicked: ins.editor.alignMany("vcenter") }
-                    IconToggle { icon: "alignBottom"; onClicked: ins.editor.alignMany("bottom") }
+                    IconToggle { icon: "alignTop"; onClicked: ins.editor.alignMany("top"); tip: "Do góry" }
+                    IconToggle { icon: "alignMiddle"; onClicked: ins.editor.alignMany("vcenter"); tip: "Do środka w pionie" }
+                    IconToggle { icon: "alignBottom"; onClicked: ins.editor.alignMany("bottom"); tip: "Do dołu" }
                 }
                 Row {
                     visible: ins.count > 2
@@ -286,22 +286,27 @@ Item {
                     suffix: "°"
                     onMoved: (v, done) => ins.set({ gradientAngle: v }, done)
                 }
+                // Styl liter, wyrównanie i listy — w grupach jak w edytorach tekstu
                 Row {
-                    spacing: 2
-                    IconToggle { icon: "bold"; on: (ins.el.weight || 400) >= 600; onClicked: ins.set({ weight: on ? 400 : 700 }) }
-                    IconToggle { icon: "italic"; on: !!ins.el.italic; onClicked: ins.set({ italic: !on }) }
-                    IconToggle { icon: "underline"; on: !!ins.el.underline; onClicked: ins.set({ underline: !on }) }
-                    IconToggle { label: "AA"; on: !!ins.el.caps; onClicked: ins.set({ caps: !on }) }
-                    Item { width: 8; height: 1 }
-                    IconToggle { icon: "alignLeft"; on: !ins.el.align || ins.el.align === "left"; onClicked: ins.set({ align: "left" }) }
-                    IconToggle { icon: "alignCenter"; on: ins.el.align === "center"; onClicked: ins.set({ align: "center" }) }
-                    IconToggle { icon: "alignRight"; on: ins.el.align === "right"; onClicked: ins.set({ align: "right" }) }
+                    spacing: 8
+                    Seg {
+                        IconToggle { icon: "bold"; tip: "Pogrubienie (Ctrl+B)"; on: (ins.el.weight || 400) >= 600; onClicked: ins.set({ weight: on ? 400 : 700 }) }
+                        IconToggle { icon: "italic"; tip: "Kursywa (Ctrl+I)"; on: !!ins.el.italic; onClicked: ins.set({ italic: !on }) }
+                        IconToggle { icon: "underline"; tip: "Podkreślenie (Ctrl+U)"; on: !!ins.el.underline; onClicked: ins.set({ underline: !on }) }
+                        IconToggle { label: "AA"; tip: "WIELKIE LITERY"; on: !!ins.el.caps; onClicked: ins.set({ caps: !on }) }
+                    }
                 }
                 Row {
-                    spacing: 2
-                    // Listy: punkty albo numery przed każdym akapitem
-                    IconToggle { label: "•"; on: ins.el.list === "bullet"; onClicked: ins.set({ list: on ? null : "bullet", align: on ? ins.el.align : "left" }) }
-                    IconToggle { label: "1."; on: ins.el.list === "number"; onClicked: ins.set({ list: on ? null : "number", align: on ? ins.el.align : "left" }) }
+                    spacing: 8
+                    Seg {
+                        IconToggle { icon: "alignLeft"; tip: "Wyrównaj do lewej"; on: !ins.el.align || ins.el.align === "left"; onClicked: ins.set({ align: "left" }) }
+                        IconToggle { icon: "alignCenter"; tip: "Wyśrodkuj"; on: ins.el.align === "center"; onClicked: ins.set({ align: "center" }) }
+                        IconToggle { icon: "alignRight"; tip: "Wyrównaj do prawej"; on: ins.el.align === "right"; onClicked: ins.set({ align: "right" }) }
+                    }
+                    Seg {
+                        IconToggle { icon: "listBullet"; tip: "Lista punktowana"; on: ins.el.list === "bullet"; onClicked: ins.set({ list: on ? null : "bullet", align: on ? ins.el.align : "left" }) }
+                        IconToggle { icon: "listNumber"; tip: "Lista numerowana"; on: ins.el.list === "number"; onClicked: ins.set({ list: on ? null : "number", align: on ? ins.el.align : "left" }) }
+                    }
                 }
             }
             Section {
@@ -915,26 +920,35 @@ Item {
                 title: "Na stronie"
                 Row {
                     spacing: 2
-                    IconToggle { icon: "alignHLeft"; onClicked: ins.alignTo("left") }
-                    IconToggle { icon: "alignHCenter"; onClicked: ins.alignTo("hcenter") }
-                    IconToggle { icon: "alignHRight"; onClicked: ins.alignTo("right") }
+                    IconToggle { icon: "alignHLeft"; onClicked: ins.alignTo("left"); tip: "Do lewej krawędzi strony" }
+                    IconToggle { icon: "alignHCenter"; onClicked: ins.alignTo("hcenter"); tip: "Na środek strony w poziomie" }
+                    IconToggle { icon: "alignHRight"; onClicked: ins.alignTo("right"); tip: "Do prawej krawędzi strony" }
                     Item { width: 6; height: 1 }
-                    IconToggle { icon: "alignTop"; onClicked: ins.alignTo("top") }
-                    IconToggle { icon: "alignMiddle"; onClicked: ins.alignTo("vcenter") }
-                    IconToggle { icon: "alignBottom"; onClicked: ins.alignTo("bottom") }
+                    IconToggle { icon: "alignTop"; onClicked: ins.alignTo("top"); tip: "Do górnej krawędzi strony" }
+                    IconToggle { icon: "alignMiddle"; onClicked: ins.alignTo("vcenter"); tip: "Na środek strony w pionie" }
+                    IconToggle { icon: "alignBottom"; onClicked: ins.alignTo("bottom"); tip: "Do dolnej krawędzi strony" }
                 }
                 Row {
                     spacing: 2
-                    IconToggle { icon: "bringFront"; onClicked: ins.project.arrange(ins.id_, "front") }
-                    IconToggle { icon: "layerUp"; onClicked: ins.project.arrange(ins.id_, "up") }
-                    IconToggle { icon: "layerDown"; onClicked: ins.project.arrange(ins.id_, "down") }
-                    IconToggle { icon: "sendBack"; onClicked: ins.project.arrange(ins.id_, "back") }
+                    IconToggle { icon: "bringFront"; tip: "Na wierzch (Ctrl+Shift+])"; onClicked: ins.project.arrange(ins.id_, "front") }
+                    IconToggle { icon: "layerUp"; tip: "Do przodu (Ctrl+])"; onClicked: ins.project.arrange(ins.id_, "up") }
+                    IconToggle { icon: "layerDown"; tip: "Do tyłu (Ctrl+[)"; onClicked: ins.project.arrange(ins.id_, "down") }
+                    IconToggle { icon: "sendBack"; tip: "Na spód (Ctrl+Shift+[)"; onClicked: ins.project.arrange(ins.id_, "back") }
                     Item { width: 6; height: 1 }
-                    IconToggle { icon: "copy"; onClicked: ins.editor.duplicate() }
-                    IconToggle { icon: "lock"; onClicked: ins.editor.setLocked(true) }
-                    IconToggle { icon: "trash"; onClicked: ins.editor.remove() }
+                    IconToggle { icon: "copy"; onClicked: ins.editor.duplicate(); tip: "Duplikuj (Ctrl+D)" }
+                    IconToggle { icon: "lock"; onClicked: ins.editor.setLocked(true); tip: "Zablokuj" }
+                    IconToggle { icon: "trash"; onClicked: ins.editor.remove(); tip: "Usuń (Delete)" }
                 }
             }
         }
+    }
+
+    // Grupa przycisków na wspólnym tle
+    component Seg: Rectangle {
+        default property alias buttons: segRow.children
+        width: segRow.implicitWidth + 4; height: 36
+        radius: 10
+        color: Theme.fill
+        Row { id: segRow; anchors.centerIn: parent; spacing: 0 }
     }
 }

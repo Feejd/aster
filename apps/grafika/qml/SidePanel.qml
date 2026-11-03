@@ -459,9 +459,51 @@ Item {
                     visible: sp.tab === "text"
                     width: parent.width
                     spacing: 8
+                    Btn {
+                        width: parent.width; height: 44
+                        primary: true
+                        icon: "textT"
+                        text: "Dodaj pole tekstowe"
+                        onClicked: sp.addTextStyle(sp.textStyles[2])
+                    }
+                    Text {
+                        topPadding: 6
+                        text: "Gotowe style"
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                    }
+                    Repeater {
+                        model: sp.textStyles
+                        delegate: HoverButton {
+                            id: ts
+                            required property var modelData
+                            required property int index
+                            width: textCol.width
+                            height: Math.max(52, label.implicitHeight + 24)
+                            radius: 12
+                            baseColor: Theme.fill
+                            onClicked: sp.addTextStyle(modelData)
+                            Text {
+                                id: label
+                                anchors.centerIn: parent
+                                width: parent.width - 20
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                                text: ts.modelData.label
+                                color: ts.modelData.outline ? ts.modelData.color : sp.readable(ts.modelData.color)
+                                style: ts.modelData.outline ? Text.Outline : Text.Normal
+                                styleColor: ts.modelData.outlineColor || "transparent"
+                                font.family: ts.modelData.font
+                                font.pixelSize: ts.modelData.preview
+                                font.weight: ts.modelData.weight
+                                font.italic: !!ts.modelData.italic
+                                font.capitalization: ts.modelData.caps ? Font.AllUppercase : Font.MixedCase
+                                font.letterSpacing: (ts.modelData.spacing || 0) * ts.modelData.preview
+                            }
+                        }
+                    }
                     // Moje style
                     Item {
-                        width: parent.width; height: 22
+                        width: parent.width; height: 30
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Moje style"
@@ -529,41 +571,6 @@ Item {
                         text: "Zapisz styl zaznaczonego tekstu"
                         enabled: sp.selText !== null
                         onClicked: sp.saveTextStyle()
-                    }
-                    Text {
-                        topPadding: 8
-                        text: "Gotowe style"
-                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
-                    }
-                    Repeater {
-                        model: sp.textStyles
-                        delegate: HoverButton {
-                            id: ts
-                            required property var modelData
-                            required property int index
-                            width: textCol.width
-                            height: Math.max(52, label.implicitHeight + 24)
-                            radius: 12
-                            baseColor: Theme.fill
-                            onClicked: sp.addTextStyle(modelData)
-                            Text {
-                                id: label
-                                anchors.centerIn: parent
-                                width: parent.width - 20
-                                horizontalAlignment: Text.AlignHCenter
-                                wrapMode: Text.WordWrap
-                                text: ts.modelData.label
-                                color: ts.modelData.outline ? ts.modelData.color : sp.readable(ts.modelData.color)
-                                style: ts.modelData.outline ? Text.Outline : Text.Normal
-                                styleColor: ts.modelData.outlineColor || "transparent"
-                                font.family: ts.modelData.font
-                                font.pixelSize: ts.modelData.preview
-                                font.weight: ts.modelData.weight
-                                font.italic: !!ts.modelData.italic
-                                font.capitalization: ts.modelData.caps ? Font.AllUppercase : Font.MixedCase
-                                font.letterSpacing: (ts.modelData.spacing || 0) * ts.modelData.preview
-                            }
-                        }
                     }
                     Text {
                         topPadding: 8

@@ -24,19 +24,20 @@ Window {
     property bool editing: false
 
     // Gotowe rozmiary; print — wymiary do druku w mm (PDF ma wtedy dokładnie ten format)
+    // group: social | print | screen — kolor i kategoria na ekranie startowym
     readonly property var presets: [
-        { id: "post", name: "Post kwadratowy", hint: "Instagram, Facebook", w: 1080, h: 1080 },
-        { id: "portrait", name: "Post pionowy", hint: "Instagram 4:5", w: 1080, h: 1350 },
-        { id: "story", name: "Relacja", hint: "Story, Reels, TikTok", w: 1080, h: 1920 },
-        { id: "a4", name: "A4 pionowo", hint: "Ulotka, CV, zaproszenie", w: 2480, h: 3508, print: { width: 210, height: 297 } },
-        { id: "a4l", name: "A4 poziomo", hint: "Dyplom, ogłoszenie", w: 3508, h: 2480, print: { width: 297, height: 210 } },
-        { id: "poster", name: "Plakat A3", hint: "Do druku", w: 3508, h: 4961, print: { width: 297, height: 420 } },
-        { id: "a5", name: "Ulotka A5", hint: "Ulotka, zaproszenie", w: 1748, h: 2480, print: { width: 148, height: 210 } },
-        { id: "card", name: "Kartka A6", hint: "Życzenia, podziękowanie", w: 1748, h: 1240, print: { width: 148, height: 105 } },
-        { id: "bcard", name: "Wizytówka", hint: "90 × 50 mm", w: 1063, h: 591, print: { width: 90, height: 50 } },
-        { id: "slide", name: "Slajd 16:9", hint: "Prezentacja", w: 1920, h: 1080 },
-        { id: "youtube", name: "Miniaturka YouTube", hint: "Okładka filmu", w: 1280, h: 720 },
-        { id: "fbcover", name: "Okładka Facebook", hint: "Profil, strona", w: 1640, h: 624 }
+        { id: "post", name: "Post kwadratowy", hint: "Instagram, Facebook", w: 1080, h: 1080, group: "social", icon: "image" },
+        { id: "portrait", name: "Post pionowy", hint: "Instagram 4:5", w: 1080, h: 1350, group: "social", icon: "image" },
+        { id: "story", name: "Relacja", hint: "Story, Reels, TikTok", w: 1080, h: 1920, group: "social", icon: "phone" },
+        { id: "fbcover", name: "Okładka Facebook", hint: "Profil, strona", w: 1640, h: 624, group: "social", icon: "user" },
+        { id: "youtube", name: "Miniaturka YouTube", hint: "Okładka filmu", w: 1280, h: 720, group: "screen", icon: "play" },
+        { id: "slide", name: "Slajd 16:9", hint: "Prezentacja", w: 1920, h: 1080, group: "screen", icon: "layout" },
+        { id: "a4", name: "A4 pionowo", hint: "Ulotka, CV, zaproszenie", w: 2480, h: 3508, print: { width: 210, height: 297 }, group: "print", icon: "doc" },
+        { id: "a4l", name: "A4 poziomo", hint: "Dyplom, ogłoszenie", w: 3508, h: 2480, print: { width: 297, height: 210 }, group: "print", icon: "doc" },
+        { id: "a5", name: "Ulotka A5", hint: "Ulotka, zaproszenie", w: 1748, h: 2480, print: { width: 148, height: 210 }, group: "print", icon: "news" },
+        { id: "poster", name: "Plakat A3", hint: "Do druku", w: 3508, h: 4961, print: { width: 297, height: 420 }, group: "print", icon: "news" },
+        { id: "card", name: "Kartka A6", hint: "Życzenia, podziękowanie", w: 1748, h: 1240, print: { width: 148, height: 105 }, group: "print", icon: "mail" },
+        { id: "bcard", name: "Wizytówka", hint: "Firma, kontakt", w: 1063, h: 591, print: { width: 90, height: 50 }, group: "print", icon: "user" }
     ]
 
     Project {
