@@ -159,7 +159,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
 - [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
-- [ ] Asystent pod klawiszem.
+- [ ] Asystent Aster — rozpisany niżej („Asystent Aster”).
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
 - [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
@@ -330,3 +330,52 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [ ] Aster Code: więcej grup i podział w pionie, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie), zwijanie z serwera języka (foldingRange), zwinięte bloki w minimapie, przeciąganie kart między grupami
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
+
+## Asystent Aster
+Jeden asystent dla całego systemu: na górnym pasku, w osobnym panelu i w terminalu. Odpowiada model w chmurze
+albo lokalny — zawsze widać który, a nic nie wychodzi z komputera bez zgody.
+
+**Gdzie mieszka**
+- **Wyspa na górnym pasku** (Super+Spacja albo klik w wyspę): wyspa rozlewa się w pole pytania. Krótka odpowiedź na
+  jedno pytanie albo polecenie („włącz tryb ciemny”, „ile to 15% z 240”, „przetłumacz na angielski: …”) pojawia się
+  w wyspie i znika jak powiadomienie.
+- **Panel z prawej** (warstwa jak centrum sterowania): otwiera się sam, gdy rozmowa ma więcej niż jedną wymianę albo
+  odpowiedź jest długa (lista kroków, kod, tabela). Historia rozmów, kopiowanie, wklejanie plików i zrzutów,
+  przypięcie panelu na stałe, „Nowa rozmowa”.
+- **Terminal** — polecenie `aster` (`ai` jako skrót) w każdym terminalu:
+  - `aster "jak spakować folder do zip"` — odpowiedź od razu, strumieniowo;
+  - `aster` bez argumentów — rozmowa w terminalu (wiele wiadomości), `/nowa`, `/model`, `/wyjdz`;
+  - potok: `journalctl -b -p err | aster "co tu jest nie tak?"`, `git diff | aster "napisz opis commita"`;
+  - asystent może zaproponować komendę — pokazuje ją i pyta [T/n] przed uruchomieniem, nigdy sam.
+  - Terminal Aster: Ctrl+Shift+A otwiera rozmowę z kontekstem ostatniego polecenia i jego błędu.
+
+**Jak działa**
+- Usługa `aster-assistant` (D-Bus `org.aster.Assistant`, sesja użytkownika) — jedna dla wyspy, panelu i terminala:
+  rozmowy, strumień odpowiedzi, narzędzia, historia (lokalnie, w ~/.local/share/aster/asystent, do wyłączenia).
+- Dostawcy przez API zgodne z OpenAI (DeepSeek, OpenAI, Gemini, OpenRouter, Mistral, lokalny llama.cpp/Ollama)
+  oraz Anthropic (Claude). Klucze API w portfelu systemu (Secret Service / KWallet), nie w plikach.
+- **Model lokalny (offline):** llama.cpp (`llama-server`) z małym modelem 3–4B (Q4, ok. 2–3 GB) pobieranym na życzenie;
+  wystarcza do poleceń systemowych, streszczeń i tłumaczeń, działa też na słabym sprzęcie (i3, 8 GB — wolniej).
+  Tryb „Najpierw lokalnie”: proste rzeczy lokalnie, trudniejsze — do chmury po zgodzie.
+- **Narzędzia (function calling)** z potwierdzeniem przy każdej zmianie w systemie: tryb ciemny, jasność, głośność,
+  Wi‑Fi, Bluetooth, Nie przeszkadzać; otwieranie programów i ustawień; wyszukiwanie plików (Baloo) i ich otwieranie;
+  przypomnienia i minutnik (dynamiczna wyspa); komendy w terminalu (pokazane i potwierdzone).
+- **Kontekst na życzenie:** zaznaczony tekst, schowek, plik przeciągnięty do panelu, zrzut okna — tylko po kliknięciu,
+  nigdy w tle.
+
+**Prywatność**
+- Przy pierwszym uruchomieniu wybór: tylko lokalnie / chmura (dostawca + klucz) / najpierw lokalnie.
+- Każda odpowiedź ma znaczek „Na tym komputerze” albo „Chmura: <dostawca>”; dostawcy z serwerami poza UE są opisani
+  wprost (np. DeepSeek — serwery w Chinach).
+- Bez telemetrii; historia tylko lokalnie; „Wyczyść historię” jednym kliknięciem.
+
+**Ustawienia → Asystent:** dostawca i model, klucz API, model lokalny (pobierz / usuń, rozmiar), skrót klawiszowy,
+historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
+
+**Etapy**
+- [ ] A1. Usługa `aster-assistant` + polecenie `aster` w terminalu (jedno pytanie, rozmowa, potok), dostawcy
+      zgodni z OpenAI i Anthropic, klucze w portfelu, Ustawienia → Asystent
+- [ ] A2. Wyspa: pole pytania i krótka odpowiedź; panel z prawej dla rozmów (przejście z wyspy do panelu), historia
+- [ ] A3. Narzędzia systemowe z potwierdzeniem; propozycje komend w terminalu [T/n]; Ctrl+Shift+A w Terminalu Aster
+- [ ] A4. Model lokalny (llama.cpp, pobieranie modelu, tryb offline i „Najpierw lokalnie”)
+- [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie
