@@ -285,11 +285,42 @@ Item {
     }
     function exportNow(format, scale) {
         exportPop.close();
-        const path = project.exportFile(format, scale, "");
-        if (path !== "") app.toast("Zapisano „" + path.split("/").pop() + "”", path);
+        const all = exportPop.allPages && project.pageCount > 1 && format !== "pdf";
+        const path = project.exportFile(format, scale, "", all);
+        if (path === "") return;
+        if (all) app.toast("Zapisano " + project.pageCount + " pliki: „" + path.split("/").pop() + "” i kolejne", path);
+        else app.toast("Zapisano „" + path.split("/").pop() + "”", path);
+    }
+
+    // ——— Strony ———
+    function goToPage(i) {
+        stage.clearSelection();
+        project.goToPage(i);
+        stage.forceActiveFocus();
+    }
+    function showPageMenu(i, item) {
+        const items = [
+            { label: "Duplikuj stronę", icon: "copy", action: "page:dup:" + i },
+            { label: "Przesuń w lewo", icon: "back", action: "page:left:" + i, disabled: i === 0 },
+            { label: "Przesuń w prawo", icon: "forward", action: "page:right:" + i, disabled: i === project.pageCount - 1 },
+            { separator: true },
+            { label: "Usuń stronę", icon: "trash", action: "page:del:" + i, danger: true, disabled: project.pageCount < 2 }
+        ];
+        const pt = item.mapToItem(ed, 0, 0);
+        menu.openAt(pt.x, pt.y - items.length * 34 - 16, items.filter(it => !it.disabled));
     }
 
     function runMenu(a) {
+        if (a.startsWith("page:")) {
+            const [, what, n] = a.split(":");
+            const i = Number(n);
+            stage.clearSelection();
+            if (what === "dup") project.duplicatePage(i);
+            else if (what === "del") project.removePage(i);
+            else if (what === "left") project.movePage(i, i - 1);
+            else if (what === "right") project.movePage(i, i + 1);
+            return;
+        }
         if (a.startsWith("size:")) {
             for (const p of app.presets) if (p.id === a.substring(5)) project.setPageSize(p.w, p.h, true);
             stage.fit = true;
@@ -364,6 +395,10 @@ Item {
         else if (cmd === "align") alignMany(arg);
         else if (cmd === "dup") duplicate();
         else if (cmd === "group") group();
+        else if (cmd === "addpage") project.addPage();
+        else if (cmd === "duppage") project.duplicatePage(project.currentPage);
+        else if (cmd === "page") goToPage(Number(arg));
+        else if (cmd === "exportpages") { const p = project.exportFile(arg, 0.5, "/tmp/grafika-strony." + arg, true); app.toast(p, p); }
         else if (cmd === "collage") addCollage(side.collages[Number(arg)].rects);
         else if (cmd === "resize") { const [w, h] = arg.split("x"); project.setPageSize(Number(w), Number(h), true); stage.fit = true; }
         else if (cmd === "searchg") { side.tab = "shapes"; side.searchGraphics(arg); }
@@ -398,6 +433,9 @@ Item {
     Shortcut { sequences: [StandardKey.Paste]; enabled: ed.active && !ed.typing; onActivated: ed.paste() }
     Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.duplicate() }
     Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: stage.selectAll() }
+    Shortcut { sequence: "PgDown"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.min(ed.project.pageCount - 1, ed.project.currentPage + 1)) }
+    Shortcut { sequence: "PgUp"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.max(0, ed.project.currentPage - 1)) }
+    Shortcut { sequence: "Ctrl+Return"; enabled: ed.active && !ed.typing; onActivated: { stage.clearSelection(); ed.project.addPage(); } }
     Shortcut { sequence: "Ctrl+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.group() }
     Shortcut { sequence: "Ctrl+Shift+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.ungroup() }
     Shortcut { sequence: "Ctrl+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("up") }
@@ -448,7 +486,7 @@ Item {
         selectedFile: "file:///" + ed.project.name + "." + format
         nameFilters: format === "pdf" ? ["Dokument PDF (*.pdf)"] : format === "jpg" ? ["Obraz JPG (*.jpg)"] : ["Obraz PNG (*.png)"]
         onAccepted: {
-            const path = ed.project.exportFile(format, scale, String(selectedFile));
+            const path = ed.project.exportFile(format, scale, String(selectedFile), exportPop.allPages && format !== "pdf");
             if (path !== "") ed.app.toast("Zapisano „" + path.split("/").pop() + "”", path);
         }
     }
@@ -575,9 +613,95 @@ Item {
             id: stage
             y: bar.height
             width: parent.width - inspector.width
-            height: parent.height - y
+            height: parent.height - y - pageBar.height
             project: ed.project
             onMenuRequested: (x, y) => ed.showContextMenu(x, y)
+        }
+
+        // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
+        Item {
+            id: pageBar
+            y: stage.y + stage.height
+            width: stage.width
+            height: 92
+            readonly property real thumbH: 56
+            readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
+            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            Flickable {
+                id: pageFlick
+                anchors.fill: parent
+                anchors.leftMargin: 16; anchors.rightMargin: 16
+                contentWidth: pageRow.width
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                clip: true
+                Row {
+                    id: pageRow
+                    height: pageFlick.height
+                    spacing: 10
+                    Repeater {
+                        model: ed.project.pageCount
+                        delegate: Item {
+                            id: pg
+                            required property int index
+                            readonly property bool current: index === ed.project.currentPage
+                            width: pageBar.thumbW + 8
+                            height: pageRow.height
+                            Rectangle {
+                                id: pgFrame
+                                x: 0; y: 10
+                                width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
+                                radius: 8
+                                color: "transparent"
+                                border.width: pg.current ? 2 : 1
+                                border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
+                                PageView {
+                                    x: 4; y: 4
+                                    width: pageBar.thumbW; height: pageBar.thumbH
+                                    project: ed.project
+                                    page: pg.index
+                                }
+                                MouseArea {
+                                    id: pgMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: (e) => {
+                                        if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
+                                        else ed.goToPage(pg.index);
+                                    }
+                                }
+                            }
+                            Text {
+                                anchors.horizontalCenter: pgFrame.horizontalCenter
+                                y: pgFrame.y + pgFrame.height + 3
+                                text: pg.index + 1
+                                color: pg.current ? Theme.accentText : Theme.text2
+                                font.family: Theme.font; font.pixelSize: 11; font.weight: pg.current ? Font.DemiBold : Font.Normal
+                            }
+                        }
+                    }
+                    HoverButton {
+                        y: 10
+                        width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
+                        radius: 8
+                        baseColor: Theme.fill
+                        onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
+                        Column {
+                            id: addPageRow
+                            anchors.centerIn: parent
+                            spacing: 2
+                            Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.plus; size: 16; stroke: 2.2; color: Theme.text }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: ed.project.pageCount > 1 ? "Strona" : "Dodaj stronę"
+                                color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Rectangle {
@@ -609,6 +733,7 @@ Item {
         id: exportPop
         property string format: "png"
         property real size: 1           // mnożnik rozmiaru PNG/JPG
+        property bool allPages: true    // kilka stron: każda do osobnego pliku
         cardWidth: 320
         Column {
             width: parent.width
@@ -628,6 +753,23 @@ Item {
                     text: exportPop.format === "png" ? "Najlepsza jakość — do mediów społecznościowych i na ekran."
                         : exportPop.format === "jpg" ? "Mniejszy plik — do wysłania mailem albo komunikatorem."
                         : "Do druku: ostre litery w każdym powiększeniu. Zapisuje się w Dokumenty/Grafiki."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                }
+            }
+            Section {
+                visible: ed.project.pageCount > 1
+                title: "Strony"
+                Row {
+                    visible: exportPop.format !== "pdf"
+                    spacing: 6
+                    Chip { text: "Wszystkie (" + ed.project.pageCount + ")"; on: exportPop.allPages; onClicked: exportPop.allPages = true }
+                    Chip { text: "Tylko ta"; on: !exportPop.allPages; onClicked: exportPop.allPages = false }
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: exportPop.format === "pdf" ? "Wszystkie " + ed.project.pageCount + " strony w jednym pliku PDF."
+                        : exportPop.allPages ? "Każda strona w osobnym pliku: nazwa-1, nazwa-2… — gotowe do karuzeli." : "Tylko strona " + (ed.project.currentPage + 1) + "."
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
                 }
             }

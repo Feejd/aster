@@ -62,3 +62,46 @@ void ArtView::paint(QPainter *painter)
     else
         Art::paintElement(painter, m_element, m_project);
 }
+
+PageView::PageView(QQuickItem *parent)
+    : QQuickPaintedItem(parent)
+{
+    setAntialiasing(true);
+}
+
+void PageView::setProject(Project *project)
+{
+    if (m_project == project)
+        return;
+    if (m_project)
+        disconnect(m_project, nullptr, this, nullptr);
+    m_project = project;
+    if (m_project) {
+        for (auto signal : {&Project::changed, &Project::pagesChanged, &Project::backgroundChanged, &Project::imagesChanged, &Project::pageChanged})
+            connect(m_project, signal, this, [this] { update(); });
+        connect(m_project, &QAbstractItemModel::dataChanged, this, [this] {
+            if (m_project && m_project->currentPage() == m_page)
+                update();
+        });
+    }
+    Q_EMIT projectChanged();
+    update();
+}
+
+void PageView::setPage(int page)
+{
+    if (m_page == page)
+        return;
+    m_page = page;
+    Q_EMIT pageChanged();
+    update();
+}
+
+void PageView::paint(QPainter *painter)
+{
+    if (!m_project || m_page >= m_project->pageCount())
+        return;
+    painter->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+    painter->scale(width() / m_project->pageWidth(), height() / m_project->pageHeight());
+    Art::paintPage(painter, m_project->pageDocument(m_page), m_project);
+}

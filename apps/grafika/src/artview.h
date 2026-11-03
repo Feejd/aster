@@ -37,3 +37,28 @@ private:
     QVariantMap m_element;
     QPointer<Project> m_project;
 };
+
+// Podgląd całej strony projektu (pasek stron) — rysuje się na nowo po każdej zmianie
+class PageView : public QQuickPaintedItem
+{
+    Q_OBJECT
+    QML_ELEMENT
+    Q_PROPERTY(Project *project READ project WRITE setProject NOTIFY projectChanged)
+    Q_PROPERTY(int page READ page WRITE setPage NOTIFY pageChanged)
+
+public:
+    explicit PageView(QQuickItem *parent = nullptr);
+    Project *project() const { return m_project; }
+    void setProject(Project *project);
+    int page() const { return m_page; }
+    void setPage(int page);
+    void paint(QPainter *painter) override;
+
+Q_SIGNALS:
+    void projectChanged();
+    void pageChanged();
+
+private:
+    QPointer<Project> m_project;
+    int m_page = 0;
+};

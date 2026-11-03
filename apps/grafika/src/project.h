@@ -9,7 +9,8 @@
 #include <QStringList>
 #include <QtQml/qqmlregistration.h>
 
-// Otwarty projekt: strona (rozmiar, tło) i lista elementów od spodu do wierzchu (model dla Repeatera).
+// Otwarty projekt: rozmiar stron i strony (tło i elementy od spodu do wierzchu). Model dla Repeatera to elementy
+// bieżącej strony; pozostałe strony czekają w m_pages. Wszystkie strony mają ten sam rozmiar (karuzela, PDF).
 // Plik projektu (.grafika) to ZIP: project.json, zdjęcia w images/ i miniatura thumbnail.png.
 // Cofanie i ponawianie zapamiętuje całe migawki strony (JSON) — zdjęcia zostają w pamięci, dopóki projekt jest otwarty.
 class Project : public QAbstractListModel, public ImageSource
@@ -27,6 +28,8 @@ class Project : public QAbstractListModel, public ImageSource
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(QStringList images READ images NOTIFY imagesChanged)
     Q_PROPERTY(QStringList colors READ colors NOTIFY colorsChanged)
+    Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
+    Q_PROPERTY(int currentPage READ currentPage NOTIFY pagesChanged)
 
 public:
     enum Roles { ElementRole = Qt::UserRole + 1, IdRole };
@@ -49,6 +52,8 @@ public:
     int count() const { return m_elements.size(); }
     QStringList images() const;
     QStringList colors() const;
+    int pageCount() const { return int(m_pages.size()); }
+    int currentPage() const { return m_page; }
 
     QImage image(const QString &key, qreal pixels) const override;
     QByteArray vector(const QString &key) const override;
@@ -63,7 +68,15 @@ public:
     Q_INVOKABLE void setPageSize(qreal width, qreal height, bool fit = false);   // fit — przeskaluj treść do nowej strony
     // Element powiększony k razy względem punktu (ox, oy) — rozmiar, pozycja, czcionka, grubości, cień
     Q_INVOKABLE QVariantMap scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) const;
-    Q_INVOKABLE QVariantMap document() const;
+    Q_INVOKABLE QVariantMap document() const;              // bieżąca strona (background, elements) i wszystkie (pages)
+
+    // ——— Strony ———
+    Q_INVOKABLE QVariantMap pageDocument(int page) const;   // { width, height, background, elements } do podglądu
+    Q_INVOKABLE void goToPage(int page);
+    Q_INVOKABLE void addPage();                             // pusta strona za bieżącą (z tym samym tłem)
+    Q_INVOKABLE void duplicatePage(int page);
+    Q_INVOKABLE void removePage(int page);
+    Q_INVOKABLE void movePage(int from, int to);
 
     // ——— Elementy (po id, bo indeks zmienia się przy zmianie kolejności) ———
     Q_INVOKABLE QString add(const QVariantMap &element);
@@ -92,7 +105,8 @@ public:
     Q_INVOKABLE void copy(const QStringList &ids) const;
     Q_INVOKABLE QStringList paste();                              // elementy ze schowka, zdjęcie albo tekst
     Q_INVOKABLE bool copyImage();                                 // cała strona jako obraz (do wklejenia w komunikatorze)
-    Q_INVOKABLE QString exportFile(const QString &format, qreal scale, const QString &target = QString());
+    // allPages — PNG/JPG: każda strona do osobnego pliku (nazwa-1, nazwa-2…); PDF ma zawsze wszystkie strony
+    Q_INVOKABLE QString exportFile(const QString &format, qreal scale, const QString &target = QString(), bool allPages = false);
 
 Q_SIGNALS:
     void pageChanged();
@@ -104,6 +118,7 @@ Q_SIGNALS:
     void countChanged();
     void imagesChanged();
     void colorsChanged();
+    void pagesChanged();
     void changed();                 // każda zmiana treści (do zapisu automatycznego)
     void reset();                   // nowa zawartość (cofanie, otwarcie) — zaznaczenie mogło zniknąć
     void error(const QString &message);
@@ -119,6 +134,9 @@ private:
     QByteArray snapshot() const;
     void restore(const QByteArray &json);
     void load(const QVariantMap &doc);
+    QVariantList pages() const;                 // wszystkie strony, z bieżącą w aktualnym stanie
+    void storePage();                           // bieżąca strona → m_pages
+    void showPage(int page);                    // strona z m_pages → model
     void setModified(bool on);
     void setPath(const QString &path);
     QString addAsset(const QByteArray &data, const QString &ext);
@@ -133,6 +151,8 @@ private:
     QVariantMap m_background;
     QVariantMap m_print;            // rozmiar do druku w mm (PDF), np. A4
     QVariantList m_elements;
+    QVariantList m_pages;           // { background, elements } każdej strony (bieżąca — stan sprzed storePage)
+    int m_page = 0;
     QString m_name;
     QString m_path;
     bool m_modified = false;

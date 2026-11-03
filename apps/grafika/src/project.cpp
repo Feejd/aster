@@ -23,6 +23,7 @@
 #include <private/qzipwriter_p.h>
 
 static const char *ClipboardMime = "application/x-aster-grafika";
+static void regroup(QVariantMap &el, QHash<QString, QString> &groups);
 
 static QString projectsDir()
 {
@@ -77,7 +78,117 @@ QVariantMap Project::document() const
         doc[QStringLiteral("print")] = m_print;
     doc[QStringLiteral("background")] = m_background;
     doc[QStringLiteral("elements")] = m_elements;
+    doc[QStringLiteral("pages")] = pages();
+    doc[QStringLiteral("page")] = m_page;
     return doc;
+}
+
+QVariantList Project::pages() const
+{
+    QVariantList out = m_pages;
+    if (m_page >= 0 && m_page < out.size())
+        out[m_page] = QVariantMap{{QStringLiteral("background"), m_background}, {QStringLiteral("elements"), m_elements}};
+    return out;
+}
+
+void Project::storePage()
+{
+    if (m_page >= 0 && m_page < m_pages.size())
+        m_pages[m_page] = QVariantMap{{QStringLiteral("background"), m_background}, {QStringLiteral("elements"), m_elements}};
+}
+
+void Project::showPage(int page)
+{
+    m_page = qBound(0, page, int(m_pages.size()) - 1);
+    const QVariantMap p = m_pages.value(m_page).toMap();
+    beginResetModel();
+    m_background = p.value(QStringLiteral("background")).toMap();
+    if (m_background.isEmpty())
+        m_background = {{QStringLiteral("type"), QStringLiteral("color")}, {QStringLiteral("color"), QStringLiteral("#ffffff")}};
+    m_elements = p.value(QStringLiteral("elements")).toList();
+    endResetModel();
+    Q_EMIT backgroundChanged();
+    Q_EMIT countChanged();
+    Q_EMIT colorsChanged();
+    Q_EMIT pagesChanged();
+    Q_EMIT reset();
+}
+
+QVariantMap Project::pageDocument(int page) const
+{
+    const QVariantMap p = page == m_page ? QVariantMap{{QStringLiteral("background"), m_background}, {QStringLiteral("elements"), m_elements}}
+                                         : m_pages.value(page).toMap();
+    return {{QStringLiteral("width"), m_width}, {QStringLiteral("height"), m_height},
+            {QStringLiteral("background"), p.value(QStringLiteral("background"))}, {QStringLiteral("elements"), p.value(QStringLiteral("elements"))}};
+}
+
+// Przejście na inną stronę nie jest krokiem cofania — cofnięcie wraca na stronę, na której była zmiana
+void Project::goToPage(int page)
+{
+    if (page == m_page || page < 0 || page >= m_pages.size())
+        return;
+    commit();
+    storePage();
+    showPage(page);
+    m_last = snapshot();
+}
+
+void Project::addPage()
+{
+    commit();
+    storePage();
+    m_pages.insert(m_page + 1, QVariantMap{{QStringLiteral("background"), m_background}, {QStringLiteral("elements"), QVariantList()}});
+    showPage(m_page + 1);
+    commit();
+}
+
+void Project::duplicatePage(int page)
+{
+    commit();
+    storePage();
+    QVariantMap p = m_pages.value(page).toMap();
+    QVariantList elements;
+    QHash<QString, QString> groups;
+    for (const QVariant &v : p.value(QStringLiteral("elements")).toList()) {
+        QVariantMap el = v.toMap();
+        regroup(el, groups);
+        el[QStringLiteral("id")] = newId();
+        elements.append(el);
+    }
+    p[QStringLiteral("elements")] = elements;
+    m_pages.insert(page + 1, p);
+    showPage(page + 1);
+    commit();
+}
+
+void Project::removePage(int page)
+{
+    if (m_pages.size() < 2 || page < 0 || page >= m_pages.size())
+        return;
+    commit();
+    storePage();
+    m_pages.removeAt(page);
+    showPage(qMin(page, int(m_pages.size()) - 1));
+    commit();
+}
+
+void Project::movePage(int from, int to)
+{
+    to = qBound(0, to, int(m_pages.size()) - 1);
+    if (from == to || from < 0 || from >= m_pages.size())
+        return;
+    commit();
+    storePage();
+    m_pages.move(from, to);
+    // Bieżąca strona idzie razem z przesuwaną albo przesuwa się o jedno miejsce
+    if (m_page == from)
+        m_page = to;
+    else if (from < m_page && to >= m_page)
+        --m_page;
+    else if (from > m_page && to <= m_page)
+        ++m_page;
+    Q_EMIT pagesChanged();
+    commit();
 }
 
 QByteArray Project::snapshot() const
@@ -114,29 +225,31 @@ void Project::load(const QVariantMap &doc)
     m_width = qMax(16.0, num(doc, "width", 1080));
     m_height = qMax(16.0, num(doc, "height", 1080));
     m_print = doc.value(QStringLiteral("print")).toMap();
-    m_background = doc.value(QStringLiteral("background")).toMap();
-    if (m_background.isEmpty())
-        m_background = {{QStringLiteral("type"), QStringLiteral("color")}, {QStringLiteral("color"), QStringLiteral("#ffffff")}};
-    m_elements.clear();
-    for (const QVariant &v : doc.value(QStringLiteral("elements")).toList()) {
-        QVariantMap el = v.toMap();
-        const QString id = el.value(QStringLiteral("id")).toString();
-        if (id.startsWith(QLatin1Char('e')))
-            m_nextId = qMax(m_nextId, id.mid(1).toInt() + 1);
-        m_elements.append(el);
-    }
-    for (QVariant &v : m_elements) {
-        QVariantMap el = v.toMap();
-        if (el.value(QStringLiteral("id")).toString().isEmpty())
-            el[QStringLiteral("id")] = newId();
-        v = prepared(el);
+    // Stary zapis (jedna strona) — background i elements na wierzchu
+    m_pages = doc.value(QStringLiteral("pages")).toList();
+    if (m_pages.isEmpty())
+        m_pages = {QVariantMap{{QStringLiteral("background"), doc.value(QStringLiteral("background"))}, {QStringLiteral("elements"), doc.value(QStringLiteral("elements"))}}};
+    for (const QVariant &pv : std::as_const(m_pages))
+        for (const QVariant &v : pv.toMap().value(QStringLiteral("elements")).toList()) {
+            const QString id = v.toMap().value(QStringLiteral("id")).toString();
+            if (id.startsWith(QLatin1Char('e')))
+                m_nextId = qMax(m_nextId, id.mid(1).toInt() + 1);
+        }
+    for (QVariant &pv : m_pages) {
+        QVariantMap p = pv.toMap();
+        QVariantList elements = p.value(QStringLiteral("elements")).toList();
+        for (QVariant &v : elements) {
+            QVariantMap el = v.toMap();
+            if (el.value(QStringLiteral("id")).toString().isEmpty())
+                el[QStringLiteral("id")] = newId();
+            v = prepared(el);
+        }
+        p[QStringLiteral("elements")] = elements;
+        pv = p;
     }
     endResetModel();
     Q_EMIT pageChanged();
-    Q_EMIT backgroundChanged();
-    Q_EMIT countChanged();
-    Q_EMIT colorsChanged();
-    Q_EMIT reset();
+    showPage(doc.value(QStringLiteral("page")).toInt());
 }
 
 void Project::restore(const QByteArray &json)
@@ -263,8 +376,22 @@ bool Project::applyTemplate(const QString &file)
     const QVariantMap doc = readJson(file);
     if (doc.isEmpty())
         return false;
+    // Szablon zastępuje tylko bieżącą stronę (i ustawia rozmiar stron) — pozostałe strony zostają
     commit();
-    load(doc);
+    storePage();
+    QVariantList elements;
+    for (const QVariant &v : doc.value(QStringLiteral("elements")).toList()) {
+        QVariantMap el = v.toMap();
+        el[QStringLiteral("id")] = newId();
+        elements.append(prepared(el));
+    }
+    QVariantMap bg = doc.value(QStringLiteral("background")).toMap();
+    m_pages[m_page] = QVariantMap{{QStringLiteral("background"), bg}, {QStringLiteral("elements"), elements}};
+    m_width = qMax(16.0, num(doc, "width", m_width));
+    m_height = qMax(16.0, num(doc, "height", m_height));
+    m_print = doc.value(QStringLiteral("print")).toMap();
+    Q_EMIT pageChanged();
+    showPage(m_page);
     commit();
     return true;
 }
@@ -353,8 +480,9 @@ bool Project::save()
                 zip.addFile(QStringLiteral("images/") + it.key(), it->data);
         // Pobrane czcionki jadą razem z projektem — na innym komputerze tekst wygląda tak samo
         QSet<QString> families;
-        for (const QVariant &v : std::as_const(m_elements))
-            families.insert(v.toMap().value(QStringLiteral("font")).toString());
+        for (const QVariant &pv : pages())
+            for (const QVariant &v : pv.toMap().value(QStringLiteral("elements")).toList())
+                families.insert(v.toMap().value(QStringLiteral("font")).toString());
         for (const QString &family : std::as_const(families)) {
             for (const QString &path : Online::fontFiles(family)) {
                 QFile f(path);
@@ -366,7 +494,7 @@ bool Project::save()
         QByteArray thumb;
         QBuffer buf(&thumb);
         buf.open(QIODevice::WriteOnly);
-        Art::renderPage(doc, QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this).save(&buf, "PNG");
+        Art::renderPage(pageDocument(0), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this).save(&buf, "PNG");
         zip.addFile(QStringLiteral("thumbnail.png"), thumb);
         zip.close();
     }
@@ -400,16 +528,25 @@ void Project::setPageSize(qreal width, qreal height, bool fit)
     width = qMax(16.0, width);
     height = qMax(16.0, height);
     // Dopasowanie: treść skalowana do mniejszego z boków i wyśrodkowana; tło wypełnia nową stronę samo
-    if (fit && !m_elements.isEmpty()) {
+    if (fit) {
         const qreal k = qMin(width / m_width, height / m_height);
         const qreal dx = (width - m_width * k) / 2, dy = (height - m_height * k) / 2;
-        for (QVariant &v : m_elements) {
-            QVariantMap el = scaled(v.toMap(), k, 0, 0);
-            el[QStringLiteral("x")] = std::round((num(el, "x") + dx) * 10) / 10;
-            el[QStringLiteral("y")] = std::round((num(el, "y") + dy) * 10) / 10;
-            v = prepared(el);
+        storePage();
+        for (QVariant &pv : m_pages) {
+            QVariantMap p = pv.toMap();
+            QVariantList elements = p.value(QStringLiteral("elements")).toList();
+            for (QVariant &v : elements) {
+                QVariantMap el = scaled(v.toMap(), k, 0, 0);
+                el[QStringLiteral("x")] = std::round((num(el, "x") + dx) * 10) / 10;
+                el[QStringLiteral("y")] = std::round((num(el, "y") + dy) * 10) / 10;
+                v = prepared(el);
+            }
+            p[QStringLiteral("elements")] = elements;
+            pv = p;
         }
-        Q_EMIT dataChanged(index(0), index(m_elements.size() - 1));
+        m_width = width;
+        m_height = height;
+        showPage(m_page);
     }
     m_width = width;
     m_height = height;
@@ -824,7 +961,7 @@ bool Project::copyImage()
 {
     // Najwyżej 2400 px na dłuższym boku — komunikatory i tak zmniejszają większe obrazy
     const qreal k = qMin(1.0, 2400 / qMax(m_width, m_height));
-    const QImage img = Art::renderPage(document(), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this, Qt::white);
+    const QImage img = Art::renderPage(pageDocument(m_page), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this, Qt::white);
     if (img.isNull())
         return false;
     QGuiApplication::clipboard()->setImage(img.convertToFormat(QImage::Format_RGB32));
@@ -833,10 +970,10 @@ bool Project::copyImage()
 
 // ——— Eksport ———
 
-QString Project::exportFile(const QString &format, qreal scale, const QString &target)
+QString Project::exportFile(const QString &format, qreal scale, const QString &target, bool allPages)
 {
     commit();
-    const QVariantMap doc = document();
+    const QVariantMap doc = pageDocument(m_page);
     QString path = target.startsWith(QLatin1String("file:")) ? QUrl(target).toLocalFile() : target;
     if (path.isEmpty()) {
         const QString dir = (format == QLatin1String("pdf") ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
@@ -862,20 +999,35 @@ QString Project::exportFile(const QString &format, qreal scale, const QString &t
             return {};
         }
         p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
-        p.scale(pdf.width() / m_width, pdf.height() / m_height);
-        Art::paintPage(&p, doc, this);
+        // Wszystkie strony, każda na osobnej stronie PDF
+        for (int i = 0; i < m_pages.size(); ++i) {
+            if (i > 0)
+                pdf.newPage();
+            p.save();
+            p.scale(pdf.width() / m_width, pdf.height() / m_height);
+            Art::paintPage(&p, pageDocument(i), this);
+            p.restore();
+        }
         p.end();
         return path;
     }
 
     const QSize size(qMax(1, qRound(m_width * scale)), qMax(1, qRound(m_height * scale)));
     const bool jpg = format == QLatin1String("jpg");
-    QImage img = Art::renderPage(doc, size, this, jpg ? QColor(Qt::white) : QColor(Qt::transparent));
-    if (jpg)
-        img = img.convertToFormat(QImage::Format_RGB32);
-    if (!img.save(path, jpg ? "JPG" : "PNG", jpg ? 92 : -1)) {
-        Q_EMIT error(QStringLiteral("Nie udało się zapisać pliku."));
-        return {};
+    const bool many = allPages && m_pages.size() > 1;
+    const QFileInfo fi(path);
+    for (int i = many ? 0 : m_page; i < (many ? m_pages.size() : m_page + 1); ++i) {
+        // Kilka stron: nazwa-1.png, nazwa-2.png… obok siebie (karuzela w mediach społecznościowych)
+        const QString file = many ? fi.path() + QLatin1Char('/') + fi.completeBaseName() + QStringLiteral("-%1.").arg(i + 1) + fi.suffix() : path;
+        QImage img = Art::renderPage(pageDocument(i), size, this, jpg ? QColor(Qt::white) : QColor(Qt::transparent));
+        if (jpg)
+            img = img.convertToFormat(QImage::Format_RGB32);
+        if (!img.save(file, jpg ? "JPG" : "PNG", jpg ? 92 : -1)) {
+            Q_EMIT error(QStringLiteral("Nie udało się zapisać pliku."));
+            return {};
+        }
+        if (i == 0 && many)
+            path = file;
     }
     return path;
 }
