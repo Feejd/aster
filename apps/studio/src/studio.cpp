@@ -1769,7 +1769,8 @@ QString Studio::chordName(int degree, bool seventh) const
 
 static BeatSynth::Kind kindOf(const QString &kind)
 {
-    return kind == QLatin1String("bass") ? BeatSynth::Bass : kind == QLatin1String("keys") ? BeatSynth::Keys : BeatSynth::Drums;
+    return kind == QLatin1String("bass") ? BeatSynth::Bass : kind == QLatin1String("keys") ? BeatSynth::Keys
+         : kind == QLatin1String("melody") ? BeatSynth::Melody : BeatSynth::Drums;
 }
 
 void Studio::renderKeyTracks()
@@ -1796,11 +1797,13 @@ int Studio::addPatternTrack(const QString &kind, const QString &genre)
     if (!isOpen() || m_tracks.size() >= Renderer::MaxTracks)
         return -1;
     const BeatSynth::Kind k = kindOf(kind);
-    addTrack(k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys ? QStringLiteral("Akordy") : QStringLiteral("Bit"));   // zapamiętuje stan do cofnięcia
+    addTrack(k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys ? QStringLiteral("Akordy")
+             : k == BeatSynth::Melody ? QStringLiteral("Melodia") : QStringLiteral("Bit"));   // zapamiętuje stan do cofnięcia
     Track &t = m_tracks.last();
-    t.kind = k == BeatSynth::Bass ? QStringLiteral("bass") : k == BeatSynth::Keys ? QStringLiteral("keys") : QStringLiteral("drums");
+    t.kind = k == BeatSynth::Bass ? QStringLiteral("bass") : k == BeatSynth::Keys ? QStringLiteral("keys")
+           : k == BeatSynth::Melody ? QStringLiteral("melody") : QStringLiteral("drums");
     t.pattern = BeatSynth::genrePattern(genre.isEmpty() ? QStringLiteral("trap") : genre, k);
-    applyPresetTo(t, k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys ? QStringLiteral("keys") : QStringLiteral("drums"));
+    applyPresetTo(t, k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys || k == BeatSynth::Melody ? QStringLiteral("keys") : QStringLiteral("drums"));
     if (k == BeatSynth::Keys && genre == QLatin1String("trap"))
         t.echo = 0.25;                          // dzwonki w trapie z echem
     renderPattern(int(m_tracks.size()) - 1);
@@ -1828,7 +1831,7 @@ void Studio::renderPattern(int index)
     pattern.insert(QStringLiteral("keyMinor"), m_keyMinor);
     std::shared_ptr<AudioSource> src = BeatSynth::render(pattern, kind, m_bpm, Engine::Rate);
     const QString path = uniqueAudioPath(kind == BeatSynth::Bass ? QStringLiteral("_808") : kind == BeatSynth::Keys ? QStringLiteral("_akordy")
-                                                                                                                   : QStringLiteral("_bit"),
+                                         : kind == BeatSynth::Melody ? QStringLiteral("_melodia") : QStringLiteral("_bit"),
                                          QStringLiteral("wav"));
     SF_INFO info{};
     info.samplerate = Engine::Rate;
@@ -1902,5 +1905,36 @@ bool Studio::keyFrom808()
             changed();
             return true;
         }
+    return false;
+}
+
+// Akordy → Melodia: te same dźwięki jako nuty piano rolla (dalej edytowane ręcznie)
+void Studio::chordsToNotes(int index)
+{
+    if (index < 0 || index >= m_tracks.size() || m_tracks[index].kind != QLatin1String("keys"))
+        return;
+    checkpoint();
+    Track &t = m_tracks[index];
+    QJsonObject p = t.pattern;
+    p.insert(QStringLiteral("keyRoot"), m_keyRoot);
+    p.insert(QStringLiteral("keyMinor"), m_keyMinor);
+    const QJsonArray notes = BeatSynth::chordNotes(p);
+    t.pattern = QJsonObject{{QStringLiteral("instrument"), t.pattern.value(QStringLiteral("instrument"))},
+                            {QStringLiteral("bars"), std::max(1, int(t.pattern.value(QStringLiteral("chords")).toArray().size()))},
+                            {QStringLiteral("notes"), notes}};
+    t.kind = QStringLiteral("melody");
+    if (t.name == QLatin1String("Akordy"))
+        t.name = QStringLiteral("Melodia");
+    renderPattern(index);
+    changed();
+}
+
+bool Studio::inKey(int midi) const
+{
+    static const int minor[7] = {0, 2, 3, 5, 7, 8, 10}, major[7] = {0, 2, 4, 5, 7, 9, 11};
+    const int pc = ((midi - m_keyRoot) % 12 + 12) % 12;
+    for (int d = 0; d < 7; ++d)
+        if ((m_keyMinor ? minor[d] : major[d]) == pc)
+            return true;
     return false;
 }

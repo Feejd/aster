@@ -196,7 +196,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         (Smutna, Mroczna, Epicka, Rozmarzona, Z nadzieją, Dwa akordy) i akord na każdy takt z nazwami w tonacji projektu
         (np. fis-moll → D-dur → A-dur → E-dur); prowadzenie głosów (najbliższy przewrót); zmiana tonacji przelicza akordy;
         szablony gatunków mają gotową ścieżkę akordów; nieużywane pętle „_…” sprzątane przy zamknięciu projektu
-  - [ ] Dalej: piano roll dla własnych melodii, biblioteka pętli generowanych w programie, przełącznik A/B masteringu
+  - [x] piano roll (ścieżka Melodia): klawiatura C2–C7, siatka szesnastek na 1–8 taktów, klik dodaje nutę (długość
+        1/16…cała), przeciąganie przesuwa, prawy brzeg zmienia długość, prawy klik / dwuklik usuwa; wiersze tonacji
+        podświetlone, „Tylko nuty skali”; te same brzmienia co Akordy; „Zamień na nuty” przenosi akordy do piano rolla
+        bez zmiany brzmienia (eksport identyczny)
+  - [ ] Dalej: odsłuch nuty przy kliknięciu w piano rollu (głos syntezatora w wątku audio), siła uderzenia nuty,
+        kopiowanie taktów, melodia z klawiatury komputera / MIDI USB, biblioteka pętli, przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem

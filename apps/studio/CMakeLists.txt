@@ -21,6 +21,7 @@ set(STUDIO_QML
     qml/Segmented.qml
     qml/Inspector.qml
     qml/PatternEditor.qml
+    qml/PianoRoll.qml
 )
 foreach(f ${STUDIO_QML})
     get_filename_component(name ${f} NAME)

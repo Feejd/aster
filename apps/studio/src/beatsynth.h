@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 #include <QVariantList>
@@ -16,7 +17,7 @@
 // Wzór 808:      { kit, bars, root (0 = C … 11 = H), notes: [stopień skali molowej 0…14 albo -1], glide }
 namespace BeatSynth {
 
-enum Kind { Drums, Bass, Keys };
+enum Kind { Drums, Bass, Keys, Melody };
 
 QVariantList kits();                                       // [{ id, label, hint }]
 QVariantList genres();                                     // [{ id, label, bpm, hint }]
@@ -27,7 +28,9 @@ QStringList rowNames();                                    // kick, snare, clap,
 QVariantList instruments();                                // [{ id, label, hint }]
 QVariantList rhythms();                                    // [{ id, label }]
 QVariantList progressions();                               // [{ id, label, hint, chords }]
-QString chordName(int root, bool minor, int degree, bool seventh);   // „a-moll”, „F-dur⁷”
+QString chordName(int root, bool minor, int degree, bool seventh);
+// Melodia (piano roll): { instrument, bars, notes: [{ step, len, pitch (MIDI), vel, pan }] }
+QJsonArray chordNotes(const QJsonObject &keysPattern);     // akordy → nuty (do piano rolla)   // „a-moll”, „F-dur⁷”
 int noteMidi(const QJsonObject &bassPattern, int degree);  // stopień skali → MIDI
 
 // Pętla audio (stereo, `rate`) z wzoru w danym tempie; ogony dźwięków zawijają się na początek (pętla bez szwu)

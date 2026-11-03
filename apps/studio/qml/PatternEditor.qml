@@ -88,6 +88,7 @@ Item {
             spacing: 8
             Pill { height: 30; text: "Wzór…"; icon: "sparkle"; tip: "Wstaw gotowy wzór gatunku"; onClicked: { const p = mapToItem(pe, 0, height + 4); pe.genreMenu(p.x, p.y); } }
             Pill { visible: !pe.keys; height: 30; text: "Wyczyść"; icon: "trash"; onClicked: pe.clear() }
+            Pill { visible: pe.keys; height: 30; text: "Zamień na nuty"; icon: "pencil"; tip: "Przenieś akordy do piano rolla i zmieniaj pojedyncze nuty"; onClicked: Studio.chordsToNotes(pe.track) }
             HoverButton {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 30; height: 30; radius: 15

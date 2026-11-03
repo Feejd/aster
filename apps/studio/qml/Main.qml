@@ -100,6 +100,8 @@ Window {
         else if (what.startsWith("newp:")) Studio.newProject(what.substring(5), 96, 4);
         else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
         else if (what.startsWith("import:")) { const a = what.split(":"); Studio.importFiles([a[2]], Number(a[1]), 0); }
+        else if (what.startsWith("add:")) Studio.addPatternTrack(what.substring(4), "trap");
+        else if (what.startsWith("toNotes:")) Studio.chordsToNotes(Number(what.substring(8)));
         else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
         else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));
         else if (what === "demo") {
@@ -207,7 +209,8 @@ Window {
             { label: "Nagranie — głos, gitara", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
             { label: "Bit — Beat Maker", icon: "grid", action: "addDrums" },
             { label: "Bas 808", icon: "music", action: "addBass" },
-            { label: "Akordy / melodia", icon: "music", action: "addKeys" }
+            { label: "Akordy", icon: "music", action: "addKeys" },
+            { label: "Melodia — piano roll", icon: "music", action: "addMelody" }
         ]);
     }
     function projectMenu(project, item, x, y) {
@@ -240,6 +243,7 @@ Window {
         else if (a === "forget") Studio.forgetRecent(menu.folder);
         else if (a === "addAudio") Studio.addTrack();
         else if (a === "addDrums") { const i = Studio.addPatternTrack("drums", "trap"); if (i >= 0) editTrack = i; }
+        else if (a === "addMelody") { const i = Studio.addPatternTrack("melody", ""); if (i >= 0) editTrack = i; }
         else if (a === "addKeys") { const i = Studio.addPatternTrack("keys", "trap"); if (i >= 0) editTrack = i; }
         else if (a === "addBass") { const i = Studio.addPatternTrack("bass", "trap"); if (i >= 0) editTrack = i; }
         else if (a.startsWith("chord:") && editTrack >= 0) {
@@ -467,7 +471,7 @@ Window {
                 id: timeline
                 y: toolbar.height
                 width: parent.width - inspector.width
-                height: parent.height - y - statusBar.height - mixer.height - beatMaker.height
+                height: parent.height - y - statusBar.height - mixer.height - beatMaker.height - pianoRoll.height
                 colors: win.trackColors
                 onClipMenu: (c, track, item, x, y, at) => win.clipMenu(c, track, item, x, y, at)
                 onTrackMenu: (track, item, x, y) => win.trackMenu(track, item, x, y)
@@ -549,7 +553,8 @@ Window {
             track: win.editTrack
             colors: win.trackColors
             readonly property bool bassMode: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "bass"
-            height: win.editTrack >= 0 && !!Studio.tracks[win.editTrack] ? Math.min(bassMode ? 450 : 330, project.height * 0.55) : 0
+            readonly property bool melody: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "melody"
+            height: win.editTrack >= 0 && !!Studio.tracks[win.editTrack] && !melody ? Math.min(bassMode ? 450 : 330, project.height * 0.55) : 0
             // Akordy: niższy panel
             visible: height > 0
             clip: true
@@ -564,6 +569,22 @@ Window {
                 const p = beatMaker.mapToItem(frame, x, y);
                 menu.openAt(p.x, Math.min(p.y, frame.height - 320), Studio.genres.map(g => ({ label: g.label + " · " + g.bpm + " BPM", icon: "sparkle", action: "genre:" + g.id })));
             }
+            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
+        }
+
+        // Piano roll (ścieżka Melodia)
+        PianoRoll {
+            id: pianoRoll
+            parent: project
+            z: 20
+            anchors.bottom: parent ? parent.bottom : undefined
+            width: project.width
+            track: beatMaker.melody ? win.editTrack : -1
+            colors: win.trackColors
+            height: beatMaker.melody ? Math.min(460, project.height * 0.6) : 0
+            visible: height > 0
+            clip: true
+            onCloseRequested: win.editTrack = -1
             Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         }
 

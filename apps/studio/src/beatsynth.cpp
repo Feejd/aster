@@ -547,6 +547,8 @@ QJsonObject genrePattern(const QString &id, Kind kind)
     const Genre *g = genre(id);
     if (!g)
         g = &s_genres[0];
+    if (kind == Melody)
+        return QJsonObject{{QStringLiteral("instrument"), QStringLiteral("lead")}, {QStringLiteral("bars"), 4}, {QStringLiteral("notes"), QJsonArray()}};
     if (kind == Keys) {
         struct K { const char *genre, *inst, *rhythm, *prog; int octave; bool seventh; };
         static const K table[] = {
@@ -591,11 +593,63 @@ int noteMidi(const QJsonObject &p, int degree)
     return base + 12 * (degree / 7) + s_scale[degree % 7];
 }
 
+QJsonArray chordNotes(const QJsonObject &p)
+{
+    const QString rhythm = p.value(QStringLiteral("rhythm")).toString(QStringLiteral("sustain"));
+    const QJsonArray chords = p.value(QStringLiteral("chords")).toArray();
+    const bool minor = p.value(QStringLiteral("keyMinor")).toBool(true);
+    const int root = std::clamp(p.value(QStringLiteral("keyRoot")).toInt(9), 0, 11);
+    const int octave = std::clamp(p.value(QStringLiteral("octave")).toInt(4), 2, 6);
+    const bool seventh = p.value(QStringLiteral("seventh")).toBool(false);
+    const int base = 12 * (octave + 1) + root;
+    double center = base + 5;
+    struct Ev { int step, len; int tone; double vel; };    // tone −1 = cały akord
+    std::vector<Ev> bar;
+    if (rhythm == QLatin1String("half"))
+        bar = {{0, 8, -1, 0.9}, {8, 8, -1, 0.75}};
+    else if (rhythm == QLatin1String("stabs"))
+        bar = {{0, 2, -1, 1}, {3, 2, -1, 0.7}, {6, 2, -1, 0.85}, {10, 2, -1, 0.75}, {12, 3, -1, 0.9}};
+    else if (rhythm == QLatin1String("arp")) {
+        static const int seq[8] = {0, 1, 2, 3, 2, 1, 0, 1};
+        for (int i = 0; i < 8; ++i)
+            bar.push_back({i * 2, 2, seq[i], i % 2 ? 0.7 : 0.95});
+    } else if (rhythm == QLatin1String("arp16")) {
+        for (int i = 0; i < 16; ++i)
+            bar.push_back({i, 1, i % 4, i % 4 == 0 ? 1.0 : 0.65});
+    } else {
+        bar = {{0, 16, -1, 0.9}};
+    }
+    QJsonArray out;
+    auto note = [&out](int step, int len, int pitch, double vel, double pan) {
+        out.append(QJsonObject{{QStringLiteral("step"), step}, {QStringLiteral("len"), len}, {QStringLiteral("pitch"), pitch},
+                               {QStringLiteral("vel"), vel}, {QStringLiteral("pan"), pan}});
+    };
+    for (int ci = 0; ci < std::min(8, int(chords.size())); ++ci) {
+        const int d = std::clamp(chords.at(ci).toInt(), 0, 6);
+        std::vector<int> notes;
+        for (int t = 0; t < (seventh ? 4 : 3); ++t)
+            notes.push_back(base + scaleSemis(d + 2 * t, minor));
+        notes = voiceChord(notes, center);
+        for (const Ev &e : bar) {
+            if (e.tone < 0) {
+                for (size_t t = 0; t < notes.size(); ++t)
+                    note(ci * 16 + e.step, e.len, notes[t], e.vel * 0.6, double(t) / notes.size() * 0.6 - 0.3);
+            } else {
+                // Arpeggio: kolejne dźwięki akordu, czwarty to podstawa oktawę wyżej
+                const int midi = e.tone < int(notes.size()) && !(e.tone == 3 && !seventh) ? notes[size_t(e.tone)] : notes[0] + 12;
+                note(ci * 16 + e.step, e.len, midi, e.vel, e.tone % 2 ? 0.25 : -0.25);
+            }
+        }
+    }
+    return out;
+}
+
 std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm, int rate)
 {
     const Kit &k = kit(p.value(QStringLiteral("kit")).toString());
     const int bars = kind == Keys ? std::clamp(int(p.value(QStringLiteral("chords")).toArray().size()), 1, 8)
-                                  : std::clamp(p.value(QStringLiteral("bars")).toInt(2), 1, 4);
+                   : kind == Melody ? std::clamp(p.value(QStringLiteral("bars")).toInt(4), 1, 8)
+                                    : std::clamp(p.value(QStringLiteral("bars")).toInt(2), 1, 4);
     const int nSteps = bars * 16;
     const double stepSec = 60.0 / std::clamp(bpm, 30.0, 300.0) / 4;
     const long long loop = llround(nSteps * stepSec * rate);
@@ -647,58 +701,22 @@ std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm,
         }
         lofi(b, k.lofi, rate, rnd);
         normalize(b, 0.75f);
-    } else if (kind == Keys) {
-        // Akordy w tonacji projektu (keyRoot, keyMinor wstawia Studio) w wybranym rytmie
+    } else if (kind == Keys || kind == Melody) {
+        // Nuty: z akordów (w tonacji projektu) albo wprost z piano rolla
         const QString inst = p.value(QStringLiteral("instrument")).toString(QStringLiteral("piano"));
-        const QString rhythm = p.value(QStringLiteral("rhythm")).toString(QStringLiteral("sustain"));
-        const QJsonArray chords = p.value(QStringLiteral("chords")).toArray();
-        const bool minor = p.value(QStringLiteral("keyMinor")).toBool(true);
-        const int root = std::clamp(p.value(QStringLiteral("keyRoot")).toInt(9), 0, 11);
-        const int octave = std::clamp(p.value(QStringLiteral("octave")).toInt(4), 2, 6);
-        const bool seventh = p.value(QStringLiteral("seventh")).toBool(false);
-        const int base = 12 * (octave + 1) + root;
-        double center = base + 5;
-        struct Ev { int step, len; int tone; float vel; };    // tone −1 = cały akord
-        std::vector<Ev> bar;
-        if (rhythm == QLatin1String("half"))
-            bar = {{0, 8, -1, 0.9f}, {8, 8, -1, 0.75f}};
-        else if (rhythm == QLatin1String("stabs"))
-            bar = {{0, 2, -1, 1}, {3, 2, -1, 0.7f}, {6, 2, -1, 0.85f}, {10, 2, -1, 0.75f}, {12, 3, -1, 0.9f}};
-        else if (rhythm == QLatin1String("arp")) {
-            static const int seq[8] = {0, 1, 2, 3, 2, 1, 0, 1};
-            for (int i = 0; i < 8; ++i)
-                bar.push_back({i * 2, 2, seq[i], i % 2 ? 0.7f : 0.95f});
-        } else if (rhythm == QLatin1String("arp16")) {
-            for (int i = 0; i < 16; ++i)
-                bar.push_back({i, 1, i % 4, i % 4 == 0 ? 1.0f : 0.65f});
-        } else {
-            bar = {{0, 16, -1, 0.9f}};
-        }
-        for (int pass = 0; pass < 2; ++pass) {
-            double c = center;
-            for (int ci = 0; ci < bars; ++ci) {
-                const int d = std::clamp(chords.at(ci).toInt(), 0, 6);
-                std::vector<int> notes;
-                for (int t = 0; t < (seventh ? 4 : 3); ++t)
-                    notes.push_back(base + scaleSemis(d + 2 * t, minor));
-                notes = voiceChord(notes, c);
-                for (const Ev &e : bar) {
-                    const long long at = pass * loop + llround((ci * 16 + e.step) * stepSec * rate);
-                    const long long len = llround(e.len * stepSec * rate);
-                    auto play = [&](int midi, float vel, float pan) {
-                        b.add(at, keyVoice(inst, midiHz(midi), len, rate, rnd), vel, pan);
-                    };
-                    if (e.tone < 0) {
-                        for (size_t t = 0; t < notes.size(); ++t)
-                            play(notes[t], e.vel * 0.6f, float(t) / notes.size() * 0.6f - 0.3f);
-                    } else {
-                        // Arpeggio: kolejne dźwięki akordu, czwarty to podstawa oktawę wyżej
-                        const int midi = e.tone < int(notes.size()) && !(e.tone == 3 && !seventh) ? notes[size_t(e.tone)] : notes[0] + 12;
-                        play(midi, e.vel, e.tone % 2 ? 0.25f : -0.25f);
-                    }
-                }
+        const QJsonArray notes = kind == Keys ? chordNotes(p) : p.value(QStringLiteral("notes")).toArray();
+        for (int pass = 0; pass < 2; ++pass)
+            for (const QJsonValue &nv : notes) {
+                const QJsonObject n = nv.toObject();
+                const int step = n.value(QStringLiteral("step")).toInt();
+                if (step < 0 || step >= nSteps)
+                    continue;
+                const long long at = pass * loop + llround(step * stepSec * rate);
+                const long long len = llround(std::max(1, n.value(QStringLiteral("len")).toInt(2)) * stepSec * rate);
+                const int pitch = std::clamp(n.value(QStringLiteral("pitch")).toInt(60), 12, 120);
+                b.add(at, keyVoice(inst, midiHz(pitch), len, rate, rnd), float(n.value(QStringLiteral("vel")).toDouble(0.85)),
+                      float(n.value(QStringLiteral("pan")).toDouble(0)));
             }
-        }
         normalize(b, 0.6f);
     } else {
         // 808: jeden głos; przy ślizgu nuta płynnie przechodzi w następną bez ponownego uderzenia

@@ -185,6 +185,8 @@ public:
     Q_INVOKABLE QVariantMap genrePattern(const QString &kind, const QString &genre) const;
     Q_INVOKABLE QString noteName(int root, int degree) const;     // „Fis1”
     Q_INVOKABLE QString chordName(int degree, bool seventh) const; // w tonacji projektu: „a-moll”
+    Q_INVOKABLE void chordsToNotes(int index);                    // ścieżka Akordy → Melodia (piano roll)
+    Q_INVOKABLE bool inKey(int midi) const;                         // nuta należy do tonacji projektu
     Q_INVOKABLE void setMastering(const QString &key, double value);
     Q_INVOKABLE void applyMastering(const QString &preset);
     Q_INVOKABLE bool keyFrom808();                              // tonacja jak w pierwszej ścieżce 808               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
