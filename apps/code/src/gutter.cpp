@@ -62,6 +62,19 @@ void Gutter::setHasBase(bool on)
     m_diffTimer.start(0);
 }
 
+void Gutter::setDiagnostics(const QVariantList &list)
+{
+    m_diagList = list;
+    m_diagLines.clear();
+    for (const QVariant &v : list) {
+        const QVariantMap m = v.toMap();
+        const int line = m.value(QStringLiteral("line")).toInt(), sev = m.value(QStringLiteral("severity")).toInt();
+        m_diagLines.insert(line, std::min(m_diagLines.value(line, 99), sev));
+    }
+    update();
+    Q_EMIT changed();
+}
+
 int Gutter::lineCount() const
 {
     return m_document && m_document->textDocument() ? m_document->textDocument()->blockCount() : 0;
@@ -186,6 +199,13 @@ void Gutter::paint(QPainter *painter)
         painter->setPen(current ? m_currentColor : m_color);
         const qreal lineH = block.layout() && block.layout()->lineCount() > 0 ? block.layout()->lineAt(0).height() : fm.height();
         painter->drawText(QRectF(0, y, right, lineH), Qt::AlignRight | Qt::AlignVCenter, QString::number(n + 1));
+
+        // Kropka błędu albo ostrzeżenia z serwera języka, po lewej od numeru
+        if (const int sev = m_diagLines.value(n, 0); sev == 1 || sev == 2) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(sev == 1 ? m_error : m_warning);
+            painter->drawEllipse(QPointF(7, y + lineH / 2), 3, 3);
+        }
 
         if (n < marked && m_marks[n]) {
             painter->setPen(Qt::NoPen);

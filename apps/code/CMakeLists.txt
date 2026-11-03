@@ -21,6 +21,8 @@ set(CODE_QML
     qml/TerminalPanel.qml
     qml/FileIcon.qml
     qml/NameBox.qml
+    qml/ProblemsView.qml
+    qml/CompletionPopup.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -41,6 +43,8 @@ qt_add_qml_module(aster-code
         src/textops.cpp
         src/textops.h
         src/codeterminal.h
+        src/lsp.cpp
+        src/lsp.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

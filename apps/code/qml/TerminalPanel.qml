@@ -3,7 +3,8 @@ import QtQuick
 import Aster.Ui
 import Aster.Code
 
-// Terminal na dole okna (Ctrl+`): powłoka w folderze projektu, ten sam silnik co Terminal Aster.
+// Panel na dole okna: terminal (Ctrl+`) — powłoka w folderze projektu, ten sam silnik co Terminal Aster —
+// i problemy z serwerów języków (Ctrl+Shift+M).
 // Po wyjściu z powłoki (exit) panel się chowa; „+” uruchamia nową powłokę.
 Item {
     id: tp
@@ -11,6 +12,8 @@ Item {
     property bool maximized: false
     property bool started: false          // powłoka startuje dopiero przy pierwszym pokazaniu panelu
     property bool reloading: false
+    property int tab: 0                    // 0 terminal, 1 problemy
+    signal openProblem(string path, int line, int col)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -20,7 +23,8 @@ Item {
         reloading = true;
         Qt.callLater(() => { tp.reloading = false; Qt.callLater(tp.focusTerminal); });
     }
-    onVisibleChanged: if (visible) started = true
+    onVisibleChanged: if (visible && tab === 0) started = true
+    onTabChanged: if (visible && tab === 0) started = true
     onDirChanged: if (started) restart()
 
     readonly property var colors: Theme.dark
@@ -35,12 +39,18 @@ Item {
         id: header
         y: 1; width: parent.width; height: 34
         Row {
-            x: 16; anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
-            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.prompt; size: 14; stroke: 2; color: Theme.accentText }
-            Text { anchors.verticalCenter: parent.verticalCenter; text: "TERMINAL"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.5 }
+            x: 10; anchors.verticalCenter: parent.verticalCenter
+            spacing: 2
+            PanelTab { label: "TERMINAL"; icon: "prompt"; on: tp.tab === 0; onClicked: { tp.tab = 0; Qt.callLater(tp.focusTerminal); } }
+            PanelTab {
+                label: "PROBLEMY"; icon: "alertCircle"; on: tp.tab === 1
+                badge: Lsp.errorCount + Lsp.warningCount
+                onClicked: tp.tab = 1
+            }
             Text {
+                visible: tp.tab === 0
                 anchors.verticalCenter: parent.verticalCenter
+                leftPadding: 8
                 text: !tp.term ? "" : (tp.term.program ? tp.term.program + " · " : "") + Project.pretty(tp.term.currentDirectory || tp.dir)
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
             }
@@ -49,15 +59,23 @@ Item {
             anchors.right: parent.right; anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
-            PanelBtn { icon: "plus"; onClicked: tp.restart() }
-            PanelBtn { icon: "trash"; onClicked: if (tp.term) tp.term.clear() }
+            PanelBtn { visible: tp.tab === 0; icon: "plus"; onClicked: tp.restart() }
+            PanelBtn { visible: tp.tab === 0; icon: "trash"; onClicked: if (tp.term) tp.term.clear() }
             PanelBtn { icon: tp.maximized ? "exitFullscreen" : "fullscreen"; onClicked: tp.maximizeRequested() }
             PanelBtn { icon: "close"; onClicked: tp.hideRequested() }
         }
     }
 
+    ProblemsView {
+        visible: tp.tab === 1
+        anchors.fill: parent
+        anchors.topMargin: header.height + 1
+        onOpenProblem: (path, line, col) => tp.openProblem(path, line, col)
+    }
+
     Loader {
         id: loader
+        visible: tp.tab === 0
         active: tp.started && !tp.reloading && tp.dir !== ""
         anchors.fill: parent
         anchors.topMargin: header.height + 1
@@ -80,11 +98,35 @@ Item {
         }
     }
     Rectangle {
+        visible: tp.tab === 0
         anchors.fill: loader
         z: -1
         color: tp.colors.bg
     }
 
+    component PanelTab: HoverButton {
+        id: ptab
+        property string label
+        property string icon
+        property bool on: false
+        property int badge: 0
+        width: ptabRow.implicitWidth + 16; height: 26; radius: 7
+        baseColor: on ? Theme.fill : "transparent"
+        Row {
+            id: ptabRow
+            anchors.centerIn: parent
+            spacing: 6
+            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[ptab.icon] || ""; size: 13; stroke: 2; color: ptab.on ? Theme.accentText : Theme.text2 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: ptab.label; color: ptab.on ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.5 }
+            Rectangle {
+                visible: ptab.badge > 0
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(16, bt.implicitWidth + 8); height: 16; radius: 8
+                color: Theme.fill
+                Text { id: bt; anchors.centerIn: parent; text: ptab.badge; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold }
+            }
+        }
+    }
     component PanelBtn: HoverButton {
         id: pb
         property string icon

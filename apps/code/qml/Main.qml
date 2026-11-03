@@ -112,6 +112,7 @@ Window {
         lastSave[t.path] = Date.now();
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
+            Lsp.saved(t.path);
             tabs.setProperty(i, "changedOnDisk", false);
             pin(i);
             revision++;
@@ -196,6 +197,7 @@ Window {
             }
         }
         function onMessage(text) { win.toast(text); }
+        function onRootChanged() { Lsp.setRoot(Project.root); }
         function onFileChanged(path) {
             const i = win.indexOfPath(path);
             if (i < 0 || Date.now() - (win.lastSave[path] || 0) < 2000) return;
@@ -210,6 +212,49 @@ Window {
             }
         }
     }
+    // ——— Serwer języka ———
+    Connections {
+        target: Lsp
+        function onDefinitionReady(seq, path, line, col) { win.openFile(path, { line: line, col: col, length: 0 }); }
+        function onDefinitionMissing(seq) { win.toast("Nie znaleziono definicji"); }
+        function onMessage(text) { win.toast(text); }
+    }
+    function goToDefinition() {
+        if (!cur) return;
+        definitionFeedback(cur.goToDefinition());
+    }
+    function definitionFeedback(seq) { if (seq === -1) lspHint(); }
+    // Bez serwera języka — co doinstalować (polecenie trafia do schowka)
+    function lspHint() {
+        const s = cur ? Lsp.serverFor(curPath) : {};
+        if (!s.id) { toast("Dla tego rodzaju pliku nie ma serwera języka"); return; }
+        if (s.failed) { toast("Serwer języka " + s.name + " przestał działać — otwórz folder ponownie"); return; }
+        if (s.available) { toast("Serwer języka " + s.name + " się uruchamia…"); return; }
+        Project.copyText(s.package);
+        toast("Brak serwera języka " + s.name + " — polecenie w schowku: " + s.package);
+    }
+    function showProblems() {
+        if (!hasProject) return;
+        if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
+        terminalShown = true;
+        terminalPanel.tab = 1;
+    }
+    function showEditorMenu(item, x, y) {
+        const p = item.mapToItem(frame, x, y);
+        const e = cur.edit;
+        menu.openAt(p.x, p.y, [
+            { label: "Przejdź do definicji", icon: "arrow", shortcut: "F12", action: "definition", enabled: cur.lspOn },
+            { label: "Podpowiedzi", icon: "sparkle", shortcut: "Ctrl+Spacja", action: "complete", enabled: cur.lspOn },
+            { separator: true },
+            { label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut", enabled: e.selectedText !== "" },
+            { label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy", enabled: e.selectedText !== "" },
+            { label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste", enabled: e.canPaste },
+            { separator: true },
+            { label: "Przełącz komentarz", icon: "code", shortcut: "Ctrl+/", action: "comment" },
+            { label: "Zaznacz wszystko", icon: "check", shortcut: "Ctrl+A", action: "selectAll" }
+        ]);
+    }
+
     function reloadCurrent() {
         const res = Project.load(curPath);
         if (!res.ok) { toast(res.error); return; }
@@ -351,8 +396,9 @@ Window {
     function toggleTerminal() {
         if (!hasProject) return;
         // Ctrl+` z edytora: pokaż i przejdź do terminala; z terminala — schowaj i wróć do edytora
-        if (terminalShown && terminalPanel.term && terminalPanel.term.activeFocus) { terminalShown = false; if (cur) cur.focusEditor(); return; }
+        if (terminalShown && terminalPanel.tab === 0 && terminalPanel.term && terminalPanel.term.activeFocus) { terminalShown = false; if (cur) cur.focusEditor(); return; }
         terminalShown = true;
+        terminalPanel.tab = 0;
         Qt.callLater(terminalPanel.focusTerminal);
     }
 
@@ -370,6 +416,8 @@ Window {
         { label: "Znajdź", shortcut: "Ctrl+F", action: "find", icon: "search" },
         { label: "Zamień", shortcut: "Ctrl+H", action: "replace", icon: "pencil" },
         { label: "Szukaj w projekcie", shortcut: "Ctrl+Shift+F", action: "searchProject", icon: "search" },
+        { label: "Przejdź do definicji", shortcut: "F12", action: "definition", icon: "arrow" },
+        { label: "Problemy", shortcut: "Ctrl+Shift+M", action: "problems", icon: "alertCircle" },
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
         { label: "Usuń wiersz", shortcut: "Ctrl+Shift+K", action: "deleteLine", icon: "trash" },
@@ -406,6 +454,13 @@ Window {
         else if (a === "replace") openFind(true);
         else if (a === "searchProject") showView(1);
         else if (a === "comment") { if (cur) cur.toggleComment(); }
+        else if (a === "definition") goToDefinition();
+        else if (a === "complete") { if (cur) { cur.focusEditor(); cur.requestCompletion(); } }
+        else if (a === "problems") showProblems();
+        else if (a === "cut") { if (cur) cur.edit.cut(); }
+        else if (a === "copy") { if (cur) cur.edit.copy(); }
+        else if (a === "paste") { if (cur) cur.edit.paste(); }
+        else if (a === "selectAll") { if (cur) cur.edit.selectAll(); }
         else if (a === "duplicate") { if (cur) cur.lines("duplicateDown"); }
         else if (a === "deleteLine") { if (cur) cur.lines("deleteLine"); }
         else if (a === "nextChange") { if (cur) cur.nextChange(false); }
@@ -512,7 +567,7 @@ Window {
         if (what.startsWith("folder:")) openFolder(arg);
         else if (what.startsWith("open:")) openFile(Project.root + "/" + arg, { preview: false });
         else if (what.startsWith("preview:")) openFile(Project.root + "/" + arg, { preview: true });
-        else if (what.startsWith("line:")) { if (cur) cur.goToLine(Number(arg)); }
+        else if (what.startsWith("line:")) { if (cur) { const lc = arg.split(","); cur.goToLine(Number(lc[0]), Number(lc[1] || 1) - 1); } }
         else if (what.startsWith("type:")) { if (cur) { cur.edit.insert(cur.edit.cursorPosition, arg.replace(/\\n/g, "\n")); pin(current); } }
         else if (what.startsWith("del:")) { if (cur) { const p = cur.edit.cursorPosition; cur.edit.remove(p, p + Number(arg)); } }
         else if (what.startsWith("lines:")) { if (cur) cur.lines(arg); }
@@ -526,6 +581,11 @@ Window {
         else if (what.startsWith("expand:")) Project.tree.expandPath(Project.root + "/" + arg);
         else if (what.startsWith("tree:")) { const row = Project.tree.indexOf(Project.root + "/" + arg); const it = treeList.itemAtIndex(row); if (it) { const pp = it.mapToItem(frame, 60, 14); showTreeMenu(Project.root + "/" + arg, false, pp.x, pp.y); } }
         else if (what === "menu") showMenu();
+        else if (what === "complete") { if (cur) cur.requestCompletion(); }
+        else if (what === "problems") showProblems();
+        else if (what === "definition") goToDefinition();
+        else if (what.startsWith("keys:")) { if (cur) for (const ch of arg) cur.typeKey(ch); }
+        else if (what.startsWith("hover:")) { if (cur) { const ab = arg.split(","); cur.testHover(Number(ab[0]), Number(ab[1])); } }
         else if (what === "newfile") newFile("");
         else if (what === "close") win.close();
     }
@@ -549,6 +609,8 @@ Window {
     Shortcut { sequence: "Ctrl+B"; enabled: win.hasProject; onActivated: prefs.sidebar = !prefs.sidebar }
     Shortcut { sequences: ["Ctrl+`", "Ctrl+J"]; enabled: win.hasProject; onActivated: win.toggleTerminal() }
     Shortcut { sequences: ["Ctrl+/", "Ctrl+K,Ctrl+C"]; enabled: !!win.cur && win.cur.edit.activeFocus; onActivated: win.cur.toggleComment() }
+    Shortcut { sequence: "F12"; enabled: !!win.cur; onActivated: win.goToDefinition() }
+    Shortcut { sequence: "Ctrl+Shift+M"; enabled: win.hasProject; onActivated: win.showProblems() }
     Shortcut { sequence: "Alt+F5"; enabled: !!win.cur; onActivated: win.cur.nextChange(false) }
     Shortcut { sequence: "Shift+Alt+F5"; enabled: !!win.cur; onActivated: win.cur.nextChange(true) }
     Shortcut { sequence: "Alt+Z"; onActivated: prefs.wrap = !prefs.wrap }
@@ -721,6 +783,8 @@ Window {
                         wrap: prefs.wrap
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
+                        onDefinitionRequested: (seq) => win.definitionFeedback(seq)
+                        onContextMenuRequested: (item, x, y) => win.showEditorMenu(item, x, y)
                         onModifiedChanged: { if (modified) win.pin(index); win.revision++; }
                         Component.onCompleted: {
                             load(win.pendingText[uid] || "", win.pendingCursor[uid] || 0);
@@ -851,6 +915,7 @@ Window {
                 maximized: win.terminalMax
                 onHideRequested: { win.terminalShown = false; win.terminalMax = false; if (win.cur) win.cur.focusEditor(); }
                 onMaximizeRequested: win.terminalMax = !win.terminalMax
+                onOpenProblem: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5
@@ -885,6 +950,11 @@ Window {
                         onClicked: win.showView(2)
                     }
                     StatusBtn {
+                        icon: "alertCircle"
+                        text: Lsp.errorCount + "   ⚠ " + Lsp.warningCount
+                        onClicked: win.showProblems()
+                    }
+                    StatusBtn {
                         visible: !!win.cur && win.cur.gutter.changeCount > 0
                         text: win.cur ? "zmiany w pliku: " + win.cur.gutter.changeCount : ""
                         onClicked: win.cur.nextChange(false)
@@ -916,6 +986,14 @@ Window {
                         onClicked: win.showStatusMenu("eol", eolBtn)
                     }
                     StatusBtn { text: win.cur ? win.cur.language : "" }
+                    // Serwer języka: nazwa (działa), „uruchamia się” albo podpowiedź, co doinstalować
+                    StatusBtn {
+                        visible: !!win.cur && !!win.cur.serverInfo.id
+                        icon: !win.cur ? "" : win.cur.serverInfo.running ? "check" : win.cur.serverInfo.available && !win.cur.serverInfo.failed ? "clock" : "info"
+                        text: !win.cur ? "" : win.cur.serverInfo.running ? win.cur.serverInfo.name
+                            : win.cur.serverInfo.available && !win.cur.serverInfo.failed ? win.cur.serverInfo.name + "…" : "Brak " + (win.cur.serverInfo.name || "")
+                        onClicked: win.lspHint()
+                    }
                     StatusBtn {
                         visible: tabs.count > 0 && win.revision >= 0 && tabs.get(win.current).readOnly
                         text: "Tylko do odczytu"

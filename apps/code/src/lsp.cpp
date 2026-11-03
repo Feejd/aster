@@ -1,5 +1,6 @@
 #include "lsp.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
