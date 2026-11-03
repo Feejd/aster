@@ -6,7 +6,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 ## Etap 1 — powłoka działa ✅ (prawie)
 - [x] Tapeta dzień/noc, dok z prawdziwymi oknami, górna wyspa z datą
 - [x] Rozmycie KWin pod wyspami, kliknięcia tylko w wyspy
-- [ ] Kilka monitorów (dok i tapeta na każdym ekranie)
+- [x] Kilka monitorów: tapeta i górny pasek na każdym ekranie, dok, Start i powiadomienia na głównym
 
 ## Etap 2 — Start, centrum sterowania, powiadomienia
 - [x] **Start** z prototypu (pierwsza wersja): wyszukiwanie aplikacji, plików i ustawień, przypięte, ostatnie pliki,
