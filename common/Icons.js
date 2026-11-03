@@ -161,3 +161,4 @@ var crop = "M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14";
 var distributeH = "M4 4v16M20 4v16M10 8h4v8h-4z";
 var distributeV = "M4 4h16M4 20h16M8 10h8v4H8z";
 var ruler = "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4";
+var clapper = "M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10l-.7-3.6a1 1 0 0 1 .8-1.2l13.6-2.5a1 1 0 0 1 1.2.8l.5 2.6zM8.4 4.4l2.2 3.4M13.6 3.5l2.2 3.4";

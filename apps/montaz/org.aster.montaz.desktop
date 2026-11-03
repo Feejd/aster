@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Montaż
+GenericName=Edytor wideo
+Comment=Montuj filmy na TikTok, Reels i YouTube — klipy, napisy, muzyka i przejścia
+Exec=aster-montaz %F
+Icon=org.aster.montaz
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mp4;video/webm;video/x-matroska;video/quicktime;
+Keywords=wideo;film;montaż;edytor;tiktok;reels;youtube;shorts;napisy;
+StartupWMClass=aster-montaz

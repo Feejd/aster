@@ -162,5 +162,51 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Asystent pod klawiszem.
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
+- [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
+      (silnik Kdenlive/Shotcut): nowy projekt 9:16 / 16:9 / 1:1 (albo od razu z upuszczonych plików — format z pierwszego
+      filmu), import filmów, zdjęć i muzyki (przeciąganiem i z okna), oś czasu z ścieżkami wideo / tekst / muzyka,
+      przycinanie krawędzi, dzielenie w miejscu głowicy (S), przesuwanie, usuwanie, przybliżanie, podgląd z dźwiękiem
+      i klatka po klatce, 6 stylów napisów, przenikanie 0,5/1 s, głośność klipu i muzyki (wyciszanie na końcu),
+      prędkość 0,25–3×, kadr „wypełnij”/„zmieść”, cofanie; projekty zapisują się same (JSON), zapis do MLT XML;
+      eksport MP4 (H.264 przez x264 albo OpenH264 + AAC) w 720p/1080p, a bez kodera H.264 — WebM (VP9/Opus) z wyjaśnieniem
+- [x] Montaż 2: filtry kolorów (Żywy, Ciepły, Chłodny, Pogodny, Kino, Retro, Czarno-biały — z miniaturami klipu)
+      i korekta jasności, kontrastu, nasycenia; animacje napisów (pojawianie, wjazd od dołu i z boku, pisanie litera
+      po literze); rozjaśnienie z czerni i ściemnienie na końcu filmu (obraz i dźwięk); kształt fali muzyki na osi;
+      muzyka w tle przycinana przy dodaniu do długości filmu; test przeciągania myszą (krok drag: w ASTER_OPEN)
+- [x] Montaż 3: napisy z mowy — whisper.cpp (pakiet whisper-cpp, offline, na procesorze), model „Szybki” (base,
+      ok. 150 MB) albo „Dokładny” (small, ok. 490 MB) pobierany przy pierwszym użyciu do ~/.local/share/Aster/aster-montaz/models;
+      polski, angielski albo wykrywanie języka; krótkie napisy (do ~34 znaków) w wybranym stylu, zwykłe i edytowalne,
+      ponowne rozpoznanie zastępuje poprzednie; pomijanie ciszy i typowych „halucynacji” Whispera (np. Amara.org)
+- [x] Montaż 4: 13 nowoczesnych przejść (przenikanie, przez czerń, błysk, rozmycie, przesunięcie, w górę, wsunięcie,
+      smuga, przybliżenie, oddalenie, obrót, kurtyna, koło) z animowanymi podglądami, długością 0,3–1 s, „Zastosuj do
+      wszystkich” i rombami przejść na osi; ruch kamery (najazd, odjazd, w lewo/prawo, puls, drgania); rozmyte tło
+      (poziomy film w pionowym kadrze i odwrotnie); odbicie lustrzane; napisy przeciągane po podglądzie (przyciąganie
+      do środka), wielkość i kolor liter; zmiana formatu projektu w każdej chwili
+- [x] Montaż 5: druga ścieżka obrazu — nakładki (film albo zdjęcie/naklejka PNG z przezroczystością) nad głównym
+      obrazem: obraz w obrazie, przeciąganie i zmiana wielkości na podglądzie, obrót, widoczność, kształt (prostokąt,
+      zaokrąglony, koło), pojawianie się (pojawianie, wyskok, wjazd), usuwanie zielonego/niebieskiego tła z czułością,
+      głośność; nachodzące na siebie nakładki w osobnych wierszach osi; dodawanie przyciskiem, przeciągnięciem
+      z multimediów albo upuszczeniem pliku na ścieżkę nakładek
+- [x] Montaż 6: napisy karaoke — czasy słów z whisper.cpp (tokeny sklejane w słowa) zapisane w napisie; tryby
+      Karaoke (kolor wypowiadanego słowa), Ramka słowa, Słowo po słowie (jedno duże słowo), Narastanie; wybór w oknie
+      „Napisy z mowy” i w animacjach każdego napisu (napisy pisane ręcznie dostają czasy proporcjonalne do długości słów)
+- [x] Montaż 7: naklejki — 12 własnych wzorów Aster rysowanych w programie (Subskrybuj, Obserwuj, Polub, Link
+      w opisie, Nowość, Część 1, strzałka, kółko, dymek, Wow, serce, iskry) i wszystkie emoji z polskim wyszukiwaniem
+      (dane panelu emoji Aster, rysowane z Noto Color Emoji do PNG); karta „Naklejki” obok multimediów, klik dodaje
+      naklejkę jako nakładkę w miejscu głowicy (z wyskokiem, przeciąganiem, obrotem)
+- [x] Montaż 8: nagrywanie lektora — przycisk „Lektor”, pasek z poziomem mikrofonu, odliczanie 3‑2‑1, nagranie
+      od miejsca głowicy przy odtwarzanym (wyciszonym) filmie, zapis WAV (QAudioSource) do nagrań projektu, nagranie
+      na ścieżce dźwięku jako „Lektor N”; automatyczne przyciszanie muzyki i dźwięku filmu pod lektorem (−14 dB,
+      można wyłączyć); muzyka i lektor nachodzące na siebie w osobnych wierszach osi
+- [x] Montaż 9: odszumianie głosu — dla klipu z dźwiękiem, muzyki i lektora: „Lekkie” (RNNoise, 90%) albo „Mocne”
+      (RNNoise 100% i bramka — cisza między słowami) oraz „Wyraźny głos” (bez dudnienia, pasmo 3 kHz, kompresor);
+      nagranie lektora od razu lekko odszumione i wyraźne; afftdn z ffmpeg w MLT nie działa (zmienia liczbę próbek)
+- [ ] Montaż, dalej: efekty głosu, naklejki animowane (GIF/WebP, Lottie),
+      własne naklejki użytkownika z wycinaniem tła,
+      klatki kluczowe położenia i skali, cofanie klipu i stop-klatka,
+      płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
+      fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
+      szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
+- [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264
 - [ ] Aster Code — edytor kodu w stylu Aster
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
