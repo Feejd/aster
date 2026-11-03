@@ -153,6 +153,7 @@ Window {
         else if (what.startsWith("cycle:")) { const a = what.split(":"); Studio.setCycle(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("select:")) Studio.selectedTrack = Number(what.substring(7));
         else if (what === "inspectorOff") showInspector = false;
+        else if (what === "dbgpos") console.warn("POS", Studio.position.toFixed(2), Studio.playing);
         else if (what === "dbg") console.warn("STUDIO", inspector.hasClip, JSON.stringify(inspector.cl), Studio.selectedClip, JSON.stringify(Studio.clip(Studio.selectedClip)));
     }
 

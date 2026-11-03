@@ -167,13 +167,20 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] wybór wyjścia i wejścia dźwięku (urządzenia z PipeWire), poziom wejścia
   - [x] eksport miksu (ten sam kod co odsłuch) do MP3, WAV 16 bit, OGG Vorbis, FLAC
   - [ ] Nazwa programu (propozycje: „Próba”, „Scena”, „Nuta”)
-  - [ ] Dalej: efekty na ścieżkach (pogłos, korektor, kompresor, bramka szumów), wtyczki LV2 (lilv)
+  - [x] efekty na ścieżkach (`src/dsp.h`, bez alokacji w wątku audio): korektor 3-pasmowy + usuwanie dudnienia
+        (80 Hz), kompresor jednym suwakiem, wspólny pogłos z wielkością sali; gotowe brzmienia (Wokal, Gitara, Bas,
+        Perkusja, Radio, Daleko); panel z prawej (E) z brzmieniem ścieżki i ustawieniami klipu
+  - [x] głośność klipu, narastanie i wyciszanie (uchwyty na klipie i suwaki w panelu)
+  - [x] region pętli odtwarzania do ćwiczenia (C, przeciąganie po linijce, „Ćwicz w pętli” z menu klipu) —
+        zawijanie w środku bloku audio, sprawdzone przez PipeWire w kontenerze
+  - [x] nowe nagranie zastępuje to, co było pod nim na ścieżce (stare klipy przycięte/podzielone, Ctrl+Z przywraca)
+  - [ ] Dalej: bramka szumów, de-esser, efekty na sumie, wtyczki LV2 (lilv)
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
         do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
   - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
-        nagranie zastępujące fragment pod spodem, region pętli odtwarzania, automatyka głośności, wyciszanie/narastanie klipów
+        automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
         stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
   - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,
