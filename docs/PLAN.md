@@ -204,8 +204,13 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         od razu gra dźwięk — 8 głosów odsłuchu w wątku audio, także przy zatrzymanym transporcie
   - [x] klawiatura komputera jak pianino w piano rollu (A S D F G H J K / W E T Y U O, Z/X — oktawa), wciśnięte
         klawisze podświetlone; „Nagrywaj nuty” — granie w trakcie odtwarzania zapisuje nuty wyrównane do szesnastek
-  - [ ] Dalej: klawiatury MIDI na USB (ALSA/PipeWire MIDI), siła uderzenia nuty, kopiowanie taktów, dłuższe trzymanie
-        dźwięku na żywo (pad), biblioteka pętli, przełącznik A/B masteringu
+  - [x] klawiatury MIDI na USB (`src/midiinput.*`, sekwencer ALSA — przez niego PipeWire pokazuje urządzenia MIDI):
+        samo podłącza się do każdej klawiatury, także wpiętej w trakcie pracy; nuty z siłą uderzenia do odsłuchu
+        i nagrywania w piano rollu (bez otwartego piano rolla — odsłuch na ścieżce Melodia/Akordy); lista klawiatur
+        w ustawieniach dźwięku; bez sekwencera po cichu nic nie robi. W kontenerze nie ma /dev/snd/seq — prawdziwą
+        klawiaturę sprawdzić w maszynie wirtualnej (przekazanie USB)
+  - [ ] Dalej: dźwięk trzymany tak długo jak klawisz (głos syntezatora w wątku audio z puszczeniem nuty), pedał
+        sustain, pokrętła klawiatury do suwaków, kopiowanie taktów, biblioteka pętli, przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem

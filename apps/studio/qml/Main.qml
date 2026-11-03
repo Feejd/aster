@@ -33,6 +33,26 @@ Window {
     onClosing: Studio.closeProject()
     Component.onCompleted: effectsTimer.restart()
 
+    // Klawiatura MIDI: do otwartego piano rolla, a bez niego — odsłuch na zaznaczonej (albo pierwszej) ścieżce z nutami
+    property bool midiHintShown: false
+    function midiTrack() {
+        const t = Studio.tracks;
+        if (t[Studio.selectedTrack] && (t[Studio.selectedTrack].kind === "melody" || t[Studio.selectedTrack].kind === "keys")) return Studio.selectedTrack;
+        for (let i = 0; i < t.length; ++i) if (t[i].kind === "melody" || t[i].kind === "keys") return i;
+        return -1;
+    }
+    Connections {
+        target: Studio
+        function onMidiNote(pitch, velocity, on) {
+            if (!Studio.open) return;
+            if (pianoRoll.visible) { if (on) pianoRoll.midiDown(pitch, velocity); else pianoRoll.midiUp(pitch); return; }
+            if (!on) return;
+            const i = win.midiTrack();
+            if (i >= 0) Studio.previewNote(i, pitch, velocity / 127);
+            else if (!win.midiHintShown) { win.midiHintShown = true; win.toast("Dodaj ścieżkę Melodia, żeby grać i nagrywać z klawiatury MIDI"); }
+        }
+        function onMidiDevicesChanged() { if (Studio.midiDevices.length) win.toast("Podłączono klawiaturę MIDI: " + Studio.midiDevices.join(", ")); }
+    }
     Connections {
         target: Studio
         function onMessage(text) { win.toast(text); console.warn(text); }
@@ -107,6 +127,7 @@ Window {
         else if (what.startsWith("kd:")) pianoRoll.keyDown(what.substring(3));
         else if (what.startsWith("ku:")) pianoRoll.keyUp(what.substring(3));
         else if (what === "recNotes") pianoRoll.recNotes = true;
+        else if (what.startsWith("midi:")) { const a = what.split(":"); Studio.simulateMidi(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("toNotes:")) Studio.chordsToNotes(Number(what.substring(8)));
         else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
         else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));
@@ -822,6 +843,14 @@ Window {
                     visible: Studio.tracks.length > 0
                     text: "Poziom widać, gdy ścieżka jest gotowa do nagrania (czerwona kropka przy ścieżce). Śpiewaj głośno — wskaźnik nie powinien dochodzić do czerwieni."
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                }
+                Label { text: "Klawiatury MIDI" }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: Studio.midiDevices.length ? Studio.midiDevices.join(", ") + " — graj w piano rollu (ścieżka Melodia)"
+                                                    : "Brak — podłącz klawiaturę USB, Studio połączy się z nią samo"
+                    color: Studio.midiDevices.length ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 12
                 }
                 Label { text: "Korekta opóźnienia nagrań" }
                 Row {

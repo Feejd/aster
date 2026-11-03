@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "engine.h"
+#include "midiinput.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -45,6 +46,7 @@ class Studio : public QObject
     Q_PROPERTY(QString keyName READ keyName NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList genres READ genres CONSTANT)
     Q_PROPERTY(QVariantList instruments READ instruments CONSTANT)
+    Q_PROPERTY(QStringList midiDevices READ midiDevices NOTIFY midiDevicesChanged)     // podłączone klawiatury MIDI
     Q_PROPERTY(QVariantList rhythms READ rhythms CONSTANT)
     Q_PROPERTY(QVariantList progressions READ progressions CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
@@ -118,6 +120,7 @@ public:
     QString keyName() const;
     QVariantList genres() const;
     QVariantList instruments() const;
+    QStringList midiDevices() const { return m_midi.devices(); }
     QVariantList rhythms() const;
     QVariantList progressions() const;
     void setMasterVolume(double db);
@@ -187,7 +190,8 @@ public:
     Q_INVOKABLE QString chordName(int degree, bool seventh) const; // w tonacji projektu: „a-moll”
     Q_INVOKABLE void chordsToNotes(int index);
     // Odsłuch: Melodia/Akordy — value = nuta MIDI, 808 — stopień skali, Bit — numer wiersza (stopa, werbel…)
-    Q_INVOKABLE void previewNote(int index, int value);                    // ścieżka Akordy → Melodia (piano roll)
+    Q_INVOKABLE void previewNote(int index, int value, double velocity = 1.0);
+    Q_INVOKABLE void simulateMidi(int pitch, int velocity);     // do testów: jak nuta z klawiatury (0 = puszczenie)                    // ścieżka Akordy → Melodia (piano roll)
     Q_INVOKABLE bool inKey(int midi) const;                         // nuta należy do tonacji projektu
     Q_INVOKABLE void setMastering(const QString &key, double value);
     Q_INVOKABLE void applyMastering(const QString &preset);
@@ -249,6 +253,8 @@ signals:
     void recentChanged();
     void sourcesChanged();
     void cycleChanged();
+    void midiDevicesChanged();
+    void midiNote(int pitch, int velocity, bool on);            // nuta z klawiatury MIDI (siła 1…127)
     void exportFinished(bool ok, const QString &path, const QString &error);
     void message(const QString &text);
 
@@ -312,6 +318,7 @@ private:
 
     static inline Studio *s_instance = nullptr;
     Engine m_engine;
+    MidiInput m_midi;
     QTimer m_timer;
     QString m_name, m_folder, m_audioError;
     bool m_dirty = false;

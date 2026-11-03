@@ -35,10 +35,15 @@ Item {
         if (ch === "Z") { octave = Math.max(1, octave - 1); return true; }
         if (ch === "X") { octave = Math.min(7, octave + 1); return true; }
         if (!(ch in keyMap) || ch in held) return false;
-        const pitch = 12 * (octave + 1) + keyMap[ch];
-        Studio.previewNote(track, pitch);
+        return noteDown(ch, 12 * (octave + 1) + keyMap[ch], 0.85);
+    }
+    // Klawiatura MIDI: te same ścieżki co klawiatura komputera, z siłą uderzenia
+    function midiDown(pitch, velocity) { if (pat) noteDown("m" + pitch, pitch, velocity / 127); }
+    function midiUp(pitch) { keyUp("m" + pitch); }
+    function noteDown(id, pitch, vel) {
+        Studio.previewNote(track, pitch, vel);
         const h = Object.assign({}, held);
-        h[ch] = { pitch: pitch, start: absStep() };
+        h[id] = { pitch: pitch, start: absStep(), vel: vel };
         held = h;
         return true;
     }
@@ -50,11 +55,11 @@ Item {
         held = h;
         if (!recNotes || !Studio.playing) return true;
         // Nagranie: początek i długość wyrównane do szesnastek, w pętli wzoru
-        const len = Math.max(1, Math.min(16, absStep() - n.start));
+        const len = Math.max(1, Math.min(steps, absStep() - n.start));
         const step = ((n.start % steps) + steps) % steps;
         const p = JSON.parse(JSON.stringify(pat));
         p.notes = p.notes.filter(x => !(x.pitch === n.pitch && x.step === step));
-        p.notes.push({ step: step, len: Math.min(len, steps - step), pitch: n.pitch, vel: 0.85 });
+        p.notes.push({ step: step, len: Math.min(len, steps - step), pitch: n.pitch, vel: n.vel });
         pat = p;
         commit();
         return true;
@@ -111,7 +116,11 @@ Item {
             Column {
                 anchors.verticalCenter: parent.verticalCenter
                 Text { text: pr.tr ? pr.tr.name : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Bold }
-                Text { text: "Piano roll — klik dodaje nutę, prawy klik usuwa"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                Text {
+                    text: Studio.midiDevices.length ? "Klawiatura MIDI: " + Studio.midiDevices.join(", ") : "Piano roll — klik dodaje nutę, prawy klik usuwa"
+                    color: Studio.midiDevices.length ? Theme.accentText : Theme.text2
+                    font.family: Theme.font; font.pixelSize: 11
+                }
             }
             Item { width: 8; height: 1 }
             Repeater {

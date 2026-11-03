@@ -1,10 +1,11 @@
 # Studio (aster-studio) — budowane z głównego CMakeLists.txt repozytorium.
 # Dźwięk: PipeWire (pipewire-devel) w wątku czasu rzeczywistego; pliki: libsndfile (WAV/FLAC/OGG/MP3);
-# przepróbkowanie importu: libsamplerate.
+# przepróbkowanie importu: libsamplerate; klawiatury MIDI: sekwencer ALSA (alsa-lib-devel).
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 pkg_check_modules(SNDFILE REQUIRED IMPORTED_TARGET sndfile)
 pkg_check_modules(SAMPLERATE REQUIRED IMPORTED_TARGET samplerate)
+pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 
 qt_add_executable(aster-studio src/main.cpp)
 target_include_directories(aster-studio PRIVATE src)
@@ -36,6 +37,8 @@ qt_add_qml_module(aster-studio
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
+        src/midiinput.cpp
+        src/midiinput.h
         src/tune.h
         src/beatsynth.cpp
         src/beatsynth.h
@@ -55,6 +58,7 @@ target_link_libraries(aster-studio PRIVATE
     PkgConfig::PIPEWIRE
     PkgConfig::SNDFILE
     PkgConfig::SAMPLERATE
+    PkgConfig::ALSA
     KF6::WindowSystem
     aster-uiplugin
 )

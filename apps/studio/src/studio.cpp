@@ -46,6 +46,9 @@ Studio::Studio(QObject *parent) : QObject(parent)
         m_audioError = msg.isEmpty() ? QStringLiteral("Urządzenie dźwięku przestało działać.") : msg;
         emit audioErrorChanged();
     });
+    connect(&m_midi, &MidiInput::devicesChanged, this, &Studio::midiDevicesChanged);
+    connect(&m_midi, &MidiInput::noteOn, this, [this](int p, int v) { emit midiNote(p, v, true); });
+    connect(&m_midi, &MidiInput::noteOff, this, [this](int p) { emit midiNote(p, 0, false); });
     m_timer.setInterval(33);
     connect(&m_timer, &QTimer::timeout, this, &Studio::tick);
     m_timer.start();
@@ -1939,7 +1942,7 @@ bool Studio::inKey(int midi) const
     return false;
 }
 
-void Studio::previewNote(int index, int value)
+void Studio::previewNote(int index, int value, double velocity)
 {
     if (index < 0 || index >= m_tracks.size() || !m_engine.running())
         return;
@@ -1984,5 +1987,12 @@ void Studio::previewNote(int index, int value)
     for (long long i = 0; i < fade && i < snd->frames; ++i)
         for (int c = 0; c < snd->channels; ++c)
             snd->data[size_t((snd->frames - 1 - i) * snd->channels + c)] *= float(i) / fade;
-    m_engine.preview(snd, float(dbToGain(t.volume) * dbToGain(m_masterDb) * 0.8));
+    // Siła uderzenia: cicho grane ciszej (krzywa jak w instrumentach — nie liniowo)
+    const double vel = 0.25 + 0.75 * std::clamp(velocity, 0.0, 1.0);
+    m_engine.preview(snd, float(dbToGain(t.volume) * dbToGain(m_masterDb) * 0.8 * vel));
+}
+
+void Studio::simulateMidi(int pitch, int velocity)
+{
+    emit midiNote(pitch, velocity, velocity > 0);
 }
