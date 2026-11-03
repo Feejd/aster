@@ -16,6 +16,10 @@ on:
         description: "Zbuduj też plik ISO z instalatorem"
         type: boolean
         default: true
+      obraz:
+        description: "Zbuduj obraz systemu od nowa (bez tego: gotowy obraz z ghcr.io — szybciej, gdy zmienia się tylko ISO)"
+        type: boolean
+        default: true
       arch:
         description: "Dla jakich procesorów"
         type: choice
@@ -75,12 +79,19 @@ jobs:
           df -h / /mnt 2>/dev/null || df -h /
 
       - name: Obraz systemu Aster
+        if: github.event_name != 'workflow_dispatch' || inputs.obraz
         run: |
           sudo podman build -f image/Containerfile -t localhost/aster:latest .
           sudo podman image prune -f
 
+      - name: Gotowy obraz systemu z ghcr.io
+        if: github.event_name == 'workflow_dispatch' && !inputs.obraz
+        run: |
+          sudo podman pull "$IMAGE:latest-${{ matrix.tag }}"
+          sudo podman tag "$IMAGE:latest-${{ matrix.tag }}" localhost/aster:latest
+
       - name: Wyślij obraz do ghcr.io
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.obraz)
         run: |
           echo '${{ secrets.GITHUB_TOKEN }}' | sudo podman login ghcr.io -u '${{ github.actor }}' --password-stdin
           sudo podman push localhost/aster:latest "$IMAGE:latest-${{ matrix.tag }}"
