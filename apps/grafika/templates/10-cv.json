@@ -5,6 +5,10 @@
  "category": "CV",
  "width": 2480,
  "height": 3508,
+ "print": {
+  "width": 210,
+  "height": 297
+ },
  "background": {
   "type": "color",
   "color": "#FFFFFF"
@@ -311,9 +315,5 @@
    "lineHeight": 1.4,
    "id": "e22"
   }
- ],
- "print": {
-  "width": 210,
-  "height": 297
- }
+ ]
 }

@@ -413,6 +413,7 @@ void Online::setCatalog(const QByteArray &json)
                      {QStringLiteral("category"), o.value(QStringLiteral("category")).toString()},
                      {QStringLiteral("weights"), weights},
                      {QStringLiteral("italic"), o.value(QStringLiteral("styles")).toArray().contains(QStringLiteral("italic"))},
+                     {QStringLiteral("license"), o.value(QStringLiteral("license")).toString()},
                      {QStringLiteral("rank"), rank.value(family, 100000)}});
     }
     std::stable_sort(list.begin(), list.end(), [](const QVariantMap &a, const QVariantMap &b) {
@@ -525,7 +526,7 @@ void Online::installFont(const QString &family)
     const QString key = QStringLiteral("install:") + family;
     if (m_pending.contains(key))
         return;
-    // Grubości i kursywę zna dopiero lista czcionek — najpierw ona (bez niej pobrałaby się tylko zwykła grubość)
+    // Licencję (katalog w repozytorium) i grubości zna dopiero lista czcionek — najpierw ona
     if (m_catalog.isEmpty() && !m_catalogFailed) {
         loadFontCatalog();
         if (m_catalog.isEmpty()) {
@@ -539,69 +540,99 @@ void Online::installFont(const QString &family)
             return;
         }
     }
-    // Wszystkie grubości i kursywa, jeśli jest — żeby pogrubienie i pochylenie działały naprawdę
     QVariantMap info;
     for (const QVariant &v : std::as_const(m_catalog))
         if (v.toMap().value(QStringLiteral("family")).toString() == family)
             info = v.toMap();
-    QStringList weights;
-    for (const QVariant &w : info.value(QStringLiteral("weights")).toList())
-        weights.append(QString::number(w.toInt()));
-    if (weights.isEmpty())
-        weights.append(QStringLiteral("400"));
-    QString spec;
-    if (info.value(QStringLiteral("italic")).toBool()) {
-        QStringList tuples;
-        for (const QString &w : weights)
-            tuples.append(QStringLiteral("0,") + w);
-        for (const QString &w : weights)
-            tuples.append(QStringLiteral("1,") + w);
-        spec = QStringLiteral(":ital,wght@") + tuples.join(QLatin1Char(';'));
-    } else if (weights.size() > 1 || weights.constFirst() != QLatin1String("400")) {
-        spec = QStringLiteral(":wght@") + weights.join(QLatin1Char(';'));
-    }
     m_pending.insert(key);
-    QPointer<Online> self(this);
-    fontFaces(family, spec, [self, family, key](const QList<QPair<QString, QString>> &faces) {
-        if (!self)
-            return;
-        if (faces.isEmpty()) {
-            self->m_pending.remove(key);
-            Q_EMIT self->fontFailed(family);
+
+    // Pliki z repozytorium Google Fonts (pełne rodziny z poprawnymi nazwami, często czcionki zmienne);
+    // gdy się nie uda — pliki z Google Fonts CSS
+    const QString license = info.value(QStringLiteral("license")).toString();
+    const QString dir = license.startsWith(QLatin1String("Apache")) ? QStringLiteral("apache") : license.startsWith(QLatin1String("UFL")) ? QStringLiteral("ufl") : QStringLiteral("ofl");
+    const QString base = QStringLiteral("https://raw.githubusercontent.com/google/fonts/main/%1/%2/").arg(dir, fileSafe(family).toLower());
+    QNetworkReply *meta = get(base + QStringLiteral("METADATA.pb"));
+    connect(meta, &QNetworkReply::finished, this, [this, meta, family, key, base, info] {
+        meta->deleteLater();
+        QList<QPair<QString, QString>> files;
+        if (meta->error() == QNetworkReply::NoError) {
+            static const QRegularExpression file(QStringLiteral("filename:\\s*\"([^\"]+\\.ttf)\""));
+            for (auto it = file.globalMatch(QString::fromUtf8(meta->readAll())); it.hasNext();) {
+                const QString name = it.next().captured(1);
+                files.append({base + QString::fromLatin1(QUrl::toPercentEncoding(name)), name});
+            }
+        }
+        if (!files.isEmpty()) {
+            downloadFaces(family, key, files);
             return;
         }
-        const QString dir = fontsDir() + QLatin1Char('/') + fileSafe(family);
-        QDir().mkpath(dir + QStringLiteral(".part"));
-        auto left = std::make_shared<int>(faces.size());
-        auto ok = std::make_shared<bool>(true);
-        for (const auto &face : faces) {
-            QNetworkReply *r = self->get(face.second);
-            const QString file = dir + QStringLiteral(".part/") + fileSafe(family) + QLatin1Char('-') + face.first + QStringLiteral(".ttf");
-            connect(r, &QNetworkReply::finished, self, [self, r, file, dir, family, key, left, ok] {
-                r->deleteLater();
-                const QByteArray data = r->readAll();
-                QFile f(file);
-                if (r->error() != QNetworkReply::NoError || data.isEmpty() || !f.open(QIODevice::WriteOnly) || f.write(data) != data.size())
-                    *ok = false;
-                f.close();
-                if (--*left > 0)
-                    return;
-                self->m_pending.remove(key);
-                // Cała rodzina albo nic: pliki trafiają na miejsce dopiero po pobraniu wszystkich
-                if (!*ok) {
-                    QDir(dir + QStringLiteral(".part")).removeRecursively();
-                    Q_EMIT self->fontFailed(family);
-                    return;
-                }
-                QDir(dir).removeRecursively();
-                QDir().rename(dir + QStringLiteral(".part"), dir);
-                if (self->m_previews.contains(family))
-                    QFontDatabase::removeApplicationFont(self->m_previews.take(family));
-                previewFamilies().remove(family);
-                for (const QString &path : fontFiles(family))
-                    QFontDatabase::addApplicationFont(path);
-                Q_EMIT self->fontInstalled(family);
-            });
+        QStringList weights;
+        for (const QVariant &w : info.value(QStringLiteral("weights")).toList())
+            weights.append(QString::number(w.toInt()));
+        if (weights.isEmpty())
+            weights.append(QStringLiteral("400"));
+        QString spec;
+        if (info.value(QStringLiteral("italic")).toBool()) {
+            QStringList tuples;
+            for (const QString &w : weights)
+                tuples.append(QStringLiteral("0,") + w);
+            for (const QString &w : weights)
+                tuples.append(QStringLiteral("1,") + w);
+            spec = QStringLiteral(":ital,wght@") + tuples.join(QLatin1Char(';'));
+        } else if (weights.size() > 1 || weights.constFirst() != QLatin1String("400")) {
+            spec = QStringLiteral(":wght@") + weights.join(QLatin1Char(';'));
         }
+        QPointer<Online> self(this);
+        fontFaces(family, spec, [self, family, key](const QList<QPair<QString, QString>> &faces) {
+            if (!self)
+                return;
+            QList<QPair<QString, QString>> files;
+            for (const auto &face : faces)
+                files.append({face.second, fileSafe(family) + QLatin1Char('-') + face.first + QStringLiteral(".ttf")});
+            self->downloadFaces(family, key, files);
+        });
     });
+}
+
+// Pobranie plików (adres, nazwa) całej rodziny: na miejsce trafiają dopiero wszystkie naraz
+void Online::downloadFaces(const QString &family, const QString &key, const QList<QPair<QString, QString>> &files)
+{
+    if (files.isEmpty()) {
+        m_pending.remove(key);
+        Q_EMIT fontFailed(family);
+        return;
+    }
+    const QString dir = fontsDir() + QLatin1Char('/') + fileSafe(family);
+    QDir(dir + QStringLiteral(".part")).removeRecursively();
+    QDir().mkpath(dir + QStringLiteral(".part"));
+    auto left = std::make_shared<int>(files.size());
+    auto ok = std::make_shared<bool>(true);
+    for (const auto &f : files) {
+        QNetworkReply *r = get(f.first);
+        const QString path = dir + QStringLiteral(".part/") + f.second;
+        connect(r, &QNetworkReply::finished, this, [this, r, path, dir, family, key, left, ok] {
+            r->deleteLater();
+            const QByteArray data = r->readAll();
+            QFile out(path);
+            if (r->error() != QNetworkReply::NoError || data.isEmpty() || !out.open(QIODevice::WriteOnly) || out.write(data) != data.size())
+                *ok = false;
+            out.close();
+            if (--*left > 0)
+                return;
+            m_pending.remove(key);
+            if (!*ok) {
+                QDir(dir + QStringLiteral(".part")).removeRecursively();
+                Q_EMIT fontFailed(family);
+                return;
+            }
+            QDir(dir).removeRecursively();
+            QDir().rename(dir + QStringLiteral(".part"), dir);
+            if (m_previews.contains(family))
+                QFontDatabase::removeApplicationFont(m_previews.take(family));
+            previewFamilies().remove(family);
+            for (const QString &p : fontFiles(family))
+                QFontDatabase::addApplicationFont(p);
+            Q_EMIT fontInstalled(family);
+        });
+    }
 }

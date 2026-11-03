@@ -236,6 +236,23 @@ Item {
                     }
                 }
                 Row {
+                    spacing: 8
+                    ColorWell {
+                        id: textWell2
+                        label: ins.el.color2 ? "Przejście" : "+ przejście"
+                        value: ins.el.color2 || ""
+                        onClicked: ins.editor.pickColor(textWell2, value, true, (c, done) => ins.set({ color2: c === "" ? null : c }, done))
+                    }
+                }
+                ValueSlider {
+                    visible: !!ins.el.color2
+                    label: "Kierunek przejścia"
+                    from: 0; to: 360; step: 15
+                    value: ins.el.gradientAngle === undefined ? 90 : ins.el.gradientAngle
+                    suffix: "°"
+                    onMoved: (v, done) => ins.set({ gradientAngle: v }, done)
+                }
+                Row {
                     spacing: 2
                     IconToggle { icon: "bold"; on: (ins.el.weight || 400) >= 600; onClicked: ins.set({ weight: on ? 400 : 700 }) }
                     IconToggle { icon: "italic"; on: !!ins.el.italic; onClicked: ins.set({ italic: !on }) }
@@ -272,6 +289,13 @@ Item {
                     spacing: 8
                     Chip { text: "Obrys"; on: (ins.el.outline || 0) > 0; onClicked: ins.set({ outline: on ? 0 : 0.05, outlineColor: ins.el.outlineColor || "#111111" }) }
                     Chip { text: "Tło"; on: !!ins.el.bg; onClicked: ins.set({ bg: on ? null : "#FFE600" }) }
+                    Chip {
+                        // Neon: świecenie w kolorze tekstu (miękki cień bez przesunięcia)
+                        text: "Neon"
+                        on: ins.softShadow && (ins.el.shadowDist || 0) === 0
+                        onClicked: ins.set(on ? { shadow: null, shadowBlur: null, shadowDist: null, shadowAngle: null, shadowOpacity: null, shadowColor: null }
+                                              : { shadow: true, shadowBlur: Math.round((ins.el.size || 48) * 0.45), shadowDist: 0, shadowOpacity: 0.95, shadowColor: ins.el.color || "#FF2D95" })
+                    }
                     ColorWell {
                         id: textBgWell
                         visible: !!ins.el.bg

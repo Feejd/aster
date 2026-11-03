@@ -1,0 +1,96 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Polaroidy",
+ "category": "Relacja",
+ "width": 1080,
+ "height": 1920,
+ "background": {
+  "type": "color",
+  "color": "#E9F1EC"
+ },
+ "elements": [
+  {
+   "type": "text",
+   "text": "Weekendowe inspiracje",
+   "x": 60,
+   "y": 150,
+   "w": 960,
+   "size": 120,
+   "font": "Caveat",
+   "weight": 700,
+   "color": "#24443A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 150,
+   "y": 360,
+   "w": 560,
+   "h": 640,
+   "fill": "#FFFFFF",
+   "radius": 6,
+   "rotation": -6,
+   "shadow": true,
+   "shadowBlur": 40,
+   "shadowDist": 16,
+   "shadowAngle": 170,
+   "shadowOpacity": 0.25,
+   "id": "e2"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 185,
+   "y": 395,
+   "w": 490,
+   "h": 500,
+   "rotation": -6,
+   "id": "e3"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 380,
+   "y": 1000,
+   "w": 560,
+   "h": 640,
+   "fill": "#FFFFFF",
+   "radius": 6,
+   "rotation": 5,
+   "shadow": true,
+   "shadowBlur": 40,
+   "shadowDist": 16,
+   "shadowAngle": 170,
+   "shadowOpacity": 0.25,
+   "id": "e4"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 415,
+   "y": 1035,
+   "w": 490,
+   "h": 500,
+   "rotation": 5,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "las · kawa · dobra książka",
+   "x": 60,
+   "y": 1730,
+   "w": 960,
+   "size": 70,
+   "font": "Caveat",
+   "weight": 400,
+   "color": "#24443A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e6"
+  }
+ ]
+}

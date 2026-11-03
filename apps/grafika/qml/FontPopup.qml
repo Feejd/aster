@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtCore
 import Aster.Ui
 import Aster.Grafika
 
@@ -21,7 +22,17 @@ Popover {
         { id: "display", label: "Ozdobne" }, { id: "handwriting", label: "Odręczne" }, { id: "monospace", label: "Maszynowe" }
     ]
     readonly property string query: search.text.trim().toLowerCase()
-    readonly property var localList: query === "" ? Library.fonts : Library.fonts.filter(f => f.toLowerCase().indexOf(query) >= 0)
+    // Ulubione czcionki — w ustawieniach programu, na górze listy zainstalowanych
+    Settings { id: saved; category: "Grafika"; property string favoriteFonts: "[]" }
+    property var favorites: { try { return JSON.parse(saved.favoriteFonts); } catch (e) { return []; } }
+    function toggleFavorite(f) {
+        saved.favoriteFonts = JSON.stringify(favorites.indexOf(f) >= 0 ? favorites.filter(x => x !== f) : favorites.concat([f]));
+    }
+    readonly property var localList: {
+        const all = query === "" ? Library.fonts : Library.fonts.filter(f => f.toLowerCase().indexOf(query) >= 0);
+        const fav = favorites.filter(f => all.indexOf(f) >= 0);
+        return fav.concat(all.filter(f => fav.indexOf(f) < 0));
+    }
     readonly property var webList: Online.fontCatalog.filter(f => (category === "" || f.category === category)
                                                                && (query === "" || f.family.toLowerCase().indexOf(query) >= 0))
 
@@ -33,8 +44,8 @@ Popover {
         openAt(item, "left");
         search.focusInput();
         if (source === "web") Online.loadFontCatalog();
-        const i = Library.fonts.indexOf(family);
-        if (source === "local" && i >= 0) localView.positionViewAtIndex(i, ListView.Center);
+        const j = localList.indexOf(family);
+        if (source === "local" && j >= 0) localView.positionViewAtIndex(j, ListView.Center);
     }
     function choose(family) {
         if (Library.fonts.indexOf(family) >= 0) {
@@ -112,12 +123,21 @@ Popover {
             color: modelData === fp.value ? baseColor : hovered ? Theme.hover : baseColor
             onClicked: fp.choose(row.modelData)
             Text {
-                x: 10; width: parent.width - 20
+                x: 10; width: parent.width - 50
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
                 text: row.modelData
                 color: Theme.text
                 font.family: row.modelData; font.pixelSize: 18
+            }
+            HoverButton {
+                readonly property bool fav: fp.favorites.indexOf(row.modelData) >= 0
+                anchors.right: parent.right; anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+                width: 30; height: 30; radius: 15
+                visible: fav || row.hovered || hovered
+                onClicked: fp.toggleFavorite(row.modelData)
+                Icon { anchors.centerIn: parent; d: Icons.star; size: 14; stroke: 2; color: parent.fav ? "#FFB400" : Theme.text2 }
             }
         }
     }

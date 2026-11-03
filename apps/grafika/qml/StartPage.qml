@@ -83,7 +83,7 @@ Item {
                     font.family: Theme.font; font.pixelSize: 30; font.weight: Font.Bold; font.letterSpacing: -0.6
                 }
                 Text {
-                    text: "Wybierz rozmiar i zacznij od pustej strony albo od szablonu. Wszystko działa bez internetu, a projekty zapisują się same."
+                    text: "Wybierz rozmiar i zacznij od pustej strony albo od szablonu. Projekty zapisują się same, a darmowe zdjęcia, ikony i czcionki znajdziesz w edytorze."
                     color: Theme.text2
                     font.family: Theme.font; font.pixelSize: 14
                 }

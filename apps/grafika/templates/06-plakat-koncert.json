@@ -5,6 +5,10 @@
  "category": "Plakat",
  "width": 3508,
  "height": 4961,
+ "print": {
+  "width": 297,
+  "height": 420
+ },
  "background": {
   "type": "gradient",
   "color": "#0F2027",
@@ -107,7 +111,7 @@
   },
   {
    "type": "text",
-   "text": "zespoły z okolicy · strefa dla dzieci · food trucki",
+   "text": "zespoły z naszej okolicy · strefa dla dzieci · food trucki",
    "x": 300,
    "y": 4400,
    "w": 2908,
@@ -121,9 +125,5 @@
    "spacing": 0.06,
    "id": "e8"
   }
- ],
- "print": {
-  "width": 297,
-  "height": 420
- }
+ ]
 }

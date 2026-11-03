@@ -1,0 +1,101 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Podziękowanie",
+ "category": "Dyplom",
+ "width": 3508,
+ "height": 2480,
+ "print": {
+  "width": 297,
+  "height": 210
+ },
+ "background": {
+  "type": "color",
+  "color": "#FBF7EF"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 140,
+   "y": 140,
+   "w": 3228,
+   "h": 2200,
+   "fill": "",
+   "radius": 40,
+   "stroke": "#2F5D50",
+   "strokeWidth": 14,
+   "id": "e1"
+  },
+  {
+   "type": "text",
+   "text": "Podziękowanie",
+   "x": 300,
+   "y": 380,
+   "w": 2908,
+   "size": 460,
+   "font": "Great Vibes",
+   "weight": 400,
+   "color": "#2F5D50",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "dla Pani Marii Kowalskiej",
+   "x": 300,
+   "y": 1020,
+   "w": 2908,
+   "size": 150,
+   "font": "Playfair Display",
+   "weight": 700,
+   "color": "#2B2B2B",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "za serce i czas poświęcony naszej świetlicy przez cały rok szkolny",
+   "x": 500,
+   "y": 1300,
+   "w": 2508,
+   "size": 100,
+   "font": "Lora",
+   "weight": 400,
+   "color": "#4A4A4A",
+   "align": "center",
+   "lineHeight": 1.4,
+   "italic": true,
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "line",
+   "x": 1354,
+   "y": 1938.0,
+   "w": 800,
+   "h": 24,
+   "fill": "",
+   "stroke": "#2F5D50",
+   "strokeWidth": 5,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Dyrekcja i dzieci",
+   "x": 1154,
+   "y": 1990,
+   "w": 1200,
+   "size": 70,
+   "font": "Lora",
+   "weight": 400,
+   "color": "#4A4A4A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "italic": true,
+   "id": "e6"
+  }
+ ]
+}

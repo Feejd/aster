@@ -31,6 +31,9 @@ Window {
         { id: "a4", name: "A4 pionowo", hint: "Ulotka, CV, zaproszenie", w: 2480, h: 3508, print: { width: 210, height: 297 } },
         { id: "a4l", name: "A4 poziomo", hint: "Dyplom, ogłoszenie", w: 3508, h: 2480, print: { width: 297, height: 210 } },
         { id: "poster", name: "Plakat A3", hint: "Do druku", w: 3508, h: 4961, print: { width: 297, height: 420 } },
+        { id: "a5", name: "Ulotka A5", hint: "Ulotka, zaproszenie", w: 1748, h: 2480, print: { width: 148, height: 210 } },
+        { id: "card", name: "Kartka A6", hint: "Życzenia, podziękowanie", w: 1748, h: 1240, print: { width: 148, height: 105 } },
+        { id: "bcard", name: "Wizytówka", hint: "90 × 50 mm", w: 1063, h: 591, print: { width: 90, height: 50 } },
         { id: "slide", name: "Slajd 16:9", hint: "Prezentacja", w: 1920, h: 1080 },
         { id: "youtube", name: "Miniaturka YouTube", hint: "Okładka filmu", w: 1280, h: 720 },
         { id: "fbcover", name: "Okładka Facebook", hint: "Profil, strona", w: 1640, h: 624 }

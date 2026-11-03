@@ -37,7 +37,10 @@ QFont textFont(const QVariantMap &el)
     QFont f(el.value(QStringLiteral("font"), QStringLiteral("Geist")).toString());
     const qreal size = qMax(1.0, num(el, "size", 48));
     f.setPixelSize(qMax(1, qRound(size)));
-    f.setWeight(QFont::Weight(qBound(100, int(num(el, "weight", 400)), 900)));
+    const int weight = qBound(100, int(num(el, "weight", 400)), 900);
+    f.setWeight(QFont::Weight(weight));
+    // Czcionki zmienne (np. pobrane z repozytorium Google Fonts) — grubość z osi „wght”, inaczej byłaby najcieńsza
+    f.setVariableAxis(QFont::Tag("wght"), weight);
     f.setItalic(el.value(QStringLiteral("italic")).toBool());
     f.setUnderline(el.value(QStringLiteral("underline")).toBool());
     // Odstęp liter w częściach wielkości czcionki — przy skalowaniu tekstu rośnie razem z nim
@@ -110,6 +113,17 @@ QPainterPath glyphPath(const QTextLayout &tl)
     return path;
 }
 
+QBrush gradientBrush(const QColor &a, const QColor &b, qreal angle, const QRectF &r, bool radial);
+
+// Kolor tekstu albo przejście kolorów (`color2`, `gradientAngle`) przez cały blok tekstu
+QBrush textBrush(const QVariantMap &el, const QRectF &r)
+{
+    const QColor a = color(el, "color", Qt::black), b = color(el, "color2");
+    if (b.isValid() && b.alpha() > 0)
+        return gradientBrush(a, b, num(el, "gradientAngle", 90), r, false);
+    return QBrush(a);
+}
+
 // Tekst po łuku: każda litera obrócona wzdłuż okręgu. curve > 0 — łuk w górę, < 0 — w dół (−1..1 = do pół okręgu)
 void paintCurvedText(QPainter *p, const QVariantMap &el)
 {
@@ -157,7 +171,7 @@ void paintCurvedText(QPainter *p, const QVariantMap &el)
         pen.setJoinStyle(Qt::RoundJoin);
         p->strokePath(out, pen);
     }
-    p->fillPath(out, color(el, "color", Qt::black));
+    p->fillPath(out, textBrush(el, out.boundingRect()));
 }
 
 void paintText(QPainter *p, const QVariantMap &el)
@@ -203,7 +217,7 @@ void paintText(QPainter *p, const QVariantMap &el)
         pen.setCapStyle(Qt::RoundCap);
         p->strokePath(path, pen);
     }
-    p->setPen(color(el, "color", Qt::black));
+    p->setPen(QPen(textBrush(el, QRectF(0, 0, w, num(el, "h", 100))), 0));
     tl.draw(p, QPointF(0, 0));
 }
 

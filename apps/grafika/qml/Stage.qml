@@ -707,6 +707,7 @@ Item {
                     font.family: editBox.el.font || "Geist"
                     font.pixelSize: Math.max(1, Math.round(editBox.el.size || 48))
                     font.weight: editBox.el.weight || 400
+                    font.variableAxes: ({ "wght": editBox.el.weight || 400 })
                     font.italic: !!editBox.el.italic
                     font.underline: !!editBox.el.underline
                     font.letterSpacing: (editBox.el.spacing || 0) * (editBox.el.size || 48)

@@ -5,6 +5,10 @@
  "category": "Dyplom",
  "width": 3508,
  "height": 2480,
+ "print": {
+  "width": 297,
+  "height": 210
+ },
  "background": {
   "type": "radial",
   "color": "#FFFFFF",
@@ -159,9 +163,5 @@
    "italic": true,
    "id": "e11"
   }
- ],
- "print": {
-  "width": 297,
-  "height": 210
- }
+ ]
 }

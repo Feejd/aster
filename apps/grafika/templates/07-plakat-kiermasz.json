@@ -5,6 +5,10 @@
  "category": "Plakat",
  "width": 2480,
  "height": 3508,
+ "print": {
+  "width": 210,
+  "height": 297
+ },
  "background": {
   "type": "color",
   "color": "#FFF4E0"
@@ -113,9 +117,5 @@
    "lineHeight": 1.15,
    "id": "e8"
   }
- ],
- "print": {
-  "width": 210,
-  "height": 297
- }
+ ]
 }

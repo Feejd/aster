@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtCore
 import Aster.Ui
 import Aster.Grafika
 
-// Wybór koloru: gotowe barwy, kolory już użyte w projekcie, pole jasności i nasycenia, odcień, zapis szesnastkowy.
+// Wybór koloru: gotowe barwy, moje kolory (zapamiętane dla wszystkich projektów, np. kolory firmy), kolory już użyte w projekcie, pole jasności i nasycenia, odcień, zapis szesnastkowy.
 // open(item, kolor, brakDozwolony, funkcja(kolor, koniec)) — funkcja dostaje "" dla „brak”.
 Popover {
     id: cp
@@ -22,6 +23,15 @@ Popover {
         "#00ACC1", "#1E88E5", "#3949AB", "#7E57C2", "#D81B60", "#F48FB1",
         "#5D4037", "#A1887F", "#004D40", "#0D47A1", "#1A237E", "#311B92"
     ]
+
+    // Moje kolory — w ustawieniach programu, wspólne dla wszystkich projektów
+    Settings { id: saved; category: "Grafika"; property string myColors: "[]" }
+    property var mine: { try { return JSON.parse(saved.myColors); } catch (e) { return []; } }
+    function addMine() {
+        if (value === "" || mine.indexOf(value.toLowerCase()) >= 0) return;
+        saved.myColors = JSON.stringify(mine.concat([value.toLowerCase()]).slice(-18));
+    }
+    function removeMine(c) { saved.myColors = JSON.stringify(mine.filter(m => m !== c)); }
 
     function open(item, color, none, fn, side) {
         callback = fn;
@@ -63,6 +73,47 @@ Popover {
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: cp.setFrom(sw.modelData, true) }
                 }
             }
+        }
+
+        Text {
+            text: "Moje kolory"
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+        }
+        Flow {
+            width: parent.width
+            spacing: 8
+            Repeater {
+                model: cp.mine
+                delegate: Rectangle {
+                    id: my
+                    required property string modelData
+                    width: 32; height: 32; radius: 16
+                    color: modelData
+                    border.width: cp.value.toLowerCase() === modelData ? 2.5 : 1
+                    border.color: cp.value.toLowerCase() === modelData ? Theme.accent : Qt.rgba(0, 0, 0, 0.14)
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: (e) => { if (e.button === Qt.RightButton) cp.removeMine(my.modelData); else cp.setFrom(my.modelData, true); }
+                    }
+                }
+            }
+            HoverButton {
+                width: 32; height: 32; radius: 16
+                baseColor: Theme.fill
+                enabled: cp.value !== "" && cp.mine.indexOf(cp.value.toLowerCase()) < 0
+                opacity: enabled ? 1 : 0.4
+                onClicked: cp.addMine()
+                Icon { anchors.centerIn: parent; d: Icons.plus; size: 14; stroke: 2.2; color: Theme.text }
+            }
+        }
+        Text {
+            visible: cp.mine.length === 0
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: "„+” zapamiętuje wybrany kolor we wszystkich projektach (np. kolory firmy). Prawy przycisk usuwa."
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
         }
 
         Text {

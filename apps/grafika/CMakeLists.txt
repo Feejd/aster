@@ -66,5 +66,7 @@ target_link_libraries(aster-grafika PRIVATE
 )
 
 install(TARGETS aster-grafika RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Darmowe czcionki z Google Fonts (OFL) do szablonów — działają bez internetu
+install(DIRECTORY fonts/ DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts/aster-grafika)
 install(FILES org.aster.grafika.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES org.aster.grafika.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)

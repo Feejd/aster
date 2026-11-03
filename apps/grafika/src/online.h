@@ -61,6 +61,7 @@ Q_SIGNALS:
 private:
     QNetworkReply *get(const QString &url);
     void setCatalog(const QByteArray &json);
+    void downloadFaces(const QString &family, const QString &key, const QList<QPair<QString, QString>> &files);
     void fontFaces(const QString &family, const QString &spec, std::function<void(QList<QPair<QString, QString>>)> done);
 
     QNetworkAccessManager *m_net;

@@ -387,6 +387,19 @@ bool Project::applyTemplate(const QString &file)
     }
     QVariantMap bg = doc.value(QStringLiteral("background")).toMap();
     m_pages[m_page] = QVariantMap{{QStringLiteral("background"), bg}, {QStringLiteral("elements"), elements}};
+    // Szablon wielostronicowy (karuzela, wizytówka): pozostałe jego strony wchodzą za bieżącą
+    const QVariantList more = doc.value(QStringLiteral("pages")).toList();
+    for (int i = 1; i < more.size(); ++i) {
+        QVariantMap p = more.at(i).toMap();
+        QVariantList els;
+        for (const QVariant &v : p.value(QStringLiteral("elements")).toList()) {
+            QVariantMap el = v.toMap();
+            el[QStringLiteral("id")] = newId();
+            els.append(prepared(el));
+        }
+        p[QStringLiteral("elements")] = els;
+        m_pages.insert(m_page + i, p);
+    }
     m_width = qMax(16.0, num(doc, "width", m_width));
     m_height = qMax(16.0, num(doc, "height", m_height));
     m_print = doc.value(QStringLiteral("print")).toMap();

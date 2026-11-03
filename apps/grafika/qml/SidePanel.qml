@@ -94,6 +94,18 @@ Item {
         }
     }
 
+    // ——— Szablony: kategorie, „Pasujące” — w proporcjach bieżącej strony ———
+    property string tplCategory: "fit"
+    readonly property var tplCategories: {
+        const out = [];
+        for (const t of Library.templates) if (t.category && out.indexOf(t.category) < 0) out.push(t.category);
+        return out;
+    }
+    readonly property var tplList: Library.templates.filter(t => tplCategory === "" ? true
+        : tplCategory === "fit" ? Math.abs(t.width / t.height - project.pageWidth / project.pageHeight) < 0.02
+        : t.category === tplCategory)
+    onTplListChanged: if (tplCategory === "fit" && tplList.length === 0) tplCategory = ""
+
     // ——— Warstwy ———
     property var layers: []                  // od wierzchu
     function refreshLayers() { layers = project.document().elements.slice().reverse(); }
@@ -299,9 +311,32 @@ Item {
                     }
                     Flow {
                         width: parent.width
+                        spacing: 4
+                        Chip { height: 26; text: "Pasujące"; on: sp.tplCategory === "fit"; onClicked: sp.tplCategory = "fit" }
+                        Chip { height: 26; text: "Wszystkie"; on: sp.tplCategory === ""; onClicked: sp.tplCategory = "" }
+                        Repeater {
+                            model: sp.tplCategories
+                            delegate: Chip {
+                                required property string modelData
+                                height: 26
+                                text: modelData
+                                on: sp.tplCategory === modelData
+                                onClicked: sp.tplCategory = modelData
+                            }
+                        }
+                    }
+                    Text {
+                        visible: sp.tplList.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Nie ma szablonów w tym rozmiarze strony — wybierz „Wszystkie”."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                    }
+                    Flow {
+                        width: parent.width
                         spacing: 8
                         Repeater {
-                            model: Library.templates
+                            model: sp.tplList
                             delegate: HoverButton {
                                 id: tpl
                                 required property var modelData
@@ -322,7 +357,7 @@ Item {
                                     anchors.bottom: parent.bottom; anchors.bottomMargin: 4
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
-                                    text: tpl.modelData.name
+                                    text: tpl.modelData.name + (tpl.modelData.pages > 1 ? " · " + tpl.modelData.pages + " str." : "")
                                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
                                 }
                             }

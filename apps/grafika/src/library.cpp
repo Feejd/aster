@@ -39,6 +39,7 @@ Library::Library(QObject *parent)
             {QStringLiteral("category"), doc.value(QStringLiteral("category"))},
             {QStringLiteral("width"), doc.value(QStringLiteral("width"))},
             {QStringLiteral("height"), doc.value(QStringLiteral("height"))},
+            {QStringLiteral("pages"), qMax(1, int(doc.value(QStringLiteral("pages")).toList().size()))},
         });
     }
     refresh();

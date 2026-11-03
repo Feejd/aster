@@ -5,6 +5,10 @@
  "category": "Zaproszenie",
  "width": 1748,
  "height": 2480,
+ "print": {
+  "width": 148,
+  "height": 210
+ },
  "background": {
   "type": "radial",
   "color": "#FFFFFF",
@@ -138,9 +142,5 @@
    "lineHeight": 1.15,
    "id": "e10"
   }
- ],
- "print": {
-  "width": 148,
-  "height": 210
- }
+ ]
 }

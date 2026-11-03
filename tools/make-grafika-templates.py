@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Generuje szablony Grafiki — zwykłe pliki projektu bez zdjęć: python3 tools/make-grafika-templates.py apps/grafika/templates
+# Generuje szablony Grafiki — zwykłe pliki projektu bez zdjęć (miejsca na zdjęcia są puste):
+#   python3 tools/make-grafika-templates.py apps/grafika/templates
 import json, os, sys
 
 OUT = sys.argv[1]
@@ -25,15 +26,37 @@ def R(x, y, w, h, fill, radius=0, **kw):
 def LINE(x, y, w, color, width, **kw):
     return S("line", x, y - max(24, width * 4) / 2, w, max(24, width * 4), "", stroke=color, strokeWidth=width, **kw)
 
-def save(fname, name, category, w, h, bg, elements, print_=None):
-    doc = {"format": "aster-grafika", "version": 1, "name": name, "category": category, "width": w, "height": h,
-           "background": bg, "elements": []}
+# Puste miejsce na zdjęcie (zdjęcie upuszczone albo kliknięte w panelu trafia do środka)
+def P(x, y, w, h, **kw):
+    d = dict(type="image", src="", x=x, y=y, w=w, h=h)
+    d.update(kw)
+    return d
+
+def shadow(blur, dist=0, angle=160, opacity=0.35, color=None):
+    d = dict(shadow=True, shadowBlur=blur, shadowDist=dist, shadowAngle=angle, shadowOpacity=opacity)
+    if color:
+        d["shadowColor"] = color
+    return d
+
+# pages — kolejne strony [(tło, elementy), …] za pierwszą (karuzela, wizytówka dwustronna, prezentacja)
+def save(fname, name, category, w, h, bg, elements, print_=None, pages=None):
+    doc = {"format": "aster-grafika", "version": 1, "name": name, "category": category, "width": w, "height": h}
     if print_:
         doc["print"] = {"width": print_[0], "height": print_[1]}
-    for i, e in enumerate(elements, 1):
-        e = dict(e)
-        e["id"] = "e%d" % i
-        doc["elements"].append(e)
+    n = 0
+    all_pages = []
+    for pbg, pels in [(bg, elements)] + list(pages or []):
+        out = []
+        for e in pels:
+            n += 1
+            e = dict(e)
+            e["id"] = "e%d" % n
+            out.append(e)
+        all_pages.append({"background": pbg, "elements": out})
+    doc["background"] = all_pages[0]["background"]
+    doc["elements"] = all_pages[0]["elements"]
+    if len(all_pages) > 1:
+        doc["pages"] = all_pages
     with open(os.path.join(OUT, fname), "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=1)
 
@@ -97,7 +120,7 @@ save("06-plakat-koncert.json", "Koncert w parku", "Plakat", 3508, 4961, grad("#0
     LINE(1254, 3420, 1000, "#FFB300", 22),
     T("Sobota, 21 czerwca · 19:00", 200, 3580, 3108, 190, "Geist", 700, "#FFFFFF"),
     T("Park Miejski, scena przy fontannie · wstęp wolny", 300, 3880, 2908, 130, "Geist", 400, "#C9D6E2"),
-    T("zespoły z okolicy · strefa dla dzieci · food trucki", 300, 4400, 2908, 88, "Geist", 500, "#FFB300", caps=True, spacing=0.06),
+    T("zespoły z naszej okolicy · strefa dla dzieci · food trucki", 300, 4400, 2908, 88, "Geist", 500, "#FFB300", caps=True, spacing=0.06),
 ], (297, 420))
 save("07-plakat-kiermasz.json", "Kiermasz ciast", "Plakat", 2480, 3508, solid("#FFF4E0"), [
     R(0, 0, 2480, 900, "#E85D75"),
@@ -232,5 +255,261 @@ save("16-dyplom.json", "Dyplom", "Dyplom", 3508, 2480, radial("#FFFFFF", "#F1EBD
     T("data", 500, 2090, 800, 64, "Noto Serif", 400, "#7A6A55", italic=True),
     T("podpis", 2208, 2090, 800, 64, "Noto Serif", 400, "#7A6A55", italic=True),
 ], (297, 210))
+
+
+# ════════ Druga seria: czcionki z Google Fonts (wbudowane w program), miejsca na zdjęcia, cienie, wiele stron ════════
+
+# ——— Instagram ———
+save("17-promocja-zdjecie.json", "Nowa kolekcja", "Instagram", 1080, 1350, solid("#FFF6EC"), [
+    P(70, 70, 940, 780, radius=40),
+    T("NOWA KOLEKCJA", 60, 890, 960, 150, "Bebas Neue", 400, "#1E1B18", spacing=0.02),
+    T("−30% na wszystko do niedzieli", 120, 1060, 840, 46, "Poppins", 600, "#FFFFFF", bg="#FF5A36", bgPadding=0.4, bgRadius=0.5),
+    T("sklep.pl · darmowa dostawa od 150 zł", 120, 1200, 840, 32, "Poppins", 400, "#6B625A"),
+])
+save("18-porady-karuzela.json", "Porady — karuzela", "Instagram", 1080, 1350, solid("#1F3A5F"), [
+    S("ellipse", 640, -220, 700, 700, "#FFD166", opacity=0.18),
+    S("ellipse", -260, 980, 620, 620, "#FFFFFF", opacity=0.06),
+    T("5 sposobów na", 90, 420, 900, 76, "Poppins", 600, "#FFFFFF", align="left"),
+    T("lepszy sen", 80, 510, 920, 170, "Playfair Display", 700, "#FFD166", align="left", italic=True, lineHeight=1.0),
+    T("Zapisz, żeby nie zgubić — i podeślij komuś, kto ciągle ziewa.", 90, 760, 780, 38, "Poppins", 400, "#C9D6E8", align="left", lineHeight=1.4),
+    T("przesuń  →", 690, 1200, 300, 36, "Poppins", 600, "#FFD166", align="right"),
+], pages=[
+    (solid("#F4F1EA"), [
+        T("01", 90, 120, 400, 240, "Abril Fatface", 400, "#1F3A5F", align="left", lineHeight=1.0),
+        T("Stała pora", 90, 420, 900, 90, "Poppins", 800, "#1F3A5F", align="left"),
+        T("Kładź się i wstawaj o tej samej godzinie — także w weekend. Organizm szybko się przyzwyczai.", 90, 560, 880, 46, "Lora", 400, "#3E4652", align="left", lineHeight=1.45),
+        R(90, 1180, 120, 12, "#FFD166", 6),
+        T("2 / 5", 690, 1160, 300, 32, "Poppins", 600, "#8A93A3", align="right"),
+    ]),
+    (solid("#F4F1EA"), [
+        T("02", 90, 120, 400, 240, "Abril Fatface", 400, "#1F3A5F", align="left", lineHeight=1.0),
+        T("Bez ekranu przed snem", 90, 420, 900, 90, "Poppins", 800, "#1F3A5F", align="left"),
+        T("Godzinę przed snem odłóż telefon. Zamiast tego książka, ciepła herbata albo krótki spacer.", 90, 660, 880, 46, "Lora", 400, "#3E4652", align="left", lineHeight=1.45),
+        R(90, 1180, 120, 12, "#FFD166", 6),
+        T("3 / 5", 690, 1160, 300, 32, "Poppins", 600, "#8A93A3", align="right"),
+    ]),
+])
+save("19-opinia-klienta.json", "Opinia klienta", "Instagram", 1080, 1080, solid("#EEF3FF"), [
+    R(80, 120, 920, 840, "#FFFFFF", 40, **shadow(50, 18, 180, 0.16)),
+    *[S("star", 330 + i * 86, 200, 70, 70, "#FFB400") for i in range(5)],
+    T("„Najlepsza obsługa w mieście! Wszystko na czas, z uśmiechem i bez nerwów. Polecam każdemu.”", 150, 330, 780, 50, "Lora", 400, "#1F2633", italic=True, lineHeight=1.4),
+    P(470, 690, 140, 140, mask="ellipse"),
+    T("Anna, stała klientka", 200, 860, 680, 34, "Poppins", 600, "#1F2633"),
+])
+save("20-komunikat.json", "Ważny komunikat", "Instagram", 1080, 1080, solid("#FFE14D"), [
+    T("WAŻNE!", 60, 140, 960, 230, "Anton", 400, "#16181D", lineHeight=1.0),
+    R(90, 440, 900, 130, "#16181D", 20),
+    T("Zmiana godzin otwarcia", 90, 470, 900, 58, "Poppins", 800, "#FFE14D"),
+    T("Od 1 grudnia zapraszamy\npon.–pt. 9:00–17:00\nsob. 9:00–13:00", 120, 640, 840, 54, "Poppins", 600, "#16181D", lineHeight=1.4),
+    T("Dziękujemy za wyrozumiałość!", 120, 930, 840, 34, "Poppins", 400, "#4A4426"),
+])
+save("21-wydarzenie.json", "Wydarzenie", "Instagram", 1080, 1350, grad("#2A1B5C", "#7B2FF7", 160), [
+    R(90, 110, 260, 300, "#FFFFFF", 30, **shadow(40, 14, 180, 0.3)),
+    T("14", 90, 140, 260, 170, "Abril Fatface", 400, "#2A1B5C", lineHeight=1.0),
+    T("LISTOPADA", 90, 330, 260, 34, "Poppins", 800, "#7B2FF7", spacing=0.08),
+    T("Wieczór planszówek", 80, 520, 920, 120, "Montserrat", 800, "#FFFFFF", align="left", lineHeight=1.05),
+    T("Gry dla każdego, herbata i ciasto. Wstęp wolny — przyjdź z przyjaciółmi!", 90, 820, 860, 42, "Poppins", 400, "#E3D9FF", align="left", lineHeight=1.4),
+    T("godz. 18:00 · Biblioteka Miejska", 90, 1150, 900, 40, "Poppins", 600, "#FFFFFF", align="left", bg="#33FFFFFF", bgPadding=0.5),
+])
+save("22-przed-i-po.json", "Przed i po", "Instagram", 1080, 1080, solid("#FFFFFF"), [
+    P(0, 0, 536, 1080),
+    P(544, 0, 536, 1080),
+    T("PRZED", 40, 960, 456, 44, "Poppins", 800, "#FFFFFF", bg="#16181D", bgPadding=0.4, bgRadius=0.3, spacing=0.06),
+    T("PO", 584, 960, 456, 44, "Poppins", 800, "#16181D", bg="#FFE14D", bgPadding=0.4, bgRadius=0.3, spacing=0.06),
+])
+
+# ——— Relacje ———
+save("23-story-odliczanie.json", "Odliczanie", "Relacja", 1080, 1920, radial("#FF7EB3", "#5B2C83"), [
+    T("Jeszcze", 90, 420, 900, 80, "Poppins", 600, "#FFFFFF"),
+    T("3", 90, 520, 900, 620, "Abril Fatface", 400, "#FFFFFF", lineHeight=1.0, **shadow(60, 0, 0, 0.8, "#FF2D95")),
+    T("dni", 90, 1150, 900, 130, "Poppins", 800, "#FFFFFF"),
+    T("do premiery!", 90, 1330, 900, 110, "Pacifico", 400, "#FFE14D"),
+])
+save("24-story-nowy-produkt.json", "Nowy produkt", "Relacja", 1080, 1920, solid("#F2E8DF"), [
+    P(140, 220, 800, 1000, mask="arch"),
+    T("NOWOŚĆ", 90, 1270, 900, 190, "Bebas Neue", 400, "#3B2A20", spacing=0.04),
+    T("Ręcznie robiona świeca sojowa o zapachu wanilii i drzewa sandałowego", 140, 1480, 800, 44, "Lora", 400, "#5E4A3D", italic=True, lineHeight=1.4),
+    R(290, 1680, 500, 110, "#3B2A20", 55),
+    T("Sprawdź w sklepie", 290, 1712, 500, 42, "Poppins", 600, "#F2E8DF"),
+])
+save("25-story-polecamy.json", "Polaroidy", "Relacja", 1080, 1920, solid("#E9F1EC"), [
+    T("Weekendowe inspiracje", 60, 150, 960, 120, "Caveat", 700, "#24443A"),
+    R(150, 360, 560, 640, "#FFFFFF", 6, rotation=-6, **shadow(40, 16, 170, 0.25)),
+    P(185, 395, 490, 500, rotation=-6),
+    R(380, 1000, 560, 640, "#FFFFFF", 6, rotation=5, **shadow(40, 16, 170, 0.25)),
+    P(415, 1035, 490, 500, rotation=5),
+    T("las · kawa · dobra książka", 60, 1730, 960, 70, "Caveat", 400, "#24443A"),
+])
+
+# ——— Plakaty i ulotki (A4, A3, A5) ———
+strips = []
+for i in range(8):
+    cx = 155 + i * 310
+    # Pionowe przerywane linie między karteczkami i numer telefonu w poprzek każdej
+    strips.append(LINE(cx - 155 - 250, 3184, 500, "#9AA0A8", 4, rotation=90, dash=True) if i else None)
+    strips.append(T("Tel. 600 000 000", cx - 250, 3184 - 23, 500, 40, "Poppins", 600, "#16181D", rotation=-90))
+strips = [e for e in strips if e]
+save("26-ogloszenie-sprzedam.json", "Sprzedam — z karteczkami", "Plakat", 2480, 3508, solid("#FFFFFF"), [
+    T("SPRZEDAM", 120, 150, 2240, 420, "Anton", 400, "#16181D", lineHeight=1.0),
+    P(240, 680, 2000, 1300, radius=30),
+    T("Rower miejski, 3 biegi, koszyk i błotniki. Mało używany, stan bardzo dobry.", 240, 2080, 2000, 90, "Poppins", 400, "#2A2E36", lineHeight=1.35),
+    T("450 zł", 240, 2420, 2000, 220, "Poppins", 800, "#E53935"),
+    LINE(0, 2860, 2480, "#9AA0A8", 4, dash=True),
+] + strips, (210, 297))
+save("27-zaginal-pies.json", "Zaginął pies", "Plakat", 2480, 3508, solid("#FFFFFF"), [
+    R(0, 0, 2480, 560, "#E53935"),
+    T("ZAGINĄŁ PIES", 80, 110, 2320, 340, "Anton", 400, "#FFFFFF", lineHeight=1.0),
+    P(240, 700, 2000, 1500, radius=40),
+    T("Reksio", 240, 2290, 2000, 200, "Montserrat", 800, "#16181D"),
+    T("Mały, rudy, z białą łatką na piersi. Ostatnio widziany przy parku na ul. Lipowej. Jest przyjazny, ale płochliwy.", 300, 2560, 1880, 80, "Poppins", 400, "#2A2E36", lineHeight=1.4),
+    R(0, 3060, 2480, 448, "#16181D"),
+    T("Pomóż! Tel. 600 000 000", 80, 3190, 2320, 150, "Poppins", 800, "#FFE14D"),
+], (210, 297))
+confetti = []
+cols = ["#FF5A5F", "#FFB400", "#00A699", "#7B61FF", "#FF7AB6"]
+import random
+rnd = random.Random(7)
+for i in range(26):
+    x, y = rnd.randint(80, 3400), rnd.randint(1500, 4800)
+    if 600 < x < 2900 and 1700 < y < 4200:
+        continue
+    confetti.append(S(rnd.choice(["ellipse", "star", "rect"]), x, y, rnd.randint(50, 120), rnd.randint(50, 120), rnd.choice(cols), rotation=rnd.randint(0, 90)))
+save("28-festyn.json", "Festyn rodzinny", "Plakat", 3508, 4961, grad("#7FD3FF", "#FFF5D6", 180), [
+    S("ellipse", 2500, 220, 760, 760, "#FFD23F", **shadow(160, 0, 0, 0.6, "#FFB400")),
+    *confetti,
+    T("FESTYN", 200, 900, 3108, 900, "Bebas Neue", 400, "#E53935", curve=0.3, **shadow(30, 18, 180, 0.25)),
+    T("RODZINNY", 200, 1950, 3108, 500, "Bebas Neue", 400, "#1F3A5F", spacing=0.06),
+    R(700, 2620, 2108, 700, "#FFFFFF", 80, opacity=0.92, **shadow(60, 20, 180, 0.15)),
+    T("niedziela 8 czerwca\ngodz. 12:00–20:00", 700, 2700, 2108, 190, "Poppins", 800, "#1F3A5F", lineHeight=1.25),
+    T("dmuchańce · loteria · grill · koncert na koniec", 400, 3520, 2708, 120, "Poppins", 600, "#1F3A5F"),
+    T("Boisko przy Szkole Podstawowej nr 3 · wstęp wolny", 400, 3760, 2708, 100, "Poppins", 400, "#3E5A78"),
+], (297, 420))
+def menu_section(title, y, items):
+    out = [T(title, 200, y, 2080, 130, "Playfair Display", 700, "#2B2118", align="left", italic=True),
+           LINE(200, y + 190, 2080, "#C8B49A", 4)]
+    yy = y + 250
+    for name, desc, price in items:
+        out += [T(name, 200, yy, 1700, 66, "Poppins", 600, "#2B2118", align="left"),
+                T(price, 1880, yy, 400, 66, "Poppins", 600, "#9C6B30", align="right"),
+                T(desc, 200, yy + 86, 1700, 46, "Lora", 400, "#6B5D4D", align="left", italic=True)]
+        yy += 220
+    return out
+save("29-menu.json", "Menu restauracji", "Menu", 2480, 3508, solid("#FAF6EF"), [
+    T("Menu", 200, 150, 2080, 420, "Great Vibes", 400, "#2B2118", lineHeight=1.0),
+    T("BISTRO POD KASZTANAMI", 200, 600, 2080, 60, "Poppins", 600, "#9C6B30", spacing=0.3),
+    *menu_section("Zupy", 860, [("Żurek na zakwasie", "z jajkiem i białą kiełbasą", "18 zł"), ("Krem z dyni", "z prażonymi pestkami", "16 zł")]),
+    *menu_section("Dania główne", 1600, [("Pierogi ruskie", "okraszone cebulką, 8 sztuk", "26 zł"), ("Schabowy z ziemniakami", "z kapustą zasmażaną", "34 zł"), ("Placki po węgiersku", "z gulaszem wołowym", "36 zł")]),
+    *menu_section("Desery", 2560, [("Szarlotka na ciepło", "z gałką lodów waniliowych", "16 zł"), ("Sernik", "według przepisu babci", "15 zł")]),
+], (210, 297))
+save("30-ulotka-korepetycje.json", "Korepetycje — ulotka", "Ulotka", 1748, 2480, solid("#0E4D64"), [
+    S("ellipse", 1100, -300, 1000, 1000, "#13A89E", opacity=0.35),
+    T("Korepetycje\nz matematyki", 140, 260, 1468, 190, "Montserrat", 800, "#FFFFFF", align="left", lineHeight=1.05),
+    T("Szkoła podstawowa · liceum · matura", 140, 760, 1468, 60, "Poppins", 400, "#BFE7EA", align="left"),
+    *[S("ellipse", 150, 1000 + i * 160, 44, 44, "#FFD166") for i in range(3)],
+    *[T(t, 240, 990 + i * 160, 1350, 56, "Poppins", 600, "#FFFFFF", align="left") for i, t in enumerate(["Cierpliwie i od podstaw", "Zajęcia u ucznia albo online", "Pierwsza lekcja za pół ceny"])],
+    R(140, 1620, 700, 150, "#FFD166", 75),
+    T("60 zł / godz.", 140, 1660, 700, 62, "Poppins", 800, "#0E4D64"),
+    T("Tel. 600 000 000", 140, 2050, 1468, 120, "Montserrat", 800, "#FFFFFF", align="left"),
+    T("mgr Jan Kowalski", 140, 2220, 1468, 56, "Poppins", 400, "#BFE7EA", align="left"),
+], (148, 210))
+
+# ——— Zaproszenia i kartki ———
+save("31-zaproszenie-komunia.json", "Pierwsza Komunia", "Zaproszenie", 1748, 2480, solid("#FFFFFF"), [
+    R(80, 80, 1588, 2320, "", 20, stroke="#C9A55C", strokeWidth=6),
+    S("star", 824, 220, 100, 100, "#C9A55C"),
+    T("Zaproszenie", 100, 400, 1548, 260, "Great Vibes", 400, "#8A6A2F"),
+    T("na uroczystość Pierwszej Komunii Świętej", 200, 760, 1348, 70, "Lora", 400, "#3E3524", italic=True, lineHeight=1.35),
+    T("Zosi", 100, 1000, 1548, 220, "Playfair Display", 700, "#3E3524"),
+    LINE(624, 1330, 500, "#C9A55C", 4),
+    T("niedziela, 18 maja, godz. 11:00\nkościół pw. św. Józefa", 160, 1420, 1428, 66, "Lora", 400, "#3E3524", lineHeight=1.5),
+    T("Po uroczystości zapraszamy na obiad do restauracji „Pod Lipą”.", 220, 1800, 1308, 54, "Lora", 400, "#6B5D4D", italic=True, lineHeight=1.45),
+], (148, 210))
+save("32-zaproszenie-18.json", "Osiemnastka", "Zaproszenie", 1748, 2480, solid("#0B0B1A"), [
+    T("18", 100, 300, 1548, 900, "Abril Fatface", 400, "#FFFFFF", lineHeight=1.0, **shadow(90, 0, 0, 0.95, "#FF2D95")),
+    T("urodziny", 100, 1240, 1548, 260, "Pacifico", 400, "#3DF5FF", **shadow(50, 0, 0, 0.8, "#00B3FF")),
+    T("Kasi", 100, 1560, 1548, 150, "Poppins", 800, "#FFFFFF"),
+    T("sobota, 22 marca · od 20:00\nKlub „Neon”, ul. Długa 5", 160, 1850, 1428, 66, "Poppins", 400, "#C8C8E8", lineHeight=1.5),
+], (148, 210))
+snow = [S("ellipse", rnd.randint(0, 1700), rnd.randint(0, 1200), s, s, "#FFFFFF", opacity=0.5) for s in [rnd.randint(10, 26) for _ in range(40)]]
+save("33-kartka-swiateczna.json", "Kartka świąteczna", "Kartka", 1748, 1240, solid("#0F3D2E"), snow + [
+    S("star", 824, 120, 100, 100, "#F2C14E", **shadow(40, 0, 0, 0.8, "#F2C14E")),
+    T("Wesołych Świąt", 60, 330, 1628, 230, "Great Vibes", 400, "#F5E6C8"),
+    T("i szczęśliwego Nowego Roku", 80, 690, 1588, 80, "Lora", 400, "#E8D9B5", italic=True),
+    T("życzy rodzina Nowaków", 80, 950, 1588, 50, "Poppins", 400, "#A9C4B8"),
+], (148, 105))
+balloons = []
+for i, (x, c) in enumerate([(160, "#FF5A5F"), (330, "#FFB400"), (1290, "#7B61FF"), (1460, "#00A699")]):
+    y = 140 + (i % 2) * 120
+    balloons += [LINE(x + 60, y + 330, 260, "#B7A8B0", 3, rotation=90), S("ellipse", x, y, 130, 170, c, **shadow(20, 8, 160, 0.2))]
+save("34-kartka-urodzinowa.json", "Kartka urodzinowa", "Kartka", 1748, 1240, solid("#FFF0F5"), balloons + [
+    T("Sto lat!", 300, 330, 1148, 300, "Pacifico", 400, "#E0336E"),
+    T("Wszystkiego najlepszego,\nzdrowia i samych słonecznych dni", 300, 760, 1148, 60, "Poppins", 600, "#5B3448", lineHeight=1.4),
+], (148, 105))
+
+# ——— Wizytówka (90 × 50 mm, dwie strony) ———
+save("35-wizytowka.json", "Wizytówka", "Wizytówka", 1063, 591, solid("#16181D"), [
+    R(70, 250, 80, 8, "#FFB400", 4),
+    T("Anna Nowak", 70, 140, 900, 80, "Montserrat", 800, "#FFFFFF", align="left"),
+    T("PROJEKTANTKA WNĘTRZ", 70, 290, 900, 30, "Poppins", 600, "#FFB400", align="left", spacing=0.15),
+], (90, 50), pages=[
+    (solid("#FFFFFF"), [
+        T("tel. 600 000 000\nanna@pracownia.pl\nul. Długa 5, Kraków", 70, 150, 900, 40, "Poppins", 400, "#16181D", align="left", lineHeight=1.6),
+        T("pracownia.pl", 70, 450, 900, 34, "Poppins", 800, "#E0A100", align="left"),
+    ]),
+])
+
+# ——— Prezentacja (4 slajdy) ———
+save("36-prezentacja.json", "Prezentacja — 4 slajdy", "Slajd", 1920, 1080, grad("#141E30", "#243B55", 135), [
+    T("Plan na nowy rok", 160, 360, 1600, 150, "Montserrat", 800, "#FFFFFF", align="left"),
+    T("Spotkanie zespołu · styczeń", 160, 560, 1600, 56, "Poppins", 400, "#AFC3DD", align="left"),
+    R(160, 700, 160, 10, "#FFB400", 5),
+], pages=[
+    (solid("#F7F8FB"), [
+        T("O czym porozmawiamy", 160, 140, 1600, 90, "Montserrat", 800, "#141E30", align="left"),
+        *[S("ellipse", 170, 350 + i * 150, 40, 40, "#FFB400") for i in range(4)],
+        *[T(t, 250, 340 + i * 150, 1400, 56, "Poppins", 400, "#2A3446", align="left") for i, t in enumerate(["Co się udało w zeszłym roku", "Nasze cele", "Kto czym się zajmuje", "Pytania"])],
+    ]),
+    (solid("#FFFFFF"), [
+        P(1000, 0, 920, 1080),
+        T("Nasze cele", 160, 200, 760, 90, "Montserrat", 800, "#141E30", align="left"),
+        T("Więcej klientów z polecenia, szybsza obsługa i nowy sklep internetowy do wiosny.", 160, 360, 760, 50, "Poppins", 400, "#2A3446", align="left", lineHeight=1.5),
+    ]),
+    (grad("#141E30", "#243B55", 135), [
+        T("Dziękuję!", 160, 380, 1600, 200, "Playfair Display", 700, "#FFFFFF", italic=True),
+        T("Pytania?", 160, 640, 1600, 70, "Poppins", 400, "#AFC3DD"),
+    ]),
+])
+
+# ——— YouTube i Facebook ———
+save("37-yt-reakcja.json", "Miniaturka — reakcja", "YouTube", 1280, 720, solid("#FFD400"), [
+    P(700, 0, 580, 720, mask="blob"),
+    T("NIE\nWIERZYŁEM!", 50, 150, 720, 150, "Anton", 400, "#FFFFFF", align="left", lineHeight=1.0, rotation=-4, outline=0.08, outlineColor="#16181D"),
+    S("arrow", 560, 520, 260, 60, "", stroke="#E53935", strokeWidth=26, rotation=-20),
+])
+save("38-okladka-firma.json", "Okładka — pracownia", "Facebook", 1640, 624, grad("#FDF3E7", "#F3D9C1", 90), [
+    T("Pracownia Ceramiki", 100, 170, 900, 120, "Playfair Display", 700, "#5A3E2B", align="left", lineHeight=1.05),
+    T("warsztaty dla dorosłych i dzieci · Gdańsk", 100, 440, 900, 40, "Poppins", 400, "#8A6A52", align="left"),
+    P(1060, 60, 230, 504, radius=115),
+    P(1320, 60, 230, 504, radius=115),
+])
+
+# ——— Podziękowanie, plan tygodnia ———
+save("39-podziekowanie.json", "Podziękowanie", "Dyplom", 3508, 2480, solid("#FBF7EF"), [
+    R(140, 140, 3228, 2200, "", 40, stroke="#2F5D50", strokeWidth=14),
+    T("Podziękowanie", 300, 380, 2908, 460, "Great Vibes", 400, "#2F5D50"),
+    T("dla Pani Marii Kowalskiej", 300, 1020, 2908, 150, "Playfair Display", 700, "#2B2B2B"),
+    T("za serce i czas poświęcony naszej świetlicy przez cały rok szkolny", 500, 1300, 2508, 100, "Lora", 400, "#4A4A4A", italic=True, lineHeight=1.4),
+    LINE(1354, 1950, 800, "#2F5D50", 5),
+    T("Dyrekcja i dzieci", 1154, 1990, 1200, 70, "Lora", 400, "#4A4A4A", italic=True),
+], (297, 210))
+days = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+save("40-plan-tygodnia.json", "Plan tygodnia", "Plan", 2480, 3508, solid("#F7F8FB"), [
+    T("Plan tygodnia", 160, 150, 2160, 200, "Poppins", 800, "#1F2633", align="left"),
+    T("Notuj, odhaczaj, odpoczywaj.", 160, 380, 2160, 110, "Caveat", 400, "#7B61FF", align="left"),
+    *[e for i, d in enumerate(days) for e in (
+        R(160, 600 + i * 390, 2160, 350, "#FFFFFF", 30, **shadow(30, 8, 180, 0.08)),
+        T(d, 220, 640 + i * 390, 900, 80, "Poppins", 800, "#7B61FF" if i < 5 else "#FF5A5F", align="left"),
+    )],
+], (210, 297))
 
 print("templates:", len([f for f in os.listdir(OUT) if f.endswith('.json')]))

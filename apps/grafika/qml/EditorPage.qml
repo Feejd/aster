@@ -626,6 +626,8 @@ Item {
             height: 92
             readonly property real thumbH: 56
             readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
+            property int dragFrom: -1           // przeciąganie strony na inne miejsce
+            property int dragTo: -1
             Rectangle { width: parent.width; height: 1; color: Theme.line }
             Flickable {
                 id: pageFlick
@@ -666,11 +668,36 @@ Item {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    cursorShape: Qt.PointingHandCursor
+                                    cursorShape: pageBar.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                    property real startX
+                                    property bool dragged: false
+                                    onPressed: (e) => { startX = mapToItem(pageRow, e.x, e.y).x; dragged = false; }
+                                    onPositionChanged: (e) => {
+                                        if (!pressed || !(pressedButtons & Qt.LeftButton)) return;
+                                        const x = mapToItem(pageRow, e.x, e.y).x;
+                                        if (pageBar.dragFrom < 0 && Math.abs(x - startX) < 8) return;
+                                        pageBar.dragFrom = pg.index;
+                                        dragged = true;
+                                        pageBar.dragTo = Math.max(0, Math.min(ed.project.pageCount - 1, Math.floor(x / (pageBar.thumbW + 18))));
+                                    }
+                                    onReleased: {
+                                        if (pageBar.dragFrom < 0) return;
+                                        const from = pageBar.dragFrom, to = pageBar.dragTo;
+                                        pageBar.dragFrom = -1;
+                                        if (from !== to) { stage.clearSelection(); ed.project.movePage(from, to); }
+                                    }
                                     onClicked: (e) => {
+                                        if (dragged) return;
                                         if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
                                         else ed.goToPage(pg.index);
                                     }
+                                }
+                                // Miejsce, w które trafi przeciągana strona
+                                Rectangle {
+                                    visible: pageBar.dragFrom >= 0 && pageBar.dragTo === pg.index && pageBar.dragFrom !== pg.index
+                                    x: pageBar.dragTo > pageBar.dragFrom ? parent.width + 3 : -7
+                                    y: -2; width: 3; height: parent.height + 4; radius: 1.5
+                                    color: Theme.accent
                                 }
                             }
                             Text {
