@@ -225,8 +225,8 @@ Window {
                             delegate: Rectangle {
                                 id: dot
                                 required property int index
+                                y: 6
                                 width: 6; height: 6; radius: 3
-                                anchors.verticalCenter: parent.verticalCenter
                                 color: Theme.text2
                                 SequentialAnimation on opacity {
                                     running: msg.pending; loops: Animation.Infinite

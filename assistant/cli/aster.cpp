@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -485,7 +486,13 @@ int main(int argc, char *argv[])
 
     Client client;
     QString context;
-    const bool piped = !isatty(STDIN_FILENO);
+    bool piped = !isatty(STDIN_FILENO);
+    // Wejście bez terminala, ale bez potoku (skrypt, ssh, cron): gdy przez 3 s nic nie przyjdzie, pytanie idzie bez kontekstu
+    if (piped && !args.isEmpty()) {
+        pollfd p{STDIN_FILENO, POLLIN, 0};
+        if (poll(&p, 1, 3000) == 0)
+            piped = false;
+    }
     if (piped) {
         QByteArray all;
         char buf[65536];

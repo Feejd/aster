@@ -113,8 +113,9 @@ void Assistant::registerShortcut()
     // SetPresent (2): skrót aktywny, a jeśli ktoś go zmienił w Ustawieniach — zostaje jego wybór; IsDefault (8): domyślny
     accel(QStringLiteral("setShortcutKeys"), {kShortcutId, QVariant::fromValue(keys), 2u});
     accel(QStringLiteral("setShortcutKeys"), {kShortcutId, QVariant::fromValue(keys), 2u | 8u});
-    bus.connect(kAccel, QStringLiteral("/component/aster_shell"), QStringLiteral("org.kde.kglobalaccel.Component"),
-                QStringLiteral("globalShortcutPressed"), this, SLOT(onShortcut(QString, QString, qlonglong)));
+    const bool ok = bus.connect(kAccel, QStringLiteral("/component/aster_shell"), QStringLiteral("org.kde.kglobalaccel.Component"),
+                                QStringLiteral("globalShortcutPressed"), this, SLOT(onShortcut(QString, QString, qlonglong)));
+    qInfo("asystent: skrót Meta+Space zarejestrowany, nasłuch %s", ok ? "działa" : "NIE działa");
 }
 
 void Assistant::onShortcut(const QString &component, const QString &action, qlonglong)

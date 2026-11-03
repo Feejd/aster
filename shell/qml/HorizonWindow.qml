@@ -488,8 +488,8 @@ Window {
                             delegate: Rectangle {
                                 id: dot
                                 required property int index
+                                y: 6
                                 width: 6; height: 6; radius: 3
-                                anchors.verticalCenter: parent.verticalCenter
                                 color: Qt.rgba(1, 1, 1, 0.7)
                                 SequentialAnimation on opacity {
                                     running: Assistant.busy; loops: Animation.Infinite

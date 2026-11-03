@@ -356,8 +356,9 @@ QString Service::systemPrompt(const QString &source) const
         "własna powłoka na KWin i Waylandzie). Odpowiadaj w języku pytania (zwykle po polsku), krótko, konkretnie i prostym językiem — "
         "także dla kogoś, kto nie zna Linuksa. System plików systemu jest tylko do odczytu: programy instaluje się jako Flatpaki "
         "(Sklep Aster albo `flatpak install`), narzędzia deweloperskie w `toolbox`; nie proponuj `dnf install` bez wyjaśnienia. "
-        "Gdy proponujesz komendę do terminala, umieść ją w osobnym bloku ```bash (jedna czynność na blok) — użytkownik zobaczy ją "
-        "i sam zdecyduje, czy ją uruchomić. Nie wymyślaj faktów; gdy czegoś nie wiesz, powiedz to.");
+        "Komendę do terminala proponuj tylko wtedy, gdy użytkownik chce coś zrobić w systemie albo w terminalu — na pytania, "
+        "obliczenia i tłumaczenia odpowiadaj wprost, zwykłym tekstem. Komendę umieść w osobnym bloku ```bash (jedna czynność na blok) "
+        "— użytkownik zobaczy ją i sam zdecyduje, czy ją uruchomić. Nie wymyślaj faktów; gdy czegoś nie wiesz, powiedz to.");
     if (source == QLatin1String("terminal"))
         s += QStringLiteral(" Rozmowa toczy się w terminalu: pisz zwykłym tekstem, bez tabel i nagłówków Markdown; komendy w blokach ```bash.");
     else if (source == QLatin1String("wyspa"))
