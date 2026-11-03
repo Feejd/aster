@@ -52,12 +52,14 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `outlineColor`, `bg` (kolor tła pod każdym wierszem) z `bgPadding` i `bgRadius` (w wielkościach czcionki), `curve`
 (−1–1, tekst po łuku w górę albo w dół, jeden wiersz), `list` (`bullet` albo `number` — punkty lub numery przed akapitami),
 `color2` i `gradientAngle` (przejście kolorów liter). Tekst łamie się do szerokości `w`; `h` program liczy sam.
-- `shape`: `shape` = `rect` (`radius`), `ellipse`, `triangle`, `star`, `heart`, `line`, `arrow`; `fill` (pusty — bez
+- `shape`: `shape` = `rect` (`radius`), `ellipse`, `triangle`, `star`, `heart`, `bubble`, `burst`, `ribbon`, `arrowBlock`,
+  `pentagon`, `octagon`, `hexagon`, `cross`, `line`, `arrow`, `doubleArrow`; `fill` (pusty — bez
   wypełnienia), `fill2` i `gradientAngle` (przejście kolorów; `gradient: "radial"` — od środka), `stroke`, `strokeWidth`, `dash`. Linia i strzałka biegną
   poziomo przez środek pola, kolor z `stroke`.
 - `image`: `src` (plik z `images/`), wypełnia pole i jest przycinane („cover”) wokół punktu `focusX`, `focusY` (0–1),
   `radius` albo `mask` (`ellipse`, `arch`, `leaf`, `blob`, `hexagon`, `heart`, `star`, `triangle`), `zoom` (≥ 1 — powiększenie kadru), `flipX` (odbicie lustrzane),
-  `brightness`, `contrast`, `saturation` (−1–1) i `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`).
+  `brightness`, `contrast`, `saturation` (−1–1), `blur` i `vignette` (0–1), `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`,
+  `duotone` z kolorami `duo1` — cienie i `duo2` — światła), `removeBg` z `bgTolerance` (0–1, usunięcie jednolitego tła).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.
 - `code`: `kind` (`qr`, `code128`, `ean13`), `data` albo dla Wi-Fi `qrType: "wifi"` z `ssid` i `pass`; `color` (kod),

@@ -33,6 +33,11 @@ Item {
 
     clip: true
 
+    // Przesuwanie widoku: spacja + przeciąganie albo środkowy przycisk myszy
+    property bool panning: false
+    Keys.onPressed: (e) => { if (e.key === Qt.Key_Space && !e.isAutoRepeat && editing === "") { panning = true; e.accepted = true; } }
+    Keys.onReleased: (e) => { if (e.key === Qt.Key_Space && !e.isAutoRepeat) { panning = false; e.accepted = true; } }
+
     function refresh() {
         current = selected !== "" ? project.get(selected) : ({});
         if (selected !== "" && current.id === undefined) selected = "";
@@ -417,7 +422,7 @@ Item {
                         MouseArea {
                             id: ma
                             anchors.fill: parent
-                            anchors.margins: d.element.type === "shape" && (d.element.shape === "line" || d.element.shape === "arrow") ? -4 : 0
+                            anchors.margins: d.element.type === "shape" && (d.element.shape === "line" || d.element.shape === "arrow" || d.element.shape === "doubleArrow") ? -4 : 0
                             enabled: stage.editing !== d.uid
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             cursorShape: d.cropping ? Qt.OpenHandCursor : d.element.locked ? Qt.ArrowCursor
@@ -578,7 +583,7 @@ Item {
             Item {
                 id: sel
                 readonly property var el: stage.current
-                readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow")
+                readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
                 readonly property bool fixed: !!el.locked || stage.cropping !== ""     // bez uchwytów
                 visible: stage.selected !== "" && el.id !== undefined && !el.hidden
                 x: (el.x || 0) * stage.zoom
@@ -718,6 +723,21 @@ Item {
                     onActiveFocusChanged: if (!activeFocus && stage.editing !== "") stage.stopEditing()
                 }
             }
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: stage.panning ? Qt.LeftButton | Qt.MiddleButton : Qt.MiddleButton
+        cursorShape: pressed ? Qt.ClosedHandCursor : stage.panning ? Qt.OpenHandCursor : Qt.ArrowCursor
+        hoverEnabled: stage.panning
+        property point start
+        property point content
+        onPressed: (e) => { start = Qt.point(e.x, e.y); content = Qt.point(flick.contentX, flick.contentY); }
+        onPositionChanged: (e) => {
+            if (!pressed) return;
+            flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, content.x - (e.x - start.x)));
+            flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, content.y - (e.y - start.y)));
         }
     }
 

@@ -14,13 +14,13 @@ Item {
     readonly property string id_: el.id || ""
     readonly property int count: stage.selection.length
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
-    readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow")
+    readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
     readonly property var bg: project.background
     readonly property bool softShadow: !!el.shadow && el.shadowBlur !== undefined
     readonly property bool recolor: type === "vector" && project.recolorable(el.src || "")
     readonly property var filters: [
         { id: "", label: "Brak" }, { id: "gray", label: "Czarno-białe" }, { id: "sepia", label: "Sepia" }, { id: "warm", label: "Ciepłe" },
-        { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }
+        { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }, { id: "duotone", label: "Dwa kolory" }
     ]
 
     function set(patch, done) { project.change(id_, patch, done === undefined ? true : done); }
@@ -519,7 +519,7 @@ Item {
                                 x: 3; y: 3
                                 width: parent.width - 6; height: width
                                 project: ins.project
-                                element: ins.type === "image" ? { type: "image", src: ins.el.src, w: 100, h: 100, radius: 10,
+                                element: ins.type === "image" ? { type: "image", src: ins.el.src, w: 100, h: 100, radius: 10, duo1: ins.el.duo1, duo2: ins.el.duo2,
                                                                     focusX: ins.el.focusX, focusY: ins.el.focusY, filter: ft.modelData.id } : ({})
                             }
                             Text {
@@ -538,6 +538,22 @@ Item {
             Section {
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Poprawki"
+                Row {
+                    visible: ins.el.filter === "duotone"
+                    spacing: 8
+                    ColorWell {
+                        id: duoWell1
+                        label: "Cienie"
+                        value: ins.el.duo1 || "#1E2A78"
+                        onClicked: ins.editor.pickColor(duoWell1, value, false, (c, done) => ins.set({ duo1: c }, done))
+                    }
+                    ColorWell {
+                        id: duoWell2
+                        label: "Światła"
+                        value: ins.el.duo2 || "#FFB3C7"
+                        onClicked: ins.editor.pickColor(duoWell2, value, false, (c, done) => ins.set({ duo2: c }, done))
+                    }
+                }
                 ValueSlider {
                     label: "Jasność"
                     from: -1; to: 1; step: 0.02
@@ -559,10 +575,47 @@ Item {
                     shown: value * 100
                     onMoved: (v, done) => ins.set({ saturation: Math.abs(v) < 0.001 ? null : v }, done)
                 }
+                ValueSlider {
+                    label: "Rozmycie"
+                    from: 0; to: 1; step: 0.02
+                    value: ins.el.blur || 0
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ blur: v < 0.01 ? null : v }, done)
+                }
+                ValueSlider {
+                    label: "Winieta (ciemne brzegi)"
+                    from: 0; to: 1; step: 0.02
+                    value: ins.el.vignette || 0
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ vignette: v < 0.01 ? null : v }, done)
+                }
                 Btn {
-                    visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter)
+                    visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter || ins.el.blur || ins.el.vignette)
                     text: "Przywróć oryginał"
-                    onClicked: ins.set({ brightness: null, contrast: null, saturation: null, filter: null })
+                    onClicked: ins.set({ brightness: null, contrast: null, saturation: null, filter: null, blur: null, vignette: null })
+                }
+            }
+            Section {
+                visible: ins.type === "image" && !!ins.el.src
+                title: "Tło zdjęcia"
+                Chip {
+                    text: ins.el.removeBg ? "Tło usunięte" : "Usuń jednolite tło"
+                    on: !!ins.el.removeBg
+                    onClicked: ins.set({ removeBg: on ? null : true, bgTolerance: on ? null : 0.25 })
+                }
+                ValueSlider {
+                    visible: !!ins.el.removeBg
+                    label: "Czułość"
+                    from: 0.03; to: 0.8; step: 0.01
+                    value: ins.el.bgTolerance === undefined ? 0.25 : ins.el.bgTolerance
+                    shown: value * 100
+                    onMoved: (v, done) => ins.set({ bgTolerance: v }, done)
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Działa na zdjęciach z jednolitym tłem (np. przedmiot na białym). Większa czułość usuwa więcej."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
                 }
             }
 

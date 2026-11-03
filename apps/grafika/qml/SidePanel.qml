@@ -191,7 +191,15 @@ Item {
         { shape: "ellipse", label: "Okrąg", fill: "", stroke: "#16181D", strokeWidth: 0.02 },
         { shape: "line", label: "Linia", stroke: "#16181D", strokeWidth: 0.008 },
         { shape: "line", label: "Przerywana", stroke: "#16181D", strokeWidth: 0.008, dash: true },
-        { shape: "arrow", label: "Strzałka", stroke: "#16181D", strokeWidth: 0.01 }
+        { shape: "arrow", label: "Strzałka", stroke: "#16181D", strokeWidth: 0.01 },
+        { shape: "doubleArrow", label: "W obie strony", stroke: "#16181D", strokeWidth: 0.01 },
+        { shape: "bubble", label: "Dymek", fill: "#FFFFFF", stroke: "#16181D", strokeWidth: 0.008 },
+        { shape: "burst", label: "Plakietka", fill: "#FFD23F" },
+        { shape: "ribbon", label: "Wstążka", fill: "#E53935", wide: 0.3 },
+        { shape: "arrowBlock", label: "Strzałka pełna", fill: "#5B7CFA", wide: 0.6 },
+        { shape: "pentagon", label: "Pięciokąt", fill: "#22B07D" },
+        { shape: "octagon", label: "Ośmiokąt", fill: "#E53935" },
+        { shape: "cross", label: "Plus", fill: "#7E57C2" }
     ]
     readonly property var solidColors: [
         "#FFFFFF", "#F5F1EA", "#FFF4E0", "#FDE2E4", "#E3F2FD", "#E8F5E9",
@@ -252,9 +260,9 @@ Item {
     }
 
     function addShape(s) {
-        const line = s.shape === "line" || s.shape === "arrow";
+        const line = s.shape === "line" || s.shape === "arrow" || s.shape === "doubleArrow";
         const side = Math.round(base * 0.36);
-        const el = { type: "shape", shape: s.shape, fill: s.fill || "", w: line ? side * 1.4 : side, h: side };
+        const el = { type: "shape", shape: s.shape, fill: s.fill || "", w: line || s.wide ? side * 1.4 : side, h: s.wide ? Math.round(side * 1.4 * s.wide) : side };
         if (s.radius) el.radius = Math.round(side * s.radius);
         if (s.stroke) { el.stroke = s.stroke; el.strokeWidth = Math.max(2, Math.round(base * s.strokeWidth)); }
         if (s.dash) el.dash = true;
@@ -592,18 +600,19 @@ Item {
                             delegate: HoverButton {
                                 id: sh
                                 required property var modelData
-                                readonly property bool line: modelData.shape === "line" || modelData.shape === "arrow"
+                                readonly property bool line: modelData.shape === "line" || modelData.shape === "arrow" || modelData.shape === "doubleArrow"
                                 width: (pages.width - 16) / 3
                                 height: width + 16
                                 radius: 12
                                 baseColor: Theme.fill
                                 onClicked: sp.addShape(modelData)
                                 ArtView {
-                                    x: 14; y: sh.line ? (sh.width - 18) / 2 : 12
+                                    readonly property real ph: sh.line ? 18 : sh.modelData.wide ? Math.round((sh.width - 28) * Math.max(0.42, sh.modelData.wide)) : sh.width - 28
+                                    x: 14; y: 12 + (sh.width - 28 - ph) / 2
                                     width: sh.width - 28
-                                    height: sh.line ? 18 : sh.width - 28
+                                    height: ph
                                     element: ({
-                                        type: "shape", shape: sh.modelData.shape, w: 100, h: sh.line ? 18 : 100,
+                                        type: "shape", shape: sh.modelData.shape, w: 100, h: sh.line ? 18 : sh.modelData.wide ? Math.round(100 * Math.max(0.42, sh.modelData.wide)) : 100,
                                         fill: sh.modelData.fill ? sh.modelData.fill : "",
                                         stroke: sh.modelData.stroke ? (Theme.dark ? "#ECEEF3" : sh.modelData.stroke) : "",
                                         strokeWidth: sh.modelData.stroke ? (sh.line ? 6 : 6) : 0,

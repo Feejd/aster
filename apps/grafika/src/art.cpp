@@ -386,6 +386,57 @@ QPainterPath maskPath(const QString &mask, const QRectF &r)
         path.lineTo(x, y + k);
         path.quadTo(x, y, x + k, y);
         path.closeSubpath();
+    } else if (mask == QLatin1String("pentagon") || mask == QLatin1String("octagon")) {
+        const int n = mask == QLatin1String("pentagon") ? 5 : 8;
+        const qreal start = n == 5 ? -M_PI / 2 : -M_PI / 2 + M_PI / 8;
+        for (int i = 0; i < n; ++i) {
+            const qreal a = start + i * 2 * M_PI / n;
+            const QPointF pt(x + w / 2 + qCos(a) * w / 2, y + h / 2 + qSin(a) * h / 2);
+            if (i == 0)
+                path.moveTo(pt);
+            else
+                path.lineTo(pt);
+        }
+        path.closeSubpath();
+    } else if (mask == QLatin1String("burst")) {
+        // Plakietka promocyjna — gwiazda z wieloma krótkimi ramionami
+        path = starPath(r, 16, 0.84);
+    } else if (mask == QLatin1String("bubble")) {
+        // Dymek: zaokrąglony prostokąt i ogonek w lewym dolnym rogu
+        const qreal tail = h * 0.2, k = qMin(w, h - tail) * 0.22;
+        QPainterPath box;
+        box.addRoundedRect(QRectF(x, y, w, h - tail), k, k);
+        QPainterPath t;
+        t.moveTo(x + w * 0.18, y + h - tail - 1);
+        t.lineTo(x + w * 0.12, y + h);
+        t.lineTo(x + w * 0.38, y + h - tail - 1);
+        t.closeSubpath();
+        path = box.united(t);
+    } else if (mask == QLatin1String("arrowBlock")) {
+        const qreal head = qMin(w * 0.45, h);
+        path.moveTo(x, y + h * 0.3);
+        path.lineTo(x + w - head, y + h * 0.3);
+        path.lineTo(x + w - head, y);
+        path.lineTo(x + w, y + h / 2);
+        path.lineTo(x + w - head, y + h);
+        path.lineTo(x + w - head, y + h * 0.7);
+        path.lineTo(x, y + h * 0.7);
+        path.closeSubpath();
+    } else if (mask == QLatin1String("ribbon")) {
+        // Wstążka na napis — wcięte końce
+        const qreal n = qMin(w * 0.12, h * 0.5);
+        path.moveTo(x, y);
+        path.lineTo(x + w, y);
+        path.lineTo(x + w - n, y + h / 2);
+        path.lineTo(x + w, y + h);
+        path.lineTo(x, y + h);
+        path.lineTo(x + n, y + h / 2);
+        path.closeSubpath();
+    } else if (mask == QLatin1String("cross")) {
+        const qreal t = qMin(w, h) / 3;
+        path.addRect(QRectF(x + (w - t) / 2, y, t, h));
+        path.addRect(QRectF(x, y + (h - t) / 2, w, t));
+        path = path.simplified();
     } else if (mask == QLatin1String("blob")) {
         // Miękka, nieregularna plama — stałe punkty, żeby kształt był zawsze ten sam
         const qreal pts[][2] = {{0.50, 0.02}, {0.86, 0.12}, {0.98, 0.50}, {0.84, 0.88}, {0.46, 0.98}, {0.10, 0.82}, {0.03, 0.40}, {0.20, 0.10}};
@@ -408,28 +459,37 @@ void paintShape(QPainter *p, const QVariantMap &el)
     const qreal sw = num(el, "strokeWidth", 0);
     const QColor stroke = color(el, "stroke");
 
-    if (shape == QLatin1String("line") || shape == QLatin1String("arrow")) {
+    if (shape == QLatin1String("line") || shape == QLatin1String("arrow") || shape == QLatin1String("doubleArrow")) {
         const qreal t = qMax(1.0, sw > 0 ? sw : 6);
         QPen pen(stroke.alpha() > 0 ? stroke : color(el, "fill", Qt::black), t);
         pen.setCapStyle(Qt::RoundCap);
         if (el.value(QStringLiteral("dash")).toBool())
             pen.setDashPattern({2, 2.2});
         const qreal cy = h / 2;
-        qreal end = w - t / 2;
-        if (shape == QLatin1String("arrow")) {
-            const qreal head = qMin(w * 0.45, t * 3.2 + 10);
+        qreal end = w - t / 2, begin = t / 2;
+        if (shape != QLatin1String("line")) {
+            const bool both = shape == QLatin1String("doubleArrow");
+            const qreal head = qMin(w * (both ? 0.3 : 0.45), t * 3.2 + 10);
             end = w - head * 0.7;
+            if (both)
+                begin = head * 0.7;
             QPainterPath tip;
             tip.moveTo(w, cy);
             tip.lineTo(w - head, cy - head * 0.62);
             tip.lineTo(w - head, cy + head * 0.62);
             tip.closeSubpath();
+            if (both) {
+                tip.moveTo(0, cy);
+                tip.lineTo(head, cy - head * 0.62);
+                tip.lineTo(head, cy + head * 0.62);
+                tip.closeSubpath();
+            }
             p->setPen(Qt::NoPen);
             p->setBrush(pen.color());
             p->drawPath(tip);
         }
         p->setPen(pen);
-        p->drawLine(QPointF(t / 2, cy), QPointF(end, cy));
+        p->drawLine(QPointF(begin, cy), QPointF(end, cy));
         return;
     }
 
@@ -447,6 +507,8 @@ void paintShape(QPainter *p, const QVariantMap &el)
         path = starPath(r, 5, 0.45);
     } else if (shape == QLatin1String("heart")) {
         path = heartPath(r);
+    } else if (shape != QLatin1String("rect")) {
+        path = maskPath(shape, r);
     } else {
         const qreal radius = qMin(num(el, "radius", 0), qMin(r.width(), r.height()) / 2);
         path.addRoundedRect(r, radius, radius);
@@ -467,20 +529,110 @@ void paintShape(QPainter *p, const QVariantMap &el)
 
 // Jasność, kontrast, nasycenie (−1..1) i gotowe filtry; wynik w pamięci podręcznej, bo płótno rysuje się często.
 // `pixels` — potrzebny dłuższy bok: większe zdjęcie najpierw się zmniejsza (miniatury filtrów, suwaki bez zacinania).
+// Rozmycie pudełkowe trzy razy (≈ Gauss) na wszystkich kanałach obrazu z premultiplikowaną alfą
+void boxBlur(QImage &img, int r)
+{
+    if (r < 1)
+        return;
+    const int w = img.width(), h = img.height();
+    QList<QRgb> buf(qMax(w, h));
+    for (int pass = 0; pass < 3; ++pass) {
+        for (int dir = 0; dir < 2; ++dir) {
+            const int len = dir == 0 ? w : h, count = dir == 0 ? h : w;
+            for (int j = 0; j < count; ++j) {
+                auto px = [&](int i) -> QRgb & {
+                    return dir == 0 ? reinterpret_cast<QRgb *>(img.scanLine(j))[i] : reinterpret_cast<QRgb *>(img.scanLine(i))[j];
+                };
+                for (int i = 0; i < len; ++i)
+                    buf[i] = px(i);
+                int sa = 0, sr = 0, sg = 0, sb = 0;
+                const int win = r * 2 + 1;
+                for (int i = -r; i <= r; ++i) {
+                    const QRgb c = buf[qBound(0, i, len - 1)];
+                    sa += qAlpha(c); sr += qRed(c); sg += qGreen(c); sb += qBlue(c);
+                }
+                for (int i = 0; i < len; ++i) {
+                    px(i) = qRgba(sr / win, sg / win, sb / win, sa / win);
+                    const QRgb in = buf[qMin(len - 1, i + r + 1)], out = buf[qMax(0, i - r)];
+                    sa += qAlpha(in) - qAlpha(out); sr += qRed(in) - qRed(out);
+                    sg += qGreen(in) - qGreen(out); sb += qBlue(in) - qBlue(out);
+                }
+            }
+        }
+    }
+}
+
+// Usunięcie jednolitego tła (np. produkt na białym): zalewanie od brzegów pikselami podobnymi do koloru rogów,
+// potem lekko rozmyta maska, żeby krawędź nie była poszarpana. tolerance 0..1
+void removeBackground(QImage &img, qreal tolerance)
+{
+    const int w = img.width(), h = img.height();
+    if (w < 3 || h < 3)
+        return;
+    int r = 0, g = 0, b = 0;
+    const QPoint corners[] = {{0, 0}, {w - 1, 0}, {0, h - 1}, {w - 1, h - 1}};
+    for (const QPoint &c : corners) {
+        const QRgb px = img.pixel(c);
+        r += qRed(px); g += qGreen(px); b += qBlue(px);
+    }
+    r /= 4; g /= 4; b /= 4;
+    const int thr = qRound(qBound(0.02, tolerance, 1.0) * 160);
+    const int thr2 = thr * thr;
+    auto near = [&](QRgb c) {
+        const int dr = qRed(c) - r, dg = qGreen(c) - g, db = qBlue(c) - b;
+        return qAlpha(c) < 16 || dr * dr + dg * dg + db * db <= thr2;
+    };
+    QImage mask(w, h, QImage::Format_ARGB32_Premultiplied);
+    mask.fill(qRgba(255, 255, 255, 255));
+    QList<int> stack;
+    QList<bool> seen(w * h, false);
+    auto push = [&](int x, int y) {
+        const int i = y * w + x;
+        if (seen[i])
+            return;
+        seen[i] = true;
+        if (near(reinterpret_cast<const QRgb *>(img.constScanLine(y))[x]))
+            stack.append(i);
+    };
+    for (int x = 0; x < w; ++x) { push(x, 0); push(x, h - 1); }
+    for (int y = 0; y < h; ++y) { push(0, y); push(w - 1, y); }
+    while (!stack.isEmpty()) {
+        const int i = stack.takeLast();
+        const int x = i % w, y = i / w;
+        reinterpret_cast<QRgb *>(mask.scanLine(y))[x] = 0;
+        if (x > 0) push(x - 1, y);
+        if (x < w - 1) push(x + 1, y);
+        if (y > 0) push(x, y - 1);
+        if (y < h - 1) push(x, y + 1);
+    }
+    boxBlur(mask, qMax(1, qMax(w, h) / 600));
+    for (int y = 0; y < h; ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        const QRgb *m = reinterpret_cast<const QRgb *>(mask.constScanLine(y));
+        for (int x = 0; x < w; ++x)
+            line[x] = qRgba(qRed(line[x]), qGreen(line[x]), qBlue(line[x]), qAlpha(line[x]) * qAlpha(m[x]) / 255);
+    }
+}
+
 QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
 {
     const qreal br = qBound(-1.0, num(el, "brightness", 0), 1.0);
     const qreal ct = qBound(-1.0, num(el, "contrast", 0), 1.0);
     const qreal sat = qBound(-1.0, num(el, "saturation", 0), 1.0);
+    const qreal blur = qBound(0.0, num(el, "blur", 0), 1.0);
+    const qreal vignette = qBound(0.0, num(el, "vignette", 0), 1.0);
+    const qreal removeBg = el.value(QStringLiteral("removeBg")).toBool() ? num(el, "bgTolerance", 0.25) : -1;
     const QString filter = el.value(QStringLiteral("filter")).toString();
-    if (br == 0 && ct == 0 && sat == 0 && filter.isEmpty())
+    const QColor duo1 = color(el, "duo1", QColor(0x1E, 0x2A, 0x78)), duo2 = color(el, "duo2", QColor(0xFF, 0xB3, 0xC7));
+    if (br == 0 && ct == 0 && sat == 0 && filter.isEmpty() && blur == 0 && vignette == 0 && removeBg < 0)
         return src;
 
     static QMutex lock;
     static QCache<QString, QImage> cache(160);       // koszt w MB
     const int side = qMax(src.width(), src.height());
     const int target = pixels * 1.25 < side ? qMax(16, qRound(pixels * 1.25)) : side;
-    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6").arg(src.cacheKey()).arg(target).arg(br).arg(ct).arg(sat).arg(filter);
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6|%7|%8|%9").arg(src.cacheKey()).arg(target).arg(br).arg(ct).arg(sat).arg(filter)
+                            .arg(blur).arg(vignette).arg(removeBg) + duo1.name() + duo2.name();
     {
         QMutexLocker l(&lock);
         if (const QImage *hit = cache.object(key))
@@ -489,10 +641,13 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
 
     QImage img = (target < side ? src.scaled(src.width() * target / side, src.height() * target / side, Qt::KeepAspectRatio, Qt::SmoothTransformation) : src)
                      .convertToFormat(QImage::Format_ARGB32);
+    if (removeBg >= 0)
+        removeBackground(img, removeBg);
     int lut[256];
     for (int i = 0; i < 256; ++i)
         lut[i] = qBound(0, qRound((i - 128) * (1 + ct) + 128 + br * 110), 255);
-    const qreal satK = filter == QLatin1String("gray") ? 0 : 1 + sat;
+    const qreal satK = filter == QLatin1String("gray") || filter == QLatin1String("duotone") ? 0 : 1 + sat;
+    const qreal cx = img.width() / 2.0, cy = img.height() / 2.0, diag = std::hypot(cx, cy);
     for (int y = 0; y < img.height(); ++y) {
         QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
         for (int x = 0; x < img.width(); ++x) {
@@ -514,9 +669,26 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
             } else if (filter == QLatin1String("vivid")) {
                 const qreal k = 1.35;
                 r = gray + (r - gray) * k; g = gray + (g - gray) * k; b = gray + (b - gray) * k;
+            } else if (filter == QLatin1String("duotone")) {
+                // Cienie w pierwszym kolorze, światła w drugim
+                const qreal t = qBound(0.0, r / 255, 1.0);
+                r = duo1.red() + (duo2.red() - duo1.red()) * t;
+                g = duo1.green() + (duo2.green() - duo1.green()) * t;
+                b = duo1.blue() + (duo2.blue() - duo1.blue()) * t;
+            }
+            if (vignette > 0) {
+                // Przyciemnienie brzegów: od 45% odległości od środka do rogów
+                const qreal d = std::hypot(x - cx, y - cy) / diag;
+                const qreal k = 1 - vignette * 0.85 * qBound(0.0, (d - 0.45) / 0.55, 1.0);
+                r *= k; g *= k; b *= k;
             }
             line[x] = qRgba(qBound(0, qRound(r), 255), qBound(0, qRound(g), 255), qBound(0, qRound(b), 255), qAlpha(c));
         }
+    }
+    if (blur > 0) {
+        // Promień w częściach zdjęcia — ten sam wygląd na ekranie i w eksporcie w pełnej rozdzielczości
+        img = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        boxBlur(img, qRound(blur * 0.03 * qMax(img.width(), img.height())));
     }
     QMutexLocker l(&lock);
     cache.insert(key, new QImage(img), int(img.sizeInBytes() / (1024 * 1024)) + 1);

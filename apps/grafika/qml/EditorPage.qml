@@ -279,6 +279,34 @@ Item {
         t.y = Math.round(project.pageHeight - size * 3);
         addElement(t);
     }
+    // ——— Kopiowanie stylu (kolory, czcionka, efekty) z jednego elementu na inne tego samego rodzaju ———
+    property var styleClip: null
+    readonly property var styleSkip: ["id", "type", "x", "y", "w", "h", "text", "src", "data", "ssid", "pass", "group", "locked", "hidden",
+                                      "credit", "focusX", "focusY", "zoom", "shape", "kind", "chart", "qrType", "rotation"]
+    function copyStyle() {
+        if (sel === "") return;
+        const el = project.get(sel);
+        const st = { type: el.type };
+        for (const k in el) if (styleSkip.indexOf(k) < 0) st[k] = el[k];
+        styleClip = st;
+        app.toast("Skopiowano styl — zaznacz inne elementy i wybierz „Wklej styl” (Ctrl+Alt+V)", "");
+    }
+    function pasteStyle() {
+        if (!styleClip) return;
+        let n = 0;
+        for (const id of many) {
+            const el = project.get(id);
+            if (el.type !== styleClip.type || el.locked) continue;
+            const patch = {};
+            for (const k in el) if (styleSkip.indexOf(k) < 0 && !(k in styleClip)) patch[k] = null;
+            for (const k in styleClip) if (k !== "type") patch[k] = styleClip[k];
+            project.change(id, patch, false);
+            n += 1;
+        }
+        project.commit();
+        if (n === 0) app.toast("Styl pasuje tylko do elementów tego samego rodzaju", "");
+    }
+
     function copyImage() {
         exportPop.close();
         if (project.copyImage()) app.toast("Skopiowano grafikę — wklej ją w wiadomości (Ctrl+V)", "");
@@ -337,6 +365,8 @@ Item {
         else if (a === "selectAll") stage.selectAll();
         else if (a === "lock") setLocked(true);
         else if (a === "group") group();
+        else if (a === "copyStyle") copyStyle();
+        else if (a === "pasteStyle") pasteStyle();
         else if (a === "ungroup") ungroup();
         else if (a === "unlock") setLocked(false);
         else if (a === "remove") remove();
@@ -367,6 +397,8 @@ Item {
             items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
             items.push({ label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste" });
             items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
+            items.push({ label: "Kopiuj styl", icon: "palette", shortcut: "Ctrl+Alt+C", action: "copyStyle" });
+            if (styleClip && styleClip.type === el.type) items.push({ label: "Wklej styl", icon: "palette", shortcut: "Ctrl+Alt+V", action: "pasteStyle" });
             items.push({ separator: true });
             items.push({ label: "Na wierzch", icon: "bringFront", shortcut: "Ctrl+Shift+]", action: "front" });
             items.push({ label: "Do przodu", icon: "layerUp", shortcut: "Ctrl+]", action: "up" });
@@ -396,6 +428,8 @@ Item {
         else if (cmd === "dup") duplicate();
         else if (cmd === "group") group();
         else if (cmd === "addpage") project.addPage();
+        else if (cmd === "copystyle") copyStyle();
+        else if (cmd === "pastestyle") pasteStyle();
         else if (cmd === "addextra") side.addExtra(side.extras[Number(arg)]);
         else if (cmd === "duppage") project.duplicatePage(project.currentPage);
         else if (cmd === "page") goToPage(Number(arg));
@@ -437,6 +471,8 @@ Item {
     Shortcut { sequence: "PgDown"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.min(ed.project.pageCount - 1, ed.project.currentPage + 1)) }
     Shortcut { sequence: "PgUp"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.max(0, ed.project.currentPage - 1)) }
     Shortcut { sequence: "Ctrl+Return"; enabled: ed.active && !ed.typing; onActivated: { stage.clearSelection(); ed.project.addPage(); } }
+    Shortcut { sequence: "Ctrl+Alt+C"; enabled: ed.active && !ed.typing && ed.sel !== ""; onActivated: ed.copyStyle() }
+    Shortcut { sequence: "Ctrl+Alt+V"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.pasteStyle() }
     Shortcut { sequence: "Ctrl+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.group() }
     Shortcut { sequence: "Ctrl+Shift+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.ungroup() }
     Shortcut { sequence: "Ctrl+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("up") }
