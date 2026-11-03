@@ -19,18 +19,18 @@ static inline void raisePeak(std::atomic<float> &a, float v)
         a.store(v, std::memory_order_relaxed);
 }
 
-void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate)
+void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips)
 {
     while (n > 0) {
         const int k = std::min(n, MaxBlock);
-        block(s, pos, k, out, click, meters, rate);
+        block(s, pos, k, out, click, meters, rate, clips);
         pos += k;
         out += 2 * k;
         n -= k;
     }
 }
 
-void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate)
+void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips)
 {
     std::fill_n(m_l, n, 0.f);
     std::fill_n(m_r, n, 0.f);
@@ -47,10 +47,19 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             const TrackRT &t = s->tracks[ti];
             reverb |= t.send > 0;
             echo |= t.echo > 0;
+            bool any = false;
+            // Granie na żywo na tej ścieżce — wchodzi przed efekty, jak klipy
+            if (m_live && m_live->any(int(ti))) {
+                std::fill_n(m_tl, n, 0.f);
+                std::fill_n(m_tr, n, 0.f);
+                any = true;
+                m_live->render(int(ti), m_tl, m_tr, n);
+            }
             if (!t.audible)
                 continue;
-            bool any = false;
             for (const ClipRT &c : t.clips) {
+                if (!clips)
+                    break;
                 const long long a = std::max(pos, c.start);
                 const long long b = std::min(pos + n, c.start + c.length);
                 if (a >= b || !c.src || c.srcLen <= 0)
@@ -131,6 +140,9 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             }
         }
     }
+
+    if (m_live && s)
+        m_live->dropFrom(int(s->tracks.size()));
 
     // Wspólny pogłos (gra dalej, gdy klipy się skończą — wybrzmiewanie)
     if (reverb) {
@@ -319,6 +331,7 @@ static inline EngineHooks *hooks(void *p) { return static_cast<EngineHooks *>(p)
 
 Engine::Engine(QObject *parent) : QObject(parent)
 {
+    m_renderer.setLive(&m_live);
     m_hooks = new EngineHooks;
 }
 
@@ -513,6 +526,7 @@ void Engine::onPlayback()
     if (seek != NoSeek)
         m_rtPos = seek;
 
+    takeLiveCommands();
     if (m_playing.load()) {
         const long long cie = m_countInEnd.load();
         const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
@@ -531,7 +545,8 @@ void Engine::onPlayback()
                 m_rtPos = cs;
         }
     } else {
-        std::memset(dst, 0, n * stride);
+        // Zatrzymany: mikser bez klipów — granie na żywo z efektami ścieżki i wybrzmiewanie pogłosu/echa
+        m_renderer.process(m_current, m_rtPos, int(n), dst, false, &m_meters, Rate, false);
     }
     // Głosy odsłuchu dokładane na wierzch
     for (PreviewSlot &v : m_preview) {
@@ -551,7 +566,6 @@ void Engine::onPlayback()
         }
         v.pos += k;
     }
-    renderLive(dst, n);
     m_pos.store(m_rtPos);
 
     pw_time t{};
@@ -624,55 +638,28 @@ void Engine::pushLive(const LiveCmd &c)
     m_liveW.store(w + 1, std::memory_order_release);
 }
 
-void Engine::liveNoteOn(int id, SynthVoice::Inst inst, double freq, float gain)
+void Engine::liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain)
 {
-    pushLive({id, int(inst), float(freq), gain, true});
+    pushLive({id, track, int(inst), float(freq), gain, true});
 }
 
 void Engine::liveNoteOff(int id)
 {
-    pushLive({id, 0, 0, 0, false});
+    pushLive({id, 0, 0, 0, 0, false});
 }
 
-void Engine::renderLive(float *dst, uint32_t n)
+void Engine::takeLiveCommands()
 {
-    // Polecenia od interfejsu
     unsigned r = m_liveR.load(std::memory_order_relaxed);
     const unsigned w = m_liveW.load(std::memory_order_acquire);
     for (; r != w; ++r) {
         const LiveCmd &c = m_liveCmds[r % LiveQueue];
-        if (c.on) {
-            // Wolny głos, a gdy brak — najstarszy (zwykle już cichnący)
-            int slot = 0;
-            for (int i = 0; i < LiveVoices; ++i) {
-                if (!m_voices[i].active()) {
-                    slot = i;
-                    break;
-                }
-                if (m_voiceAge[i] < m_voiceAge[slot])
-                    slot = i;
-            }
-            m_voiceSeed = m_voiceSeed * 1664525u + 1013904223u;
-            m_voices[slot].start(SynthVoice::Inst(c.inst), c.freq, Rate, m_voiceSeed, c.gain);
-            m_voiceId[slot] = c.id;
-            m_voiceAge[slot] = ++m_voiceClock;
-        } else {
-            for (int i = 0; i < LiveVoices; ++i)
-                if (m_voiceId[i] == c.id && m_voices[i].active() && !m_voices[i].released())
-                    m_voices[i].release();
-        }
+        if (c.on)
+            m_live.noteOn(c.id, c.track, SynthVoice::Inst(c.inst), c.freq, Rate, c.gain);
+        else
+            m_live.noteOff(c.id);
     }
     m_liveR.store(r, std::memory_order_release);
-    // Głosy
-    for (SynthVoice &v : m_voices) {
-        if (!v.active())
-            continue;
-        for (uint32_t i = 0; i < n; ++i) {
-            const float y = v.next();
-            dst[2 * i] += y;
-            dst[2 * i + 1] += y;
-        }
-    }
 }
 
 void Engine::setSnapshot(Snapshot *s)

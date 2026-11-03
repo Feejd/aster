@@ -75,12 +75,15 @@ public:
 
     Renderer() : m_tune(MaxTracks) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
-    void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate);
+    // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
+    void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
+    void setLive(LivePool *live) { m_live = live; }
     // Pułap ogranicznika sumy (liniowo). Dla MP3/OGG niżej — koder dokłada własne szczyty.
     void setCeiling(float c) { m_ceiling = c; }
 
 private:
-    void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate);
+    void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips);
+    LivePool *m_live = nullptr;           // głosy grane na żywo (tylko w silniku, nie przy eksporcie)
     float m_l[MaxBlock], m_r[MaxBlock], m_tl[MaxBlock], m_tr[MaxBlock];
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
@@ -162,7 +165,7 @@ public:
     void preview(SourcePtr sound, float gain);
 
     // Granie na żywo (klawiatura komputera, MIDI): nuta brzmi, dopóki nie przyjdzie liveNoteOff z tym samym id
-    void liveNoteOn(int id, SynthVoice::Inst inst, double freq, float gain);
+    void liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain);
     void liveNoteOff(int id);
 
     // Wejście włączone tylko, gdy jakaś ścieżka czeka na nagranie (inaczej system pokazuje używany mikrofon)
@@ -256,6 +259,7 @@ private:
     struct LiveCmd
     {
         int id = 0;
+        int track = 0;
         int inst = 0;
         float freq = 0, gain = 0;
         bool on = false;
@@ -263,14 +267,9 @@ private:
     static constexpr unsigned LiveQueue = 256;
     LiveCmd m_liveCmds[LiveQueue];
     std::atomic<unsigned> m_liveW{0}, m_liveR{0};
-    static constexpr int LiveVoices = 16;
-    SynthVoice m_voices[LiveVoices];              // tylko wątek audio
-    int m_voiceId[LiveVoices] = {};
-    long long m_voiceAge[LiveVoices] = {};
-    long long m_voiceClock = 0;
-    uint32_t m_voiceSeed = 12345;
+    LivePool m_live;                              // tylko wątek audio
     void pushLive(const LiveCmd &c);
-    void renderLive(float *dst, uint32_t n);      // wątek audio
+    void takeLiveCommands();                      // wątek audio
     int m_previewNext = 0;
     QList<QPair<qint64, SourcePtr>> m_previewKeep;
 };

@@ -212,8 +212,11 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] granie na żywo: 16 głosów syntezatora w wątku audio (`src/synthvoice.h` — ten sam głos liczy też nuty
         ścieżek), polecenia przez kolejkę bez blokad; nuta brzmi, dopóki klawisz (komputer, MIDI, klawiatura ekranowa)
         jest wciśnięty, potem wybrzmiewa jak instrument; przy braku wolnego głosu zabierany najstarszy
-  - [ ] Dalej: efekty ścieżki także na graniu na żywo, pedał sustain, pokrętła klawiatury do suwaków, kopiowanie
-        taktów, biblioteka pętli, przełącznik A/B masteringu
+  - [x] granie na żywo przez efekty ścieżki: głosy przypisane do ścieżki wchodzą do miksera przed jej łańcuchem
+        (autotune, korektor, przester, kompresor, głośność, panorama, pogłos, echo, mastering); mikser pracuje też przy
+        zatrzymanym transporcie (bez klipów), więc słychać ogony pogłosu i echa; wycisz/solo obowiązują
+  - [ ] Dalej: pedał sustain, pokrętła klawiatury do suwaków, kopiowanie taktów, biblioteka pętli,
+        przełącznik A/B masteringu
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —
         wymaga serwera; najpierw eksport „do wysłania” (MP3 + okładka) i wysyłanie przez Telefon/komunikatory
   - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem

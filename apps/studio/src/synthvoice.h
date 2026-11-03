@@ -148,3 +148,68 @@ private:
     std::array<float, MaxString> m_ks{};
     int m_ksLen = 2, m_ksPos = 0;
 };
+
+// Głosy grane na żywo, każdy przypisany do ścieżki — mikser dokłada je do ścieżki przed jej efektami
+// (autotune, korektor, kompresor, pogłos, echo…), więc granie brzmi jak gotowa ścieżka. Tylko wątek audio.
+class LivePool
+{
+public:
+    static constexpr int Voices = 16;
+
+    void noteOn(int id, int track, SynthVoice::Inst inst, double freq, int rate, float gain)
+    {
+        // Wolny głos, a gdy brak — najstarszy (zwykle już cichnący)
+        int slot = 0;
+        for (int i = 0; i < Voices; ++i) {
+            if (!m_v[i].active()) {
+                slot = i;
+                break;
+            }
+            if (m_age[i] < m_age[slot])
+                slot = i;
+        }
+        m_seed = m_seed * 1664525u + 1013904223u;
+        m_v[slot].start(inst, freq, rate, m_seed, gain);
+        m_id[slot] = id;
+        m_track[slot] = track;
+        m_age[slot] = ++m_clock;
+    }
+    void noteOff(int id)
+    {
+        for (int i = 0; i < Voices; ++i)
+            if (m_id[i] == id && m_v[i].active() && !m_v[i].released())
+                m_v[i].release();
+    }
+    bool any(int track) const
+    {
+        for (int i = 0; i < Voices; ++i)
+            if (m_track[i] == track && m_v[i].active())
+                return true;
+        return false;
+    }
+    void render(int track, float *l, float *r, int n)
+    {
+        for (int i = 0; i < Voices; ++i) {
+            if (m_track[i] != track || !m_v[i].active())
+                continue;
+            for (int k = 0; k < n; ++k) {
+                const float y = m_v[i].next();
+                l[k] += y;
+                r[k] += y;
+            }
+        }
+    }
+    // Głosy ścieżek, których już nie ma w miksie (usunięte) — wyciszamy, żeby nie wisiały
+    void dropFrom(int trackCount)
+    {
+        for (int i = 0; i < Voices; ++i)
+            if (m_track[i] >= trackCount && m_v[i].active())
+                m_v[i] = SynthVoice();
+    }
+
+private:
+    SynthVoice m_v[Voices];
+    int m_id[Voices] = {}, m_track[Voices] = {};
+    long long m_age[Voices] = {}, m_clock = 0;
+    uint32_t m_seed = 12345;
+};
