@@ -1,0 +1,55 @@
+# Studio jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.studio
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-studio
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --socket=pulseaudio
+  - --filesystem=xdg-run/pipewire-0
+  - --device=all                     # MIDI i interfejsy audio
+  - --filesystem=xdg-music
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-download:ro
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: libsamplerate
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DBUILD_SHARED_LIBS=ON, -DBUILD_TESTING=OFF, -DLIBSAMPLERATE_EXAMPLES=OFF,
+                  -DCMAKE_POLICY_VERSION_MINIMUM=3.5]
+    sources:
+      - type: git
+        url: https://github.com/libsndfile/libsamplerate.git
+        tag: 0.2.2
+  - name: taglib
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DBUILD_SHARED_LIBS=ON, -DBUILD_TESTING=OFF, -DBUILD_EXAMPLES=OFF]
+    sources:
+      - type: git
+        url: https://github.com/taglib/taglib.git
+        tag: v2.3.2
+  - name: studio
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=studio
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

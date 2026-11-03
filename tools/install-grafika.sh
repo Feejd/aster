@@ -44,7 +44,7 @@ flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/fl
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 say "Pobieram Grafikę ($ARCH)…"
-URL="${GRAFIKA_URL:-https://github.com/$REPO/releases/download/grafika/grafika-$ARCH.flatpak}"     # GRAFIKA_URL — do testów
+URL="${GRAFIKA_URL:-https://github.com/$REPO/releases/download/aplikacje/grafika-$ARCH.flatpak}"     # GRAFIKA_URL — do testów
 curl -fL --progress-bar -o "$TMP/grafika.flatpak" "$URL" \
     || fail "Nie udało się pobrać Grafiki. Sprawdź połączenie z internetem."
 

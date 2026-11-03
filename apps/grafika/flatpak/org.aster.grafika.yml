@@ -1,7 +1,7 @@
 # Grafika jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
 # Budowa: flatpak-builder --user --install-deps-from=flathub build apps/grafika/flatpak/org.aster.grafika.yml
-# (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/grafika-flatpak.yml,
-# instaluje ją tools/install-grafika.sh.
+# (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
+# instaluje ją tools/install-apps.sh (albo tools/install-grafika.sh).
 app-id: org.aster.grafika
 runtime: org.kde.Platform
 runtime-version: "6.11"
@@ -16,6 +16,7 @@ finish-args:
   - --filesystem=xdg-documents      # projekty w Dokumenty/Grafiki
   - --filesystem=xdg-pictures       # zdjęcia z folderu Obrazy, eksport
   - --filesystem=xdg-download:ro
+  - --filesystem=xdg-config/aster:ro  # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.portal.*
 cleanup:
   - /include

@@ -1,7 +1,14 @@
 # Zdjęcia (aster-photos) — budowane z głównego CMakeLists.txt repozytorium.
 # Metadane zdjęć (data, aparat) i obrót JPEG bez utraty jakości: exiv2 (pakiet exiv2-devel).
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(EXIV2 REQUIRED IMPORTED_TARGET exiv2)
+# Najpierw pakiet CMake exiv2 (Flatpak buduje exiv2 sam), potem pkg-config (Fedora)
+find_package(exiv2 CONFIG QUIET)
+if(TARGET Exiv2::exiv2lib)
+    add_library(AsterExiv2 ALIAS Exiv2::exiv2lib)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(EXIV2 REQUIRED IMPORTED_TARGET exiv2)
+    add_library(AsterExiv2 ALIAS PkgConfig::EXIV2)
+endif()
 find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 qt_add_executable(aster-photos src/main.cpp)
@@ -34,7 +41,7 @@ target_link_libraries(aster-photos PRIVATE
     Qt6::Quick
     Qt6::Qml
     Qt6::Concurrent
-    PkgConfig::EXIV2
+    AsterExiv2
     aster-uiplugin
 )
 

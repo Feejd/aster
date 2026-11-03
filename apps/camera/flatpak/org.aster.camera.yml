@@ -1,0 +1,38 @@
+# Kamera jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.camera
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-camera
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --socket=pulseaudio
+  - --device=all                     # kamera internetowa
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-videos
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: camera
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=camera
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

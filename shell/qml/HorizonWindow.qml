@@ -26,6 +26,7 @@ Window {
     readonly property int barY: 7
     readonly property int barH: 32
     property bool controlOpen: false
+    property bool primary: true                // powiadomienia tylko na głównym ekranie
     signal startRequested()
     signal controlRequested()
 
@@ -58,6 +59,7 @@ Window {
     property var current: null
     Connections {
         target: Platform
+        enabled: hz.primary
         function onNotificationPosted(n) {
             if (Config.doNotDisturb) return;      // „Nie przeszkadzać”: bez karty, plakietki w doku zostają
             hz.queue = hz.queue.concat([n]);

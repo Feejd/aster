@@ -1,0 +1,102 @@
+# Aplikacje Aster jako Flatpaki dla dowolnego Linuksa (x86_64 i ARM), każda w osobnym zadaniu, równolegle.
+# Paczki trafiają do wydania „aplikacje” na GitHubie, skąd instaluje je tools/install-apps.sh (jedna komenda).
+# Manifesty: apps/<aplikacja>/flatpak/org.aster.<aplikacja>.yml
+name: Aplikacje (Flatpak)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/calculator/**"
+      - "apps/camera/**"
+      - "apps/code/**"
+      - "apps/editor/**"
+      - "apps/grafika/**"
+      - "apps/montaz/**"
+      - "apps/music/**"
+      - "apps/pdf/**"
+      - "apps/photos/**"
+      - "apps/studio/**"
+      - "apps/video/**"
+      - "common/**"
+      - "data/fonts/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/flatpak.yml"
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "Które aplikacje (rozdzielone spacjami, puste = wszystkie)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flatpak
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        env:
+          WANT: ${{ inputs.apps }}
+        run: |
+          all="grafika montaz studio code editor calculator photos music video pdf camera"
+          apps="${WANT:-$all}"
+          inc=""
+          for a in $apps; do
+            inc="$inc{\"app\":\"$a\",\"arch\":\"x86_64\",\"runner\":\"ubuntu-24.04\"},{\"app\":\"$a\",\"arch\":\"aarch64\",\"runner\":\"ubuntu-24.04-arm\"},"
+          done
+          echo "matrix={\"include\":[${inc%,}]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flatpak i flatpak-builder
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q flatpak flatpak-builder
+          # Ubuntu 24.04 domyślnie blokuje przestrzenie nazw użytkownika, których potrzebuje bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Budowa
+        run: |
+          id=org.aster.${{ matrix.app }}
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean \
+            --repo=repo build apps/${{ matrix.app }}/flatpak/$id.yml
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            repo ${{ matrix.app }}-${{ matrix.arch }}.flatpak $id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-${{ matrix.arch }}
+          path: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
+
+  # Wydanie dostaje każdą paczkę, która się zbudowała — błąd jednej aplikacji nie blokuje reszty
+  release:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Wydanie „aplikacje”
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la *.flatpak
+          gh release view aplikacje > /dev/null 2>&1 || gh release create aplikacje --title "Aplikacje Aster (Flatpak)" \
+            --notes "Instalacja na dowolnym Linuksie: curl -fsSL https://raw.githubusercontent.com/${GH_REPO}/main/tools/install-apps.sh | sh"
+          gh release upload aplikacje ./*.flatpak --clobber

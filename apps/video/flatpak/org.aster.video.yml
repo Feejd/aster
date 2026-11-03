@@ -1,0 +1,40 @@
+# Wideo jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.video
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-video
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --socket=pulseaudio
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-download:ro
+  - --filesystem=home:ro
+  - --own-name=org.mpris.MediaPlayer2.*
+  - --talk-name=org.freedesktop.ScreenSaver
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: video
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=video
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
