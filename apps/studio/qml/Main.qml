@@ -179,6 +179,7 @@ Window {
         }
         else if (what === "split") { const c = clips(0)[0]; Studio.splitClip(c.id, c.start + timeline.barSec * 6); }
         else if (what === "mixer") showMixer = true;
+        else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("beat:")) Studio.importBeat(what.substring(5));
         else if (what.startsWith("insp:")) { showInspector = true; inspector.page = what.substring(5); }
         else if (what.startsWith("seek:")) Studio.seek(Number(what.substring(5)));
@@ -1028,6 +1029,17 @@ Window {
                     visible: Studio.tracks.length > 0
                     text: "Poziom widać, gdy ścieżka jest gotowa do nagrania (czerwona kropka przy ścieżce). Śpiewaj głośno — wskaźnik nie powinien dochodzić do czerwieni."
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                }
+                Check {
+                    text: "Słysz siebie w słuchawkach — z efektami ścieżki (np. autotune)"
+                    on: Studio.monitor
+                    onToggled: Studio.monitor = !Studio.monitor
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Tylko w słuchawkach — w głośnikach mikrofon złapie własny dźwięk i zapiszczy."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
                 }
                 Label { text: "Klawiatury MIDI" }
                 Text {

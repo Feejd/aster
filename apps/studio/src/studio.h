@@ -30,6 +30,8 @@ class Studio : public QObject
     Q_PROPERTY(int beatsPerBar READ beatsPerBar WRITE setBeatsPerBar NOTIFY settingsChanged)
     Q_PROPERTY(bool metronome READ metronome WRITE setMetronome NOTIFY settingsChanged)
     Q_PROPERTY(bool countIn READ countIn WRITE setCountIn NOTIFY settingsChanged)
+    // Odsłuch głosu w słuchawkach z efektami uzbrojonej ścieżki (autotune na żywo); zapamiętany w ustawieniach
+    Q_PROPERTY(bool monitor READ monitor WRITE setMonitor NOTIFY devicesChanged)
     Q_PROPERTY(double masterVolume READ masterVolume WRITE setMasterVolume NOTIFY settingsChanged)
     Q_PROPERTY(double reverbSize READ reverbSize WRITE setReverbSize NOTIFY settingsChanged)     // 0 mały pokój … 1 hala
     Q_PROPERTY(double clickVolume READ clickVolume WRITE setClickVolume NOTIFY settingsChanged)
@@ -154,6 +156,8 @@ public:
     QString input() const { return m_engine.input(); }
     void setInput(const QString &name);
     double latency() const { return m_latencyMs; }
+    bool monitor() const { return m_monitor; }
+    void setMonitor(bool on);
     void setLatency(double ms);
     bool canUndo() const { return !m_undo.isEmpty(); }
     bool canRedo() const { return !m_redo.isEmpty(); }
@@ -367,6 +371,8 @@ private:
     bool m_cycle = false;
     double m_cycleStart = 0, m_cycleEnd = 0;
     double m_latencyMs = 0;
+    bool m_monitor = false;
+    void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)
     QList<Track> m_tracks;
     QVariantList m_tracksView, m_mixView;
     int m_nextId = 1;

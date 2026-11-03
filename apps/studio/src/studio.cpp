@@ -46,6 +46,7 @@ Studio::Studio(QObject *parent) : QObject(parent)
     m_engine.setInput(st.value(QStringLiteral("audio/input")).toString());
     m_latencyMs = st.value(QStringLiteral("audio/latency"), 0.0).toDouble();
     m_engine.setLatencyOffset(llround(m_latencyMs * Engine::Rate / 1000.0));
+    m_monitor = st.value(QStringLiteral("audio/monitor"), false).toBool();
     if (!m_engine.start())
         m_audioError = m_engine.error();
     connect(&m_engine, &Engine::devicesChanged, this, &Studio::devicesChanged);
@@ -177,6 +178,25 @@ void Studio::setLatency(double ms)
     m_engine.setLatencyOffset(llround(m_latencyMs * Engine::Rate / 1000.0));
     QSettings().setValue(QStringLiteral("audio/latency"), m_latencyMs);
     emit devicesChanged();
+}
+
+void Studio::setMonitor(bool on)
+{
+    if (on == m_monitor)
+        return;
+    m_monitor = on;
+    QSettings().setValue(QStringLiteral("audio/monitor"), on);
+    updateMonitor();
+    emit devicesChanged();
+}
+
+void Studio::updateMonitor()
+{
+    int ti = recording() ? m_recTrack : -1;
+    for (int i = 0; i < m_tracks.size() && ti < 0; ++i)
+        if (m_tracks[i].armed && m_tracks[i].kind == QLatin1String("audio"))
+            ti = i;
+    m_engine.setMonitor(m_monitor && ti >= 0 && ti < m_tracks.size() ? ti : -1, ti >= 0 && ti < m_tracks.size() ? m_tracks[ti].input : 0);
 }
 
 QVariantList Studio::devices(bool input) const
@@ -646,6 +666,7 @@ void Studio::rebuildView()
 
 void Studio::rebuildMix()
 {
+    updateMonitor();
     m_mixView.clear();
     for (const Track &t : m_tracks)
         m_mixView.append(QVariantMap{{QStringLiteral("volume"), t.volume},
@@ -1466,6 +1487,7 @@ void Studio::record()
     if (playing())
         m_engine.stop();
     m_recTrack = ti;
+    updateMonitor();
     m_recPath = uniqueAudioPath(m_tracks[ti].name, QStringLiteral("wav"));
     const long long start = frames(m_position);
     if (!m_engine.startRecording(m_recPath, start, m_tracks[ti].input)) {

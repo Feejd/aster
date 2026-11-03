@@ -78,12 +78,16 @@ public:
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
     void setLive(LivePool *live) { m_live = live; }
+    // Odsłuch wejścia (mono) na ścieżce `track` w tym wywołaniu process() — przed efektami, jak klipy
+    void setMonitor(int track, const float *buf, int count) { m_monTrack = track; m_mon = buf; m_monN = count; m_monPos = 0; }
     // Pułap ogranicznika sumy (liniowo). Dla MP3/OGG niżej — koder dokłada własne szczyty.
     void setCeiling(float c) { m_ceiling = c; }
 
 private:
     void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips);
     LivePool *m_live = nullptr;           // głosy grane na żywo (tylko w silniku, nie przy eksporcie)
+    const float *m_mon = nullptr;         // odsłuch wejścia: próbki, ich liczba i ile już zużyto
+    int m_monTrack = -1, m_monN = 0, m_monPos = 0;
     float m_l[MaxBlock], m_r[MaxBlock], m_tl[MaxBlock], m_tr[MaxBlock];
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
@@ -168,6 +172,10 @@ public:
     void liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain);
     void liveNoteOff(int id);
 
+    // Odsłuch: głos z mikrofonu słychać na ścieżce `track` z jej efektami (autotune, pogłos…); -1 — wyłączony.
+    // channel jak przy nagrywaniu: 0 = oba zmieszane, 1 = lewy, 2 = prawy
+    void setMonitor(int track, int channel);
+
     // Wejście włączone tylko, gdy jakaś ścieżka czeka na nagranie (inaczej system pokazuje używany mikrofon)
     void setCapture(bool on);
     bool capturing() const { return m_in != nullptr; }
@@ -242,6 +250,11 @@ private:
     std::vector<float> m_livePeaks;
     std::atomic<float> m_inPeak[2] = {};
     std::atomic<long long> m_recClipStart{0};
+
+    // Odsłuch: wątek wejścia pisze mono, wątek wyjścia czyta (opóźnienie trzymane przy kilku ms)
+    SpscRing m_monRing{size_t(Rate)};
+    std::atomic<int> m_monTrack{-1}, m_monChannel{0};
+    std::vector<float> m_monBuf = std::vector<float>(16384);   // tylko wątek wyjścia
 
     // Głosy odsłuchu: wątek interfejsu wpisuje dźwięk i zwiększa numer, wątek audio zaczyna go od początku
     static constexpr int PreviewVoices = 8;

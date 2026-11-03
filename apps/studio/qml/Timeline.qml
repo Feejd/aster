@@ -505,7 +505,21 @@ Item {
                 onClicked: Studio.setTrackSolo(th.trackIndex, !th.mix.solo)
             }
         }
+        // Odsłuch w słuchawkach (z efektami ścieżki) — przy ścieżce gotowej do nagrania
         MiniBtn {
+            id: monBtn
+            visible: th.track.armed
+            anchors.right: armBtn.left; anchors.rightMargin: 6
+            y: 48
+            tip: Studio.monitor ? "Słyszysz siebie w słuchawkach z efektami ścieżki — kliknij, żeby wyłączyć"
+                                : "Słysz siebie w słuchawkach z efektami (np. autotune). Tylko w słuchawkach — w głośnikach zapiszczy"
+            on: Studio.monitor
+            onColor: Theme.accent
+            onClicked: Studio.monitor = !Studio.monitor
+            Icon { anchors.centerIn: parent; d: Icons.headphones; size: 14; stroke: 2; color: Studio.monitor ? "white" : Theme.text }
+        }
+        MiniBtn {
+            id: armBtn
             visible: th.track.kind === "audio" && !th.track.beat
             anchors.right: parent.right; anchors.rightMargin: 14
             y: 48

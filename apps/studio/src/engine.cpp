@@ -24,6 +24,7 @@ void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool
     while (n > 0) {
         const int k = std::min(n, MaxBlock);
         block(s, pos, k, out, click, meters, rate, clips);
+        m_monPos += k;
         pos += k;
         out += 2 * k;
         n -= k;
@@ -57,6 +58,19 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             }
             if (!t.audible)
                 continue;
+            // Odsłuch mikrofonu na uzbrojonej ścieżce — słychać od razu z jej efektami (np. autotune)
+            if (m_mon && int(ti) == m_monTrack && m_monPos < m_monN) {
+                if (!any) {
+                    std::fill_n(m_tl, n, 0.f);
+                    std::fill_n(m_tr, n, 0.f);
+                    any = true;
+                }
+                const int k = std::min(n, m_monN - m_monPos);
+                for (int i = 0; i < k; ++i) {
+                    m_tl[i] += m_mon[m_monPos + i];
+                    m_tr[i] += m_mon[m_monPos + i];
+                }
+            }
             for (const ClipRT &c : t.clips) {
                 if (!clips)
                     break;
@@ -446,6 +460,13 @@ void Engine::connectInput()
                       pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS), params, 1);
 }
 
+void Engine::setMonitor(int track, int channel)
+{
+    // Bufora nie czyścimy stąd (czyta go tylko wątek wyjścia) — sam odrzuca nadmiar
+    m_monChannel.store(channel, std::memory_order_relaxed);
+    m_monTrack.store(track, std::memory_order_relaxed);
+}
+
 void Engine::setCapture(bool on)
 {
     if (!m_core || on == (m_in != nullptr))
@@ -527,6 +548,23 @@ void Engine::onPlayback()
         m_rtPos = seek;
 
     takeLiveCommands();
+    // Odsłuch: to, co przyszło z mikrofonu. Nadmiar ponad jeden blok i trochę zapasu — odrzucony,
+    // żeby opóźnienie nie rosło; brak — cisza (wejście jeszcze nie ruszyło)
+    const int monTrack = m_monTrack.load(std::memory_order_relaxed);
+    if (monTrack >= 0) {
+        const size_t want = std::min<size_t>(n, m_monBuf.size());
+        size_t avail = m_monRing.available();
+        while (avail > want + 512) {
+            const size_t drop = std::min(avail - want, m_monBuf.size());
+            m_monRing.read(m_monBuf.data(), drop);
+            avail -= drop;
+        }
+        const size_t got = m_monRing.read(m_monBuf.data(), std::min(want, avail));
+        std::fill(m_monBuf.begin() + long(got), m_monBuf.begin() + long(want), 0.f);
+        m_renderer.setMonitor(monTrack, m_monBuf.data(), int(want));
+    } else {
+        m_renderer.setMonitor(-1, nullptr, 0);
+    }
     if (m_playing.load()) {
         const long long cie = m_countInEnd.load();
         const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
@@ -594,6 +632,19 @@ void Engine::onCapture()
         }
         raisePeak(m_inPeak[0], pl);
         raisePeak(m_inPeak[1], pr);
+        if (m_monTrack.load(std::memory_order_relaxed) >= 0) {
+            const int ch = m_monChannel.load(std::memory_order_relaxed);
+            float mono[256];
+            for (uint32_t i = 0; i < n;) {
+                const uint32_t k = std::min<uint32_t>(256, n - i);
+                for (uint32_t j = 0; j < k; ++j) {
+                    const float l = src[2 * (i + j)], r = src[2 * (i + j) + 1];
+                    mono[j] = ch == 1 ? l : ch == 2 ? r : 0.5f * (l + r);
+                }
+                m_monRing.write(mono, k);
+                i += k;
+            }
+        }
         if (m_recActive.load() && m_playing.load()) {
             // Miejsce na osi czasu: to, co muzyk słyszał, gdy grał — po odjęciu opóźnienia wyjścia i wejścia
             if (m_recFirst.load() == NoSeek) {
