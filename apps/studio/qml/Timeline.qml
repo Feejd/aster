@@ -428,11 +428,27 @@ Item {
             onDoubleClicked: nameEdit.start()
         }
 
+        readonly property var kindInfo: ({
+            audio: { icon: "mic", label: "Nagranie" },
+            drums: { icon: "grid", label: "Bit" },
+            bass: { icon: "audioTrack", label: "Bas 808" },
+            keys: { icon: "music", label: "Akordy" },
+            melody: { icon: "keyboard", label: "Melodia" }
+        })[th.track.kind] || { icon: "music", label: "" }
+        readonly property string presetLabel: th.mix.preset ? (Studio.presets.find(p => p.id === th.mix.preset) || { label: "" }).label : ""
+
+        // Ikona rodzaju ścieżki w kolorze ścieżki
+        Rectangle {
+            x: 14; y: 10
+            width: 30; height: 30; radius: 9
+            color: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, Theme.dark ? 0.28 : 0.2)
+            Icon { anchors.centerIn: parent; d: Icons[th.kindInfo.icon] || ""; size: 16; stroke: 2; color: Theme.text }
+        }
         Text {
             id: nameText
             visible: !nameEdit.visible
-            x: 16; y: 12
-            width: parent.width - 56
+            x: 52; y: 9
+            width: parent.width - 90
             text: th.track.name
             elide: Text.ElideRight
             color: Theme.text
@@ -441,8 +457,8 @@ Item {
         TextInput {
             id: nameEdit
             visible: false
-            x: 16; y: 12
-            width: parent.width - 56
+            x: 52; y: 9
+            width: parent.width - 90
             color: Theme.text
             selectionColor: Theme.accentSoft
             font: nameText.font
@@ -451,39 +467,28 @@ Item {
             onActiveFocusChanged: if (!activeFocus && visible) { Studio.renameTrack(th.trackIndex, text); visible = false; }
             Keys.onEscapePressed: visible = false
         }
+        Text {
+            x: 52; y: 27
+            width: parent.width - 90
+            text: th.track.armed ? th.kindInfo.label + " · " + ["wejście: oba kanały", "wejście: lewy", "wejście: prawy"][th.track.input]
+                                 : th.kindInfo.label + (th.presetLabel && !th.kindInfo.label.includes(th.presetLabel) ? " · " + th.presetLabel : "")
+            elide: Text.ElideRight
+            color: Theme.text2
+            font.family: Theme.font; font.pixelSize: 11
+        }
         HoverButton {
             anchors.right: parent.right; anchors.rightMargin: 8
-            y: 8
+            y: 10
             width: 26; height: 26; radius: 7
             onClicked: { const p = mapToItem(th, 0, height); tl.trackMenu(th.trackIndex, th, p.x, p.y + 2); }
             Icon { anchors.centerIn: parent; d: Icons.more; size: 15; color: Theme.text2 }
+            Tip { shown: parent.hovered; text: "Więcej" }
         }
 
+        // M i S zawsze w tym samym miejscu; z prawej nagrywanie albo edycja wzoru
         Row {
-            x: 14; y: 40
+            x: 14; y: 48
             spacing: 6
-            // Ścieżka Beat Makera: zamiast nagrywania — edycja wzoru
-            HoverButton {
-                visible: th.track.kind !== "audio"
-                width: editRow.implicitWidth + 16; height: 24; radius: 7
-                baseColor: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.3)
-                onClicked: tl.editPattern(th.trackIndex)
-                Row {
-                    id: editRow
-                    x: 8; anchors.verticalCenter: parent.verticalCenter
-                    spacing: 5
-                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.grid; size: 13; stroke: 2; color: Theme.text }
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : th.track.kind === "keys" ? "Akordy" : th.track.kind === "melody" ? "Piano roll" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
-                }
-            }
-            MiniBtn {
-                visible: th.track.kind === "audio"
-                tip: th.track.armed ? "Gotowa do nagrania" : "Nagrywaj na tę ścieżkę"
-                on: th.track.armed
-                onColor: "#E5484D"
-                onClicked: Studio.setTrackArmed(th.trackIndex, !th.track.armed)
-                Rectangle { anchors.centerIn: parent; width: 10; height: 10; radius: 5; color: th.track.armed ? "white" : "#E5484D" }
-            }
             MiniBtn {
                 tip: "Wycisz (M)"
                 on: !!th.mix.mute
@@ -498,20 +503,46 @@ Item {
                 label: "S"
                 onClicked: Studio.setTrackSolo(th.trackIndex, !th.mix.solo)
             }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                leftPadding: 4
-                visible: th.track.armed
-                text: ["Wejście: oba", "Wejście: L", "Wejście: P"][th.track.input]
-                color: Theme.text2
-                font.family: Theme.font; font.pixelSize: 11
+        }
+        MiniBtn {
+            visible: th.track.kind === "audio"
+            anchors.right: parent.right; anchors.rightMargin: 14
+            y: 48
+            width: armRow.implicitWidth + 16
+            tip: th.track.armed ? "Gotowa do nagrania — kliknij, żeby wyłączyć" : "Nagrywaj na tę ścieżkę"
+            on: th.track.armed
+            onColor: "#E5484D"
+            onClicked: Studio.setTrackArmed(th.trackIndex, !th.track.armed)
+            Row {
+                id: armRow
+                anchors.centerIn: parent
+                spacing: 5
+                Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 9; height: 9; radius: 4.5; color: th.track.armed ? "white" : "#E5484D" }
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "Nagrywaj"; color: th.track.armed ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
             }
+        }
+        HoverButton {
+            visible: th.track.kind !== "audio"
+            anchors.right: parent.right; anchors.rightMargin: 14
+            y: 48
+            width: editRow.implicitWidth + 16; height: 24; radius: 7
+            baseColor: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.3)
+            color: hovered ? Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.45) : baseColor
+            onClicked: tl.editPattern(th.trackIndex)
+            Row {
+                id: editRow
+                anchors.centerIn: parent
+                spacing: 5
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.pencil; size: 12; stroke: 2; color: Theme.text }
+                Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : th.track.kind === "keys" ? "Akordy" : th.track.kind === "melody" ? "Piano roll" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+            }
+            Tip { shown: parent.hovered; text: "Otwórz edytor (albo dwuklik na klipie)" }
         }
 
         // Poziom: wejście, gdy ścieżka czeka na nagranie, inaczej to, co gra
         Rectangle {
-            x: 16; y: tl.trackH - 16
-            width: parent.width - 32; height: 4; radius: 2
+            x: 14; y: tl.trackH - 12
+            width: parent.width - 28; height: 3; radius: 1.5
             color: Theme.fill
             readonly property real level: th.track.armed ? Studio.inputLevel : (Studio.levels[th.trackIndex] || 0)
             readonly property real pos: level <= 0 ? 0 : Math.max(0, Math.min(1, (20 * Math.log(level) / Math.LN10 + 60) / 60))

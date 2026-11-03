@@ -173,6 +173,7 @@ Window {
         }
         else if (what === "split") { const c = clips(0)[0]; Studio.splitClip(c.id, c.start + timeline.barSec * 6); }
         else if (what === "mixer") showMixer = true;
+        else if (what.startsWith("insp:")) { showInspector = true; inspector.page = what.substring(5); }
         else if (what.startsWith("seek:")) Studio.seek(Number(what.substring(5)));
         else if (what.startsWith("export:")) Studio.exportMix(what.substring(7));
         else if (what === "exportSheet") exportSheet.open();
@@ -451,39 +452,46 @@ Window {
                         }
                     }
                     Item { width: 6; height: 1 }
-                    RoundBtn {
-                        path: win.metronomePath
-                        active: Studio.metronome
-                        tip: Studio.metronome ? "Metronom włączony (K)" : "Metronom wyłączony (K)"
-                        onClicked: Studio.metronome = !Studio.metronome
-                    }
-                    RoundBtn {
-                        icon: "repeat"
-                        active: Studio.cycle
-                        tip: Studio.cycle ? "Pętla odtwarzania: wł. (C)" : "Pętla odtwarzania — ćwicz fragment (C)"
-                        onClicked: Studio.cycle = !Studio.cycle
-                    }
-                    RoundBtn {
-                        icon: "timer"
-                        active: Studio.countIn
-                        tip: Studio.countIn ? "Odliczanie taktu przed nagraniem: wł." : "Odliczanie przed nagraniem: wył."
-                        onClicked: Studio.countIn = !Studio.countIn
+                    // Ustawienia grania i nagrywania — jedna grupa
+                    ToolGroup {
+                        RoundBtn {
+                            path: win.metronomePath
+                            active: Studio.metronome
+                            tip: Studio.metronome ? "Metronom włączony (K)" : "Metronom wyłączony (K)"
+                            onClicked: Studio.metronome = !Studio.metronome
+                        }
+                        RoundBtn {
+                            icon: "timer"
+                            active: Studio.countIn
+                            tip: Studio.countIn ? "Odliczanie taktu przed nagraniem: wł." : "Odliczanie przed nagraniem: wył."
+                            onClicked: Studio.countIn = !Studio.countIn
+                        }
+                        RoundBtn {
+                            icon: "repeat"
+                            active: Studio.cycle
+                            tip: Studio.cycle ? "Pętla odtwarzania: wł. (C)" : "Pętla odtwarzania — ćwicz fragment (C)"
+                            onClicked: Studio.cycle = !Studio.cycle
+                        }
+                        RoundBtn { icon: "speaker"; tip: "Głośniki, mikrofon i klawiatury MIDI"; onClicked: audioSheet.open(); warn: !Studio.audioOk || Studio.audioError !== "" }
                     }
                 }
 
+                // Z prawej: cofanie | eksport i udostępnianie (mikser i efekty — na dolnym pasku)
                 Row {
                     id: rightTools
                     anchors.right: winButtons.left; anchors.rightMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
-                    RoundBtn { icon: "undo"; enabled: Studio.canUndo; tip: "Cofnij (Ctrl+Z)"; onClicked: Studio.undo() }
-                    RoundBtn { icon: "undo"; mirror: true; enabled: Studio.canRedo; tip: "Ponów (Ctrl+Shift+Z)"; onClicked: Studio.redo() }
-                    Item { width: 4; height: 1 }
-                    RoundBtn { icon: "sliders"; active: win.showMixer; tip: "Mikser (X)"; onClicked: win.showMixer = !win.showMixer }
-                    RoundBtn { icon: "sparkle"; active: win.showInspector; tip: "Efekty i klip (E)"; onClicked: win.showInspector = !win.showInspector }
-                    RoundBtn { icon: "speaker"; tip: "Ustawienia dźwięku"; onClicked: audioSheet.open(); warn: !Studio.audioOk || Studio.audioError !== "" }
-                    RoundBtn { icon: "download"; tip: "Eksportuj do MP3, WAV, OGG, FLAC (Ctrl+E)"; onClicked: exportSheet.open() }
-                    Pill { anchors.verticalCenter: parent.verticalCenter; text: "Udostępnij"; icon: "upload"; primary: true; tip: "Piosenka z okładką albo projekt do remiksu — na telefon, e-mailem, w komunikatorze"; onClicked: shareSheet.start() }
+                    spacing: 10
+                    ToolGroup {
+                        RoundBtn { icon: "undo"; enabled: Studio.canUndo; tip: "Cofnij (Ctrl+Z)"; onClicked: Studio.undo() }
+                        RoundBtn { icon: "undo"; mirror: true; enabled: Studio.canRedo; tip: "Ponów (Ctrl+Shift+Z)"; onClicked: Studio.redo() }
+                    }
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        RoundBtn { icon: "download"; tip: "Eksportuj do MP3, WAV, OGG, FLAC (Ctrl+E)"; onClicked: exportSheet.open() }
+                        Pill { anchors.verticalCenter: parent.verticalCenter; text: "Udostępnij"; icon: "upload"; primary: true; tip: "Piosenka z okładką albo projekt do remiksu — na telefon, e-mailem, w komunikatorze"; onClicked: shareSheet.start() }
+                    }
                 }
                 WindowButtons {
                     id: winButtons
@@ -517,7 +525,7 @@ Window {
                 onEditPattern: (track) => { win.editTrack = track; Studio.selectedTrack = track; }
             }
 
-            // Pasek pod osią: dodawanie dźwięku, siatka, powiększenie
+            // Pasek pod osią: dodawanie dźwięku, siatka, powiększenie, panele (mikser, efekty)
             Item {
                 id: statusBar
                 y: timeline.y + timeline.height
@@ -528,6 +536,7 @@ Window {
                     Pill { anchors.verticalCenter: parent.verticalCenter; height: 30; text: "Dodaj dźwięk…"; icon: "plus"; tip: "Plik WAV, FLAC, MP3 lub OGG na zaznaczoną ścieżkę (Ctrl+I)"; onClicked: importDialog.open() }
                 }
                 Row {
+                    id: snapRow
                     x: timeline.headerW + 14
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 10
@@ -541,6 +550,8 @@ Window {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         leftPadding: 6
+                        // Tylko gdy starcza miejsca przed przyciskami z prawej
+                        visible: snapRow.x + 470 + implicitWidth < viewTools.x
                         text: "Shift — bez przyciągania"
                         color: Theme.text2
                         opacity: 0.8
@@ -548,11 +559,29 @@ Window {
                     }
                 }
                 Row {
-                    anchors.right: parent.right; anchors.rightMargin: 16
+                    id: viewTools
+                    anchors.right: parent.right; anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 4
-                    RoundBtn { icon: "minus"; size: 28; tip: "Pomniejsz (Ctrl+−)"; onClicked: timeline.zoom(0.8, timeline.viewW / 2) }
-                    RoundBtn { icon: "plus"; size: 28; tip: "Powiększ (Ctrl++)"; onClicked: timeline.zoom(1.25, timeline.viewW / 2) }
+                    spacing: 10
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        RoundBtn { icon: "minus"; size: 28; tip: "Pomniejsz (Ctrl+−)"; onClicked: timeline.zoom(0.8, timeline.viewW / 2) }
+                        RoundBtn { icon: "plus"; size: 28; tip: "Powiększ (Ctrl++)"; onClicked: timeline.zoom(1.25, timeline.viewW / 2) }
+                    }
+                    // Panele: mikser pod osią, efekty z prawej
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: viewRow.width + 6; height: 34; radius: 10
+                        color: Theme.fill
+                        Row {
+                            id: viewRow
+                            x: 3; anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            ViewBtn { icon: "sliders"; label: "Mikser"; active: win.showMixer; tip: "Głośność i panorama wszystkich ścieżek (X)"; onClicked: win.showMixer = !win.showMixer }
+                            ViewBtn { icon: "sparkle"; label: "Efekty"; active: win.showInspector; tip: "Brzmienie ścieżki, klip i mastering (E)"; onClicked: win.showInspector = !win.showInspector }
+                        }
+                    }
                 }
             }
 
@@ -1103,6 +1132,42 @@ Window {
         }
         Rectangle { visible: rb.warn; x: rb.width - 10; y: 3; width: 8; height: 8; radius: 4; color: "#E5484D" }
         Tip { shown: rb.hovered && rb.tip !== ""; text: rb.tip; below: true }
+    }
+
+    // Kilka przycisków na wspólnym tle — widać, co do siebie należy
+    component ToolGroup: Rectangle {
+        default property alias content: groupRow.data
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        width: groupRow.width + 6; height: 40; radius: 20
+        color: Theme.fill
+        Row { id: groupRow; x: 3; anchors.verticalCenter: parent.verticalCenter; spacing: 0 }
+    }
+
+    // Przełącznik panelu z ikoną i podpisem
+    component ViewBtn: HoverButton {
+        id: vb
+        property string icon
+        property string label
+        property string tip
+        property bool active: false
+        width: vbRow.implicitWidth + 22; height: 28; radius: 8
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        baseColor: active ? Theme.surface : "transparent"
+        color: hovered && !active ? Theme.hover : baseColor
+        border.width: active ? 1 : 0; border.color: Theme.edge
+        Row {
+            id: vbRow
+            anchors.centerIn: parent
+            spacing: 6
+            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[vb.icon] || ""; size: 15; stroke: 1.9; color: vb.active ? Theme.accentText : Theme.text }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: vb.label
+                color: vb.active ? Theme.accentText : Theme.text
+                font.family: Theme.font; font.pixelSize: 13; font.weight: vb.active ? Font.DemiBold : Font.Normal
+            }
+        }
+        Tip { shown: vb.hovered; text: vb.tip }
     }
 
     component LcdButton: HoverButton {
