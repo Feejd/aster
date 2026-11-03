@@ -23,6 +23,7 @@ set(CODE_QML
     qml/NameBox.qml
     qml/ProblemsView.qml
     qml/CompletionPopup.qml
+    qml/DiffView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)

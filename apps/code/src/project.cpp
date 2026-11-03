@@ -129,6 +129,8 @@ bool Project::open(const QString &pathOrUrl)
         m_gitTop = QDir::cleanPath(QString::fromUtf8(p.readAllStandardOutput()).trimmed());
     m_branch.clear();
     m_head.clear();
+    m_upstream.clear();
+    m_commits.clear();
     m_changes.clear();
     m_ahead = m_behind = 0;
 
@@ -494,12 +496,13 @@ void Project::refreshGit()
 void Project::parseStatus(const QByteArray &out)
 {
     const QList<QByteArray> parts = out.split('\0');
-    QString branch, head;
+    QString branch, head, upstream;
     int ahead = 0, behind = 0;
     QHash<QString, QString> files, dirs;
     QSet<QString> ignored;
     QVariantList changes;
-    const auto add = [&](const QString &rel, const QString &status, bool staged) {
+    // index / work — stan w indeksie (dodane do zatwierdzenia) i w katalogu roboczym: litera albo pusty
+    const auto add = [&](const QString &rel, const QString &status, const QString &index, const QString &work) {
         QString r = rel;
         const bool isDir = r.endsWith(QLatin1Char('/'));
         if (isDir)
@@ -521,18 +524,21 @@ void Project::parseStatus(const QByteArray &out)
                                {QStringLiteral("name"), QFileInfo(abs).fileName()},
                                {QStringLiteral("dir"), QFileInfo(abs).absolutePath() == m_root ? QString() : relative(QFileInfo(abs).absolutePath())},
                                {QStringLiteral("status"), status},
-                               {QStringLiteral("staged"), staged},
+                               {QStringLiteral("staged"), !index.isEmpty()},
+                               {QStringLiteral("index"), index},
+                               {QStringLiteral("work"), work},
                                {QStringLiteral("isDir"), isDir}};
     };
-    const auto letter = [](char x, char y) {
-        const char c = y != '.' ? y : x;
+    const auto one = [](char c) {
         switch (c) {
+        case '.': return QString();
         case 'A': case 'C': return QStringLiteral("A");
         case 'D': return QStringLiteral("D");
         case 'R': return QStringLiteral("R");
         default: return QStringLiteral("M");
         }
     };
+    const auto letter = [&](char x, char y) { return one(y != '.' ? y : x); };
     for (int i = 0; i < parts.size(); ++i) {
         const QByteArray &e = parts.at(i);
         if (e.isEmpty())
@@ -541,6 +547,8 @@ void Project::parseStatus(const QByteArray &out)
             head = QString::fromLatin1(e.mid(13));
         } else if (e.startsWith("# branch.head ")) {
             branch = QString::fromUtf8(e.mid(14));
+        } else if (e.startsWith("# branch.upstream ")) {
+            upstream = QString::fromUtf8(e.mid(18));
         } else if (e.startsWith("# branch.ab ")) {
             const QList<QByteArray> ab = e.mid(12).split(' ');
             if (ab.size() == 2) {
@@ -557,11 +565,14 @@ void Project::parseStatus(const QByteArray &out)
                 continue;
             const QString rel = QString::fromUtf8(e.mid(at + 1));
             const char x = e.at(2), y = e.at(3);
-            add(rel, e.startsWith("u ") ? QStringLiteral("C") : letter(x, y), x != '.');
+            if (e.startsWith("u "))
+                add(rel, QStringLiteral("C"), QString(), QStringLiteral("C"));
+            else
+                add(rel, letter(x, y), one(x), one(y));
             if (e.startsWith("2 "))
                 ++i;                         // następne pole to stara nazwa
         } else if (e.startsWith("? ")) {
-            add(QString::fromUtf8(e.mid(2)), QStringLiteral("U"), false);
+            add(QString::fromUtf8(e.mid(2)), QStringLiteral("U"), QString(), QStringLiteral("U"));
         } else if (e.startsWith("! ")) {
             QString rel = QString::fromUtf8(e.mid(2));
             if (rel.endsWith(QLatin1Char('/')))
@@ -575,8 +586,11 @@ void Project::parseStatus(const QByteArray &out)
         return a.toMap().value(QStringLiteral("rel")).toString() < b.toMap().value(QStringLiteral("rel")).toString();
     });
     m_tree->setGit(files, dirs, ignored);
-    if (branch != m_branch || head != m_head || ahead != m_ahead || behind != m_behind || changes != m_changes) {
+    if (head != m_head)
+        loadCommits();
+    if (branch != m_branch || head != m_head || ahead != m_ahead || behind != m_behind || changes != m_changes || upstream != m_upstream) {
         m_branch = branch;
+        m_upstream = upstream;
         m_head = head;
         m_ahead = ahead;
         m_behind = behind;
@@ -599,6 +613,268 @@ void Project::requestBase(const QString &path)
     });
     connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
     p->start(QStringLiteral("git"), {QStringLiteral("-C"), m_gitTop, QStringLiteral("show"), QStringLiteral("HEAD:") + gitRelative(path)});
+}
+
+// ——— Git: zatwierdzanie i synchronizacja ———
+
+void Project::runGit(const QString &op, const QStringList &args, const QByteArray &input, std::function<void(bool, const QString &)> done)
+{
+    if (m_gitTop.isEmpty())
+        return;
+    auto *p = new QProcess(this);
+    // Bez pytań o hasło w tle (zawisłby niewidoczny monit) — logowanie raz w terminalu
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
+    env.insert(QStringLiteral("GIT_SSH_COMMAND"), QStringLiteral("ssh -o BatchMode=yes"));
+    env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
+    p->setProcessEnvironment(env);
+    p->setWorkingDirectory(m_gitTop);
+    m_gitBusy = op;
+    Q_EMIT gitBusyChanged();
+    connect(p, &QProcess::finished, this, [this, p, op, done](int code, QProcess::ExitStatus st) {
+        p->deleteLater();
+        const bool ok = st == QProcess::NormalExit && code == 0;
+        const QString err = QString::fromUtf8(p->readAllStandardError()).trimmed();
+        const QString out = QString::fromUtf8(p->readAllStandardOutput()).trimmed();
+        m_gitBusy.clear();
+        Q_EMIT gitBusyChanged();
+        if (done)
+            done(ok, ok ? out : (err.isEmpty() ? out : err));
+        refreshGit();
+    });
+    connect(p, &QProcess::errorOccurred, this, [this, p, op](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart)
+            return;
+        p->deleteLater();
+        m_gitBusy.clear();
+        Q_EMIT gitBusyChanged();
+        Q_EMIT gitDone(op, false, QStringLiteral("Nie można uruchomić gita"));
+    });
+    p->start(QStringLiteral("git"), args);
+    if (!input.isEmpty())
+        p->write(input);
+    p->closeWriteChannel();
+}
+
+QStringList Project::gitPaths(const QStringList &paths) const
+{
+    QStringList out;
+    for (const QString &p : paths)
+        out << gitRelative(p);
+    return out;
+}
+
+void Project::stage(const QStringList &paths)
+{
+    runGit(QStringLiteral("stage"), QStringList{QStringLiteral("add"), QStringLiteral("-A"), QStringLiteral("--")} + gitPaths(paths), {},
+           [this](bool ok, const QString &msg) { if (!ok) Q_EMIT gitDone(QStringLiteral("stage"), false, msg); });
+}
+
+void Project::unstage(const QStringList &paths)
+{
+    // Repozytorium bez pierwszego zatwierdzenia nie ma HEAD — wtedy „rm --cached”
+    const QStringList args = m_head.isEmpty() || m_head == QLatin1String("(initial)")
+        ? QStringList{QStringLiteral("rm"), QStringLiteral("--cached"), QStringLiteral("-r"), QStringLiteral("-q"), QStringLiteral("--")}
+        : QStringList{QStringLiteral("restore"), QStringLiteral("--staged"), QStringLiteral("--")};
+    runGit(QStringLiteral("unstage"), args + gitPaths(paths), {},
+           [this](bool ok, const QString &msg) { if (!ok) Q_EMIT gitDone(QStringLiteral("unstage"), false, msg); });
+}
+
+void Project::discard(const QStringList &paths)
+{
+    // Nowe (nieśledzone) pliki idą do Kosza — da się je odzyskać; śledzone wracają do wersji z indeksu
+    QStringList tracked;
+    for (const QString &p : paths) {
+        bool untracked = false;
+        for (const QVariant &v : std::as_const(m_changes)) {
+            const QVariantMap m = v.toMap();
+            if (m.value(QStringLiteral("path")).toString() == p && m.value(QStringLiteral("work")).toString() == QLatin1String("U"))
+                untracked = true;
+        }
+        if (untracked)
+            QFile::moveToTrash(p);
+        else
+            tracked << p;
+    }
+    if (tracked.isEmpty()) {
+        m_tree->refresh();
+        refreshGit();
+        return;
+    }
+    runGit(QStringLiteral("discard"), QStringList{QStringLiteral("restore"), QStringLiteral("--worktree"), QStringLiteral("--")} + gitPaths(tracked), {},
+           [this](bool ok, const QString &msg) {
+               m_tree->refresh();
+               if (!ok) Q_EMIT gitDone(QStringLiteral("discard"), false, msg);
+           });
+}
+
+void Project::commit(const QString &message, bool amend, bool all)
+{
+    if (message.trimmed().isEmpty() && !amend) {
+        Q_EMIT gitDone(QStringLiteral("commit"), false, QStringLiteral("Wpisz opis zmian"));
+        return;
+    }
+    const auto doCommit = [this, message, amend] {
+        QStringList args{QStringLiteral("commit"), QStringLiteral("-q")};
+        if (amend)
+            args << QStringLiteral("--amend");
+        if (message.trimmed().isEmpty())
+            args << QStringLiteral("--no-edit");
+        else
+            args << QStringLiteral("-F") << QStringLiteral("-");
+        runGit(QStringLiteral("commit"), args, message.trimmed().toUtf8(), [this](bool ok, const QString &msg) {
+            QString text = msg;
+            if (!ok && msg.contains(QLatin1String("user.email")))
+                text = QStringLiteral("Git nie zna autora — w terminalu: git config --global user.name \"Imię Nazwisko\" i git config --global user.email adres@poczta");
+            else if (!ok && msg.contains(QLatin1String("nothing to commit")))
+                text = QStringLiteral("Nie ma nic do zatwierdzenia");
+            Q_EMIT gitDone(QStringLiteral("commit"), ok, ok ? QStringLiteral("Zatwierdzono") : text.left(300));
+        });
+    };
+    // Nic nie dodano — zatwierdzamy wszystkie zmiany (jak „smart commit” w VS Code)
+    if (all)
+        runGit(QStringLiteral("stage"), {QStringLiteral("add"), QStringLiteral("-A")}, {}, [doCommit](bool ok, const QString &) { if (ok) doCommit(); });
+    else
+        doCommit();
+}
+
+static QString syncError(const QString &msg)
+{
+    if (msg.contains(QLatin1String("terminal prompts disabled")) || msg.contains(QLatin1String("Authentication failed"))
+        || msg.contains(QLatin1String("Permission denied")) || msg.contains(QLatin1String("could not read Username")))
+        return QStringLiteral("Serwer wymaga logowania — wyślij raz z terminala (git push), potem zadziała tutaj");
+    if (msg.contains(QLatin1String("Could not resolve host")) || msg.contains(QLatin1String("unable to access")))
+        return QStringLiteral("Brak połączenia z serwerem repozytorium");
+    if (msg.contains(QLatin1String("rejected")) || msg.contains(QLatin1String("non-fast-forward")))
+        return QStringLiteral("Na serwerze są nowsze zmiany — najpierw pobierz");
+    if (msg.contains(QLatin1String("Not possible to fast-forward")) || msg.contains(QLatin1String("diverged")))
+        return QStringLiteral("Twoje i zdalne zmiany się rozeszły — połącz je w terminalu (git pull)");
+    if (msg.contains(QLatin1String("No configured push destination")) || msg.contains(QLatin1String("does not appear to be a git repository")))
+        return QStringLiteral("Repozytorium nie ma serwera (remote) — dodaj go: git remote add origin ADRES");
+    return msg.section(QLatin1Char('\n'), -2).left(300);
+}
+
+void Project::push()
+{
+    QStringList args{QStringLiteral("push")};
+    if (m_upstream.isEmpty()) {
+        // Pierwsze wysłanie gałęzi: na pierwszy serwer (zwykle origin) z ustawieniem śledzenia
+        QProcess r;
+        r.setWorkingDirectory(m_gitTop);
+        r.start(QStringLiteral("git"), {QStringLiteral("remote")});
+        r.waitForFinished(2000);
+        const QString remote = QString::fromUtf8(r.readAllStandardOutput()).section(QLatin1Char('\n'), 0, 0).trimmed();
+        if (remote.isEmpty()) {
+            Q_EMIT gitDone(QStringLiteral("push"), false, syncError(QStringLiteral("No configured push destination")));
+            return;
+        }
+        args << QStringLiteral("-u") << remote << m_branch;
+    }
+    runGit(QStringLiteral("push"), args, {}, [this](bool ok, const QString &msg) {
+        Q_EMIT gitDone(QStringLiteral("push"), ok, ok ? QStringLiteral("Wysłano") : syncError(msg));
+    });
+}
+
+void Project::pull()
+{
+    runGit(QStringLiteral("pull"), {QStringLiteral("pull"), QStringLiteral("--ff-only")}, {}, [this](bool ok, const QString &msg) {
+        Q_EMIT gitDone(QStringLiteral("pull"), ok, ok ? QStringLiteral("Pobrano zmiany") : syncError(msg));
+        m_tree->refresh();
+    });
+}
+
+void Project::fetch()
+{
+    runGit(QStringLiteral("fetch"), {QStringLiteral("fetch"), QStringLiteral("--prune")}, {}, [this](bool ok, const QString &msg) {
+        Q_EMIT gitDone(QStringLiteral("fetch"), ok, ok ? QString() : syncError(msg));
+    });
+}
+
+QString Project::lastCommitMessage() const
+{
+    if (m_gitTop.isEmpty())
+        return {};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    p.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%B")});
+    p.waitForFinished(2000);
+    return QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+}
+
+void Project::loadCommits()
+{
+    if (m_gitTop.isEmpty())
+        return;
+    auto *p = new QProcess(this);
+    p->setWorkingDirectory(m_gitTop);
+    connect(p, &QProcess::finished, this, [this, p] {
+        p->deleteLater();
+        QVariantList list;
+        for (const QString &l : QString::fromUtf8(p->readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+            const QStringList f = l.split(QChar(0x1f));
+            if (f.size() < 4)
+                continue;
+            list << QVariantMap{{QStringLiteral("hash"), f[0]}, {QStringLiteral("subject"), f[1]},
+                                {QStringLiteral("author"), f[2]}, {QStringLiteral("time"), f[3].toLongLong()}};
+        }
+        m_commits = list;
+        Q_EMIT gitChanged();
+    });
+    connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
+    p->start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-8"), QStringLiteral("--format=%h%x1f%s%x1f%an%x1f%ct")});
+}
+
+QVariantList Project::diff(const QString &path, bool staged) const
+{
+    // Różnice jednego pliku jako wiersze: { kind: " " | "+" | "-" | "@", text, old, new }
+    if (m_gitTop.isEmpty())
+        return {};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    bool untracked = false;
+    for (const QVariant &v : std::as_const(m_changes))
+        if (v.toMap().value(QStringLiteral("path")).toString() == path && v.toMap().value(QStringLiteral("work")).toString() == QLatin1String("U"))
+            untracked = true;
+    if (untracked && !staged)
+        p.start(QStringLiteral("git"), {QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("--no-index"), QStringLiteral("--"),
+                                        QStringLiteral("/dev/null"), gitRelative(path)});
+    else
+        p.start(QStringLiteral("git"), QStringList{QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("-U3")}
+                                           + (staged ? QStringList{QStringLiteral("--cached")} : QStringList())
+                                           + QStringList{QStringLiteral("--"), gitRelative(path)});
+    p.waitForFinished(5000);
+    QVariantList out;
+    int oldNo = 0, newNo = 0;
+    bool body = false;
+    static const QRegularExpression hunk(QStringLiteral("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@(.*)$"));
+    for (const QString &l : QString::fromUtf8(p.readAllStandardOutput()).split(QLatin1Char('\n'))) {
+        if (const auto m = hunk.match(l); m.hasMatch()) {
+            oldNo = m.captured(1).toInt();
+            newNo = m.captured(2).toInt();
+            body = true;
+            out << QVariantMap{{QStringLiteral("kind"), QStringLiteral("@")}, {QStringLiteral("text"), m.captured(3).trimmed()}};
+            continue;
+        }
+        if (!body || l.startsWith(QLatin1String("\\")))
+            continue;
+        const QChar k = l.isEmpty() ? QLatin1Char(' ') : l.at(0);
+        QVariantMap row{{QStringLiteral("kind"), QString(k)}, {QStringLiteral("text"), l.mid(1)}};
+        if (k == QLatin1Char('+')) {
+            row.insert(QStringLiteral("new"), newNo++);
+        } else if (k == QLatin1Char('-')) {
+            row.insert(QStringLiteral("old"), oldNo++);
+        } else {
+            row.insert(QStringLiteral("old"), oldNo++);
+            row.insert(QStringLiteral("new"), newNo++);
+        }
+        out << row;
+        if (out.size() > 20000)
+            break;
+    }
+    while (!out.isEmpty() && out.last().toMap().value(QStringLiteral("text")).toString().isEmpty()
+           && out.last().toMap().value(QStringLiteral("kind")).toString() == QLatin1String(" "))
+        out.removeLast();
+    return out;
 }
 
 // ——— Lista plików, szybkie otwieranie, szukanie ———

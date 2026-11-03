@@ -62,6 +62,7 @@ Window {
         revision++;
         Qt.callLater(() => { if (win.cur) win.cur.focusEditor(); });
         if (findBar.shown) Qt.callLater(findAll);
+        diffView.close();
     }
     // Pojedynczy klik w drzewie otwiera kartę podglądu (kursywa), którą zastępuje następny plik — jak w VS Code;
     // edycja albo podwójny klik zostawia kartę na stałe.
@@ -232,6 +233,17 @@ Window {
         if (s.available) { toast("Serwer języka " + s.name + " się uruchamia…"); return; }
         Project.copyText(s.package);
         toast("Brak serwera języka " + s.name + " — polecenie w schowku: " + s.package);
+    }
+    // Odrzucenie zmian: otwarte karty bez własnych zmian wczytują się na nowo (obserwacja pliku), reszta zostaje
+    function discardPaths(paths) {
+        Project.discard(paths);
+        diffView.close();
+    }
+    Connections {
+        target: Project
+        function onGitDone(op, ok, message) {
+            if (message && (!ok || op === "commit" || op === "push" || op === "pull")) win.toast(message);
+        }
     }
     function showProblems() {
         if (!hasProject) return;
@@ -434,6 +446,11 @@ Window {
         { label: "Powiększ tekst", shortcut: "Ctrl+=", action: "zoomIn", icon: "plus" },
         { label: "Pomniejsz tekst", shortcut: "Ctrl+-", action: "zoomOut", icon: "minus" },
         { label: "Odśwież stan gita", shortcut: "", action: "gitRefresh", icon: "reload" },
+        { label: "Git: zatwierdź", shortcut: "", action: "git:commit", icon: "check" },
+        { label: "Git: dodaj wszystkie zmiany", shortcut: "", action: "git:stageAll", icon: "plus" },
+        { label: "Git: wyślij (push)", shortcut: "", action: "git:push", icon: "upload" },
+        { label: "Git: pobierz (pull)", shortcut: "", action: "git:pull", icon: "download" },
+        { label: "Git: pokaż zmiany w pliku", shortcut: "", action: "git:diff", icon: "gitBranch" },
         { label: "Kopiuj ścieżkę pliku", shortcut: "", action: "copyPath", icon: "copy" },
         { label: "Kopiuj ścieżkę względną", shortcut: "", action: "copyRel", icon: "copy" },
         { label: "Pokaż w Plikach", shortcut: "", action: "showInFiles", icon: "folder" },
@@ -477,6 +494,11 @@ Window {
         else if (a === "zoomIn") zoom(1);
         else if (a === "zoomOut") zoom(-1);
         else if (a === "gitRefresh") Project.refreshGit();
+        else if (a === "git:commit") { showView(2); Qt.callLater(changesView.focusMessage); }
+        else if (a === "git:stageAll") Project.stage(Project.changes.filter(c => !!c.work).map(c => c.path));
+        else if (a === "git:push") Project.push();
+        else if (a === "git:pull") Project.pull();
+        else if (a === "git:diff") { if (curPath) diffView.open(curPath, false); }
         else if (a === "copyPath") { if (curPath) Project.copyText(curPath); }
         else if (a === "copyRel") { if (curPath) Project.copyText(Project.relative(curPath)); }
         else if (a === "showInFiles") Project.showInFiles(curPath || Project.root);
@@ -582,6 +604,13 @@ Window {
         else if (what.startsWith("tree:")) { const row = Project.tree.indexOf(Project.root + "/" + arg); const it = treeList.itemAtIndex(row); if (it) { const pp = it.mapToItem(frame, 60, 14); showTreeMenu(Project.root + "/" + arg, false, pp.x, pp.y); } }
         else if (what === "menu") showMenu();
         else if (what === "complete") { if (cur) cur.requestCompletion(); }
+        else if (what.startsWith("diff:")) diffView.open(Project.root + "/" + arg, false);
+        else if (what.startsWith("stage:")) Project.stage([Project.root + "/" + arg]);
+        else if (what.startsWith("commitmsg:")) { showView(2); changesView.setMessage(arg); }
+        else if (what === "commit") changesView.commitNow();
+        else if (what === "push") Project.push();
+        else if (what.startsWith("discardNow:")) win.discardPaths([Project.root + "/" + arg]);
+        else if (what.startsWith("discard:")) win.confirm = { kind: "discard", paths: [Project.root + "/" + arg], name: Project.fileName(arg) };
         else if (what === "problems") showProblems();
         else if (what === "definition") goToDefinition();
         else if (what.startsWith("keys:")) { if (cur) for (const ch of arg) cur.typeKey(ch); }
@@ -620,8 +649,8 @@ Window {
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; enabled: tabs.count > 1; onActivated: win.activate((win.current + 1) % tabs.count) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; enabled: tabs.count > 1; onActivated: win.activate((win.current - 1 + tabs.count) % tabs.count) }
     Shortcut { sequence: "F11"; onActivated: { if (win.visibility === Window.FullScreen) win.showNormal(); else win.showFullScreen(); } }
-    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm
-        onActivated: { if (win.confirm) win.confirm = null; else win.closeFind(); } }
+    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown
+        onActivated: { if (win.confirm) win.confirm = null; else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -792,6 +821,16 @@ Window {
                             delete win.pendingCursor[uid];
                         }
                     }
+                }
+
+                // Podgląd różnic (z widoku zmian)
+                DiffView {
+                    id: diffView
+                    anchors.fill: parent
+                    anchors.topMargin: banner.height
+                    z: 8
+                    fontSize: prefs.fontSize - 0.5
+                    onOpenFile: (path) => win.openFile(path)
                 }
 
                 // Bez otwartych plików — znak programu i skróty
@@ -1108,10 +1147,13 @@ Window {
                 onOpenMatch: (path, line, col, length) => win.openFile(path, { preview: true, line: line, col: col, length: length })
             }
             ChangesView {
+                id: changesView
                 visible: win.sidebarView === 2
                 y: sideTop.height
                 width: parent.width; height: parent.height - y
                 onOpenFile: (path) => win.openFile(path, { preview: true })
+                onShowDiff: (path, staged) => diffView.open(path, staged)
+                onDiscardRequested: (paths) => win.confirm = { kind: "discard", paths: paths, name: Project.fileName(paths[0] || "") }
             }
 
             // Zmiana szerokości paska
@@ -1161,15 +1203,23 @@ Window {
                     spacing: 8
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: !win.confirm ? "" : win.confirm.kind === "tab" ? "Zapisać zmiany w „" + win.confirm.name + "”?"
+                        text: !win.confirm ? "" : win.confirm.kind === "discard"
+                              ? (win.confirm.paths.length === 1 ? "Odrzucić zmiany w „" + win.confirm.name + "”?" : "Odrzucić zmiany w " + win.confirm.paths.length + " plikach?")
+                            : win.confirm.kind === "tab" ? "Zapisać zmiany w „" + win.confirm.name + "”?"
                             : win.confirm.count === 1 ? "Zapisać zmiany w 1 pliku?" : "Zapisać zmiany w " + win.confirm.count + " plikach?"
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                     }
-                    Text { width: parent.width; wrapMode: Text.Wrap; text: "Jeśli nie zapiszesz, zmiany przepadną."; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
+                    Text {
+                        width: parent.width; wrapMode: Text.Wrap
+                        text: win.confirm && win.confirm.kind === "discard" ? "Pliki wrócą do ostatniej zatwierdzonej wersji — tego nie da się cofnąć. Nowe pliki trafią do Kosza."
+                                                                           : "Jeśli nie zapiszesz, zmiany przepadną."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                    }
                     Item { width: 1; height: 10 }
                     Item {
                         width: parent.width; height: 34
                         Pill {
+                            visible: !!win.confirm && win.confirm.kind !== "discard"
                             text: "Nie zapisuj"; danger: true
                             onClicked: {
                                 const c = win.confirm;
@@ -1184,6 +1234,12 @@ Window {
                             spacing: 8
                             Pill { text: "Anuluj"; onClicked: win.confirm = null }
                             Pill {
+                                visible: !!win.confirm && win.confirm.kind === "discard"
+                                text: "Odrzuć zmiany"; danger: true
+                                onClicked: { const c = win.confirm; win.confirm = null; win.discardPaths(c.paths); }
+                            }
+                            Pill {
+                                visible: !win.confirm || win.confirm.kind !== "discard"
                                 text: win.confirm && win.confirm.kind === "all" ? "Zapisz wszystkie" : "Zapisz"; primary: true
                                 onClicked: {
                                     const c = win.confirm;

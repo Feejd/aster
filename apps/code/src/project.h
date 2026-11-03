@@ -11,6 +11,7 @@
 #include <QThread>
 #include <QVariantList>
 #include <atomic>
+#include <functional>
 #include <memory>
 
 // Otwarty folder projektu: drzewo plików, ostatnie foldery, wczytywanie i zapis plików,
@@ -33,7 +34,10 @@ class Project : public QObject
     Q_PROPERTY(QString head READ head NOTIFY gitChanged)
     Q_PROPERTY(int ahead READ ahead NOTIFY gitChanged)
     Q_PROPERTY(int behind READ behind NOTIFY gitChanged)
-    Q_PROPERTY(QVariantList changes READ changes NOTIFY gitChanged)        // [{ path, rel, name, dir, status, staged }]
+    Q_PROPERTY(QVariantList changes READ changes NOTIFY gitChanged)        // [{ path, rel, name, dir, status, staged, index, work }]
+    Q_PROPERTY(QString upstream READ upstream NOTIFY gitChanged)           // „origin/main” albo pusty
+    Q_PROPERTY(QVariantList commits READ commits NOTIFY gitChanged)        // ostatnie: [{ hash, subject, author, time }]
+    Q_PROPERTY(QString gitBusy READ gitBusy NOTIFY gitBusyChanged)         // trwająca operacja: commit, push, pull…
 
     Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)    // [{ path, rel, name, matches: [...] }]
     Q_PROPERTY(int resultCount READ resultCount NOTIFY resultsChanged)
@@ -61,6 +65,9 @@ public:
     int ahead() const { return m_ahead; }
     int behind() const { return m_behind; }
     QVariantList changes() const { return m_changes; }
+    QString upstream() const { return m_upstream; }
+    QVariantList commits() const { return m_commits; }
+    QString gitBusy() const { return m_gitBusy; }
     QVariantList results() const { return m_results; }
     int resultCount() const { return m_resultCount; }
     bool resultsTruncated() const { return m_truncated; }
@@ -100,6 +107,16 @@ public:
     // Git
     Q_INVOKABLE void refreshGit();
     Q_INVOKABLE void requestBase(const QString &path);           // wynik: baseReady
+    // Zatwierdzanie i synchronizacja — wynik: gitDone(operacja, ok, komunikat)
+    Q_INVOKABLE void stage(const QStringList &paths);
+    Q_INVOKABLE void unstage(const QStringList &paths);
+    Q_INVOKABLE void discard(const QStringList &paths);
+    Q_INVOKABLE void commit(const QString &message, bool amend, bool all);
+    Q_INVOKABLE void push();
+    Q_INVOKABLE void pull();
+    Q_INVOKABLE void fetch();
+    Q_INVOKABLE QString lastCommitMessage() const;
+    Q_INVOKABLE QVariantList diff(const QString &path, bool staged) const;
 
     // Szybkie otwieranie i szukanie
     Q_INVOKABLE void refreshFiles();
@@ -117,11 +134,16 @@ Q_SIGNALS:
     void message(const QString &text);
     void fileChanged(const QString &path);
     void baseReady(const QString &path, const QString &text, bool ok);
+    void gitDone(const QString &op, bool ok, const QString &message);
+    void gitBusyChanged();
 
 private:
     void addRecent(const QString &path);
     void parseStatus(const QByteArray &out);
     QString gitRelative(const QString &path) const;
+    QStringList gitPaths(const QStringList &paths) const;
+    void runGit(const QString &op, const QStringList &args, const QByteArray &input, std::function<void(bool, const QString &)> done);
+    void loadCommits();
     static QStringList listFiles(const QString &root, bool git);
 
     QString m_root, m_gitTop;
@@ -131,7 +153,8 @@ private:
 
     QPointer<QProcess> m_status;
     bool m_statusAgain = false;
-    QString m_branch, m_head;
+    QString m_branch, m_head, m_upstream, m_gitBusy;
+    QVariantList m_commits;
     int m_ahead = 0, m_behind = 0;
     QVariantList m_changes;
 
