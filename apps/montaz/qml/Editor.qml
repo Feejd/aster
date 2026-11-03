@@ -104,13 +104,16 @@ GlassPane {
         else if (what.startsWith("option:")) Project.setOption(arg, true);
         else if (what.startsWith("tab:")) inspector.clipTab = arg;
         else if (what === "deselect") selected = "";
+        else if (what === "captions") openCaptions();
+        else if (what.startsWith("captionsstart:")) { openCaptions(); Captions.start(arg, "pl", "zolty"); }
         else if (what === "export") exportSheet.open();
         else if (what.startsWith("exportstart:")) { exportSheet.open(); exportSheet.startWhenReady(arg); }
         else if (what === "menu") itemMenu(selected, timeline, 300, 120);
     }
 
     // ——— Skróty ———
-    readonly property bool keys: visible && !exportSheet.shown
+    readonly property bool keys: visible && !exportSheet.shown && !captionsSheet.shown
+    function openCaptions() { player.pause(); captionsSheet.open(); }
     Shortcut { sequence: "Space"; enabled: ed.keys; onActivated: player.toggle() }
     Shortcut { sequence: "S"; enabled: ed.keys; onActivated: ed.splitAtPlayhead() }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: ed.keys; onActivated: ed.removeSelected() }
@@ -374,6 +377,13 @@ GlassPane {
         width: parent.width; height: 276
         player: player
         editor: ed
+    }
+
+    CaptionsSheet {
+        id: captionsSheet
+        anchors.fill: parent
+        z: 50
+        onToast: (text) => ed.toast(text)
     }
 
     ExportSheet {

@@ -103,7 +103,9 @@ public:
     Q_INVOKABLE void setOption(const QString &key, const QVariant &value);   // ustawienia całego filmu (fadeIn, fadeOut)
     Q_INVOKABLE bool saveMlt(const QString &pathOrUrl) const;        // projekt dla Kdenlive/Shotcut
 
-    QString xml(int width, int height) const;                         // opis MLT dla danego rozmiaru
+    QString xml(int width, int height) const;
+    // Napisy z mowy: [{start, end, text}] w klatkach osi; zastępują poprzednie napisy z mowy. Zwraca liczbę dodanych.
+    int setCaptions(const QVariantList &items, const QString &style);                         // opis MLT dla danego rozmiaru
 
     static QString thumbUrl(const QString &path, int frame, const QString &look = QString());   // image://mthumb/…
     // Filtry MLT „wyglądu” klipu: [(usługa, [(właściwość, wartość)])] — wspólne dla filmu i miniatur
@@ -133,7 +135,7 @@ private:
         // wyliczane
         int start = 0, length = 0;
     };
-    struct Text { QString id, text, style, anim = QStringLiteral("wjazd"); int start = 0, length = 0; };
+    struct Text { QString id, text, style, anim = QStringLiteral("wjazd"); int start = 0, length = 0; bool caption = false; };
     struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
 
     QString m_id, m_name, m_format = QStringLiteral("9:16");

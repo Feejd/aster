@@ -180,7 +180,8 @@ QVariantList Project::texts() const
     QVariantList l;
     for (const Text &t : m_texts)
         l << QVariantMap{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
-                         {QStringLiteral("anim"), t.anim}, {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
+                         {QStringLiteral("anim"), t.anim}, {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length},
+                         {QStringLiteral("caption"), t.caption}};
     return l;
 }
 
@@ -419,7 +420,7 @@ QJsonObject Project::toJson() const
                              {QStringLiteral("saturation"), c.saturation}};
     for (const Text &t : m_texts)
         texts << QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("text"), t.text}, {QStringLiteral("style"), t.style},
-                             {QStringLiteral("anim"), t.anim},
+                             {QStringLiteral("anim"), t.anim}, {QStringLiteral("caption"), t.caption},
                              {QStringLiteral("start"), t.start}, {QStringLiteral("length"), t.length}};
     for (const Music &m : m_music)
         music << QJsonObject{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("start"), m.start},
@@ -477,7 +478,8 @@ void Project::fromJson(const QJsonObject &o)
         const QJsonObject m = v.toObject();
         m_texts << Text{m.value(QLatin1String("id")).toString(), m.value(QLatin1String("text")).toString(),
                         m.value(QLatin1String("style")).toString(), m.value(QLatin1String("anim")).toString(QStringLiteral("brak")),
-                        m.value(QLatin1String("start")).toInt(), m.value(QLatin1String("length")).toInt()};
+                        m.value(QLatin1String("start")).toInt(), m.value(QLatin1String("length")).toInt(),
+                        m.value(QLatin1String("caption")).toBool()};
     }
     for (const QJsonValue &v : o.value(QLatin1String("music")).toArray()) {
         const QJsonObject m = v.toObject();
@@ -986,6 +988,39 @@ void Project::setValue(const QString &id, const QString &key, const QVariant &va
         return;
     }
     commit();
+}
+
+int Project::setCaptions(const QVariantList &items, const QString &style)
+{
+    snapshot();
+    m_texts.removeIf([](const Text &t) { return t.caption; });
+    QList<QVariantMap> list;
+    for (const QVariant &v : items)
+        list << v.toMap();
+    std::sort(list.begin(), list.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a.value(QStringLiteral("start")).toInt() < b.value(QStringLiteral("start")).toInt();
+    });
+    int added = 0;
+    for (int i = 0; i < list.size(); ++i) {
+        Text t;
+        t.id = newId();
+        t.text = list.at(i).value(QStringLiteral("text")).toString();
+        t.style = style.isEmpty() ? QStringLiteral("zolty") : style;
+        t.anim = QStringLiteral("brak");
+        t.caption = true;
+        t.start = list.at(i).value(QStringLiteral("start")).toInt();
+        // Każdy napis widać co najmniej 0,6 s, ale nie dłużej niż do następnego
+        int end = qMax(list.at(i).value(QStringLiteral("end")).toInt(), t.start + Fps * 6 / 10);
+        if (i + 1 < list.size())
+            end = qMin(end, list.at(i + 1).value(QStringLiteral("start")).toInt());
+        t.length = end - t.start;
+        if (t.length < 3)
+            continue;
+        m_texts << t;
+        ++added;
+    }
+    commit();
+    return added;
 }
 
 void Project::setOption(const QString &key, const QVariant &value)

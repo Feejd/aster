@@ -162,8 +162,11 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       i korekta jasności, kontrastu, nasycenia; animacje napisów (pojawianie, wjazd od dołu i z boku, pisanie litera
       po literze); rozjaśnienie z czerni i ściemnienie na końcu filmu (obraz i dźwięk); kształt fali muzyki na osi;
       muzyka w tle przycinana przy dodaniu do długości filmu; test przeciągania myszą (krok drag: w ASTER_OPEN)
-- [ ] Montaż, dalej: automatyczne napisy z mowy (whisper.cpp offline, po polsku, model do pobrania przy pierwszym użyciu),
-      animacje „słowo po słowie” pod napisy z mowy, przejścia (przesunięcie, zoom),
+- [x] Montaż 3: napisy z mowy — whisper.cpp (pakiet whisper-cpp, offline, na procesorze), model „Szybki” (base,
+      ok. 150 MB) albo „Dokładny” (small, ok. 490 MB) pobierany przy pierwszym użyciu do ~/.local/share/Aster/aster-montaz/models;
+      polski, angielski albo wykrywanie języka; krótkie napisy (do ~34 znaków) w wybranym stylu, zwykłe i edytowalne,
+      ponowne rozpoznanie zastępuje poprzednie; pomijanie ciszy i typowych „halucynacji” Whispera (np. Amara.org)
+- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, przejścia (przesunięcie, zoom),
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
 - [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264

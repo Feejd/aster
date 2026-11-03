@@ -92,6 +92,7 @@ Item {
             Rectangle { width: 1; height: 20; color: Theme.line; anchors.verticalCenter: parent.verticalCenter }
             BarButton { icon: "textSize"; label: "Tekst"; hint: "T"; onClicked: tl.editor.addText() }
             BarButton { icon: "music"; label: "Muzyka"; onClicked: tl.editor.importRequested() }
+            BarButton { icon: "captions"; label: "Napisy z mowy"; visible: Captions.available; enabled: Project.clips.length > 0; onClicked: tl.editor.openCaptions() }
         }
         Row {
             anchors.right: parent.right; anchors.rightMargin: 12

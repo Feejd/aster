@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD:-$HOME/aster-build}"
 
 # Brak narzędzi albo nowych bibliotek (doszły w nowszej wersji kodu) → przygotowanie maszyny
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel mlt-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel mlt-devel whisper-cpp-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 
 # Stary katalog budowania z czasów, gdy budowała się sama powłoka — zacznij od nowa
 [ -f "$BUILD/CMakeCache.txt" ] && ! grep -q "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT\$" "$BUILD/CMakeCache.txt" && rm -rf "$BUILD"

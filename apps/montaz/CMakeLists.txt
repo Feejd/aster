@@ -1,7 +1,9 @@
 # Montaż (aster-montaz) — budowane z głównego CMakeLists.txt repozytorium.
 # Silnik: MLT 7 (pakiet mlt-devel, API C++ mlt++) — ten sam, na którym stoją Kdenlive i Shotcut;
 # podgląd: klatki z MLT jako tekstura w scenie QML, eksport przez FFmpeg (konsument avformat MLT).
-find_package(Qt6 REQUIRED COMPONENTS DBus)
+find_package(Qt6 REQUIRED COMPONENTS DBus Network)
+# Napisy z mowy: whisper.cpp (pakiet whisper-cpp-devel); bez niego program działa, tylko bez tej funkcji
+find_package(whisper CONFIG QUIET)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MLT REQUIRED IMPORTED_TARGET mlt++-7)
 
@@ -15,6 +17,7 @@ set(MONTAZ_QML
     qml/Timeline.qml
     qml/Inspector.qml
     qml/ExportSheet.qml
+    qml/CaptionsSheet.qml
 )
 foreach(f ${MONTAZ_QML})
     get_filename_component(name ${f} NAME)
@@ -30,6 +33,8 @@ qt_add_qml_module(aster-montaz
         src/project.h
         src/engine.cpp
         src/engine.h
+        src/captions.cpp
+        src/captions.h
 )
 
 target_link_libraries(aster-montaz PRIVATE
@@ -37,9 +42,17 @@ target_link_libraries(aster-montaz PRIVATE
     Qt6::Quick
     Qt6::Qml
     Qt6::DBus
+    Qt6::Network
     PkgConfig::MLT
     aster-uiplugin
 )
 
 install(TARGETS aster-montaz RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES org.aster.montaz.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+
+if(whisper_FOUND)
+    target_compile_definitions(aster-montaz PRIVATE HAVE_WHISPER)
+    target_link_libraries(aster-montaz PRIVATE whisper)
+else()
+    message(STATUS "aster-montaz: brak whisper.cpp — napisy z mowy wyłączone")
+endif()
