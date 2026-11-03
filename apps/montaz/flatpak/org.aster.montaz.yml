@@ -25,13 +25,21 @@ cleanup:
   - /share/man
   - "*.a"
 modules:
+  # Odszumianie głosu (filtr MLT „rnnoise”)
+  - name: rnnoise
+    buildsystem: autotools
+    config-opts: [--disable-static, --disable-examples, --disable-doc]
+    sources:
+      - type: archive
+        url: https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz
+        sha256: 90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37
   - name: mlt
     buildsystem: cmake-ninja
     config-opts: [-DCMAKE_BUILD_TYPE=Release, -DGPL=ON, -DGPL3=ON, -DBUILD_TESTING=OFF, -DSWIG_PYTHON=OFF,
                   -DMOD_QT=OFF, -DMOD_QT6=ON, -DMOD_GLAXNIMATE=OFF, -DMOD_GLAXNIMATE_QT6=OFF, -DMOD_OPENCV=OFF,
                   -DMOD_MOVIT=OFF, -DMOD_RTAUDIO=OFF, -DMOD_SOX=OFF, -DMOD_VIDSTAB=OFF, -DMOD_JACKRACK=OFF,
                   -DMOD_RUBBERBAND=OFF, -DMOD_FREI0R=OFF, -DMOD_SPATIALAUDIO=OFF, -DMOD_XINE=OFF, -DMOD_GDK=OFF,
-                  -DMOD_DECKLINK=OFF, -DMOD_NDI=OFF, -DMOD_SDL1=OFF]
+                  -DMOD_DECKLINK=OFF, -DMOD_NDI=OFF, -DMOD_SDL1=OFF, -DMOD_PLACEBO=OFF]
     sources:
       - type: git
         url: https://github.com/mltframework/mlt.git
