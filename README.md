@@ -16,6 +16,11 @@ Skrypt w razie potrzeby instaluje Flatpak, a potem Grafikę (paczka z wydania �
 `.github/workflows/grafika-flatpak.yml`). Ponowne uruchomienie aktualizuje program.
 Odinstalowanie: `flatpak uninstall --user org.aster.grafika`.
 
+Narzędzia AI w Grafice (usuwanie tła, magiczna gumka, wyodrębnianie obiektu kliknięciem, pędzlem albo lassem)
+działają na komputerze, przez ONNX Runtime, na małych modelach o wolnych licencjach: ISNet (Apache 2.0, 179 MB),
+MobileSAM (Apache 2.0, 45 MB) i MI-GAN (MIT, 28 MB). Modele pobierają się przy pierwszym użyciu do
+`~/.local/share/aster-grafika/models`; zdjęcia nigdzie nie są wysyłane.
+
 ## Co gdzie jest
 
 | Folder | Zawartość |

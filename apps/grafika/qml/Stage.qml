@@ -15,6 +15,11 @@ Item {
     property var group: ({})                    // prostokąt obejmujący kilka zaznaczonych (piksele strony)
     property string editing: ""
     property string cropping: ""                // zdjęcie w trybie kadrowania
+    // Narzędzia AI na zaznaczonym zdjęciu: object (kliknięcie w rzecz) | brush | lasso
+    readonly property bool magicOn: Magic.element !== "" && Magic.element === selected
+    property string magicTool: "object"
+    property real brushSize: 36                 // piksele ekranu
+    property bool magicSubtract: false
     property rect marquee: Qt.rect(0, 0, 0, 0)  // ramka zaznaczania (piksele strony)
     property bool marqueeOn: false
     property var marqueeBase: []
@@ -51,6 +56,7 @@ Item {
         group = selection.length > 1 ? bounds(selection) : ({});
     }
     onSelectedChanged: {
+        if (Magic.element !== "" && selected !== Magic.element) Magic.end();
         if (!syncing) selection = selected !== "" ? [selected] : [];
         refresh();
     }
@@ -91,7 +97,8 @@ Item {
     }
     // Esc: najpierw kończy kadrowanie, potem zdejmuje zaznaczenie
     function cancel() {
-        if (cropping !== "") cropping = "";
+        if (magicOn) Magic.end();
+        else if (cropping !== "") cropping = "";
         else clearSelection();
     }
     // Prostokąt (bez obrotu) obejmujący elementy
@@ -769,7 +776,7 @@ Item {
                 id: sel
                 readonly property var el: stage.current
                 readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
-                readonly property bool fixed: !!el.locked || stage.cropping !== ""     // bez uchwytów
+                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn     // bez uchwytów
                 visible: stage.selected !== "" && el.id !== undefined && !el.hidden
                 x: (el.x || 0) * stage.zoom
                 y: (el.y || 0) * stage.zoom
@@ -908,6 +915,96 @@ Item {
                     onActiveFocusChanged: if (!activeFocus && stage.editing !== "") stage.stopEditing()
                 }
             }
+
+            // ——— Narzędzia AI: zaznaczanie na zdjęciu ———
+            Item {
+                id: magicBox
+                readonly property var el: stage.current
+                visible: stage.magicOn
+                x: (el.x || 0) * stage.zoom
+                y: (el.y || 0) * stage.zoom
+                width: (el.w || 0) * stage.zoom
+                height: (el.h || 0) * stage.zoom
+                rotation: el.rotation || 0
+                Image {
+                    anchors.fill: parent
+                    visible: Magic.hasMask
+                    source: Magic.maskUrl
+                    cache: false
+                    smooth: true
+                }
+                Rectangle {
+                    anchors.fill: parent; anchors.margins: -1
+                    color: "transparent"
+                    border.width: 1.5; border.color: "#FF3D9A"
+                }
+                Canvas {
+                    id: strokeCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const ctx = getContext("2d");
+                        ctx.reset();
+                        if (pts.length === 0) return;
+                        ctx.beginPath();
+                        ctx.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) ctx.lineTo(q[0], q[1]);
+                        if (stage.magicTool === "lasso") {
+                            ctx.closePath();
+                            ctx.fillStyle = "rgba(255, 61, 154, 0.18)";
+                            ctx.fill();
+                            ctx.lineWidth = 1.5;
+                            ctx.strokeStyle = "#FF3D9A";
+                        } else {
+                            ctx.lineCap = "round";
+                            ctx.lineJoin = "round";
+                            ctx.lineWidth = stage.brushSize;
+                            ctx.strokeStyle = stage.magicSubtract ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 61, 154, 0.5)";
+                        }
+                        ctx.stroke();
+                    }
+                }
+                // Pędzel: kółko pod kursorem
+                Rectangle {
+                    id: brushRing
+                    visible: stage.magicTool === "brush" && magicArea.containsMouse
+                    width: stage.brushSize; height: width; radius: width / 2
+                    color: "transparent"
+                    border.width: 1.5; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.4) }
+                }
+                MouseArea {
+                    id: magicArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    enabled: !Magic.busy
+                    cursorShape: stage.magicTool === "brush" ? Qt.BlankCursor : Qt.CrossCursor
+                    onPositionChanged: (e) => {
+                        brushRing.x = e.x - brushRing.width / 2;
+                        brushRing.y = e.y - brushRing.height / 2;
+                        if (!pressed || stage.magicTool === "object") return;
+                        const last = strokeCanvas.pts[strokeCanvas.pts.length - 1];
+                        if (last && Math.hypot(e.x - last[0], e.y - last[1]) < 2) return;
+                        strokeCanvas.pts = strokeCanvas.pts.concat([[e.x, e.y]]);
+                        strokeCanvas.requestPaint();
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        strokeCanvas.pts = stage.magicTool === "object" ? [] : [[e.x, e.y]];
+                        strokeCanvas.requestPaint();
+                    }
+                    onReleased: (e) => {
+                        const k = 1 / stage.zoom;
+                        const sub = stage.magicSubtract || !!(e.modifiers & Qt.AltModifier);
+                        const pts = strokeCanvas.pts.map(q => [q[0] * k, q[1] * k]);
+                        if (stage.magicTool === "object") Magic.addObject(e.x * k, e.y * k, sub);
+                        else if (stage.magicTool === "brush") Magic.addStroke(pts, stage.brushSize * k, false, sub);
+                        else if (pts.length > 2) Magic.addStroke(pts, 0, true, sub);
+                        strokeCanvas.pts = [];
+                        strokeCanvas.requestPaint();
+                    }
+                }
+            }
         }
     }
 
@@ -1014,6 +1111,101 @@ Item {
             if (!pressed) return;
             flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, content.x - (e.x - start.x)));
             flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, content.y - (e.y - start.y)));
+        }
+    }
+
+    // ——— Pasek narzędzi AI ———
+    Rectangle {
+        id: magicBar
+        visible: stage.magicOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: Math.min(parent.width - 24, magicCol.implicitWidth + 28)
+        height: magicCol.implicitHeight + 24
+        radius: 18
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        Column {
+            id: magicCol
+            anchors.centerIn: parent
+            spacing: 10
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 6
+                Repeater {
+                    model: [{ id: "object", label: "Kliknij rzecz", icon: "target" }, { id: "brush", label: "Pędzel", icon: "brush" }, { id: "lasso", label: "Lasso", icon: "lasso" }]
+                    delegate: HoverButton {
+                        id: tool
+                        required property var modelData
+                        readonly property bool on: stage.magicTool === modelData.id
+                        width: toolRow.implicitWidth + 22; height: 32; radius: 16
+                        baseColor: on ? Theme.accent : Theme.fill
+                        color: on ? baseColor : hovered ? Theme.hover : baseColor
+                        onClicked: stage.magicTool = modelData.id
+                        Row {
+                            id: toolRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[tool.modelData.icon]; size: 15; stroke: 2; color: tool.on ? "white" : Theme.text }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: tool.modelData.label; color: tool.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: tool.on ? Font.DemiBold : Font.Normal }
+                        }
+                    }
+                }
+                Item { width: 6; height: 1 }
+                Chip { text: "Odejmij"; on: stage.magicSubtract; onClicked: stage.magicSubtract = !stage.magicSubtract }
+                ValueSlider {
+                    visible: stage.magicTool === "brush"
+                    width: 150; height: 44
+                    label: "Rozmiar"
+                    from: 6; to: 140; step: 1
+                    value: stage.brushSize
+                    suffix: " px"
+                    onMoved: (v) => stage.brushSize = v
+                }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: stage.magicTool === "object" ? "Kliknij rzecz na zdjęciu — zaznaczy się cała. Kliknij kolejne, żeby dodać."
+                    : stage.magicTool === "brush" ? "Zamaluj to, co chcesz usunąć albo wyciąć."
+                    : "Obrysuj fragment zdjęcia."
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 6
+                Btn { primary: true; icon: "sparkles"; text: "Usuń"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("erase") }
+                Btn { text: "Wyodrębnij"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("extract") }
+                Btn { text: "Przenieś"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("move") }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.undoMask() }
+                Btn { text: "Gotowe"; height: 34; onClicked: Magic.end() }
+            }
+        }
+    }
+    // Praca AI w toku (także „Usuń tło” z panelu)
+    Rectangle {
+        visible: Magic.busy
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top; anchors.topMargin: stage.ruler + 14
+        width: busyCol.implicitWidth + 32; height: busyCol.implicitHeight + 18; radius: 16
+        color: Qt.rgba(0, 0, 0, 0.78)
+        Column {
+            id: busyCol
+            anchors.centerIn: parent
+            spacing: 6
+            Row {
+                spacing: 8
+                Icon {
+                    d: Icons.sparkles; size: 15; stroke: 2; color: "white"
+                    RotationAnimation on rotation { running: Magic.busy; from: 0; to: 360; duration: 1600; loops: Animation.Infinite }
+                }
+                Text { text: Magic.status; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+            }
+            Rectangle {
+                visible: Magic.progress >= 0
+                width: parent.width; height: 4; radius: 2
+                color: Qt.rgba(1, 1, 1, 0.25)
+                Rectangle { width: parent.width * Math.max(0, Magic.progress); height: parent.height; radius: 2; color: "white" }
+            }
         }
     }
 

@@ -510,6 +510,34 @@ Item {
                     Btn { visible: !!ins.el.src; text: "Jako tło"; onClicked: ins.editor.imageToBackground(ins.id_) }
                 }
             }
+            // Narzędzia AI — małe modele na komputerze, pobierane przy pierwszym użyciu
+            Section {
+                visible: ins.type === "image" && !!ins.el.src && Magic.available
+                title: "Magia AI"
+                Btn {
+                    width: parent.width
+                    primary: true
+                    icon: "sparkles"
+                    text: "Usuń tło"
+                    enabled: !Magic.busy
+                    onClicked: Magic.removeBackground(ins.project, ins.id_)
+                }
+                Btn {
+                    width: parent.width
+                    icon: "brush"
+                    text: "Gumka i wyodrębnianie"
+                    enabled: !Magic.busy
+                    onClicked: ins.editor.startMagic()
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    readonly property int mb: ins.id_ !== "" && !Magic.busy ? Magic.downloadMB("background") + Magic.downloadMB("object") + Magic.downloadMB("erase") : 0
+                    text: "Usuwa tło, niechciane rzeczy ze zdjęcia albo wycina obiekt jako osobny element. Działa na tym komputerze — zdjęcia nigdzie nie wychodzą."
+                          + (mb > 0 ? " Za pierwszym razem pobierze modele (do " + mb + " MB)." : "")
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                }
+            }
             Section {
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Kadr"
@@ -630,7 +658,7 @@ Item {
             }
             Section {
                 visible: ins.type === "image" && !!ins.el.src
-                title: "Tło zdjęcia"
+                title: Magic.available ? "Jednolite tło (bez AI)" : "Tło zdjęcia"
                 Chip {
                     text: ins.el.removeBg ? "Tło usunięte" : "Usuń jednolite tło"
                     on: !!ins.el.removeBg

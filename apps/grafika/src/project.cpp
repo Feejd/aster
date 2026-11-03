@@ -1078,6 +1078,24 @@ QImage Project::image(const QString &key, qreal pixels) const
     return pixels <= pv * 1.05 ? it->preview : it->full;
 }
 
+QImage Project::fullImage(const QString &key) const
+{
+    const auto it = m_assets.constFind(key);
+    return it == m_assets.cend() ? QImage() : it->full;
+}
+
+QString Project::addImage(const QImage &img)
+{
+    QByteArray data;
+    QBuffer buf(&data);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    const QString key = addAsset(data, QStringLiteral("png"));
+    if (!key.isEmpty())
+        Q_EMIT imagesChanged();
+    return key;
+}
+
 QSize Project::imageSize(const QString &key) const
 {
     const auto it = m_assets.constFind(key);

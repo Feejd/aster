@@ -178,6 +178,27 @@ Item {
         project.removeAll(ids);
     }
     function copy() { if (many.length > 0) project.copy(many); }
+    // Narzędzia AI na zaznaczonym zdjęciu
+    function startMagic() {
+        if (sel === "" || stage.current.type !== "image" || !stage.current.src) return;
+        stage.stopEditing();
+        stage.cropping = "";
+        Magic.begin(project, sel);
+        stage.forceActiveFocus();
+    }
+    function undo() {
+        if (Magic.element !== "" && Magic.hasMask) { Magic.undoMask(); return; }
+        project.undo();
+        if (Magic.element !== "" && project.indexOf(Magic.element) >= 0) Magic.begin(project, Magic.element);
+    }
+    Connections {
+        target: Magic
+        function onFinished(message, ids) {
+            if (Magic.element === "" && ids.length > 0) stage.setSelection(ids);
+            if (message !== "") ed.app.toast(message, "");
+        }
+        function onFailed(message) { ed.app.toast(message, ""); }
+    }
     function saveElements() {
         if (many.length === 0) return;
         if (project.saveElements(many)) app.toast("Zapisano w „Moich elementach” — znajdziesz je w zakładce Elementy w każdym projekcie", "");
@@ -387,6 +408,8 @@ Item {
         else if (a === "group") group();
         else if (a === "copyStyle") copyStyle();
         else if (a === "saveElements") saveElements();
+        else if (a === "aiBackground") Magic.removeBackground(project, sel);
+        else if (a === "aiMagic") startMagic();
         else if (a === "pasteStyle") pasteStyle();
         else if (a === "ungroup") ungroup();
         else if (a === "unlock") setLocked(false);
@@ -415,6 +438,10 @@ Item {
             if (el.type === "text") items.push({ label: "Edytuj tekst", icon: "pencil", shortcut: "Enter", action: "edit" });
             if (el.type === "image" && el.src) items.push({ label: "Kadruj", icon: "crop", shortcut: "dwuklik", action: "crop" });
             if (el.type === "image") items.push({ label: "Odbij w poziomie", icon: "mirror", action: "flip" });
+            if (el.type === "image" && el.src && Magic.available) {
+                items.push({ label: "Usuń tło (AI)", icon: "sparkles", action: "aiBackground" });
+                items.push({ label: "Gumka i wyodrębnianie", icon: "brush", action: "aiMagic" });
+            }
             items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
             items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
             items.push({ label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste" });
@@ -490,6 +517,12 @@ Item {
         else if (cmd === "menuaction") runMenu(arg);
         else if (cmd === "savestyle") side.saveTextStyle();
         else if (cmd === "saveel") saveElements();
+        else if (cmd === "magic") startMagic();
+        else if (cmd === "magicbg") Magic.removeBackground(project, sel);
+        else if (cmd === "magicobj") { const [x, y] = arg.split(",").map(Number); Magic.addObject(x, y, false); }
+        else if (cmd === "magicstroke") { const a = JSON.parse(arg); Magic.addStroke(a.points, a.width || 0, !!a.lasso, false); }
+        else if (cmd === "magicapply") Magic.apply(arg);
+        else if (cmd === "magictool") stage.magicTool = arg;
         else if (cmd === "insertsaved") insertSaved(side.saved[Number(arg)].file);
         else if (cmd === "replacecolor") { const [a, b] = arg.split(","); project.commit(); project.replaceColor(a, b); }
         else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
@@ -506,7 +539,7 @@ Item {
     }
 
     // ——— Skróty ———
-    Shortcut { sequences: [StandardKey.Undo]; enabled: ed.active && !ed.typing; onActivated: ed.project.undo() }
+    Shortcut { sequences: [StandardKey.Undo]; enabled: ed.active && !ed.typing; onActivated: ed.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Y"]; enabled: ed.active && !ed.typing; onActivated: ed.project.redo() }
     Shortcut { sequences: [StandardKey.Delete, "Backspace"]; enabled: ed.active && !ed.typing; onActivated: ed.remove() }
     Shortcut { sequences: [StandardKey.Copy]; enabled: ed.active && !ed.typing; onActivated: ed.copy() }
@@ -663,7 +696,7 @@ Item {
                 anchors.right: parent.right; anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: ed.project.canUndo; onClicked: ed.project.undo() }
+                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: ed.project.canUndo; onClicked: ed.undo() }
                 ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
                 Item { width: 8; height: 1 }
                 ToolBtn {

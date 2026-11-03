@@ -63,6 +63,8 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `radius` albo `mask` (`ellipse`, `arch`, `leaf`, `blob`, `hexagon`, `heart`, `star`, `triangle`), `zoom` (≥ 1 — powiększenie kadru), `flipX` (odbicie lustrzane),
   `brightness`, `contrast`, `saturation` (−1–1), `blur` i `vignette` (0–1), `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`,
   `duotone` z kolorami `duo1` — cienie i `duo2` — światła), `removeBg` z `bgTolerance` (0–1, usunięcie jednolitego tła).
+  Narzędzia AI (usuwanie tła, gumka, wyodrębnianie) nie dodają pól: wynik to nowe zdjęcie w `images/` (PNG
+  z przezroczystością), a element dostaje jego `src` — poprzednie zdjęcie zostaje w historii cofania.
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.
 - `code`: `kind` (`qr`, `code128`, `ean13`), `data` albo dla Wi-Fi `qrType: "wifi"` z `ssid` i `pass`; `color` (kod),

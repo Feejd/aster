@@ -46,7 +46,21 @@ qt_add_qml_module(aster-grafika
         src/library.h
         src/online.cpp
         src/online.h
+        src/magic.cpp
+        src/magic.h
 )
+
+# Narzędzia AI (usuwanie tła, gumka, wyodrębnianie) — ONNX Runtime; bez niego program działa, tylko bez nich
+find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h PATH_SUFFIXES onnxruntime onnxruntime/core/session)
+find_library(ONNXRUNTIME_LIBRARY onnxruntime)
+if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+    target_include_directories(aster-grafika PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+    target_link_libraries(aster-grafika PRIVATE ${ONNXRUNTIME_LIBRARY})
+    target_compile_definitions(aster-grafika PRIVATE GRAFIKA_ONNX)
+    message(STATUS "Grafika: narzędzia AI z ONNX Runtime (${ONNXRUNTIME_LIBRARY})")
+else()
+    message(STATUS "Grafika: bez ONNX Runtime — bez narzędzi AI")
+endif()
 
 # Szablony — zwykłe pliki projektu (project.json), wbudowane w program pod :/szablony
 file(GLOB GRAFIKA_TEMPLATES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS templates/*.json)
