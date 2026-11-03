@@ -88,12 +88,17 @@ Programy:
       przeciąganiem na okno) i schowka, pliki telefonu w Plikach (SFTP), powiadomienia z telefonu z zamykaniem
 - [ ] Telefon, dalej: SMS-y i rozmowy, odpowiadanie na powiadomienia, sterowanie muzyką na telefonie
 
-Usuwanie z obrazu (`image/Containerfile`, `dnf remove` po zbudowaniu zastępców):
-- [ ] Programy: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso, skanlite, kdeconnect-app/sms (zostaje kdeconnectd), kcalc, ark, discover,
-      plasma-systemmonitor, kinfocenter, kwalletmanager, ksystemlog, kmail/kontact, akregator, gry KDE, plasma-welcome
-- [ ] Zostaje infrastruktura bez okien: KWin, biblioteki Plasmy (powiadomienia, zadania), KIO, PowerDevil, PipeWire,
-      NetworkManager, BlueZ, kded; KDE-owe okna systemowe znikają dopiero po zrobieniu własnych (portal, polkit)
-- [ ] Ustawienia KDE (systemsettings) ukryte w Starcie, ale zostają dla zaawansowanych
+Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
+- [x] Programy zastąpione przez Aster: dolphin, konsole, kate, kwrite, okular, gwenview, elisa, dragon/haruna, kamoso,
+      skanlite, kcalc, ark, filelight, partitionmanager, kcharselect, discover, plasma-systemmonitor, kinfocenter,
+      kwalletmanager, ksystemlog, kmail/kontact/akregator, khelpcenter, plasma-welcome, drkonqi, gry KDE
+      — bez sprzątania „niepotrzebnych” zależności (dnf zabrałby flatpak, fwupd, sshfs); próba: `--dry-run`
+- [x] Zostaje infrastruktura bez okien (sprawdzane po usunięciu — inaczej budowa obrazu się przerywa): KWin, Plasma,
+      KIO z kio-extras, PowerDevil, PipeWire, NetworkManager, BlueZ, kdeconnectd (z pakietem kde-connect), flatpak, fwupd
+- [x] Ustawienia KDE (systemsettings), edytor menu, okna KDE Connect, Klipper — ukryte w Starcie; Ustawienia KDE
+      otwiera Ustawienia Aster → Ogólne → „Zaawansowane ustawienia (KDE)”; w maszynie wirtualnej install-vm.sh
+      ukrywa zastąpione programy w Starcie (pakiety zostają, całkiem usuwa je `sudo sh image/debloat.sh`)
+- [ ] Sprawdzić listę na prawdziwym obrazie Kinoite przy pierwszej budowie (Etap 4)
 
 ## Etap 4 — prawdziwy system do zainstalowania
 - [ ] Obraz systemu (`image/Containerfile`) budowany automatycznie przy każdej zmianie.

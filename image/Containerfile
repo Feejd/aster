@@ -24,6 +24,10 @@ RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fo
  && systemctl --global enable aster-shell.service \
  && dnf clean all
 
+# ——— Bez zdublowanych programów: KDE-owe okna zastąpione przez Aster znikają (infrastruktura KDE zostaje) ———
+COPY image/debloat.sh /tmp/debloat.sh
+RUN sh /tmp/debloat.sh && rm -f /tmp/debloat.sh && dnf clean all
+
 # ——— Start jak w macOS: znak Aster, bez tekstu, od razu do sesji Aster ———
 COPY image/boot/10-aster.toml /usr/lib/bootc/kargs.d/10-aster.toml
 COPY image/boot/10-aster-sddm.conf /etc/sddm.conf.d/10-aster.conf

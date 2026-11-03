@@ -37,6 +37,8 @@ rm -f "$HOME/.local/share/kglobalaccel/org.aster.tasks.desktop" "$HOME/.local/sh
 kwriteconfig6 --file kglobalaccelrc --group org.kde.plasma.emojier.desktop --key _launch "Meta+Ctrl+Alt+Shift+Space,Meta+Ctrl+Alt+Shift+Space,Emoji Selector" 2>/dev/null || true
 sudo systemctl --global enable aster-shell.service
 fc-cache -f >/dev/null 2>&1 || true
+# Programy KDE zastąpione przez Aster znikają ze Startu (pakiety zostają; całkiem usuwa je: sudo sh image/debloat.sh)
+sh "$ROOT/image/debloat.sh" --hide
 
 echo "==> Ekran startowy Aster (przebudowa initramfs — chwilę potrwa)…"
 rpm -q plymouth-plugin-script >/dev/null 2>&1 || sudo dnf install -y plymouth-plugin-script

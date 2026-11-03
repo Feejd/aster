@@ -75,6 +75,11 @@ Page {
         SettingRow { title: "Skróty klawiszowe"; icon: "keyboard"; chevron: true; onClicked: gp.navigate("shortcuts") }
     }
 
+    Section {
+        footer: "Pełne ustawienia KDE — dla zaawansowanych. Większość z nich jest już w Ustawieniach Aster."
+        SettingRow { title: "Zaawansowane ustawienia (KDE)"; icon: "sliders"; chevron: true; onClicked: System.run("systemsettings") }
+    }
+
     Sheet {
         id: hostSheet
         title: "Nazwa komputera"
