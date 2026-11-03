@@ -11,6 +11,8 @@ import Aster.Ui
 //  środek  — dynamiczna wyspa: godzina; gdy gra muzyka — okładka i korektor; po najechaniu — data.
 //            Powiadomienie (od każdego programu, także aplikacji webowych) rozlewa wyspę w kartę:
 //            klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
+//            Asystent (Super+Spacja albo klik w wyspę): wyspa rozlewa się w pole pytania, krótka odpowiedź
+//            zostaje w wyspie i znika jak powiadomienie; dłuższa rozmowa przechodzi do panelu z prawej.
 //  prawa   — wyszukiwanie, stan sieci, dźwięku i baterii: otwiera centrum sterowania
 Window {
     id: hz
@@ -27,8 +29,10 @@ Window {
     readonly property int barH: 32
     property bool controlOpen: false
     property bool primary: true                // powiadomienia tylko na głównym ekranie
+    property bool assistantOpen: false         // panel asystenta otwarty (Shell)
     signal startRequested()
     signal controlRequested()
+    signal assistantPanelRequested(bool show)
 
     Component.onCompleted: {
         Platform.makeLayer(hz, "top", 1 | 4 | 8, hz.reserved, "none", "aster-horizon");
@@ -83,6 +87,66 @@ Window {
         id: showTimer
         interval: Platform.env("ASTER_SHOT_NOTIFY") !== "" ? 60000 : 5500
         onTriggered: if (islandHover.hovered) restart(); else hz.next()
+    }
+
+    // ——— Asystent w wyspie ———
+    property bool asking: false
+    readonly property bool answerShown: asking && Assistant.count > 0
+    readonly property int askW: Math.max(360, Math.min(580, hz.width - 2 * Math.max(left.width, right.width) - 40))
+    // Odpowiedź za długa na wyspę: lista kroków, kod, tabela albo po prostu dużo tekstu
+    readonly property bool longAnswer: {
+        const a = Assistant.lastAnswer;
+        return a.length > 260 || a.indexOf("```") >= 0 || a.indexOf("|---") >= 0 || a.split("\n").length > 4;
+    }
+    function openAsk() {
+        dismissTimer.stop();
+        if (!asking) {
+            Assistant.newConversation();
+            Assistant.refreshStatus();
+            askField.text = "";
+            asking = true;
+            Platform.setKeyboard(hz, "exclusive");
+            hz.requestActivate();
+        }
+        askField.forceActiveFocus();
+    }
+    function closeAsk() {
+        if (!asking) return;
+        asking = false;
+        dismissTimer.stop();
+        askField.focus = false;
+        Platform.setKeyboard(hz, "none");
+    }
+    function toggleAsk() {
+        if (hz.assistantOpen) hz.assistantPanelRequested(false);
+        else if (asking) closeAsk();
+        else openAsk();
+    }
+    function submitAsk() {
+        const t = askField.text.trim();
+        if (t === "") return;
+        askField.text = "";
+        dismissTimer.stop();
+        Assistant.ask(t, Assistant.exchanges > 0 ? "panel" : "wyspa");
+    }
+    // Do testów (ASTER_SHOT_ASK): wpisuje pytanie i wysyła je jak użytkownik
+    function askNow(text) { openAsk(); askField.text = text; submitAsk(); }
+    Connections {
+        target: Assistant
+        enabled: hz.asking
+        function onChanged() {
+            if (Assistant.exchanges > 1 || hz.longAnswer) {
+                hz.closeAsk();
+                hz.assistantPanelRequested(true);
+            }
+        }
+        function onAnswered() { dismissTimer.restart(); }
+    }
+    // Krótka odpowiedź znika po chwili (kursor nad wyspą albo pisanie wstrzymują)
+    Timer {
+        id: dismissTimer
+        interval: Platform.env("ASTER_SHOT_ASK") !== "" ? 60000 : 12000
+        onTriggered: if (islandHover.hovered || askField.text !== "") restart(); else hz.closeAsk()
     }
 
     // ——— Lewa wyspa ———
@@ -143,9 +207,9 @@ Window {
         solid: true
         readonly property var n: hz.current
         readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
-        width: hz.noting ? 440 : idleW
-        height: hz.noting ? 92 : hz.barH
-        radius: Math.min(height / 2, 28)
+        width: hz.asking ? hz.askW : hz.noting ? 440 : idleW
+        height: hz.asking ? askCol.implicitHeight : hz.noting ? 92 : hz.barH
+        radius: hz.asking ? 24 : Math.min(height / 2, 28)
         x: Math.round((hz.width - width) / 2)
         y: hz.barY
         onWidthChanged: hz.updateRegion()
@@ -156,15 +220,19 @@ Window {
 
         HoverHandler { id: islandHover }
         TapHandler {
-            onTapped: if (island.n) { Platform.activateNotification(island.n.id); hz.next(); }
+            onTapped: {
+                if (hz.asking) return;
+                if (island.n) { Platform.activateNotification(island.n.id); hz.next(); }
+                else hz.toggleAsk();
+            }
         }
 
         // Spoczynek: (okładka) godzina / data (korektor)
         Item {
             anchors.fill: parent
-            opacity: hz.noting ? 0 : 1
+            opacity: hz.noting || hz.asking ? 0 : 1
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: hz.noting ? 90 : 260 } }
+            Behavior on opacity { NumberAnimation { duration: hz.noting || hz.asking ? 90 : 260 } }
 
             Rectangle {
                 id: art
@@ -242,7 +310,7 @@ Window {
         // Karta powiadomienia
         Item {
             anchors.fill: parent
-            opacity: hz.noting && island.height > 70 ? 1 : 0
+            opacity: hz.noting && !hz.asking && island.height > 70 ? 1 : 0
             visible: opacity > 0
             Behavior on opacity { NumberAnimation { duration: 180 } }
 
@@ -324,6 +392,145 @@ Window {
                 MouseArea {
                     id: closeArea; anchors.fill: parent; hoverEnabled: true
                     onClicked: { if (island.n) Platform.dismissNotification(island.n.id); hz.next(); }
+                }
+            }
+        }
+    }
+
+    // ——— Pole pytania i krótka odpowiedź (w środku dynamicznej wyspy) ———
+    Item {
+        parent: island
+        anchors.fill: parent
+        opacity: hz.asking && island.width > hz.askW * 0.8 ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: hz.asking ? 200 : 80 } }
+
+        Column {
+            id: askCol
+            x: 10
+            width: parent.width - 20
+            bottomPadding: hz.answerShown ? 10 : 0
+
+            Item {
+                width: parent.width
+                height: 46
+                // Iskra asystenta; kręci się, gdy model pisze
+                Rectangle {
+                    id: spark
+                    width: 30; height: 30; radius: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.45) }
+                        GradientStop { position: 1; color: "#7C3AED" }
+                    }
+                    Icon {
+                        anchors.centerIn: parent; d: Icons.sparkle; size: 16; stroke: 2; color: "white"
+                        RotationAnimation on rotation { running: Assistant.busy; loops: Animation.Infinite; from: 0; to: 360; duration: 1600 }
+                    }
+                }
+                TextInput {
+                    id: askField
+                    anchors.left: spark.right; anchors.leftMargin: 12
+                    anchors.right: keyHint.left; anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: "white"
+                    selectionColor: Qt.rgba(1, 1, 1, 0.25)
+                    font.family: Theme.font; font.pixelSize: 15
+                    clip: true
+                    Keys.onReturnPressed: hz.submitAsk()
+                    Keys.onEnterPressed: hz.submitAsk()
+                    Keys.onEscapePressed: { if (Assistant.busy) Assistant.cancel(); hz.closeAsk(); }
+                    onTextChanged: if (text !== "") dismissTimer.stop()
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !askField.text
+                        text: hz.answerShown ? "Dopytaj…" : "Zapytaj o cokolwiek…"
+                        color: Qt.rgba(1, 1, 1, 0.38)
+                        font: askField.font
+                    }
+                }
+                // Klawisz podpowiedzi: ↵ gdy jest co wysłać, Esc gdy pusto
+                Rectangle {
+                    id: keyHint
+                    anchors.right: parent.right; anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: keyText.implicitWidth + 14; height: 22; radius: 7
+                    color: Qt.rgba(1, 1, 1, 0.08)
+                    border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.1)
+                    Text {
+                        id: keyText
+                        anchors.centerIn: parent
+                        text: askField.text !== "" ? "↵" : "Esc"
+                        color: Qt.rgba(1, 1, 1, 0.5)
+                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                    }
+                }
+            }
+
+            // Odpowiedź
+            Item {
+                visible: hz.answerShown
+                width: parent.width
+                height: visible ? answerCol.implicitHeight + 10 : 0
+                Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+                Column {
+                    id: answerCol
+                    x: 4; y: 10
+                    width: parent.width - 8
+                    spacing: 8
+                    // Kropki, zanim przyjdzie pierwszy kawałek odpowiedzi
+                    Row {
+                        visible: Assistant.busy && Assistant.lastAnswer === ""
+                        spacing: 5
+                        height: 18
+                        Repeater {
+                            model: 3
+                            delegate: Rectangle {
+                                id: dot
+                                required property int index
+                                width: 6; height: 6; radius: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: Qt.rgba(1, 1, 1, 0.7)
+                                SequentialAnimation on opacity {
+                                    running: Assistant.busy; loops: Animation.Infinite
+                                    PauseAnimation { duration: dot.index * 160 }
+                                    NumberAnimation { from: 0.25; to: 1; duration: 320 }
+                                    NumberAnimation { from: 1; to: 0.25; duration: 320 }
+                                    PauseAnimation { duration: (2 - dot.index) * 160 }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        visible: text !== ""
+                        width: parent.width
+                        text: Assistant.lastError ? Assistant.lastAnswer : Assistant.lastAnswer.replace(/\*\*/g, "")
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 5
+                        elide: Text.ElideRight
+                        color: Assistant.lastError ? "#FF9C94" : Qt.rgba(1, 1, 1, 0.9)
+                        font.family: Theme.font; font.pixelSize: 14
+                        lineHeight: 1.12
+                    }
+                    // Kto odpowiedział + podpowiedź
+                    Row {
+                        visible: !Assistant.busy
+                        spacing: 10
+                        AssistantBadge { visible: !Assistant.lastError; text: Assistant.lastBadge }
+                        Rectangle {
+                            visible: Assistant.lastError
+                            width: setText.implicitWidth + 18; height: 22; radius: 11
+                            color: setArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.1)
+                            Text { id: setText; anchors.centerIn: parent; text: "Ustawienia asystenta"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+                            MouseArea { id: setArea; anchors.fill: parent; hoverEnabled: true; onClicked: { hz.closeAsk(); Assistant.openSettings(); } }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "↵ dopytaj · Esc zamknij"
+                            color: Qt.rgba(1, 1, 1, 0.32)
+                            font.family: Theme.font; font.pixelSize: 11
+                        }
+                    }
                 }
             }
         }

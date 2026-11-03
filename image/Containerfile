@@ -9,6 +9,7 @@ RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules python3 \
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
+COPY assistant /src/assistant
 COPY apps /src/apps
 COPY session /src/session
 COPY data /src/data

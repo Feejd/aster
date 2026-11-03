@@ -20,17 +20,55 @@ QtObject {
             screen: modelData
             primary: modelData === Qt.application.screens[0]
             controlOpen: controlWin.open
-            onStartRequested: { controlWin.close(); startWin.toggle(); }
-            onControlRequested: { startWin.close(); controlWin.toggle(); }
+            assistantOpen: assistWin.open
+            onStartRequested: { controlWin.close(); assistWin.close(); startWin.toggle(); }
+            onControlRequested: { startWin.close(); assistWin.close(); controlWin.toggle(); }
+            onAssistantPanelRequested: show => {
+                if (!show) { assistWin.close(); return; }
+                startWin.close(); controlWin.close(); assistWin.show();
+            }
         }
     }
     property var clock: ClockWindow {}
     property var start: StartWindow { id: startWin }
     property var control: ControlCenterWindow { id: controlWin }
+    property var assistant: AssistantWindow { id: assistWin }   // panel asystenta z prawej
     property var auth: AuthWindow {}            // hasło administratora (agent polkit)
     property var dock: DockWindow {
         startOpen: startWin.open
         onStartRequested: { controlWin.close(); startWin.toggle(); }
+    }
+
+    // Super+Spacja: pole pytania w wyspie głównego ekranu (albo zamknięcie otwartego panelu)
+    property var assistantKey: Connections {
+        target: Assistant
+        function onToggleRequested() {
+            const h = shell.horizons.objectAt(0);
+            if (assistWin.open) assistWin.close();
+            else if (h) h.toggleAsk();
+        }
+    }
+    // Do testów: ASTER_SHOT_ASK="pytanie|kolejne|…" — pierwsze w wyspie, kolejne jak dopytanie
+    property var shotAsk: Timer {
+        readonly property var questions: Platform.env("ASTER_SHOT_ASK") === "" ? [] : Platform.env("ASTER_SHOT_ASK").split("|")
+        property int next: 0
+        running: questions.length > 0
+        interval: 1300
+        onTriggered: {
+            const h = shell.horizons.objectAt(0);
+            if (h) h.askNow(questions[0]);
+            next = 1;
+        }
+    }
+    property var shotAskNext: Connections {
+        target: Assistant
+        enabled: shell.shotAsk.questions.length > 1
+        function onAnswered() {
+            if (shell.shotAsk.next >= shell.shotAsk.questions.length) return;
+            const q = shell.shotAsk.questions[shell.shotAsk.next++];
+            const h = shell.horizons.objectAt(0);
+            Qt.callLater(() => { if (assistWin.open) assistWin.askNow(q); else if (h) h.askNow(q); });
+        }
     }
 
     // Klawisz Super (KWin wywołuje org.kde.plasmashell → activateLauncherMenu)

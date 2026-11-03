@@ -8,6 +8,8 @@ qt_add_executable(aster-shell
     src/controlcenter.h
     src/polkitagent.cpp
     src/polkitagent.h
+    src/assistant.cpp
+    src/assistant.h
 )
 
 target_include_directories(aster-shell PRIVATE src)
@@ -23,6 +25,8 @@ set(ASTER_QML
     qml/ClockWindow.qml
     qml/ControlCenterWindow.qml
     qml/AuthWindow.qml
+    qml/AssistantWindow.qml
+    qml/AssistantBadge.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform

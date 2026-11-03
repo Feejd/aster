@@ -159,7 +159,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
 - [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
-- [ ] Asystent Aster — rozpisany niżej („Asystent Aster”).
+- [ ] Asystent Aster — rozpisany niżej („Asystent Aster”); gotowe A1 (usługa, `aster` w terminalu, Ustawienia) i A2 (wyspa, panel).
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
 - [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
@@ -373,9 +373,25 @@ albo lokalny — zawsze widać który, a nic nie wychodzi z komputera bez zgody.
 historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
 
 **Etapy**
-- [ ] A1. Usługa `aster-assistant` + polecenie `aster` w terminalu (jedno pytanie, rozmowa, potok), dostawcy
-      zgodni z OpenAI i Anthropic, klucze w portfelu, Ustawienia → Asystent
-- [ ] A2. Wyspa: pole pytania i krótka odpowiedź; panel z prawej dla rozmów (przejście z wyspy do panelu), historia
+- [x] A1. Usługa `aster-assistant` (`assistant/`: Qt Core/Network/DBus, bez GUI; startuje na żądanie przez D-Bus,
+      kończy się po 15 min bezczynności) + polecenie `aster`/`ai` (jedno pytanie strumieniowo, rozmowa z `/nowa`,
+      `/model` — z ostrzeżeniem, gdzie trafią pytania, i wpisaniem klucza bez echa — `/wyjdz`, potok jako kontekst;
+      komendy z bloków ```bash pokazywane z pytaniem [T/n], ryzykowne — sudo, rm -r, dd, systemctl… — domyślnie „nie”).
+      Dostawcy: lokalny llama.cpp (domyślny — nic nie wychodzi bez wyboru chmury), Ollama, Mistral (UE), DeepSeek
+      (Chiny), OpenAI, Claude (Anthropic Messages), Gemini, OpenRouter. Klucze przez Secret Service (KWallet/ksecretd)
+      — własna obsługa przez D-Bus, bez nowych zależności; w pliku tylko „klucz jest”. Historia w
+      ~/.local/share/aster/asystent (pliki 0600, do wyłączenia i wyczyszczenia). Ustawienia → Asystent: dostawca
+      (zgoda z opisem serwerów przy wyborze chmury), model, adres serwera lokalnego, klucz, historia.
+      Testy bez klucza: `tools/asystent-atrapa.py` (atrapa API OpenAI i Anthropic ze strumieniem), zmienne
+      `ASTER_ASSISTANT_URL` / `ASTER_ASSISTANT_API_KEY` dla usługi.
+- [x] A2. Wyspa: Super+Spacja (kglobalaccel przez D-Bus) albo klik — pole pytania w wyspie (klawiatura warstwy
+      przełączana na „exclusive” tylko na czas pytania), krótka odpowiedź ze znaczkiem i znika po 12 s; dopytanie,
+      długa odpowiedź (kod, lista, tabela) albo błąd → panel z prawej (`AssistantWindow.qml`): rozmowa w Markdown,
+      znaczek „Na tym komputerze” / „Chmura: <dostawca>” przy każdej odpowiedzi, kopiowanie, „Nowa rozmowa”,
+      historia (otwieranie, usuwanie), podpowiedzi pierwszych pytań. Zrzuty: `ASTER_SHOT_ASK="pytanie|dopytanie"`,
+      `ASTER_OPEN_ASSISTANT=1`. Do sprawdzenia na prawdziwym KWin: fokus klawiatury wyspy i Super+Spacja.
+- [ ] A2+. Panel: przypięcie na stałe, wklejanie plików i zrzutów (razem z A5); wybór przy pierwszym uruchomieniu
+      (tylko lokalnie / chmura / najpierw lokalnie — razem z A4)
 - [ ] A3. Narzędzia systemowe z potwierdzeniem; propozycje komend w terminalu [T/n]; Ctrl+Shift+A w Terminalu Aster
 - [ ] A4. Model lokalny (llama.cpp, pobieranie modelu, tryb offline i „Najpierw lokalnie”)
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie
