@@ -12,12 +12,13 @@ Item {
     property bool maximized: false
     property bool started: false          // powłoka startuje dopiero przy pierwszym pokazaniu panelu
     property bool reloading: false
-    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania, 3 zadanie
+    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania, 3 zadanie, 4 debugowanie
     property var refGroups: []
     property string refTitle
     signal openProblem(string path, int line, int col)
     signal openReference(string path, int line, int col, int length)
     signal openLocation(string path, int line, int col)
+    signal openFrame(int index)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -57,6 +58,11 @@ Item {
                 onClicked: tp.tab = 3
             }
             PanelTab {
+                visible: !!Debugger.state || Debugger.console.length > 0
+                label: "DEBUGOWANIE"; icon: "bug"; on: tp.tab === 4
+                onClicked: tp.tab = 4
+            }
+            PanelTab {
                 visible: tp.refGroups.length > 0
                 label: "ODWOŁANIA"; icon: "search"; on: tp.tab === 2
                 onClicked: tp.tab = 2
@@ -80,6 +86,7 @@ Item {
                 text: Tasks.title
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
             }
+            PanelBtn { visible: tp.tab === 4 && !Debugger.state; icon: "trash"; onClicked: Debugger.clearConsole() }
             PanelBtn { visible: tp.tab === 3 && Tasks.running; icon: "stop"; onClicked: Tasks.stop() }
             PanelBtn { visible: tp.tab === 3 && !Tasks.running && !!Tasks.title; icon: "reload"; onClicked: Tasks.rerun() }
             PanelBtn { visible: tp.tab === 3 && !Tasks.running; icon: "trash"; onClicked: Tasks.clear() }
@@ -88,6 +95,13 @@ Item {
             PanelBtn { icon: tp.maximized ? "exitFullscreen" : "fullscreen"; onClicked: tp.maximizeRequested() }
             PanelBtn { icon: "close"; onClicked: tp.hideRequested() }
         }
+    }
+
+    DebugView {
+        visible: tp.tab === 4
+        anchors.fill: parent
+        anchors.topMargin: header.height + 1
+        onOpenFrame: (i) => tp.openFrame(i)
     }
 
     TaskOutput {

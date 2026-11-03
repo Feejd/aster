@@ -27,6 +27,7 @@ set(CODE_QML
     qml/ReferencesView.qml
     qml/SettingsView.qml
     qml/TaskOutput.qml
+    qml/DebugView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -54,6 +55,8 @@ qt_add_qml_module(aster-code
         src/minimap.h
         src/tasks.cpp
         src/tasks.h
+        src/debugger.cpp
+        src/debugger.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

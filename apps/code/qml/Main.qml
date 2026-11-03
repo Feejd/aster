@@ -46,6 +46,7 @@ Window {
         property bool autoFetch: true
         property bool lsp: true
         property string recentTasks: "{}"        // folder projektu → ostatnie polecenia (JSON)
+        property string debugPrograms: "{}"      // folder projektu → program i argumenty do debugowania (JSON)
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
 
@@ -573,6 +574,42 @@ Window {
                      : "„" + title + "” — błąd" + (Tasks.errorCount ? " (" + Tasks.errorCount + ")" : ""));
         }
     }
+    // ——— Debugowanie (F5) ———
+    // Plik .py — debugpy dla bieżącego pliku; inaczej program z projektu (zapamiętany albo najnowszy plik ELF)
+    function startDebug(ask) {
+        if (Debugger.state) { Debugger.resume(); return; }
+        if (!hasProject) return;
+        const py = curPath.endsWith(".py");
+        const ad = Debugger.adapterFor(py ? "python" : "native");
+        if (!ad.available) { Project.copyText(ad.install); toast("Brak debugera " + ad.name + " — polecenie w schowku: " + ad.install); return; }
+        if (py) { saveAll(); launchDebug("python", curPath, ""); return; }
+        let all = {};
+        try { all = JSON.parse(prefs.debugPrograms); } catch (e) {}
+        const saved = all[Project.root];
+        if (saved && !ask && Project.exists(Project.root + "/" + saved.program)) { launchDebug("native", Project.root + "/" + saved.program, saved.args); return; }
+        const guess = saved ? saved.program + (saved.args ? " " + saved.args : "") : Project.relative(Debugger.guessProgram(Project.root));
+        nameBox.ask("Program do debugowania", guess, "Ścieżka w projekcie, po spacji argumenty. Zbuduj go z -g (informacje dla debugera).", (text) => {
+            const parts = text.trim().split(/\s+/);
+            if (!parts[0]) return;
+            const prog = parts[0], args = parts.slice(1).join(" ");
+            all[Project.root] = { program: prog, args: args };
+            prefs.debugPrograms = JSON.stringify(all);
+            win.launchDebug("native", prog.startsWith("/") ? prog : Project.root + "/" + prog, args);
+        });
+    }
+    function launchDebug(kind, program, args) {
+        if (!Debugger.start(kind, program, args, Project.root)) return;
+        terminalShown = true;
+        terminalPanel.tab = 4;
+    }
+    function toggleBreakpointHere() { if (cur) Debugger.toggleBreakpoint(curPath, cur.lineCol.y); }
+    Connections {
+        target: Debugger
+        // Zatrzymanie — plik i wiersz na wierzchu
+        function onStopChanged() { if (Debugger.stopPath && Debugger.stopLine >= 0) win.openFile(Debugger.stopPath, { line: Debugger.stopLine, col: 0, length: 0 }); }
+        function onMessage(text) { win.toast(text); }
+        function onEnded(code) { win.toast(code >= 0 ? "Program zakończył się (kod " + code + ")" : "Debugowanie zakończone"); }
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -773,6 +810,10 @@ Window {
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Debuguj", shortcut: "F5", action: "debug", icon: "bug" },
+        { label: "Debuguj inny program…", shortcut: "", action: "debugAsk", icon: "bug" },
+        { label: "Punkt przerwania", shortcut: "F9", action: "breakpoint", icon: "bug" },
+        { label: "Usuń wszystkie punkty przerwania", shortcut: "", action: "clearBreakpoints", icon: "trash" },
         { label: "Zbuduj", shortcut: "Ctrl+Shift+B", action: "build", icon: "bolt" },
         { label: "Uruchom ponownie ostatnie zadanie", shortcut: "", action: "rerun", icon: "reload" },
         { label: "Zatrzymaj zadanie", shortcut: "", action: "stopTask", icon: "stop" },
@@ -901,6 +942,10 @@ Window {
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
         else if (a === "tasks") showTasks();
+        else if (a === "debug") startDebug(false);
+        else if (a === "debugAsk") startDebug(true);
+        else if (a === "breakpoint") toggleBreakpointHere();
+        else if (a === "clearBreakpoints") Debugger.clearBreakpoints();
         else if (a === "build") buildTask();
         else if (a === "rerun") { saveAll(); Tasks.rerun(); terminalShown = true; terminalPanel.tab = 3; }
         else if (a === "stopTask") Tasks.stop();
@@ -1013,6 +1058,12 @@ Window {
         else if (what === "split") splitEditor();
         else if (what === "settings") settingsView.open();
         else if (what === "tasks") showTasks();
+        else if (what.startsWith("bp:")) Debugger.toggleBreakpoint(curPath, Number(arg) - 1);
+        else if (what.startsWith("debug:")) { const d = arg.split(" "); launchDebug("native", Project.root + "/" + d[0], d.slice(1).join(" ")); }
+        else if (what === "dnext") Debugger.next();
+        else if (what === "dstep") Debugger.stepIn();
+        else if (what === "dcont") Debugger.resume();
+        else if (what.startsWith("deval:")) Debugger.evaluate(arg);
         else if (what.startsWith("runcmd:")) runTask({ label: arg, command: arg, group: "custom" });
         else if (what.startsWith("settingsSearch:")) { settingsView.open(); Qt.callLater(() => settingsView.searchFor(arg)); }
         else if (what.startsWith("pref:")) { const kv = arg.split("="); prefs[kv[0]] = kv[1] === "true" ? true : kv[1] === "false" ? false : kv[1]; }
@@ -1056,6 +1107,13 @@ Window {
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
     Shortcut { sequence: "Ctrl+Shift+B"; enabled: win.hasProject; onActivated: win.buildTask() }
+    Shortcut { sequence: "F5"; enabled: win.hasProject; onActivated: win.startDebug(false) }
+    Shortcut { sequence: "Shift+F5"; enabled: !!Debugger.state; onActivated: Debugger.stop() }
+    Shortcut { sequence: "F6"; enabled: Debugger.state === "running"; onActivated: Debugger.pause() }
+    Shortcut { sequence: "F10"; enabled: Debugger.state === "stopped"; onActivated: Debugger.next() }
+    Shortcut { sequence: "F11"; enabled: Debugger.state === "stopped"; onActivated: Debugger.stepIn() }
+    Shortcut { sequence: "Shift+F11"; enabled: Debugger.state === "stopped"; onActivated: Debugger.stepOut() }
+    Shortcut { sequence: "F9"; enabled: !!win.cur; onActivated: win.toggleBreakpointHere() }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsView.shown ? settingsView.close() : settingsView.open() }
     Shortcut { sequence: "Ctrl+1"; enabled: win.split; onActivated: win.focusGroupN(0) }
     Shortcut { sequence: "Ctrl+2"; enabled: win.split; onActivated: win.focusGroupN(1) }
@@ -1314,6 +1372,34 @@ Window {
                 // Linia między grupami
                 Rectangle { visible: win.split; x: win.splitX; width: 1; height: parent.height; color: Theme.line; z: 6 }
 
+                // Pasek sterowania debugowaniem (u góry edytora, na środku)
+                Rectangle {
+                    visible: !!Debugger.state
+                    z: 8
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 6
+                    width: dbgRow.width + 12; height: 34; radius: 10
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.edge
+                    Row {
+                        id: dbgRow
+                        anchors.centerIn: parent
+                        spacing: 2
+                        DbgBtn { icon: Debugger.state === "running" ? "pause" : "play"; tint: Theme.dark ? "#56D364" : "#1A7F37"
+                                 onClicked: Debugger.state === "running" ? Debugger.pause() : Debugger.resume() }
+                        DbgBtn { icon: "stepOver"; enabled: Debugger.state === "stopped"; onClicked: Debugger.next() }
+                        DbgBtn { icon: "stepIn"; enabled: Debugger.state === "stopped"; onClicked: Debugger.stepIn() }
+                        DbgBtn { icon: "stepOut"; enabled: Debugger.state === "stopped"; onClicked: Debugger.stepOut() }
+                        DbgBtn { icon: "stop"; tint: Theme.danger; onClicked: Debugger.stop() }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            leftPadding: 6; rightPadding: 4
+                            text: Debugger.state === "stopped" ? "Zatrzymany" : Debugger.state === "running" ? "Działa" : "Start…"
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                        }
+                    }
+                }
+
                 // Ustawienia (Ctrl+,)
                 SettingsView {
                     id: settingsView
@@ -1461,6 +1547,7 @@ Window {
                 onOpenProblem: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
                 onOpenLocation: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
+                onOpenFrame: (i) => Debugger.selectFrame(i)
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5
@@ -1902,6 +1989,14 @@ Window {
             }
             onDoubleClicked: if (!row.isDir) win.openFile(row.path, { preview: false })
         }
+    }
+    component DbgBtn: HoverButton {
+        id: db
+        property string icon
+        property color tint: Theme.accentText
+        width: 30; height: 28; radius: 7
+        opacity: enabled ? 1 : 0.35
+        Icon { anchors.centerIn: parent; d: Icons[db.icon] || ""; size: 15; stroke: 2; color: db.tint }
     }
     component TabButton: Rectangle {
         id: tab
