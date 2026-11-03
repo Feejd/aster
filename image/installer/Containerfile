@@ -6,7 +6,9 @@ FROM ${BASE}
 ARG UPDATE_REF=localhost/aster:latest
 
 COPY image/installer/aster-installer-session.service /usr/lib/systemd/system/aster-installer-session.service
-RUN dnf install -y dracut-live podman \
+# Najnowszy skrypt instalacji także bez przebudowy obrazu systemu (szybka budowa ISO z gotowego obrazu)
+COPY apps/installer/aster-install.sh /usr/libexec/aster-install
+RUN dnf install -y dracut-live podman skopeo \
  # Użytkownik sesji instalatora (bez hasła; instalacja przez sudo bez pytania — tylko na nośniku)
  && useradd -m -c "Instalator Aster" liveuser \
  && passwd -d liveuser \

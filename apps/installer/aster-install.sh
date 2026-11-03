@@ -12,6 +12,8 @@ SETTINGS="${1:?plik z ustawieniami}"
 . "$SETTINGS"
 
 IMAGE="${ASTER_IMAGE:-localhost/aster:latest}"                                  # obraz w magazynie nośnika
+STORE_IMG=/run/initramfs/live/LiveOS/aster-image.img                           # magazyn obrazu na nośniku (squashfs)
+STORE=/run/aster-store
 UPDATE_REF="$(cat /usr/share/aster/update-ref 2>/dev/null || echo "$IMAGE")"   # skąd system weźmie aktualizacje
 TARGET=/run/aster-target
 
@@ -33,10 +35,19 @@ done
 # ——— 2. System ———
 stage "Kopiowanie systemu…"
 progress 0.06 0.55
+# Magazyn z obrazem Aster z nośnika — tylko do odczytu, jako dodatkowy (nowe dane podmana idą do pamięci)
+if ! mountpoint -q "$STORE"; then
+    mkdir -p "$STORE"
+    mount -o loop,ro "$STORE_IMG" "$STORE" || fail "Nie znaleziono obrazu systemu na nośniku instalacyjnym."
+fi
+conf=/run/aster-storage.conf
+printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n[storage.options]\nadditionalimagestores = ["%s"]\n' "$STORE" > "$conf"
+export CONTAINERS_STORAGE_CONF="$conf"
 # bootc działa z wnętrza kontenera z obrazem Aster (tak wymaga „bootc install”); obraz leży w magazynie
 # kontenerów na nośniku (tools/build-iso.sh), więc nic nie jest pobierane z internetu
 podman run --rm --privileged --pid=host --security-opt label=type:unconfined_t \
-    -v /dev:/dev -v /var/lib/containers:/var/lib/containers \
+    -v /dev:/dev -v /var/lib/containers:/var/lib/containers -v "$STORE:$STORE:ro" \
+    -v "$conf:/etc/containers/storage.conf:ro" \
     "$IMAGE" \
     bootc install to-disk --wipe --filesystem btrfs \
         --source-imgref "containers-storage:$IMAGE" --target-imgref "$UPDATE_REF" "$DISK" 2>&1 |

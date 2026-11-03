@@ -47,13 +47,6 @@ ctr=$(podman create localhost/aster-installer:latest)
 podman export "$ctr" | tar -xf - -C "$WORK/rootfs"
 podman rm "$ctr" >/dev/null
 
-echo "==> Obraz Aster do instalacji (bez internetu) w magazynie kontenerów nośnika"
-skopeo copy containers-storage:localhost/aster:latest \
-    "containers-storage:[overlay@$WORK/rootfs/var/lib/containers/storage+$WORK/run]localhost/aster:latest"
-# Sterownik overlay podłącza swój katalog sam na siebie i zostawia go podłączonego — odłączamy wszystko
-# w katalogu nośnika (inaczej nie da się go potem usunąć)
-findmnt -rno TARGET | grep -E "^($WORK/rootfs|$WORK/run)(/|$)" | sort -r | while read -r m; do umount -l "$m" || true; done
-
 echo "==> Jądro i initramfs startujące z nośnika (dmsquash-live)"
 kver=$(ls "$WORK/rootfs/usr/lib/modules" | head -n1)
 cp "$WORK/rootfs/usr/lib/modules/$kver/vmlinuz" "$WORK/iso/boot/vmlinuz"
@@ -81,6 +74,20 @@ echo "==> squashfs"
 mksquashfs "$WORK/rootfs" "$WORK/iso/LiveOS/squashfs.img" -comp zstd -Xcompression-level 15 -noappend -quiet
 # System plików nośnika jest już w squashfs — miejsce na dysku wraca od razu (runner GitHuba ma go mało)
 rm -rf "${WORK:?}/rootfs" "${WORK:?}/run"
+
+# Obraz Aster do instalacji (bez internetu): osobny squashfs z magazynem kontenerów, LiveOS/aster-image.img.
+# Instalator podłącza go tylko do odczytu jako dodatkowy magazyn (aster-install). Nie leży w systemie plików
+# nośnika — tam overlay nośnika mieszałby się z warstwami obrazu. Magazyn zapisuje skopeo z Fedory (z obrazu
+# instalatora), nie z systemu budującego, żeby format zgadzał się z podmanem na nośniku.
+echo "==> Obraz Aster do instalacji"
+mkdir -p "$WORK/store"
+skopeo copy containers-storage:localhost/aster:latest "oci:$WORK/aster-oci:aster"
+podman run --rm --privileged -v "$WORK:/work" localhost/aster-installer:latest sh -c '
+    skopeo copy oci:/work/aster-oci:aster "containers-storage:[overlay@/work/store+/work/storerun]localhost/aster:latest" &&
+    findmnt -rno TARGET | grep -E "^/work/" | sort -r | while read -r m; do umount -l "$m" || true; done'
+rm -rf "${WORK:?}/aster-oci" "${WORK:?}/storerun"
+mksquashfs "$WORK/store" "$WORK/iso/LiveOS/aster-image.img" -comp zstd -Xcompression-level 15 -noappend -quiet
+rm -rf "${WORK:?}/store"
 cat > "$WORK/iso/EFI/BOOT/grub.cfg" <<EOF
 set default=0
 set timeout=0
