@@ -4,7 +4,8 @@ import Aster.Ui
 import Aster.Code
 
 // Paleta u góry okna (jak w VS Code): bez przedrostka — szybkie otwieranie pliku (Ctrl+P),
-// „>” — polecenia (Ctrl+Shift+P), „:” — przejście do wiersza (Ctrl+G).
+// „>” — polecenia (Ctrl+Shift+P), „:” — przejście do wiersza (Ctrl+G); osobno wybór gałęzi gita
+// (przełącz albo utwórz nową, połącz z bieżącą, usuń).
 Item {
     id: pal
     property bool shown: false
@@ -15,15 +16,26 @@ Item {
     signal fileChosen(string path)
     signal commandChosen(string action)
     signal lineChosen(int line)
+    signal branchChosen(string mode, string name, bool remote, bool isNew)
+    property string special: ""          // "", "checkout", "merge", "delete"
     signal closed()
 
     anchors.fill: parent
     visible: shown
     z: 450
 
-    readonly property string mode: field.text.startsWith(">") ? "commands" : field.text.startsWith(":") ? "line" : "files"
+    readonly property string mode: special ? "branches" : field.text.startsWith(">") ? "commands" : field.text.startsWith(":") ? "line" : "files"
+
+    function openBranches(what) {
+        special = what;
+        shown = true;
+        field.text = "";
+        field.forceActiveFocus();
+        rebuild();
+    }
 
     function open(prefix) {
+        special = "";
         shown = true;
         field.text = prefix || "";
         field.forceActiveFocus();
@@ -39,6 +51,15 @@ Item {
             items = commands.filter(c => !q || c.label.toLowerCase().indexOf(q) >= 0
                                          || c.label.toLowerCase().split(" ").some(w => w.startsWith(q)))
                             .map(c => ({ kind: "command", label: c.label, shortcut: c.shortcut || "", action: c.action, icon: c.icon || "" }));
+        } else if (mode === "branches") {
+            const q = t.trim().toLowerCase();
+            let list = Project.branches().filter(b => !q || b.name.toLowerCase().indexOf(q) >= 0);
+            if (special !== "checkout") list = list.filter(b => !b.current && (special === "merge" || !b.remote));
+            const out = list.map(b => ({ kind: "branch", label: b.name, branch: b }));
+            // Nowa gałąź z wpisanej nazwy
+            if (special === "checkout" && q && !list.some(b => b.name.toLowerCase() === q))
+                out.unshift({ kind: "newBranch", label: "Nowa gałąź „" + t.trim().replace(/\s+/g, "-") + "”", name: t.trim() });
+            items = out;
         } else if (mode === "line") {
             items = [];
         } else {
@@ -62,8 +83,11 @@ Item {
         }
         const it = items[current];
         if (!it) return;
+        const sp = special;
         close();
-        if (it.kind === "file") fileChosen(it.path);
+        if (it.kind === "branch") branchChosen(sp, it.branch.name, it.branch.remote, false);
+        else if (it.kind === "newBranch") branchChosen(sp, it.name, false, true);
+        else if (it.kind === "file") fileChosen(it.path);
         else commandChosen(it.action);
     }
     function move(d) {
@@ -98,7 +122,7 @@ Item {
             border.width: 1.5; border.color: Theme.accent
             Icon {
                 x: 10; anchors.verticalCenter: parent.verticalCenter
-                d: pal.mode === "commands" ? Icons.apps : pal.mode === "line" ? Icons.arrow : Icons.search
+                d: pal.mode === "commands" ? Icons.apps : pal.mode === "line" ? Icons.arrow : pal.mode === "branches" ? Icons.gitBranch : Icons.search
                 size: 15; color: Theme.text2
             }
             TextInput {
@@ -120,7 +144,10 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !field.text
-                    text: "Szukaj pliku po nazwie (> polecenia, : wiersz)"
+                    text: pal.special === "checkout" ? "Wybierz gałąź albo wpisz nazwę nowej"
+                        : pal.special === "merge" ? "Którą gałąź połączyć z bieżącą?"
+                        : pal.special === "delete" ? "Którą gałąź usunąć?"
+                        : "Szukaj pliku po nazwie (> polecenia, : wiersz)"
                     color: Theme.text2; font: field.font
                 }
             }
@@ -129,9 +156,10 @@ Item {
         Text {
             id: empty
             x: 22; y: 58
-            visible: pal.mode === "line" || (list.count === 0 && field.text.length > (pal.mode === "commands" ? 1 : 0))
+            visible: pal.mode === "line" || (list.count === 0 && (pal.mode === "branches" || field.text.length > (pal.mode === "commands" ? 1 : 0)))
             text: pal.mode === "line" ? (parseInt(field.text.slice(1)) > 0 ? "Enter — przejdź do wiersza " + parseInt(field.text.slice(1)) : "Wpisz numer wiersza")
-                                      : pal.mode === "commands" ? "Brak takiego polecenia" : "Brak pasujących plików"
+                                      : pal.mode === "commands" ? "Brak takiego polecenia"
+                                      : pal.mode === "branches" ? "Brak innych gałęzi" : "Brak pasujących plików"
             color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
         }
 
@@ -156,6 +184,12 @@ Item {
                     name: row.modelData.name || ""
                 }
                 Icon {
+                    visible: row.modelData.kind === "branch" || row.modelData.kind === "newBranch"
+                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                    d: row.modelData.kind === "newBranch" ? Icons.plus : row.modelData.branch.remote ? Icons.globe : Icons.gitBranch
+                    size: 15; color: row.modelData.kind === "branch" && row.modelData.branch.current ? Theme.accentText : Theme.text2
+                }
+                Icon {
                     visible: row.modelData.kind === "command"
                     x: 10; anchors.verticalCenter: parent.verticalCenter
                     d: Icons[row.modelData.icon] || ""; size: 16; color: Theme.text2
@@ -171,13 +205,14 @@ Item {
                               ? (row.modelData.html ? row.modelData.html.replace(/<b>/g, "<font color=\"" + Theme.accentText + "\"><b>").replace(/<\/b>/g, "</b></font>") : row.modelData.name)
                               : row.modelData.label
                         textFormat: row.modelData.html ? Text.StyledText : Text.PlainText
+                        font.weight: row.modelData.kind === "branch" && row.modelData.branch.current ? Font.DemiBold : Font.Normal
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 13
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: row.modelData.kind === "file"
-                        width: Math.max(0, parent.width - nameText.width - 8); elide: Text.ElideLeft
-                        text: row.modelData.dir || ""
+                        visible: row.modelData.kind === "file" || row.modelData.kind === "branch"
+                        width: Math.max(0, parent.width - nameText.width - 8); elide: row.modelData.kind === "file" ? Text.ElideLeft : Text.ElideRight
+                        text: row.modelData.kind === "branch" ? (row.modelData.branch.subject || "") : (row.modelData.dir || "")
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
                     }
                 }
@@ -185,7 +220,9 @@ Item {
                     id: shortcutText
                     anchors.right: parent.right; anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    text: row.modelData.kind === "command" ? row.modelData.shortcut : (row.modelData.opened ? "otwarty" : "")
+                    text: row.modelData.kind === "command" ? row.modelData.shortcut
+                        : row.modelData.kind === "branch" ? (row.modelData.branch.current ? "bieżąca" : row.modelData.branch.remote ? "zdalna" : "")
+                        : (row.modelData.opened ? "otwarty" : "")
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
                 }
                 MouseArea {

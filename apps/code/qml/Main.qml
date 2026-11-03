@@ -242,8 +242,14 @@ Window {
     Connections {
         target: Project
         function onGitDone(op, ok, message) {
-            if (message && (!ok || op === "commit" || op === "push" || op === "pull")) win.toast(message);
+            if (message && (!ok || ["commit", "push", "pull", "checkout", "branch", "merge", "deleteBranch", "stash"].indexOf(op) >= 0)) win.toast(message);
         }
+    }
+    // Gałęzie: przełączenie podmienia pliki na dysku — najpierw pytanie o niezapisane karty
+    function branchAction(mode, name, remote, isNew) {
+        if (mode === "merge") { whenSaved(() => Project.mergeBranch(name)); return; }
+        if (mode === "delete") { Project.deleteBranch(name); return; }
+        whenSaved(() => { if (isNew) Project.createBranch(name); else Project.checkout(name, remote); });
     }
     function showProblems() {
         if (!hasProject) return;
@@ -451,6 +457,12 @@ Window {
         { label: "Git: wyślij (push)", shortcut: "", action: "git:push", icon: "upload" },
         { label: "Git: pobierz (pull)", shortcut: "", action: "git:pull", icon: "download" },
         { label: "Git: pokaż zmiany w pliku", shortcut: "", action: "git:diff", icon: "gitBranch" },
+        { label: "Git: przełącz gałąź…", shortcut: "", action: "git:checkout", icon: "gitBranch" },
+        { label: "Git: nowa gałąź…", shortcut: "", action: "git:checkout", icon: "plus" },
+        { label: "Git: połącz gałąź z bieżącą…", shortcut: "", action: "git:merge", icon: "gitBranch" },
+        { label: "Git: usuń gałąź…", shortcut: "", action: "git:deleteBranch", icon: "trash" },
+        { label: "Git: odłóż zmiany (stash)", shortcut: "", action: "git:stash", icon: "archive" },
+        { label: "Git: przywróć odłożone zmiany", shortcut: "", action: "git:stashPop", icon: "undo" },
         { label: "Kopiuj ścieżkę pliku", shortcut: "", action: "copyPath", icon: "copy" },
         { label: "Kopiuj ścieżkę względną", shortcut: "", action: "copyRel", icon: "copy" },
         { label: "Pokaż w Plikach", shortcut: "", action: "showInFiles", icon: "folder" },
@@ -499,6 +511,11 @@ Window {
         else if (a === "git:push") Project.push();
         else if (a === "git:pull") Project.pull();
         else if (a === "git:diff") { if (curPath) diffView.open(curPath, false); }
+        else if (a === "git:checkout") palette.openBranches("checkout");
+        else if (a === "git:merge") palette.openBranches("merge");
+        else if (a === "git:deleteBranch") palette.openBranches("delete");
+        else if (a === "git:stash") whenSaved(() => Project.stash(false));
+        else if (a === "git:stashPop") Project.stash(true);
         else if (a === "copyPath") { if (curPath) Project.copyText(curPath); }
         else if (a === "copyRel") { if (curPath) Project.copyText(Project.relative(curPath)); }
         else if (a === "showInFiles") Project.showInFiles(curPath || Project.root);
@@ -609,6 +626,14 @@ Window {
         else if (what.startsWith("commitmsg:")) { showView(2); changesView.setMessage(arg); }
         else if (what === "commit") changesView.commitNow();
         else if (what === "push") Project.push();
+        else if (what.startsWith("branches:")) { palette.openBranches(arg.split(",")[0]); }
+        else if (what.startsWith("newbranch:")) branchAction("checkout", arg, false, true);
+        else if (what.startsWith("checkout:")) branchAction("checkout", arg, false, false);
+        else if (what.startsWith("checkoutRemote:")) branchAction("checkout", arg, true, false);
+        else if (what === "stash") Project.stash(false);
+        else if (what === "stashPop") Project.stash(true);
+        else if (what.startsWith("merge:")) branchAction("merge", arg, false, false);
+        else if (what.startsWith("hunk:")) { const h = arg.split(","); Project.applyHunk(Project.root + "/" + h[0], h[2] === "staged", Number(h[1]), h[3] || "stage"); }
         else if (what.startsWith("discardNow:")) win.discardPaths([Project.root + "/" + arg]);
         else if (what.startsWith("discard:")) win.confirm = { kind: "discard", paths: [Project.root + "/" + arg], name: Project.fileName(arg) };
         else if (what === "problems") showProblems();
@@ -831,6 +856,7 @@ Window {
                     z: 8
                     fontSize: prefs.fontSize - 0.5
                     onOpenFile: (path) => win.openFile(path)
+                    onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
                 }
 
                 // Bez otwartych plików — znak programu i skróty
@@ -980,7 +1006,7 @@ Window {
                         visible: Project.isGit
                         icon: "gitBranch"
                         text: Project.branch + (Project.ahead || Project.behind ? "  " + (Project.behind ? "↓" + Project.behind : "") + (Project.ahead ? "↑" + Project.ahead : "") : "")
-                        onClicked: win.showView(2)
+                        onClicked: palette.openBranches("checkout")
                     }
                     StatusBtn {
                         visible: Project.isGit && Project.changes.length > 0
@@ -1047,6 +1073,7 @@ Window {
                 onFileChosen: (path) => win.openFile(path)
                 onCommandChosen: (action) => win.run(action)
                 onLineChosen: (line) => { if (win.cur) win.cur.goToLine(line); }
+                onBranchChosen: (mode, name, remote, isNew) => win.branchAction(mode, name, remote, isNew)
                 onClosed: if (win.cur) win.cur.focusEditor()
             }
             NameBox {
@@ -1154,6 +1181,7 @@ Window {
                 onOpenFile: (path) => win.openFile(path, { preview: true })
                 onShowDiff: (path, staged) => diffView.open(path, staged)
                 onDiscardRequested: (paths) => win.confirm = { kind: "discard", paths: paths, name: Project.fileName(paths[0] || "") }
+                onPickBranch: palette.openBranches("checkout")
             }
 
             // Zmiana szerokości paska
@@ -1204,7 +1232,8 @@ Window {
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
                         text: !win.confirm ? "" : win.confirm.kind === "discard"
-                              ? (win.confirm.paths.length === 1 ? "Odrzucić zmiany w „" + win.confirm.name + "”?" : "Odrzucić zmiany w " + win.confirm.paths.length + " plikach?")
+                              ? (win.confirm.hunk !== undefined ? "Odrzucić ten fragment zmian w „" + win.confirm.name + "”?"
+                                 : win.confirm.paths.length === 1 ? "Odrzucić zmiany w „" + win.confirm.name + "”?" : "Odrzucić zmiany w " + win.confirm.paths.length + " plikach?")
                             : win.confirm.kind === "tab" ? "Zapisać zmiany w „" + win.confirm.name + "”?"
                             : win.confirm.count === 1 ? "Zapisać zmiany w 1 pliku?" : "Zapisać zmiany w " + win.confirm.count + " plikach?"
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
@@ -1236,7 +1265,12 @@ Window {
                             Pill {
                                 visible: !!win.confirm && win.confirm.kind === "discard"
                                 text: "Odrzuć zmiany"; danger: true
-                                onClicked: { const c = win.confirm; win.confirm = null; win.discardPaths(c.paths); }
+                                onClicked: {
+                                    const c = win.confirm;
+                                    win.confirm = null;
+                                    if (c.hunk !== undefined) Project.applyHunk(c.paths[0], false, c.hunk, "discard");
+                                    else win.discardPaths(c.paths);
+                                }
                             }
                             Pill {
                                 visible: !win.confirm || win.confirm.kind !== "discard"

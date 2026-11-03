@@ -94,6 +94,14 @@ Project::~Project()
     for (QThread *t : {m_searchThread.data(), m_filesThread.data()})
         if (t)
             t->wait(3000);
+    // Git w tle przy zamykaniu okna — krótko poczekaj, potem przerwij (bez ostrzeżeń QProcess)
+    for (QProcess *p : findChildren<QProcess *>()) {
+        p->disconnect(this);
+        if (!p->waitForFinished(500)) {
+            p->kill();
+            p->waitForFinished(500);
+        }
+    }
 }
 
 QString Project::name() const
@@ -824,11 +832,8 @@ void Project::loadCommits()
     p->start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-8"), QStringLiteral("--format=%h%x1f%s%x1f%an%x1f%ct")});
 }
 
-QVariantList Project::diff(const QString &path, bool staged) const
+QString Project::rawDiff(const QString &path, bool staged) const
 {
-    // Różnice jednego pliku jako wiersze: { kind: " " | "+" | "-" | "@", text, old, new }
-    if (m_gitTop.isEmpty())
-        return {};
     QProcess p;
     p.setWorkingDirectory(m_gitTop);
     bool untracked = false;
@@ -843,22 +848,32 @@ QVariantList Project::diff(const QString &path, bool staged) const
                                            + (staged ? QStringList{QStringLiteral("--cached")} : QStringList())
                                            + QStringList{QStringLiteral("--"), gitRelative(path)});
     p.waitForFinished(5000);
+    return QString::fromUtf8(p.readAllStandardOutput());
+}
+
+QVariantList Project::diff(const QString &path, bool staged) const
+{
+    // Różnice jednego pliku jako wiersze: { kind: " " | "+" | "-" | "@", text, old, new, hunk }
+    if (m_gitTop.isEmpty())
+        return {};
     QVariantList out;
-    int oldNo = 0, newNo = 0;
+    int oldNo = 0, newNo = 0, hunkNo = -1;
     bool body = false;
     static const QRegularExpression hunk(QStringLiteral("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@(.*)$"));
-    for (const QString &l : QString::fromUtf8(p.readAllStandardOutput()).split(QLatin1Char('\n'))) {
+    for (const QString &l : rawDiff(path, staged).split(QLatin1Char('\n'))) {
         if (const auto m = hunk.match(l); m.hasMatch()) {
             oldNo = m.captured(1).toInt();
             newNo = m.captured(2).toInt();
             body = true;
-            out << QVariantMap{{QStringLiteral("kind"), QStringLiteral("@")}, {QStringLiteral("text"), m.captured(3).trimmed()}};
+            ++hunkNo;
+            out << QVariantMap{{QStringLiteral("kind"), QStringLiteral("@")}, {QStringLiteral("text"), m.captured(3).trimmed()},
+                               {QStringLiteral("hunk"), hunkNo}};
             continue;
         }
         if (!body || l.startsWith(QLatin1String("\\")))
             continue;
         const QChar k = l.isEmpty() ? QLatin1Char(' ') : l.at(0);
-        QVariantMap row{{QStringLiteral("kind"), QString(k)}, {QStringLiteral("text"), l.mid(1)}};
+        QVariantMap row{{QStringLiteral("kind"), QString(k)}, {QStringLiteral("text"), l.mid(1)}, {QStringLiteral("hunk"), hunkNo}};
         if (k == QLatin1Char('+')) {
             row.insert(QStringLiteral("new"), newNo++);
         } else if (k == QLatin1Char('-')) {
@@ -875,6 +890,151 @@ QVariantList Project::diff(const QString &path, bool staged) const
            && out.last().toMap().value(QStringLiteral("kind")).toString() == QLatin1String(" "))
         out.removeLast();
     return out;
+}
+
+void Project::applyHunk(const QString &path, bool staged, int index, const QString &action)
+{
+    // Łatka z jednym fragmentem: nagłówek pliku (do pierwszego @@) i ten fragment, potem git apply.
+    // stage — do indeksu; unstage — z indeksu (odwrotnie); discard — z katalogu roboczego (odwrotnie).
+    const QStringList lines = rawDiff(path, staged).split(QLatin1Char('\n'));
+    QStringList header, chunk;
+    int n = -1;
+    for (const QString &l : lines) {
+        if (l.startsWith(QLatin1String("@@")))
+            ++n;
+        if (n < 0)
+            header << l;
+        else if (n == index)
+            chunk << l;
+    }
+    while (!chunk.isEmpty() && chunk.last().isEmpty())
+        chunk.removeLast();
+    if (chunk.isEmpty() || header.isEmpty()) {
+        Q_EMIT gitDone(QStringLiteral("hunk"), false, QStringLiteral("Ten fragment już się zmienił — odśwież podgląd"));
+        return;
+    }
+    // Nowy plik (diff --no-index) — fragmentu nie da się dodać osobno; dodajemy cały plik
+    if (header.join(QLatin1Char('\n')).contains(QLatin1String("/dev/null")) && action == QLatin1String("stage") && !staged) {
+        stage({path});
+        return;
+    }
+    const QByteArray patch = (header + chunk).join(QLatin1Char('\n')).toUtf8() + '\n';
+    QStringList args{QStringLiteral("apply"), QStringLiteral("--whitespace=nowarn")};
+    if (action != QLatin1String("discard"))
+        args << QStringLiteral("--cached");
+    if (action != QLatin1String("stage"))
+        args << QStringLiteral("-R");
+    args << QStringLiteral("-");
+    runGit(QStringLiteral("hunk"), args, patch, [this, action](bool ok, const QString &msg) {
+        if (action == QLatin1String("discard"))
+            m_tree->refresh();
+        Q_EMIT gitDone(QStringLiteral("hunk"), ok, ok ? QString() : QStringLiteral("Nie udało się: ") + msg.section(QLatin1Char('\n'), 0, 0).left(200));
+    });
+}
+
+// ——— Gałęzie i odkładanie zmian ———
+
+QVariantList Project::branches() const
+{
+    if (m_gitTop.isEmpty())
+        return {};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    p.start(QStringLiteral("git"), {QStringLiteral("for-each-ref"), QStringLiteral("--sort=-committerdate"),
+                                    QStringLiteral("--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(committerdate:unix)%1f%(subject)"),
+                                    QStringLiteral("refs/heads"), QStringLiteral("refs/remotes")});
+    p.waitForFinished(3000);
+    QVariantList local, remote;
+    QSet<QString> localNames;
+    for (const QString &l : QString::fromUtf8(p.readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        const QStringList f = l.split(QChar(0x1f));
+        if (f.size() < 5 || f[0].endsWith(QLatin1String("/HEAD")))
+            continue;
+        const bool isRemote = f[0].startsWith(QLatin1String("refs/remotes/"));
+        QVariantMap m{{QStringLiteral("name"), f[1]}, {QStringLiteral("remote"), isRemote}, {QStringLiteral("upstream"), f[2]},
+                      {QStringLiteral("time"), f[3].toLongLong()}, {QStringLiteral("subject"), f[4]},
+                      {QStringLiteral("current"), !isRemote && f[1] == m_branch}};
+        if (isRemote) {
+            remote << m;
+        } else {
+            localNames.insert(f[1]);
+            local << m;
+        }
+    }
+    // Zdalna gałąź, która ma już lokalną kopię, nie powtarza się
+    for (const QVariant &v : std::as_const(remote))
+        if (!localNames.contains(v.toMap().value(QStringLiteral("name")).toString().section(QLatin1Char('/'), 1)))
+            local << v;
+    return local;
+}
+
+static QString branchError(const QString &msg)
+{
+    if (msg.contains(QLatin1String("would be overwritten")))
+        return QStringLiteral("Masz niezatwierdzone zmiany, które by przepadły — zatwierdź je albo odłóż (Git: odłóż zmiany)");
+    if (msg.contains(QLatin1String("already exists")))
+        return QStringLiteral("Gałąź o tej nazwie już istnieje");
+    if (msg.contains(QLatin1String("is not a valid branch name")) || msg.contains(QLatin1String("not a valid branch")))
+        return QStringLiteral("Niepoprawna nazwa gałęzi (bez spacji i znaków ~^:?*[\\)");
+    if (msg.contains(QLatin1String("not fully merged")))
+        return QStringLiteral("Gałąź ma zmiany niepołączone z bieżącą — najpierw ją połącz");
+    if (msg.contains(QLatin1String("CONFLICT")) || msg.contains(QLatin1String("Automatic merge failed")))
+        return QStringLiteral("Konflikty przy łączeniu — popraw pliki oznaczone „C” i zatwierdź");
+    if (msg.contains(QLatin1String("No local changes to save")))
+        return QStringLiteral("Nie ma zmian do odłożenia");
+    if (msg.contains(QLatin1String("No stash entries")))
+        return QStringLiteral("Nie ma odłożonych zmian");
+    return msg.section(QLatin1Char('\n'), 0, 1).left(300);
+}
+
+void Project::checkout(const QString &name, bool remote)
+{
+    // Zdalna „origin/funkcja” — lokalna „funkcja” śledząca zdalną (git switch zgaduje)
+    const QString local = remote ? name.section(QLatin1Char('/'), 1) : name;
+    runGit(QStringLiteral("checkout"), {QStringLiteral("switch"), local}, {}, [this, local](bool ok, const QString &msg) {
+        m_tree->refresh();
+        refreshFiles();
+        Q_EMIT gitDone(QStringLiteral("checkout"), ok, ok ? QStringLiteral("Gałąź: ") + local : branchError(msg));
+    });
+}
+
+void Project::createBranch(const QString &name)
+{
+    const QString clean = name.trimmed().replace(QLatin1Char(' '), QLatin1Char('-'));
+    runGit(QStringLiteral("branch"), {QStringLiteral("switch"), QStringLiteral("-c"), clean}, {}, [this, clean](bool ok, const QString &msg) {
+        Q_EMIT gitDone(QStringLiteral("branch"), ok, ok ? QStringLiteral("Nowa gałąź: ") + clean : branchError(msg));
+    });
+}
+
+void Project::mergeBranch(const QString &name)
+{
+    runGit(QStringLiteral("merge"), {QStringLiteral("merge"), QStringLiteral("--no-edit"), name}, {}, [this, name](bool ok, const QString &msg) {
+        m_tree->refresh();
+        Q_EMIT gitDone(QStringLiteral("merge"), ok, ok ? (msg.contains(QLatin1String("Already up to date")) ? QStringLiteral("Nic do połączenia — gałąź jest aktualna")
+                                                                                                          : QStringLiteral("Połączono „") + name + QStringLiteral("”"))
+                                                   : branchError(msg));
+    });
+}
+
+void Project::deleteBranch(const QString &name)
+{
+    runGit(QStringLiteral("deleteBranch"), {QStringLiteral("branch"), QStringLiteral("-d"), name}, {}, [this, name](bool ok, const QString &msg) {
+        Q_EMIT gitDone(QStringLiteral("deleteBranch"), ok, ok ? QStringLiteral("Usunięto gałąź „") + name + QStringLiteral("”") : branchError(msg));
+    });
+}
+
+void Project::stash(bool pop)
+{
+    const QStringList args = pop ? QStringList{QStringLiteral("stash"), QStringLiteral("pop")}
+                                 : QStringList{QStringLiteral("stash"), QStringLiteral("push"), QStringLiteral("-u"), QStringLiteral("-m"), QStringLiteral("Aster Code")};
+    runGit(QStringLiteral("stash"), args, {}, [this, pop](bool ok, const QString &msg) {
+        m_tree->refresh();
+        QString text = ok ? (pop ? QStringLiteral("Przywrócono odłożone zmiany") : QStringLiteral("Odłożono zmiany")) : branchError(msg);
+        // „stash push” bez zmian kończy się sukcesem z komunikatem na wyjściu
+        if (ok && msg.contains(QLatin1String("No local changes to save")))
+            text = branchError(msg);
+        Q_EMIT gitDone(QStringLiteral("stash"), ok, text);
+    });
 }
 
 // ——— Lista plików, szybkie otwieranie, szukanie ———

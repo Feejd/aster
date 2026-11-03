@@ -11,6 +11,7 @@ Item {
     signal openFile(string path)
     signal showDiff(string path, bool staged)
     signal discardRequested(var paths)
+    signal pickBranch()
     property bool amend: false
 
     function statusColor(s) {
@@ -76,6 +77,7 @@ Item {
                 elide: Text.ElideRight
                 text: Project.branch || "—"
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: cv.pickBranch() }
             }
             HoverButton {
                 id: syncBtn

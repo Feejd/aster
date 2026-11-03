@@ -117,6 +117,15 @@ public:
     Q_INVOKABLE void fetch();
     Q_INVOKABLE QString lastCommitMessage() const;
     Q_INVOKABLE QVariantList diff(const QString &path, bool staged) const;
+    // Jeden fragment różnic (numer z diff): stage | unstage | discard
+    Q_INVOKABLE void applyHunk(const QString &path, bool staged, int index, const QString &action);
+    // Gałęzie: lokalne i zdalne bez lokalnej kopii, od ostatnio zmienianej: [{ name, remote, current, upstream, time, subject }]
+    Q_INVOKABLE QVariantList branches() const;
+    Q_INVOKABLE void checkout(const QString &name, bool remote);
+    Q_INVOKABLE void createBranch(const QString &name);
+    Q_INVOKABLE void mergeBranch(const QString &name);
+    Q_INVOKABLE void deleteBranch(const QString &name);
+    Q_INVOKABLE void stash(bool pop);
 
     // Szybkie otwieranie i szukanie
     Q_INVOKABLE void refreshFiles();
@@ -142,6 +151,7 @@ private:
     void parseStatus(const QByteArray &out);
     QString gitRelative(const QString &path) const;
     QStringList gitPaths(const QStringList &paths) const;
+    QString rawDiff(const QString &path, bool staged) const;
     void runGit(const QString &op, const QStringList &args, const QByteArray &input, std::function<void(bool, const QString &)> done);
     void loadCommits();
     static QStringList listFiles(const QString &root, bool git);

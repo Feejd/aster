@@ -4,7 +4,8 @@ import Aster.Ui
 import Aster.Code
 
 // Podgląd różnic jednego pliku (git diff) nad edytorem: numery wierszy starej i nowej wersji,
-// dodane na zielono, usunięte na czerwono. Esc albo × zamyka; „Dodaj” / „Wycofaj” — jak w widoku zmian.
+// dodane na zielono, usunięte na czerwono. Esc albo × zamyka; „Dodaj” / „Wycofaj” — cały plik,
+// przyciski przy nagłówku fragmentu — tylko ten fragment (dodaj, wycofaj, odrzuć).
 Rectangle {
     id: dv
     property bool shown: false
@@ -14,6 +15,7 @@ Rectangle {
     property string fontFamily: "JetBrains Mono"
     property real fontSize: 13
     signal openFile(string path)
+    signal discardHunk(string path, int index)
 
     visible: shown
     color: Theme.dark ? "#090A0D" : "#FFFFFF"
@@ -76,7 +78,7 @@ Rectangle {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
     }
 
-    FontMetrics { id: fm; font.family: dv.fontFamily; font.pixelSize: dv.fontSize }
+    FontMetrics { id: fm; font.family: dv.fontFamily; font.pixelSize: dv.fontSize; font.features: { "liga": 0, "calt": 0 } }
     readonly property real numW: fm.averageCharacterWidth * 5 + 10
 
     ListView {
@@ -109,6 +111,22 @@ Rectangle {
                 text: line.modelData.new !== undefined ? line.modelData.new : ""
                 color: Theme.text2; opacity: 0.6; font: fm.font
             }
+            // Fragment: dodaj / wycofaj / odrzuć tylko ten kawałek
+            Row {
+                visible: line.modelData.kind === "@"
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                HunkBtn {
+                    visible: !dv.staged
+                    text: "Odrzuć"; danger: true
+                    onClicked: dv.discardHunk(dv.path, line.modelData.hunk)
+                }
+                HunkBtn {
+                    text: dv.staged ? "Wycofaj fragment" : "Dodaj fragment"
+                    onClicked: Project.applyHunk(dv.path, dv.staged, line.modelData.hunk, dv.staged ? "unstage" : "stage")
+                }
+            }
             Text {
                 x: line.modelData.kind === "@" ? 16 : dv.numW * 2 + 14
                 anchors.verticalCenter: parent.verticalCenter
@@ -127,6 +145,14 @@ Rectangle {
         color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
     }
 
+    component HunkBtn: HoverButton {
+        id: hb
+        property string text
+        property bool danger: false
+        width: hbText.implicitWidth + 16; height: 20; radius: 6
+        baseColor: Theme.fill
+        Text { id: hbText; anchors.centerIn: parent; text: hb.text; color: hb.danger ? Theme.danger : Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+    }
     component Pill: HoverButton {
         id: pill
         property string text
