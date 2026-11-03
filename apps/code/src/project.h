@@ -117,7 +117,7 @@ public:
     Q_INVOKABLE void commit(const QString &message, bool amend, bool all);
     Q_INVOKABLE void push();
     Q_INVOKABLE void pull();
-    Q_INVOKABLE void fetch();
+    Q_INVOKABLE void fetch(bool quiet = false);                   // quiet — w tle, bez komunikatu o błędzie
     Q_INVOKABLE QString lastCommitMessage() const;
     Q_INVOKABLE QVariantList diff(const QString &path, bool staged) const;
     // Jeden fragment różnic (numer z diff): stage | unstage | discard

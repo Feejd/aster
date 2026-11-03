@@ -318,10 +318,50 @@ QString Lsp::serverId(const QString &path) const
     return d ? QString::fromLatin1(d->id) : QString();
 }
 
+void Lsp::setEnabled(bool on)
+{
+    if (on == m_enabled)
+        return;
+    m_enabled = on;
+    // Wyłączenie zatrzymuje serwery i czyści błędy; włączenie — otwarte karty zgłaszają się same (enabledChanged)
+    for (LspServer *s : std::as_const(m_servers))
+        s->deleteLater();
+    m_servers.clear();
+    m_docs.clear();
+    m_diagnostics.clear();
+    recount();
+    Q_EMIT enabledChanged();
+    Q_EMIT serversChanged();
+}
+
+QVariantList Lsp::servers() const
+{
+    QVariantList out;
+    for (const ServerDef &d : definitions()) {
+        bool available = false;
+        for (const QStringList &c : d.commands)
+            if (!QStandardPaths::findExecutable(c.first()).isEmpty() || QFileInfo(c.first()).isExecutable())
+                available = true;
+        const LspServer *s = m_servers.value(QString::fromLatin1(d.id));
+        QStringList exts;
+        for (const QString &e : d.exts)
+            exts << QLatin1Char('.') + e;
+        out << QVariantMap{{QStringLiteral("id"), QString::fromLatin1(d.id)},
+                           {QStringLiteral("name"), QString::fromUtf8(d.name)},
+                           {QStringLiteral("program"), d.commands.first().first()},
+                           {QStringLiteral("languages"), exts.mid(0, 6).join(QStringLiteral(" "))},
+                           {QStringLiteral("available"), available},
+                           {QStringLiteral("running"), s && s->ready()},
+                           {QStringLiteral("failed"), s && s->failed()},
+                           {QStringLiteral("package"), QString::fromUtf8(d.package)}};
+    }
+    return out;
+}
+
 QVariantMap Lsp::serverFor(const QString &path) const
 {
     const ServerDef *d = defForPath(path);
-    if (!d)
+    if (!d || !m_enabled)
         return {{QStringLiteral("id"), QString()}};
     bool available = false;
     for (const QStringList &c : d->commands)
@@ -386,7 +426,7 @@ void Lsp::sendOpen(const QString &path, Doc &doc, LspServer *s)
 
 void Lsp::open(const QString &path, const QString &text)
 {
-    LspServer *s = serverForPath(path);
+    LspServer *s = m_enabled ? serverForPath(path) : nullptr;
     if (!s)
         return;
     Doc &doc = m_docs[path];

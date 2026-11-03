@@ -64,6 +64,7 @@ class Lsp : public QObject
     Q_PROPERTY(int errorCount READ errorCount NOTIFY diagnosticsChanged)
     Q_PROPERTY(int warningCount READ warningCount NOTIFY diagnosticsChanged)
     Q_PROPERTY(QVariantList problems READ problems NOTIFY diagnosticsChanged)   // [{ path, name, dir, items: [...] }]
+    Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)    // ustawienie „Serwery języków”
 
 public:
     explicit Lsp(QObject *parent = nullptr);
@@ -75,6 +76,10 @@ public:
     QVariantList problems() const;
 
     Q_INVOKABLE void setRoot(const QString &root);
+    bool enabled() const { return m_enabled; }
+    void setEnabled(bool on);
+    // Wszystkie znane serwery do ustawień: [{ id, name, languages, available, running, package }]
+    Q_INVOKABLE QVariantList servers() const;
     // { id, name, available, running, package } — serwer dla pliku (pusty id: język bez serwera)
     Q_INVOKABLE QVariantMap serverFor(const QString &path) const;
     Q_INVOKABLE void open(const QString &path, const QString &text);
@@ -101,6 +106,7 @@ public:
     Q_INVOKABLE QVariantList diagnostics(const QString &path) const;
 
 Q_SIGNALS:
+    void enabledChanged();
     void diagnosticsChanged();
     void serversChanged();
     void completionReady(int seq, const QString &path, const QVariantList &items);
@@ -142,6 +148,7 @@ private:
     QHash<QString, QJsonArray> m_rawDiag;         // to samo w postaci z serwera (do szybkich poprawek)
     QJsonArray m_actions;                         // ostatnie szybkie poprawki
     QString m_actionsServer;
+    bool m_enabled = true;
     int m_seq = 0;
     int m_revision = 0;
     int m_errors = 0, m_warnings = 0;

@@ -802,3 +802,34 @@ void TextOps::link(QQuickTextDocument *a, QQuickTextDocument *b)
     connect(da, &QTextDocument::contentsChange, db, [da, db](int pos, int removed, int added) { mirror(da, db, pos, removed, added); });
     connect(db, &QTextDocument::contentsChange, da, [da, db](int pos, int removed, int added) { mirror(db, da, pos, removed, added); });
 }
+
+bool TextOps::cleanupOnSave(QQuickTextDocument *doc, bool trimTrailing, bool finalNewline)
+{
+    if (!doc || !doc->textDocument() || (!trimTrailing && !finalNewline))
+        return false;
+    QTextDocument *d = doc->textDocument();
+    QTextCursor c(d);
+    bool changed = false;
+    c.beginEditBlock();
+    if (trimTrailing) {
+        for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
+            const QString t = b.text();
+            int n = int(t.size());
+            while (n > 0 && (t.at(n - 1) == QLatin1Char(' ') || t.at(n - 1) == QLatin1Char('\t')))
+                --n;
+            if (n == t.size())
+                continue;
+            c.setPosition(b.position() + n);
+            c.setPosition(b.position() + int(t.size()), QTextCursor::KeepAnchor);
+            c.removeSelectedText();
+            changed = true;
+        }
+    }
+    if (finalNewline && !d->isEmpty() && !d->lastBlock().text().isEmpty()) {
+        c.movePosition(QTextCursor::End);
+        c.insertText(QStringLiteral("\n"));
+        changed = true;
+    }
+    c.endEditBlock();
+    return changed;
+}

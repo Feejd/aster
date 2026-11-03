@@ -25,6 +25,7 @@ set(CODE_QML
     qml/CompletionPopup.qml
     qml/DiffView.qml
     qml/ReferencesView.qml
+    qml/SettingsView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)

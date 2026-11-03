@@ -41,6 +41,10 @@ Item {
     signal definitionRequested(int seq)
     signal editFocused()
     property bool lspPrimary: true                  // duplikat w drugiej grupie nie otwiera dokumentu w serwerze
+    // Z ustawień
+    property bool autoClose: true
+    property bool autoComplete: true
+    property string defaultIndent: "4"              // dla plików bez wcięć: "2", "4", "tab"
     signal quickFixRequested()
     // ——— Zwijanie i minimapa ———
     property var foldRanges: []
@@ -245,8 +249,10 @@ Item {
         te.text = text;
         te.textDocument.modified = false;
         const ind = TextOps.detectIndent(text);
-        indentTabs = ind.tabs;
-        indentSize = ind.size;
+        // Bez żadnego wciętego wiersza — wcięcie z ustawień
+        const known = /^[ \t]+\S/m.test(text);
+        indentTabs = known ? ind.tabs : defaultIndent === "tab";
+        indentSize = known ? ind.size : (defaultIndent === "2" ? 2 : 4);
         te.cursorPosition = Math.max(0, Math.min(cursor || 0, te.length));
         Qt.callLater(ensureVisible);
         requestBase();
@@ -329,7 +335,7 @@ Item {
             if (trigger) { completion.hide(); completionTimer.restart(); }
             else if (!w) completion.hide();
             else completion.filter(w);
-        } else if (lspOn && (trigger || w.length >= 1)) {
+        } else if (lspOn && autoComplete && (trigger || w.length >= 1)) {
             completionTimer.restart();
         }
     }
@@ -444,6 +450,8 @@ Item {
             tip.text = [page.hoverDiag, text].filter(t => !!t).join("\n\n");
         }
         function onServersChanged() { page.serverInfo = Lsp.serverFor(page.path); }
+        // Serwery włączone z powrotem w ustawieniach — karta zgłasza swój plik
+        function onEnabledChanged() { if (Lsp.enabled && page.lspPrimary && page.path) Lsp.open(page.path, te.text); }
         function onSignatureReady(seq, p, label, a, b) {
             if (seq !== page.sigSeq || !te.activeFocus) return;
             const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -841,7 +849,7 @@ Item {
         if (ctrl && alt && (e.key === Qt.Key_Up || e.key === Qt.Key_Down)) { addCursorVertical(e.key === Qt.Key_Up ? -1 : 1); e.accepted = true; return; }
         if (extras.length && multiKey(e)) { e.accepted = true; return; }
         if (ctrl && e.key === Qt.Key_Space) { requestCompletion(); e.accepted = true; return; }
-        if (!ctrl && !alt && e.text.length === 1 && autoPair(e.text)) {
+        if (!ctrl && !alt && e.text.length === 1 && (autoClose || ")]}\"'`".indexOf(e.text) >= 0) && autoPair(e.text)) {
             const pc = e.text;
             Qt.callLater(() => page.afterTyped(pc));
             e.accepted = true;

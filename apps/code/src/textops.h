@@ -59,6 +59,8 @@ public:
     Q_INVOKABLE void revealLine(QQuickTextDocument *doc, int line);              // rozwija bloki nad ukrytym wierszem
     // Ten sam plik w dwóch grupach edytora: każda zmiana w jednym dokumencie trafia do drugiego (w obie strony)
     Q_INVOKABLE void link(QQuickTextDocument *a, QQuickTextDocument *b);
+    // Przy zapisie (ustawienia): spacje na końcach wierszy, jeden pusty wiersz na końcu pliku — jeden krok cofania
+    Q_INVOKABLE bool cleanupOnSave(QQuickTextDocument *doc, bool trimTrailing, bool finalNewline);
     // Zamiana w projekcie, dla otwartej karty: wszystkie trafienia albo jedno w wierszu i kolumnie (jeden krok cofania)
     Q_INVOKABLE int replaceAll(QQuickTextDocument *doc, const QString &query, bool matchCase, bool wholeWord, bool regex, const QString &replacement);
     Q_INVOKABLE bool replaceAt(QQuickTextDocument *doc, int line, int col, const QString &query, bool matchCase, bool wholeWord, bool regex,

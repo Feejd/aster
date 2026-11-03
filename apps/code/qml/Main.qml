@@ -35,6 +35,41 @@ Window {
         property bool sidebar: true
         property bool blame: true
         property bool minimap: true
+        property string fontFamily: "JetBrains Mono"
+        property bool autoClose: true
+        property bool autoComplete: true
+        property string defaultIndent: "4"
+        property string autoSave: "off"          // off | delay | focus
+        property bool formatOnSave: false
+        property bool trimTrailing: false
+        property bool finalNewline: false
+        property bool autoFetch: true
+        property bool lsp: true
+    }
+    Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
+
+    // Samozapis po chwili od ostatniej zmiany (bez porządkowania pliku — nie przeszkadza w pisaniu)
+    Timer {
+        id: autoSaveTimer
+        interval: 1000
+        onTriggered: { for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified && !tabs.get(i).readOnly) win.save(i, null, true); }
+    }
+    // Sprawdzanie serwera gita w tle
+    Timer {
+        interval: 5 * 60 * 1000; repeat: true
+        running: prefs.autoFetch && Project.isGit && !!Project.upstream
+        onTriggered: Project.fetch(true)
+    }
+    // Formatowanie przy zapisie: zapis czeka na serwer języka najwyżej 2 s
+    property var formatSaves: ({})
+    Timer {
+        id: formatTimeout
+        interval: 2000
+        onTriggered: {
+            const pend = win.formatSaves;
+            win.formatSaves = {};
+            for (const k in pend) { const i = win.indexOfUid(pend[k].uid); if (i >= 0) win.save(i, pend[k].then, true); }
+        }
     }
 
     // ——— Karty ———
@@ -130,6 +165,8 @@ Window {
     function openPaths() { const l = []; for (let i = 0; i < tabs.count; ++i) l.push(tabs.get(i).path); return l; }
     function activate(i) {
         if (i < 0 || i >= tabs.count) return;
+        if (prefs.autoSave === "focus" && i !== current && current < tabs.count && page(current) && page(current).modified && !tabs.get(current).readOnly)
+            save(current);
         current = i;
         focusGroup = tabs.get(i).group;
         if (focusGroup === 0) g0Uid = tabs.get(i).uid; else g1Uid = tabs.get(i).uid;
@@ -184,9 +221,23 @@ Window {
     function pin(i) { if (i >= 0 && i < tabs.count && tabs.get(i).preview) tabs.setProperty(i, "preview", false); }
 
     // ——— Zapisywanie ———
-    function save(i, then) {
+    // skipCleanup — bez porządkowania z ustawień (samozapis, drugi krok po formatowaniu)
+    function save(i, then, skipCleanup) {
         if (i < 0 || i >= tabs.count) return;
         const t = tabs.get(i), p = page(i);
+        if (!skipCleanup && !t.readOnly) {
+            TextOps.cleanupOnSave(p.edit.textDocument, prefs.trimTrailing, prefs.finalNewline);
+            if (prefs.formatOnSave && p.lspOn) {
+                const seq = p.formatDocument();
+                if (seq >= 0) {
+                    const f = Object.assign({}, formatSaves);
+                    f[seq] = { uid: t.uid, then: then };
+                    formatSaves = f;
+                    formatTimeout.restart();
+                    return;
+                }
+            }
+        }
         lastSave[t.path] = Date.now();
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
@@ -284,7 +335,10 @@ Window {
     Timer { interval: 5000; running: win.hasProject; repeat: true; onTriggered: win.saveSession() }
     // Git w tle: co kilka sekund, gdy okno jest aktywne, i po powrocie do okna
     Timer { interval: 4000; running: win.hasProject && win.active; repeat: true; onTriggered: Project.refreshGit() }
-    onActiveChanged: if (active && hasProject) Project.refreshGit()
+    onActiveChanged: {
+        if (active && hasProject) Project.refreshGit();
+        if (!active && prefs.autoSave === "focus") for (let i = 0; i < tabs.count; ++i) if (page(i) && page(i).modified && !tabs.get(i).readOnly) save(i);
+    }
     property string lastHead: ""
     Connections {
         target: Project
@@ -404,6 +458,18 @@ Window {
             terminalPanel.tab = 2;
         }
         function onFormatReady(seq, path, edits) {
+            // Zapis z formatowaniem: zmiany po cichu, potem właściwy zapis
+            const pend = win.formatSaves[seq];
+            if (pend) {
+                const f = Object.assign({}, win.formatSaves);
+                delete f[seq];
+                win.formatSaves = f;
+                const k = win.indexOfUid(pend.uid);
+                if (k < 0) return;
+                if (edits.length) win.page(k).applyEdits(edits);
+                win.save(k, pend.then, true);
+                return;
+            }
             const i = win.indexOfPath(path);
             if (i < 0) return;
             if (!edits.length) { win.toast("Plik jest już sformatowany"); return; }
@@ -664,6 +730,7 @@ Window {
         { label: "Przełącz komentarz", shortcut: "Ctrl+/", action: "comment", icon: "code" },
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
+        { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Zwiń blok", shortcut: "Ctrl+Shift+[", action: "fold", icon: "chevronRight" },
         { label: "Rozwiń blok", shortcut: "Ctrl+Shift+]", action: "unfold", icon: "chevronDown" },
         { label: "Zwiń wszystko", shortcut: "Ctrl+K Ctrl+0", action: "foldAll", icon: "chevronRight" },
@@ -787,6 +854,7 @@ Window {
         else if (a === "tab:split") { activate(menu.tab); splitEditor(); }
         else if (a === "tab:move") moveToOtherGroup(menu.tab);
         else if (a === "split") splitEditor();
+        else if (a === "settings") settingsView.open();
     }
     function runTree(a, path) {
         if (a === "newFile") newFile(path);
@@ -818,6 +886,8 @@ Window {
             { label: "Zawijaj wiersze", icon: prefs.wrap ? "check" : "", shortcut: "Alt+Z", action: "wrap" },
             { label: "Autor wiersza (git)", icon: prefs.blame ? "check" : "", action: "blame" },
             { label: "Minimapa", icon: prefs.minimap ? "check" : "", action: "minimap" },
+            { separator: true },
+            { label: "Ustawienia…", icon: "gear", shortcut: "Ctrl+,", action: "settings" },
             { separator: true },
             { label: "Zamknij folder", icon: "close", action: "closeFolder" }
         ]);
@@ -892,6 +962,9 @@ Window {
         else if (what === "push") Project.push();
         else if (what === "save") save(current);
         else if (what === "split") splitEditor();
+        else if (what === "settings") settingsView.open();
+        else if (what.startsWith("settingsSearch:")) { settingsView.open(); Qt.callLater(() => settingsView.searchFor(arg)); }
+        else if (what.startsWith("pref:")) { const kv = arg.split("="); prefs[kv[0]] = kv[1] === "true" ? true : kv[1] === "false" ? false : kv[1]; }
         else if (what.startsWith("focus:")) focusGroupN(Number(arg));
         else if (what === "moveTab") moveToOtherGroup(current);
         else if (what.startsWith("fold:")) { if (cur) cur.toggleFold(Number(arg) - 1); }
@@ -931,6 +1004,7 @@ Window {
     Shortcut { sequence: "Ctrl+Alt+S"; onActivated: win.saveAll() }
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
+    Shortcut { sequence: "Ctrl+,"; onActivated: settingsView.shown ? settingsView.close() : settingsView.open() }
     Shortcut { sequence: "Ctrl+1"; enabled: win.split; onActivated: win.focusGroupN(0) }
     Shortcut { sequence: "Ctrl+2"; enabled: win.split; onActivated: win.focusGroupN(1) }
     Shortcut { sequences: ["Ctrl+P", "Ctrl+E"]; enabled: win.hasProject; onActivated: palette.open("") }
@@ -967,8 +1041,8 @@ Window {
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; enabled: tabs.count > 1; onActivated: win.activate((win.current + 1) % tabs.count) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; enabled: tabs.count > 1; onActivated: win.activate((win.current - 1 + tabs.count) % tabs.count) }
     Shortcut { sequence: "F11"; onActivated: { if (win.visibility === Window.FullScreen) win.showNormal(); else win.showFullScreen(); } }
-    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown
-        onActivated: { if (win.confirm) win.confirm = null; else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
+    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown
+        onActivated: { if (win.confirm) win.confirm = null; else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -1164,6 +1238,11 @@ Window {
                         wrap: prefs.wrap
                         showBlame: prefs.blame
                         showMinimap: prefs.minimap
+                        fontFamily: prefs.fontFamily
+                        autoClose: prefs.autoClose
+                        autoComplete: prefs.autoComplete
+                        defaultIndent: prefs.defaultIndent
+                        onEdited: if (prefs.autoSave === "delay") autoSaveTimer.restart()
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)
@@ -1182,6 +1261,18 @@ Window {
 
                 // Linia między grupami
                 Rectangle { visible: win.split; x: win.splitX; width: 1; height: parent.height; color: Theme.line; z: 6 }
+
+                // Ustawienia (Ctrl+,)
+                SettingsView {
+                    id: settingsView
+                    // Nad edytorem i terminalem, aż do paska stanu
+                    parent: pane
+                    x: 0; y: editorArea.y
+                    width: pane.width; height: status.y - y
+                    z: 50
+                    prefs: prefs
+                    onClosed: if (win.cur) win.cur.focusEditor()
+                }
 
                 // Podgląd różnic (z widoku zmian)
                 DiffView {

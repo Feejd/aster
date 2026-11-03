@@ -809,10 +809,13 @@ void Project::pull()
     });
 }
 
-void Project::fetch()
+void Project::fetch(bool quiet)
 {
-    runGit(QStringLiteral("fetch"), {QStringLiteral("fetch"), QStringLiteral("--prune")}, {}, [this](bool ok, const QString &msg) {
-        Q_EMIT gitDone(QStringLiteral("fetch"), ok, ok ? QString() : syncError(msg));
+    if (quiet && !m_gitBusy.isEmpty())
+        return;
+    runGit(QStringLiteral("fetch"), {QStringLiteral("fetch"), QStringLiteral("--prune")}, {}, [this, quiet](bool ok, const QString &msg) {
+        if (!quiet || ok)
+            Q_EMIT gitDone(QStringLiteral("fetch"), ok, ok ? QString() : syncError(msg));
     });
 }
 
