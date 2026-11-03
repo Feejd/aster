@@ -16,14 +16,39 @@ Item {
     readonly property int pad: 10
     readonly property int rulerH: 26
     readonly property int videoY: rulerH + 8
-    readonly property int videoH: 72
-    readonly property int textY: videoY + videoH + 6
-    readonly property int textH: 34
+    readonly property int videoH: 64
+    readonly property int overlayY: videoY + videoH + 6
+    // Nakładki nachodzące na siebie w czasie dostają osobne wiersze (najwyżej 4)
+    readonly property var overlayLanes: {
+        const lanes = [], ends = [];
+        const list = Project.overlays.slice().sort((a, b) => a.start - b.start);
+        for (const o of list) {
+            let l = 0;
+            while (l < ends.length && ends[l] > o.start) l++;
+            l = Math.min(l, 3);
+            ends[l] = Math.max(ends[l] || 0, o.start + o.length);
+            lanes[o.id] = l;
+        }
+        return { map: lanes, count: Math.max(1, ends.length) };
+    }
+    readonly property int laneH: overlayLanes.count > 1 ? 28 : 36
+    readonly property int overlayH: laneH * overlayLanes.count
+    readonly property int textY: overlayY + overlayH + 6
+    readonly property int textH: 32
     readonly property int musicY: textY + textH + 6
     readonly property int musicH: 42
     readonly property color videoColor: Theme.dark ? "#2A2E39" : "#C9CFDB"
     readonly property color textColor: "#8B6CF6"
     readonly property color musicColor: "#24A57E"
+    readonly property color overlayColor: "#D9792B"
+    // Ścieżka pod punktem (y we współrzędnych osi czasu): "video", "overlay", "text", "music"
+    function trackAtY(y) {
+        const cy = y - bar.height;
+        if (cy >= overlayY - 3 && cy < overlayY + overlayH + 3) return "overlay";
+        if (cy >= textY - 3 && cy < textY + textH + 3) return "text";
+        if (cy >= musicY - 3) return "music";
+        return "video";
+    }
 
     function xOf(frame) { return pad + frame * ppf }
     function frameAtX(x) {          // x we współrzędnych osi czasu
@@ -46,6 +71,7 @@ Item {
         for (const c of Project.clips) if (c.id !== exceptId) targets.push(c.start, c.start + c.length);
         for (const t of Project.texts) if (t.id !== exceptId) targets.push(t.start, t.start + t.length);
         for (const m of Project.music) if (m.id !== exceptId) targets.push(m.start, m.start + m.length);
+        for (const o of Project.overlays) if (o.id !== exceptId) targets.push(o.start, o.start + o.length);
         for (const t of targets) if (Math.abs(t - frame) < dist) { dist = Math.abs(t - frame); best = t; }
         return best;
     }
@@ -91,6 +117,7 @@ Item {
             BarButton { icon: "trash"; label: "Usuń"; enabled: tl.editor.selected !== ""; onClicked: tl.editor.removeSelected() }
             Rectangle { width: 1; height: 20; color: Theme.line; anchors.verticalCenter: parent.verticalCenter }
             BarButton { icon: "textSize"; label: "Tekst"; hint: "T"; onClicked: tl.editor.addText() }
+            BarButton { icon: "image"; label: "Nakładka"; enabled: Project.duration > 0; onClicked: tl.editor.overlayRequested() }
             BarButton { icon: "music"; label: "Muzyka"; onClicked: tl.editor.importRequested() }
             BarButton { icon: "captions"; label: "Napisy z mowy"; visible: Captions.available; enabled: Project.clips.length > 0; onClicked: tl.editor.openCaptions() }
         }
@@ -113,6 +140,7 @@ Item {
         y: bar.height
         width: tl.head; height: parent.height - y
         TrackIcon { y: tl.videoY + (tl.videoH - height) / 2; icon: "film" }
+        TrackIcon { y: tl.overlayY + (tl.overlayH - height) / 2; icon: "image" }
         TrackIcon { y: tl.textY + (tl.textH - height) / 2; icon: "textSize" }
         TrackIcon { y: tl.musicY + (tl.musicH - height) / 2; icon: "music" }
     }
@@ -193,6 +221,7 @@ Item {
 
             // Tła ścieżek
             Rectangle { x: tl.pad; y: tl.videoY; width: parent.width - tl.pad; height: tl.videoH; radius: 8; color: Theme.fill }
+            Rectangle { x: tl.pad; y: tl.overlayY; width: parent.width - tl.pad; height: tl.overlayH; radius: 8; color: Theme.fill; opacity: 0.6 }
             Rectangle { x: tl.pad; y: tl.textY; width: parent.width - tl.pad; height: tl.textH; radius: 8; color: Theme.fill; opacity: 0.6 }
             Rectangle { x: tl.pad; y: tl.musicY; width: parent.width - tl.pad; height: tl.musicH; radius: 8; color: Theme.fill; opacity: 0.6 }
             Text {
@@ -200,6 +229,12 @@ Item {
                 x: tl.pad + 14; y: tl.videoY + (tl.videoH - height) / 2
                 text: "Przeciągnij tu filmy i zdjęcia"
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+            Text {
+                visible: Project.overlays.length === 0
+                x: tl.pad + 14; y: tl.overlayY + (tl.overlayH - height) / 2
+                text: "Nakładki — obraz w obrazie, naklejki, zielone tło: przeciągnij tu plik z multimediów"
+                color: Theme.text2; opacity: 0.8; font.family: Theme.font; font.pixelSize: 11
             }
             Text {
                 visible: Project.texts.length === 0
@@ -217,6 +252,15 @@ Item {
             Repeater {
                 model: Project.clips
                 delegate: Block { required property var modelData; info: modelData; kind: "clip"; y: tl.videoY; height: tl.videoH }
+            }
+            Repeater {
+                model: Project.overlays
+                delegate: Block {
+                    required property var modelData
+                    info: modelData; kind: "overlay"
+                    y: tl.overlayY + (tl.overlayLanes.map[modelData.id] || 0) * tl.laneH
+                    height: tl.laneH - (tl.overlayLanes.count > 1 ? 2 : 0)
+                }
             }
             Repeater {
                 model: Project.texts
@@ -304,12 +348,12 @@ Item {
         // Granice przycinania
         function minDl() {
             if (kind === "clip") return info.kind === "image" ? -10 * Project.fps : -Math.floor(info.in / info.speed);
-            if (kind === "text") return -info.start;
+            if (kind === "text" || (kind === "overlay" && info.kind === "image")) return -info.start;
             return -Math.min(info.in, info.start);
         }
         function maxDr() {
             if (kind === "clip" && info.kind !== "image") return Math.floor((info.srcFrames - 1 - info.out) / info.speed);
-            if (kind === "music") return info.srcFrames - 1 - info.out;
+            if (kind === "music" || (kind === "overlay" && info.kind !== "image")) return info.srcFrames - 1 - info.out;
             return 60 * 60 * Project.fps;
         }
 
@@ -317,7 +361,7 @@ Item {
             id: body
             anchors.fill: parent
             radius: 7
-            color: b.kind === "clip" ? tl.videoColor : b.kind === "text" ? tl.textColor : tl.musicColor
+            color: b.kind === "clip" ? tl.videoColor : b.kind === "text" ? tl.textColor : b.kind === "overlay" ? tl.overlayColor : tl.musicColor
             clip: true
 
             // Taśma klatek
@@ -347,6 +391,16 @@ Item {
                     GradientStop { position: 1; color: "transparent" }
                 }
             }
+            // Miniatura nakładki
+            Image {
+                visible: b.kind === "overlay"
+                x: 2; y: 2
+                width: Math.min(parent.height * 1.4, parent.width - 4); height: parent.height - 4
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                sourceSize.height: 64
+                source: b.kind === "overlay" ? Project.thumb(b.info.path, b.info.in + 5) : ""
+            }
             // Kształt fali muzyki (cały utwór, przesunięty o przycięty początek)
             Image {
                 visible: b.kind === "music"
@@ -369,18 +423,19 @@ Item {
                 }
             }
             Row {
-                x: 8; y: b.kind === "clip" ? 4 : (parent.height - height) / 2
+                x: b.kind === "overlay" ? Math.min(b.height * 1.4, b.width - 4) + 8 : 8
+                y: b.kind === "clip" ? 4 : (parent.height - height) / 2
                 width: parent.width - 16
                 spacing: 5
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: b.kind !== "clip"
+                    visible: b.kind === "text" || b.kind === "music"
                     d: b.kind === "text" ? Icons.textSize : Icons.music
                     size: 13; stroke: 2; color: "white"
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, parent.width - (speedBadge.visible ? speedBadge.width + 5 : 0) - (b.kind !== "clip" ? 18 : 0))
+                    width: Math.max(0, Math.min(implicitWidth, parent.width - (speedBadge.visible ? speedBadge.width + 5 : 0) - (b.kind === "text" || b.kind === "music" ? 18 : 0)))
                     text: b.kind === "text" ? b.info.text.replace(/\n/g, " ") : b.info.name
                     elide: Text.ElideRight
                     color: "white"

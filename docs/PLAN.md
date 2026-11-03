@@ -171,8 +171,13 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       wszystkich” i rombami przejść na osi; ruch kamery (najazd, odjazd, w lewo/prawo, puls, drgania); rozmyte tło
       (poziomy film w pionowym kadrze i odwrotnie); odbicie lustrzane; napisy przeciągane po podglądzie (przyciąganie
       do środka), wielkość i kolor liter; zmiana formatu projektu w każdej chwili
-- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, druga ścieżka obrazu (obraz w obrazie,
-      naklejki, zielone tło), klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
+- [x] Montaż 5: druga ścieżka obrazu — nakładki (film albo zdjęcie/naklejka PNG z przezroczystością) nad głównym
+      obrazem: obraz w obrazie, przeciąganie i zmiana wielkości na podglądzie, obrót, widoczność, kształt (prostokąt,
+      zaokrąglony, koło), pojawianie się (pojawianie, wyskok, wjazd), usuwanie zielonego/niebieskiego tła z czułością,
+      głośność; nachodzące na siebie nakładki w osobnych wierszach osi; dodawanie przyciskiem, przeciągnięciem
+      z multimediów albo upuszczeniem pliku na ścieżkę nakładek
+- [ ] Montaż, dalej: animacja „słowo po słowie” (karaoke) dla napisów z mowy, gotowe naklejki i emoji w programie,
+      klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
       płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster

@@ -33,12 +33,13 @@ Item {
             Text {
                 width: parent.width
                 text: insp.kind === "clip" ? (insp.info.kind === "image" ? "Zdjęcie" : "Klip wideo")
-                      : insp.kind === "text" ? "Tekst" : insp.kind === "music" ? "Muzyka" : "Projekt"
+                      : insp.kind === "text" ? "Tekst" : insp.kind === "music" ? "Muzyka"
+                      : insp.kind === "overlay" ? (insp.info.kind === "image" ? "Nakładka — zdjęcie" : "Nakładka — film") : "Projekt"
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
             }
             Text {
-                visible: insp.kind === "clip" || insp.kind === "music"
+                visible: insp.kind === "clip" || insp.kind === "music" || insp.kind === "overlay"
                 width: parent.width
                 text: insp.info.name || ""
                 elide: Text.ElideMiddle
@@ -322,6 +323,76 @@ Item {
                 InfoRow { label: "Długość"; value: Project.time(insp.info.length ?? 0) }
             }
 
+            // ——— Nakładka ———
+            Column {
+                visible: insp.kind === "overlay"
+                width: parent.width
+                spacing: 10
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Przeciągnij nakładkę na podglądzie, a róg ramki — żeby zmienić wielkość."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                }
+                ValueSlider {
+                    label: "Wielkość"; from: 0.05; to: 1.5; neutral: 0.05; unit: "%"
+                    value: insp.info.scale ?? 0.5
+                    onMoved: (v) => Project.setValue(insp.selected, "scale", v)
+                }
+                ValueSlider {
+                    label: "Obrót"; from: -180; to: 180; neutral: 0; unit: "°"; step: 1
+                    value: insp.info.rotation ?? 0
+                    onMoved: (v) => Project.setValue(insp.selected, "rotation", v)
+                }
+                ValueSlider {
+                    label: "Widoczność"; from: 0.05; to: 1; neutral: 1; unit: "%"
+                    value: insp.info.opacity ?? 1
+                    onMoved: (v) => Project.setValue(insp.selected, "opacity", v)
+                }
+                Label { text: "Kształt" }
+                Chips {
+                    model: ["rect", "rounded", "circle"]
+                    labelOf: (v) => v === "rect" ? "Prostokąt" : v === "rounded" ? "Zaokrąglony" : "Koło"
+                    current: insp.info.shape ?? "rect"
+                    onPicked: (v) => Project.setValue(insp.selected, "shape", v)
+                }
+                Label { text: "Pojawianie się" }
+                Chips {
+                    model: ["brak", "pojawianie", "wyskok", "wjazd"]
+                    labelOf: (v) => v === "brak" ? "Bez animacji" : v === "pojawianie" ? "Pojawianie" : v === "wyskok" ? "Wyskok" : "Wjazd od dołu"
+                    current: insp.info.anim ?? "brak"
+                    onPicked: (v) => Project.setValue(insp.selected, "anim", v)
+                }
+                Label { text: "Tło nakładki" }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Toggle { label: "Usuń zielone tło"; on: (insp.info.chroma ?? false) && insp.info.key === "#00B140"
+                             onToggled: { if (on) Project.setValue(insp.selected, "chroma", false); else { Project.setValue(insp.selected, "key", "#00B140"); Project.setValue(insp.selected, "chroma", true); } } }
+                    Toggle { label: "Usuń niebieskie tło"; on: (insp.info.chroma ?? false) && insp.info.key === "#0047BB"
+                             onToggled: { if (on) Project.setValue(insp.selected, "chroma", false); else { Project.setValue(insp.selected, "key", "#0047BB"); Project.setValue(insp.selected, "chroma", true); } } }
+                }
+                ValueSlider {
+                    visible: insp.info.chroma ?? false
+                    label: "Czułość"; from: 0.02; to: 0.6; neutral: 0.25
+                    value: insp.info.variance ?? 0.25
+                    onMoved: (v) => Project.setValue(insp.selected, "variance", v)
+                }
+                Label { text: "Głośność"; visible: insp.info.kind === "video" }
+                VolumeSlider {
+                    visible: insp.info.kind === "video"
+                    value: insp.info.volume ?? 1
+                    onMoved: (v) => Project.setValue(insp.selected, "volume", v)
+                }
+                HoverButton {
+                    width: fullText.implicitWidth + 24; height: 30; radius: 15
+                    baseColor: Theme.fill
+                    onClicked: Project.setValue(insp.selected, "full", true)
+                    Text { id: fullText; anchors.centerIn: parent; text: "Na cały kadr"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                }
+                InfoRow { label: "Długość"; value: Project.time(insp.info.length ?? 0) }
+            }
+
             // ——— Muzyka ———
             Column {
                 visible: insp.kind === "music"
@@ -563,6 +634,8 @@ Item {
         property real to: 1
         property real neutral: 0
         property real value: 0
+        property string unit: ""             // "" — różnica od punktu neutralnego, "%" — procent, "°" — stopnie
+        property real step: 0.01
         signal moved(real value)
         width: parent ? parent.width : 0; height: 26
         readonly property real shown: sArea.pressed ? sArea.dragValue : value
@@ -600,7 +673,7 @@ Item {
                 function valueAt(x) {
                     let v = vsl.from + Math.max(0, Math.min(1, (x - 4) / sTrack.width)) * (vsl.to - vsl.from);
                     if (Math.abs(v - vsl.neutral) < (vsl.to - vsl.from) * 0.03) v = vsl.neutral;
-                    return Math.round(v * 100) / 100;
+                    return Math.round(v / vsl.step) * vsl.step;
                 }
                 onPressed: (e) => { dragValue = valueAt(e.x); vsl.moved(dragValue); }
                 onPositionChanged: (e) => { dragValue = valueAt(e.x); vsl.moved(dragValue); }
@@ -609,7 +682,9 @@ Item {
         }
         Text {
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: (vsl.shown - vsl.neutral > 0.005 ? "+" : "") + Math.round((vsl.shown - vsl.neutral) * 100)
+            text: vsl.unit === "%" ? Math.round(vsl.shown * 100) + "%"
+                  : vsl.unit === "°" ? Math.round(vsl.shown) + "°"
+                  : (vsl.shown - vsl.neutral > 0.005 ? "+" : "") + Math.round((vsl.shown - vsl.neutral) * 100)
             color: Theme.text
             font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; font.features: { "tnum": 1 }
         }

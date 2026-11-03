@@ -39,6 +39,13 @@ Window {
     }
 
     FileDialog {
+        id: overlayDialog
+        title: "Dodaj nakładkę — film albo zdjęcie"
+        currentFolder: "file://" + Project.videosDir()
+        nameFilters: ["Filmy i zdjęcia (*.mp4 *.mov *.mkv *.webm *.avi *.m4v *.3gp *.jpg *.jpeg *.png *.webp *.heic *.gif)", "Wszystkie pliki (*)"]
+        onAccepted: editor.selected = Project.addOverlay(String(selectedFile), editor.player.position)
+    }
+    FileDialog {
         id: importDialog
         title: "Dodaj filmy, zdjęcia i muzykę"
         fileMode: FileDialog.OpenFiles
@@ -105,6 +112,7 @@ Window {
             radius: win.r
             onToast: (text) => win.toast(text)
             onImportRequested: win.importFiles()
+            onOverlayRequested: overlayDialog.open()
             onMenuRequested: (items, x, y) => menu.openAt(x - win.m, y - win.m, items)   // współrzędne sceny
         }
 
@@ -115,7 +123,9 @@ Window {
             onDropped: (drop) => {
                 const files = drop.urls.map(u => String(u));
                 if (files.length === 0) return;
-                if (Project.isOpen) Project.importFiles(files, editor.dropFrame(drop.x, drop.y));
+                if (Project.isOpen && editor.dropTrack(drop.x, drop.y) === "overlay") {
+                    for (const f of files) editor.selected = Project.addOverlay(f, editor.dropFrame(drop.x, drop.y));
+                } else if (Project.isOpen) Project.importFiles(files, editor.dropFrame(drop.x, drop.y));
                 else win.startWith(files);
             }
         }

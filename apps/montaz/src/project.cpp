@@ -225,6 +225,21 @@ QVariantList Project::texts() const
     return l;
 }
 
+QVariantList Project::overlays() const
+{
+    QVariantList l;
+    for (const Overlay &o : m_overlays)
+        l << QVariantMap{{QStringLiteral("id"), o.id}, {QStringLiteral("path"), o.path}, {QStringLiteral("kind"), o.kind},
+                         {QStringLiteral("name"), o.name}, {QStringLiteral("start"), o.start}, {QStringLiteral("in"), o.in},
+                         {QStringLiteral("out"), o.out}, {QStringLiteral("length"), o.out - o.in + 1}, {QStringLiteral("srcFrames"), o.srcFrames},
+                         {QStringLiteral("aspect"), o.shape == QLatin1String("circle") ? 1.0 : o.aspect}, {QStringLiteral("x"), o.x},
+                         {QStringLiteral("y"), o.y}, {QStringLiteral("scale"), o.scale}, {QStringLiteral("rotation"), o.rotation},
+                         {QStringLiteral("opacity"), o.opacity}, {QStringLiteral("volume"), o.volume}, {QStringLiteral("shape"), o.shape},
+                         {QStringLiteral("chroma"), o.chroma}, {QStringLiteral("key"), o.key}, {QStringLiteral("variance"), o.variance},
+                         {QStringLiteral("anim"), o.anim}};
+    return l;
+}
+
 QVariantList Project::music() const
 {
     QVariantList l;
@@ -415,6 +430,7 @@ void Project::closeProject()
     m_clips.clear();
     m_texts.clear();
     m_music.clear();
+    m_overlays.clear();
     m_undo.clear();
     m_redo.clear();
     layout();
@@ -463,7 +479,15 @@ void Project::save()
 
 QJsonObject Project::toJson() const
 {
-    QJsonArray media, clips, texts, music;
+    QJsonArray media, clips, texts, music, overlays;
+    for (const Overlay &o : m_overlays)
+        overlays << QJsonObject{{QStringLiteral("id"), o.id}, {QStringLiteral("path"), o.path}, {QStringLiteral("kind"), o.kind},
+                                {QStringLiteral("start"), o.start}, {QStringLiteral("in"), o.in}, {QStringLiteral("out"), o.out},
+                                {QStringLiteral("srcFrames"), o.srcFrames}, {QStringLiteral("aspect"), o.aspect}, {QStringLiteral("x"), o.x},
+                                {QStringLiteral("y"), o.y}, {QStringLiteral("scale"), o.scale}, {QStringLiteral("rotation"), o.rotation},
+                                {QStringLiteral("opacity"), o.opacity}, {QStringLiteral("volume"), o.volume}, {QStringLiteral("shape"), o.shape},
+                                {QStringLiteral("chroma"), o.chroma}, {QStringLiteral("key"), o.key}, {QStringLiteral("variance"), o.variance},
+                                {QStringLiteral("anim"), o.anim}};
     for (const Media &m : m_media)
         media << QJsonObject{{QStringLiteral("path"), m.path}, {QStringLiteral("kind"), m.kind}, {QStringLiteral("frames"), m.frames},
                              {QStringLiteral("w"), m.w}, {QStringLiteral("h"), m.h}, {QStringLiteral("audio"), m.audio}};
@@ -487,7 +511,7 @@ QJsonObject Project::toJson() const
     return QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("name"), m_name}, {QStringLiteral("format"), m_format},
                        {QStringLiteral("fps"), Fps}, {QStringLiteral("fadeIn"), m_fadeIn}, {QStringLiteral("fadeOut"), m_fadeOut},
                        {QStringLiteral("media"), media}, {QStringLiteral("clips"), clips},
-                       {QStringLiteral("texts"), texts}, {QStringLiteral("music"), music}};
+                       {QStringLiteral("texts"), texts}, {QStringLiteral("music"), music}, {QStringLiteral("overlays"), overlays}};
 }
 
 void Project::fromJson(const QJsonObject &o)
@@ -500,6 +524,7 @@ void Project::fromJson(const QJsonObject &o)
     m_clips.clear();
     m_texts.clear();
     m_music.clear();
+    m_overlays.clear();
     for (const QJsonValue &v : o.value(QLatin1String("media")).toArray()) {
         const QJsonObject m = v.toObject();
         Media x;
@@ -551,6 +576,31 @@ void Project::fromJson(const QJsonObject &o)
         t.scale = m.value(QLatin1String("scale")).toDouble(1);
         t.color = m.value(QLatin1String("color")).toString();
         m_texts << t;
+    }
+    for (const QJsonValue &v : o.value(QLatin1String("overlays")).toArray()) {
+        const QJsonObject m = v.toObject();
+        Overlay n;
+        n.id = m.value(QLatin1String("id")).toString();
+        n.path = m.value(QLatin1String("path")).toString();
+        n.kind = m.value(QLatin1String("kind")).toString();
+        n.name = QFileInfo(n.path).completeBaseName();
+        n.start = m.value(QLatin1String("start")).toInt();
+        n.in = m.value(QLatin1String("in")).toInt();
+        n.out = m.value(QLatin1String("out")).toInt();
+        n.srcFrames = m.value(QLatin1String("srcFrames")).toInt();
+        n.aspect = m.value(QLatin1String("aspect")).toDouble(1);
+        n.x = m.value(QLatin1String("x")).toDouble(50);
+        n.y = m.value(QLatin1String("y")).toDouble(32);
+        n.scale = m.value(QLatin1String("scale")).toDouble(0.5);
+        n.rotation = m.value(QLatin1String("rotation")).toDouble();
+        n.opacity = m.value(QLatin1String("opacity")).toDouble(1);
+        n.volume = m.value(QLatin1String("volume")).toDouble(1);
+        n.shape = m.value(QLatin1String("shape")).toString(QStringLiteral("rect"));
+        n.chroma = m.value(QLatin1String("chroma")).toBool();
+        n.key = m.value(QLatin1String("key")).toString(QStringLiteral("#00B140"));
+        n.variance = m.value(QLatin1String("variance")).toDouble(0.25);
+        n.anim = m.value(QLatin1String("anim")).toString(QStringLiteral("brak"));
+        m_overlays << n;
     }
     for (const QJsonValue &v : o.value(QLatin1String("music")).toArray()) {
         const QJsonObject m = v.toObject();
@@ -641,6 +691,8 @@ void Project::layout()
         end = qMax(end, t.start + t.length);
     for (const Music &m : m_music)
         end = qMax(end, m.start + m.out - m.in + 1);
+    for (const Overlay &o : m_overlays)
+        end = qMax(end, o.start + o.out - o.in + 1);
     m_duration = end;
 }
 
@@ -657,6 +709,14 @@ Project::Text *Project::text(const QString &id)
     for (Text &t : m_texts)
         if (t.id == id)
             return &t;
+    return nullptr;
+}
+
+Project::Overlay *Project::overlay(const QString &id)
+{
+    for (Overlay &o : m_overlays)
+        if (o.id == id)
+            return &o;
     return nullptr;
 }
 
@@ -677,12 +737,14 @@ QString Project::kindOf(const QString &id) const
         return QStringLiteral("text");
     if (self->track(id))
         return QStringLiteral("music");
+    if (self->overlay(id))
+        return QStringLiteral("overlay");
     return QString();
 }
 
 QVariantMap Project::item(const QString &id) const
 {
-    for (const QVariantList &l : {clips(), texts(), music()})
+    for (const QVariantList &l : {clips(), texts(), music(), overlays()})
         for (const QVariant &v : l)
             if (v.toMap().value(QStringLiteral("id")).toString() == id)
                 return v.toMap();
@@ -711,6 +773,10 @@ QString Project::itemAt(const QString &trackName, int frame) const
         for (const Text &t : m_texts)
             if (frame >= t.start && frame < t.start + t.length)
                 return t.id;
+    } else if (trackName == QLatin1String("overlay")) {
+        for (const Overlay &o : m_overlays)
+            if (frame >= o.start && frame <= o.start + o.out - o.in)
+                return o.id;
     } else if (trackName == QLatin1String("music")) {
         for (const Music &m : m_music)
             if (frame >= m.start && frame <= m.start + m.out - m.in)
@@ -868,6 +934,47 @@ QString Project::addFromMedia(const QString &path, int frame)
     return QString();
 }
 
+QString Project::addOverlay(const QString &pathOrUrl, int frame)
+{
+    if (m_id.isEmpty())
+        return QString();
+    const Media *m = probe(toPath(pathOrUrl));
+    if (!m || m->kind == QLatin1String("audio")) {
+        Q_EMIT message(m ? QStringLiteral("Na nakładkę nadaje się film albo zdjęcie") : QStringLiteral("Nie można otworzyć pliku"));
+        return QString();
+    }
+    const Media media = *m;
+    snapshot();
+    bool known = false;
+    for (const Media &x : std::as_const(m_media))
+        known |= x.path == media.path;
+    if (!known)
+        m_media << media;
+    Overlay o;
+    o.id = newId();
+    o.path = media.path;
+    o.kind = media.kind;
+    o.name = media.name;
+    o.start = qMax(0, frame);
+    o.srcFrames = media.kind == QLatin1String("image") ? 0 : media.frames;
+    o.out = (media.kind == QLatin1String("image") ? ImageFrames : media.frames) - 1;
+    o.aspect = media.w > 0 && media.h > 0 ? double(media.w) / media.h : 1;
+    // Zdjęcie (naklejka) mniejsze i wyżej, film jako „okienko” w rogu
+    if (media.kind == QLatin1String("image")) {
+        o.scale = 0.4;
+        o.x = 50;
+        o.y = 30;
+    } else {
+        o.scale = 0.42;
+        o.x = 72;
+        o.y = 22;
+        o.shape = QStringLiteral("rounded");
+    }
+    m_overlays << o;
+    commit();
+    return o.id;
+}
+
 QString Project::addText(int frame, const QString &str)
 {
     if (m_id.isEmpty())
@@ -916,6 +1023,22 @@ void Project::trim(const QString &id, int ds, int de)
         m->start += in - m->in;
         m->in = in;
         m->out = qBound(m->in + MinFrames, m->out + de, m->srcFrames - 1);
+    } else if (Overlay *o = overlay(id)) {
+        snapshot();
+        if (o->srcFrames <= 0) {          // zdjęcie: zmienia się tylko początek i długość
+            const int end = o->start + o->out - o->in + 1 + de;
+            o->start = qBound(0, o->start + ds, end - MinFrames);
+            o->in = 0;
+            o->out = qMax(MinFrames, end - o->start) - 1;
+        } else {
+            int in = o->in + ds;
+            if (in < 0) { ds -= in; in = 0; }
+            if (o->start + ds < 0) { in -= o->start + ds; ds = -o->start; }
+            in = qMin(in, o->out - MinFrames);
+            o->start += in - o->in;
+            o->in = in;
+            o->out = qBound(o->in + MinFrames, o->out + de, o->srcFrames - 1);
+        }
     } else {
         return;
     }
@@ -948,6 +1071,11 @@ void Project::moveItem(const QString &id, int start)
             return;
         snapshot();
         m->start = start;
+    } else if (Overlay *o = overlay(id)) {
+        if (o->start == start)
+            return;
+        snapshot();
+        o->start = start;
     } else {
         return;
     }
@@ -997,6 +1125,18 @@ QString Project::split(const QString &id, int frame)
         m->out = m->in + local - 1;
         m->fadeOut = false;
         m_music << second;
+    } else if (Overlay *o = overlay(id)) {
+        const int local = frame - o->start;
+        if (local < 3 || local > o->out - o->in - 3)
+            return QString();
+        snapshot();
+        Overlay second = *o;
+        second.id = nid;
+        second.start = frame;
+        second.in = o->srcFrames > 0 ? o->in + local : 0;
+        second.out = o->srcFrames > 0 ? o->out : o->out - local;
+        o->out = o->in + local - 1;
+        m_overlays << second;
     } else {
         return QString();
     }
@@ -1012,6 +1152,7 @@ void Project::remove(const QString &id)
     m_clips.removeIf([&](const Clip &c) { return c.id == id; });
     m_texts.removeIf([&](const Text &t) { return t.id == id; });
     m_music.removeIf([&](const Music &m) { return m.id == id; });
+    m_overlays.removeIf([&](const Overlay &o) { return o.id == id; });
     commit();
 }
 
@@ -1079,6 +1220,35 @@ void Project::setValue(const QString &id, const QString &key, const QVariant &va
             m->volume = qBound(0.0, value.toDouble(), 2.0);
         else if (key == QLatin1String("fadeOut"))
             m->fadeOut = value.toBool();
+    } else if (Overlay *o = overlay(id)) {
+        snapshot(merge);
+        if (key == QLatin1String("pos")) {
+            const QVariantMap p = value.toMap();
+            o->x = qBound(-20.0, p.value(QStringLiteral("x")).toDouble(), 120.0);
+            o->y = qBound(-20.0, p.value(QStringLiteral("y")).toDouble(), 120.0);
+        } else if (key == QLatin1String("scale"))
+            o->scale = qBound(0.05, value.toDouble(), 2.0);
+        else if (key == QLatin1String("rotation"))
+            o->rotation = qBound(-180.0, value.toDouble(), 180.0);
+        else if (key == QLatin1String("opacity"))
+            o->opacity = qBound(0.05, value.toDouble(), 1.0);
+        else if (key == QLatin1String("volume"))
+            o->volume = qBound(0.0, value.toDouble(), 2.0);
+        else if (key == QLatin1String("shape"))
+            o->shape = value.toString();
+        else if (key == QLatin1String("chroma"))
+            o->chroma = value.toBool();
+        else if (key == QLatin1String("key"))
+            o->key = value.toString();
+        else if (key == QLatin1String("variance"))
+            o->variance = qBound(0.02, value.toDouble(), 0.6);
+        else if (key == QLatin1String("anim"))
+            o->anim = value.toString();
+        else if (key == QLatin1String("full")) {      // na cały kadr
+            o->x = o->y = 50;
+            o->scale = 1;
+            o->rotation = 0;
+        }
     } else {
         return;
     }
@@ -1486,6 +1656,77 @@ QString Project::xml(int W, int H) const
         x.writeEndElement();
     }
 
+    // Nakładki (druga ścieżka obrazu): każda na własnej ścieżce, nakładana przez affine
+    // (położenie, wielkość, obrót, przezroczystość, animacja wejścia i wyjścia)
+    QStringList overlayRects, overlayRotations;
+    for (int i = 0; i < m_overlays.size(); ++i) {
+        const Overlay &o = m_overlays.at(i);
+        const bool image = o.kind == QLatin1String("image");
+        const int len = o.out - o.in + 1;
+        const bool circle = o.shape == QLatin1String("circle");
+        x.writeStartElement(QStringLiteral("producer"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("n%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
+        x.writeAttribute(QStringLiteral("out"), QString::number((image ? 100000 : o.srcFrames) - 1));
+        prop(QStringLiteral("resource"), o.path);
+        if (image) {
+            prop(QStringLiteral("length"), QStringLiteral("100000"));
+            prop(QStringLiteral("ttl"), QStringLiteral("1"));
+        }
+        if (o.chroma)
+            filter(QStringLiteral("chroma"), {{QStringLiteral("key"), o.key}, {QStringLiteral("variance"), num(o.variance)}});
+        if (circle) {
+            // Koło na środku obrazu, o średnicy krótszego boku (radius 0,5 w qtcrop)
+            filter(QStringLiteral("qtcrop"), {{QStringLiteral("rect"), QStringLiteral("0% 0% 100% 100%")}, {QStringLiteral("circle"), QStringLiteral("1")},
+                                              {QStringLiteral("radius"), QStringLiteral("0.5")}, {QStringLiteral("color"), QStringLiteral("#00000000")}});
+        } else if (o.shape == QLatin1String("rounded")) {
+            filter(QStringLiteral("qtcrop"), {{QStringLiteral("rect"), QStringLiteral("0% 0% 100% 100%")}, {QStringLiteral("radius"), QStringLiteral("0.18")},
+                                              {QStringLiteral("color"), QStringLiteral("#00000000")}});
+        }
+        if (!image && !qFuzzyCompare(o.volume, 1.0))
+            filter(QStringLiteral("volume"), {{QStringLiteral("gain"), num(o.volume)}});
+        x.writeEndElement();
+        x.writeStartElement(QStringLiteral("playlist"));
+        x.writeAttribute(QStringLiteral("id"), QStringLiteral("nakladka%1").arg(i));
+        if (o.start > 0) {
+            x.writeStartElement(QStringLiteral("blank"));
+            x.writeAttribute(QStringLiteral("length"), QString::number(o.start));
+            x.writeEndElement();
+        }
+        x.writeStartElement(QStringLiteral("entry"));
+        x.writeAttribute(QStringLiteral("producer"), QStringLiteral("n%1").arg(i));
+        x.writeAttribute(QStringLiteral("in"), QString::number(o.in));
+        x.writeAttribute(QStringLiteral("out"), QString::number(o.out));
+        x.writeEndElement();
+        x.writeEndElement();
+
+        // Prostokąt całego obrazu źródła; przy kole widoczny krąg ma średnicę scale × szerokość kadru
+        const double D = o.scale * W;
+        double w = D, h = D / o.aspect;
+        if (circle) {
+            w = o.aspect >= 1 ? D * o.aspect : D;
+            h = o.aspect >= 1 ? D : D / o.aspect;
+        }
+        auto rect = [&](double k, double dy, double opacity) {
+            const double ww = w * k, hh = h * k;
+            return QStringLiteral("%1 %2 %3 %4 %5").arg(qRound(o.x / 100 * W - ww / 2)).arg(qRound(o.y / 100 * H - hh / 2 + dy * H))
+                .arg(qRound(ww)).arg(qRound(hh)).arg(num(opacity * o.opacity));
+        };
+        const int ramp = qBound(2, len / 4, 8), lastF = len - 1;
+        QString r;
+        if (o.anim == QLatin1String("pojawianie"))
+            r = QStringLiteral("0=%1;%2=%3;%4=%3;%5=%6").arg(rect(1, 0, 0)).arg(ramp).arg(rect(1, 0, 1)).arg(lastF - ramp).arg(lastF).arg(rect(1, 0, 0));
+        else if (o.anim == QLatin1String("wyskok"))
+            r = QStringLiteral("0=%1;%2=%3;%4=%5;%6=%5;%7=%8").arg(rect(0.55, 0, 0)).arg(ramp).arg(rect(1.06, 0, 1)).arg(ramp + 3).arg(rect(1, 0, 1))
+                    .arg(lastF - ramp).arg(lastF).arg(rect(0.7, 0, 0));
+        else if (o.anim == QLatin1String("wjazd"))
+            r = QStringLiteral("0=%1;%2=%3;%4=%3;%5=%6").arg(rect(1, 0.3, 0)).arg(ramp + 2).arg(rect(1, 0, 1)).arg(lastF - ramp).arg(lastF).arg(rect(1, 0, 0));
+        else
+            r = rect(1, 0, 1);
+        overlayRects << r;
+        overlayRotations << num(o.rotation);
+    }
+
     x.writeStartElement(QStringLiteral("tractor"));
     x.writeAttribute(QStringLiteral("id"), QStringLiteral("film"));
     x.writeAttribute(QStringLiteral("in"), QStringLiteral("0"));
@@ -1500,10 +1741,16 @@ QString Project::xml(int W, int H) const
     };
     track(QStringLiteral("tlo"), false);
     track(QStringLiteral("wideo"), false);
+    for (int i = 0; i < m_overlays.size(); ++i)
+        track(QStringLiteral("nakladka%1").arg(i), false);
     for (int i = 0; i < m_music.size(); ++i)
         track(QStringLiteral("muzyka%1").arg(i), true);
     x.writeEndElement();
-    for (int t = 1; t < 2 + m_music.size(); ++t) {
+    // Dźwięk: wszystko mieszane do ścieżki tła (0)
+    const int firstOverlay = 2, firstMusic = 2 + m_overlays.size();
+    for (int t = 1; t < firstMusic + m_music.size(); ++t) {
+        if (t >= firstOverlay && t < firstMusic && m_overlays.at(t - firstOverlay).kind == QLatin1String("image"))
+            continue;
         x.writeStartElement(QStringLiteral("transition"));
         prop(QStringLiteral("mlt_service"), QStringLiteral("mix"));
         prop(QStringLiteral("a_track"), QStringLiteral("0"));
@@ -1511,6 +1758,32 @@ QString Project::xml(int W, int H) const
         prop(QStringLiteral("always_active"), QStringLiteral("1"));
         prop(QStringLiteral("sum"), QStringLiteral("1"));
         x.writeEndElement();
+    }
+    // Obraz: przy nakładkach główną ścieżkę trzeba wprost nałożyć na tło, a nakładki — na wynik
+    if (!m_overlays.isEmpty()) {
+        x.writeStartElement(QStringLiteral("transition"));
+        prop(QStringLiteral("mlt_service"), QStringLiteral("qtblend"));
+        prop(QStringLiteral("a_track"), QStringLiteral("0"));
+        prop(QStringLiteral("b_track"), QStringLiteral("1"));
+        prop(QStringLiteral("always_active"), QStringLiteral("1"));
+        x.writeEndElement();
+        for (int i = 0; i < m_overlays.size(); ++i) {
+            const Overlay &o = m_overlays.at(i);
+            x.writeStartElement(QStringLiteral("transition"));
+            x.writeAttribute(QStringLiteral("in"), QString::number(o.start));
+            x.writeAttribute(QStringLiteral("out"), QString::number(o.start + o.out - o.in));
+            prop(QStringLiteral("mlt_service"), QStringLiteral("affine"));
+            prop(QStringLiteral("a_track"), QStringLiteral("0"));
+            prop(QStringLiteral("b_track"), QString::number(firstOverlay + i));
+            prop(QStringLiteral("rect"), overlayRects.at(i));
+            prop(QStringLiteral("fill"), QStringLiteral("1"));
+            prop(QStringLiteral("distort"), QStringLiteral("0"));
+            prop(QStringLiteral("halign"), QStringLiteral("center"));
+            prop(QStringLiteral("valign"), QStringLiteral("middle"));
+            if (overlayRotations.at(i) != QLatin1String("0"))
+                prop(QStringLiteral("fix_rotate_x"), overlayRotations.at(i));
+            x.writeEndElement();
+        }
     }
     // Napisy — filtry na całym filmie, każdy w swoim przedziale czasu
     for (const Text &t : m_texts) {

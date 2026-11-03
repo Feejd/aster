@@ -25,6 +25,7 @@ class Project : public QObject
     Q_PROPERTY(QVariantList clips READ clips NOTIFY changed)
     Q_PROPERTY(QVariantList texts READ texts NOTIFY changed)
     Q_PROPERTY(QVariantList music READ music NOTIFY changed)
+    Q_PROPERTY(QVariantList overlays READ overlays NOTIFY changed)
     Q_PROPERTY(int duration READ duration NOTIFY changed)
     Q_PROPERTY(int revision READ revision NOTIFY changed)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY changed)
@@ -58,6 +59,7 @@ public:
     QVariantList clips() const;
     QVariantList texts() const;
     QVariantList music() const;
+    QVariantList overlays() const;
     int duration() const { return m_duration; }
     int revision() const { return m_revision; }
     bool canUndo() const { return !m_undo.isEmpty(); }
@@ -84,6 +86,8 @@ public:
     Q_INVOKABLE int importFiles(const QStringList &pathsOrUrls, int atFrame = -1);   // zwraca liczbę dodanych
     Q_INVOKABLE QString addFromMedia(const QString &path, int frame);                 // z biblioteki na oś czasu
     Q_INVOKABLE QString addText(int frame, const QString &text = QString());
+    // Druga ścieżka obrazu: film albo zdjęcie (naklejka PNG) nad głównym obrazem; zwraca id albo ""
+    Q_INVOKABLE QString addOverlay(const QString &pathOrUrl, int frame);
     Q_INVOKABLE void trim(const QString &id, int deltaStart, int deltaEnd);          // przesunięcie krawędzi w klatkach osi
     Q_INVOKABLE void moveClip(const QString &id, int index);                         // ścieżka wideo: nowa kolejność
     Q_INVOKABLE void moveItem(const QString &id, int start);                         // tekst/muzyka: nowe miejsce
@@ -154,6 +158,19 @@ private:
         QString color;                  // kolor liter zamiast koloru stylu
     };
     struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
+    struct Overlay {
+        QString id, path, kind, name;
+        int start = 0, in = 0, out = 0, srcFrames = 0;   // srcFrames 0 — zdjęcie (bez limitu długości)
+        double aspect = 1;                               // szerokość / wysokość źródła
+        double x = 50, y = 32;                           // środek w % kadru
+        double scale = 0.5;                              // szerokość jako ułamek szerokości kadru
+        double rotation = 0, opacity = 1, volume = 1;
+        QString shape = QStringLiteral("rect");          // rect, rounded, circle
+        bool chroma = false;                             // usuń zielone (albo niebieskie) tło
+        QString key = QStringLiteral("#00B140");
+        double variance = 0.25;
+        QString anim = QStringLiteral("wyskok");         // brak, pojawianie, wyskok, wjazd
+    };
 
     // Ułożenie napisu w kadrze (w pikselach danego rozmiaru)
     struct TextLayout { QString text, valign; int size = 0, lines = 1, longest = 0; double x = 0, y = 0, w = 0, h = 0; };
@@ -165,6 +182,7 @@ private:
     QList<Clip> m_clips;
     QList<Text> m_texts;
     QList<Music> m_music;
+    QList<Overlay> m_overlays;
     int m_duration = 0;
     int m_revision = 0;
     qint64 m_created = 0;
@@ -188,4 +206,5 @@ private:
     Clip *clip(const QString &id);
     Text *text(const QString &id);
     Music *track(const QString &id);
+    Overlay *overlay(const QString &id);
 };

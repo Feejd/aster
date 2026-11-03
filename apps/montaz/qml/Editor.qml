@@ -12,6 +12,7 @@ GlassPane {
     property real radius: 0
     signal toast(string text)
     signal importRequested()
+    signal overlayRequested()
     signal menuRequested(var items, real x, real y)
 
     leftLine: false
@@ -29,7 +30,7 @@ GlassPane {
 
     // Zaznaczony napis ma być widać na podglądzie — głowica wskakuje do jego środka
     onSelectedChanged: {
-        if (selectedKind !== "text") return;
+        if (selectedKind !== "text" && selectedKind !== "overlay") return;
         const t = Project.item(selected);
         if (player.position < t.start || player.position >= t.start + t.length) {
             player.pause();
@@ -45,6 +46,11 @@ GlassPane {
 
     // Gdzie wstawić nowe klipy: w miejscu głowicy, a gdy stoi na końcu — na końcu
     function insertFrame() { return player.position > 0 && player.position < Project.duration - 1 ? player.position : -1 }
+    // Upuszczenie na ścieżkę nakładek dodaje nakładkę zamiast klipu
+    function dropTrack(x, y) {
+        const p = mapToItem(timeline, x, y);
+        return timeline.contains(Qt.point(p.x, p.y)) ? timeline.trackAtY(p.y) : "";
+    }
     function dropFrame(x, y) {
         const p = mapToItem(timeline, x, y);
         return timeline.contains(Qt.point(p.x, p.y)) ? timeline.frameAtX(p.x) : insertFrame();
@@ -122,6 +128,9 @@ GlassPane {
         else if (what.startsWith("textpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
         else if (what.startsWith("textscale:")) Project.setValue(selected, "scale", Number(arg));
         else if (what.startsWith("textcolor:")) Project.setValue(selected, "color", arg);
+        else if (what.startsWith("overlay:")) selected = Project.addOverlay(arg, player.position);
+        else if (what.startsWith("ov:")) { const kv = arg.split("="); Project.setValue(selected, kv[0], isNaN(Number(kv[1])) ? (kv[1] === "true" ? true : kv[1]) : Number(kv[1])); }
+        else if (what.startsWith("ovpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
         else if (what === "deselect") selected = "";
         else if (what === "captions") openCaptions();
         else if (what.startsWith("captionsstart:")) { openCaptions(); Captions.start(arg, "pl", "zolty"); }
@@ -318,7 +327,7 @@ GlassPane {
                 }
                 TextHandle {
                     anchors.fill: parent
-                    visible: ed.selectedKind === "text"
+                    visible: ed.selectedKind === "text" || ed.selectedKind === "overlay"
                 }
                 Column {
                     visible: Project.duration === 0
@@ -397,7 +406,7 @@ GlassPane {
     Timeline {
         id: timeline
         anchors.bottom: parent.bottom
-        width: parent.width; height: 276
+        width: parent.width; height: 276 + timeline.overlayH - 36
         player: player
         editor: ed
     }
@@ -420,7 +429,12 @@ GlassPane {
     // uchwyt w rogu zmienia wielkość
     component TextHandle: Item {
         id: th
-        readonly property var box: ed.selectedKind === "text" && Project.revision >= 0 ? Project.textBox(ed.selected) : ({ x: 0.5, y: 0.5, w: 0, h: 0 })
+        readonly property bool isOverlay: ed.selectedKind === "overlay"
+        readonly property var info: isOverlay && Project.revision >= 0 ? Project.item(ed.selected) : ({})
+        // Prostokąt w ułamkach kadru: napis — z C++, nakładka — z położenia, wielkości i proporcji
+        readonly property var box: ed.selectedKind === "text" && Project.revision >= 0 ? Project.textBox(ed.selected)
+                                   : isOverlay ? ({ x: info.x / 100, y: info.y / 100, w: info.scale, h: info.scale * Project.width / info.aspect / Project.height })
+                                   : ({ x: 0.5, y: 0.5, w: 0, h: 0 })
         property real dx: 0
         property real dy: 0
         property real dscale: 1
@@ -444,6 +458,7 @@ GlassPane {
             height: Math.max(20, th.box.h * th.height * th.dscale + 8)
             x: th.cx - width / 2
             y: th.cy - height / 2
+            rotation: th.isOverlay ? (th.info.rotation || 0) : 0
             color: moveArea.pressed ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
             radius: 6
             border.width: 1.5
@@ -561,7 +576,12 @@ GlassPane {
             onReleased: {
                 if (!drag.active) return;
                 const p = ghost.mapToItem(timeline, ghost.width / 2, ghost.height / 2);
-                if (timeline.contains(Qt.point(p.x, p.y))) Project.addFromMedia(tile.info.path, timeline.frameAtX(p.x));
+                if (timeline.contains(Qt.point(p.x, p.y))) {
+                    if (timeline.trackAtY(p.y) === "overlay" && tile.info.kind !== "audio")
+                        ed.selected = Project.addOverlay(tile.info.path, timeline.frameAtX(p.x));
+                    else
+                        Project.addFromMedia(tile.info.path, timeline.frameAtX(p.x));
+                }
                 ghost.info = null;
             }
             onCanceled: ghost.info = null
