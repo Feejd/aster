@@ -63,7 +63,12 @@ chmod 644 "$WORK/iso/boot/initramfs.img"
 
 echo "==> Rozruch UEFI (shim + GRUB z obrazu, bez menu)"
 # Fedora 41+ trzyma je w /usr/lib/efi/<pakiet>/<wersja>/EFI/fedora, starsze obrazy w /usr/lib/bootupd albo /boot/efi
-find_efi() { find "$WORK/rootfs/usr/lib/efi" "$WORK/rootfs/usr/lib/bootupd" "$WORK/rootfs/boot/efi" -name "$1" -path '*EFI*' 2>/dev/null | sort | tail -n1; }
+find_efi() {
+    local d
+    for d in "$WORK/rootfs/usr/lib/efi" "$WORK/rootfs/usr/lib/bootupd" "$WORK/rootfs/boot/efi"; do
+        if [ -d "$d" ]; then find "$d" -name "$1" -path '*EFI*'; fi
+    done | sort -V | tail -n1
+}
 shim=$(find_efi "$SHIM"); grub=$(find_efi "$GRUB_EFI")
 [ -n "$shim" ] && [ -n "$grub" ] || { echo "Nie znaleziono $SHIM / $GRUB_EFI w obrazie" >&2; exit 1; }
 cp "$shim" "$WORK/iso/EFI/BOOT/$EFI_NAME"
