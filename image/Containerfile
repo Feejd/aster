@@ -57,8 +57,11 @@ RUN dnf install -y plymouth-plugin-script sddm sddm-wayland-plasma \
  && for s in /usr/share/wayland-sessions/plasma*.desktop /usr/share/xsessions/plasma*.desktop; do \
         [ -f "$s" ] && sed -i '/^\[Desktop Entry\]/a NoDisplay=true\nHidden=true' "$s"; done; \
     plymouth-set-default-theme aster \
- # initramfs z ekranem Aster (ekran startowy działa, zanim zamontuje się dysk)
+ # initramfs z ekranem Aster (ekran startowy działa, zanim zamontuje się dysk). Moduł ostree jest konieczny —
+ # bez niego system po instalacji nie wybierze swojej wersji z dysku i staje w trybie awaryjnym
+ # („/sysroot does not seem to be an OS tree”); dracut nie dodaje go sam przy --no-hostonly
  && kver=$(ls /usr/lib/modules | head -n1) \
- && dracut --no-hostonly --reproducible -f /usr/lib/modules/$kver/initramfs.img $kver \
+ && dracut --no-hostonly --reproducible --add "ostree plymouth" -f /usr/lib/modules/$kver/initramfs.img $kver \
+ && lsinitrd /usr/lib/modules/$kver/initramfs.img | grep -q ostree-prepare-root \
  && dnf clean all
 RUN bootc container lint || true
