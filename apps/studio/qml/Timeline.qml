@@ -430,11 +430,12 @@ Item {
 
         readonly property var kindInfo: ({
             audio: { icon: "mic", label: "Nagranie" },
+            beat: { icon: "audioTrack", label: "Bit z pliku" },
             drums: { icon: "grid", label: "Bit" },
             bass: { icon: "audioTrack", label: "Bas 808" },
             keys: { icon: "music", label: "Akordy" },
             melody: { icon: "keyboard", label: "Melodia" }
-        })[th.track.kind] || { icon: "music", label: "" }
+        })[th.track.beat ? "beat" : th.track.kind] || { icon: "music", label: "" }
         readonly property string presetLabel: th.mix.preset ? (Studio.presets.find(p => p.id === th.mix.preset) || { label: "" }).label : ""
 
         // Ikona rodzaju ścieżki w kolorze ścieżki
@@ -505,7 +506,7 @@ Item {
             }
         }
         MiniBtn {
-            visible: th.track.kind === "audio"
+            visible: th.track.kind === "audio" && !th.track.beat
             anchors.right: parent.right; anchors.rightMargin: 14
             y: 48
             width: armRow.implicitWidth + 16

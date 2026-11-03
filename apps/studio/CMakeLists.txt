@@ -37,6 +37,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
+        src/analysis.cpp src/analysis.h
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h

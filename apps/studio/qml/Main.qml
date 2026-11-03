@@ -77,6 +77,12 @@ Window {
         onAccepted: Studio.openProject(String(selectedFile))
     }
     FileDialog {
+        id: beatDialog
+        title: "Wybierz bit"
+        nameFilters: ["Bity (*.mp3 *.wav *.flac *.ogg *.oga *.opus *.aiff *.aif)", "Wszystkie pliki (*)"]
+        onAccepted: Studio.importBeat(String(selectedFile))
+    }
+    FileDialog {
         id: importDialog
         title: "Dodaj dźwięk do projektu"
         fileMode: FileDialog.OpenFiles
@@ -173,6 +179,7 @@ Window {
         }
         else if (what === "split") { const c = clips(0)[0]; Studio.splitClip(c.id, c.start + timeline.barSec * 6); }
         else if (what === "mixer") showMixer = true;
+        else if (what.startsWith("beat:")) Studio.importBeat(what.substring(5));
         else if (what.startsWith("insp:")) { showInspector = true; inspector.page = what.substring(5); }
         else if (what.startsWith("seek:")) Studio.seek(Number(what.substring(5)));
         else if (what.startsWith("export:")) Studio.exportMix(what.substring(7));
@@ -244,6 +251,7 @@ Window {
         const p = item.mapToItem(frame, x, y);
         menu.openAt(p.x, p.y, [
             { label: "Nagranie — głos, gitara", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
+            { label: "Bit z pliku — tempo i tonacja same", icon: "audioTrack", action: "addBeat" },
             { label: "Bit — Beat Maker", icon: "grid", action: "addDrums" },
             { label: "Bas 808", icon: "music", action: "addBass" },
             { label: "Akordy", icon: "music", action: "addKeys" },
@@ -279,6 +287,7 @@ Window {
         else if (a === "showProject") Studio.showInFolder(menu.folder);
         else if (a === "forget") Studio.forgetRecent(menu.folder);
         else if (a === "addAudio") Studio.addTrack();
+        else if (a === "addBeat") beatDialog.open();
         else if (a === "addDrums") { const i = Studio.addPatternTrack("drums", "trap"); if (i >= 0) editTrack = i; }
         else if (a === "addMelody") { const i = Studio.addPatternTrack("melody", ""); if (i >= 0) editTrack = i; }
         else if (a === "addKeys") { const i = Studio.addPatternTrack("keys", "trap"); if (i >= 0) editTrack = i; }
@@ -331,6 +340,7 @@ Window {
             onNewRequested: (genre) => win.newProject(genre)
             onOpenRequested: openDialog.open()
             onBundleRequested: bundleDialog.open()
+            onBeatRequested: beatDialog.open()
             onMenuRequested: (project, item, x, y) => win.projectMenu(project, item, x, y)
         }
 

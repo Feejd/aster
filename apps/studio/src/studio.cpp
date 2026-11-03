@@ -1,4 +1,5 @@
 #include "studio.h"
+#include "analysis.h"
 #include "beatsynth.h"
 #include "share.h"
 
@@ -16,6 +17,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QPointer>
 #include <QSet>
 #include <QSettings>
@@ -246,7 +248,21 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
                 return g.toMap();
         return QVariantMap();
     }();
-    if (genre.isEmpty()) {
+    if (templ == QLatin1String("beat")) {
+        // Na swoim bicie: zwrotka, dubel i ad-libsy z gotowym brzmieniem; bit dokłada importBeat
+        addTrack(QStringLiteral("Wokal"));
+        applyPresetTo(m_tracks.last(), QStringLiteral("rap"));
+        addTrack(QStringLiteral("Dubel"));
+        applyPresetTo(m_tracks.last(), QStringLiteral("backing"));
+        m_tracks.last().pan = -0.25;
+        addTrack(QStringLiteral("Ad-libsy"));
+        applyPresetTo(m_tracks.last(), QStringLiteral("radio"));
+        m_tracks.last().pan = 0.3;
+        m_tracks.last().volume = -3;
+        m_metronome = false;                      // rytm słychać w bicie
+        m_engine.setMetronome(false);
+        changed(false);
+    } else if (genre.isEmpty()) {
         addTrack(QStringLiteral("Wokal"));
         addTrack(QStringLiteral("Gitara"));
     } else {
@@ -413,6 +429,7 @@ QJsonObject Studio::toJson() const
                                   {QStringLiteral("mute"), t.mute},
                                   {QStringLiteral("solo"), t.solo},
                                   {QStringLiteral("input"), t.input},
+                                  {QStringLiteral("beat"), t.beat},
                                   {QStringLiteral("effects"), QJsonObject{{QStringLiteral("preset"), t.preset},
                                                                           {QStringLiteral("lowCut"), t.lowCut},
                                                                           {QStringLiteral("eqLow"), t.eqLow},
@@ -499,6 +516,7 @@ void Studio::fromJson(const QJsonObject &o)
         t.mute = to.value(QStringLiteral("mute")).toBool();
         t.solo = to.value(QStringLiteral("solo")).toBool();
         t.input = to.value(QStringLiteral("input")).toInt();
+        t.beat = to.value(QStringLiteral("beat")).toBool();
         const QJsonObject fx = to.value(QStringLiteral("effects")).toObject();
         t.preset = fx.value(QStringLiteral("preset")).toString();
         t.lowCut = fx.value(QStringLiteral("lowCut")).toBool();
@@ -614,6 +632,7 @@ void Studio::rebuildView()
                                         {QStringLiteral("armed"), t.armed},
                                         {QStringLiteral("input"), t.input},
                                         {QStringLiteral("kind"), t.kind},
+                                        {QStringLiteral("beat"), t.beat},
                                         {QStringLiteral("pattern"), t.pattern.toVariantMap()},
                                         {QStringLiteral("clips"), clips}});
     }
@@ -1253,6 +1272,117 @@ void Studio::importFiles(const QVariantList &urls, int track, double start)
             emit st->sourcesChanged();
             emit st->selectionChanged();
             st->changed();
+        });
+    });
+}
+
+void Studio::importBeat(const QVariant &url)
+{
+    const QString path = localPath(url.toUrl().isValid() && !url.toUrl().scheme().isEmpty() ? url.toUrl().toString() : url.toString());
+    if (!QFileInfo(path).isFile())
+        return;
+    if (!isOpen() && !newProject(QFileInfo(path).completeBaseName(), 140, 4, QStringLiteral("beat")))
+        return;
+    if (m_tracks.size() >= Renderer::MaxTracks) {
+        emit message(QStringLiteral("Projekt może mieć najwyżej %1 ścieżki.").arg(Renderer::MaxTracks));
+        return;
+    }
+    ++m_loading;
+    emit busyChanged();
+    emit message(QStringLiteral("Słucham bitu — rozpoznaję tempo i tonację…"));
+    const QFileInfo fi(path);
+    const QString dir = m_folder + QStringLiteral("/audio/");
+    const QString target = fi.absolutePath() + QLatin1Char('/') == dir ? path : uniqueAudioPath(fi.completeBaseName(), fi.suffix().toLower());
+    QPointer<Studio> self(this);
+    QThreadPool::globalInstance()->start([self, path, target, dir, name = fi.completeBaseName()] {
+        QString err;
+        auto src = loadAudio(path, Engine::Rate, &err);
+        Analysis::Result an;
+        if (src) {
+            if (target != path && !QFile::copy(path, target))
+                err = QStringLiteral("Nie udało się skopiować „%1” do projektu.").arg(QFileInfo(path).fileName()), src.reset();
+            else {
+                src->file = QFileInfo(target).fileName();
+                an = Analysis::analyze(*src, Engine::Rate);
+            }
+        }
+        QMetaObject::invokeMethod(qApp, [self, src, an, err, dir, name] {
+            if (!self)
+                return;
+            Studio *st = self;
+            --st->m_loading;
+            emit st->busyChanged();
+            if (!src) {
+                emit st->message(err);
+                return;
+            }
+            if (st->m_folder + QStringLiteral("/audio/") != dir)
+                return;
+            st->checkpoint();
+            st->m_sources.insert(src->file, src);
+            // Tempo i tonacja projektu jak w bicie (ścieżki wzorów idą za tempem)
+            if (an.bpm > 0) {
+                const double ratio = st->m_bpm / an.bpm;
+                st->m_bpm = an.bpm;
+                for (int i = 0; i < st->m_tracks.size(); ++i) {
+                    if (st->m_tracks[i].kind == QLatin1String("audio"))
+                        continue;
+                    for (Clip &c : st->m_tracks[i].clips) {
+                        c.start = llround(c.start * ratio);
+                        c.length = llround(c.length * ratio);
+                    }
+                    st->renderPattern(i);
+                }
+            }
+            if (an.keyRoot >= 0) {
+                st->m_keyRoot = an.keyRoot;
+                st->m_keyMinor = an.minor;
+                st->renderKeyTracks();
+            }
+            Track t;
+            t.id = st->m_nextId++;
+            t.name = QStringLiteral("Bit");
+            t.beat = true;
+            t.volume = -3;                          // gotowe bity są głośne — zostaje miejsce na głos
+            QList<int> used;
+            for (const Track &o : st->m_tracks)
+                used << o.color;
+            t.color = int(st->m_tracks.size()) % Colors;
+            for (int c = 0; c < Colors; ++c)
+                if (!used.contains(c)) {
+                    t.color = c;
+                    break;
+                }
+            Clip c;
+            c.id = st->m_nextId++;
+            c.file = src->file;
+            c.name = name;
+            c.length = c.srcLen = src->frames;
+            // Pierwszy „raz” bitu na początku taktu: cisza przed nim — przycięta; dźwięk przed nim
+            // (przedtakt) — cały bit przesunięty tak, że „raz” wypada na początku taktu 2
+            if (an.bpm > 0 && an.firstBar > 0.02) {
+                const long long fb = llround(an.firstBar * Engine::Rate);
+                if (an.leadIn >= an.firstBar - 0.03)
+                    cutStart(c, fb), c.start = 0;
+                else
+                    c.start = llround(st->m_beatsPerBar * 60.0 / st->m_bpm * Engine::Rate) - fb;
+            }
+            t.clips.append(c);
+            st->m_tracks.append(t);
+            st->m_selTrack = int(st->m_tracks.size()) - 1;
+            st->m_selClip = c.id;
+            ++st->m_sourcesVersion;
+            emit st->sourcesChanged();
+            emit st->settingsChanged();
+            emit st->selectionChanged();
+            st->changed();
+            QString msg = an.bpm > 0 ? QStringLiteral("Bit: %1 BPM").arg(QLocale().toString(an.bpm, 'g', 4))
+                                     : QStringLiteral("Bit dodany — tempa nie udało się rozpoznać, ustaw je ręcznie");
+            if (an.keyRoot >= 0)
+                msg += QStringLiteral(", %1").arg(st->keyName()) + (an.keyConfidence < 0.3 ? QStringLiteral(" (sprawdź tonację w zakładce Piosenka)") : QString());
+            if (an.bpm > 0)
+                msg += QStringLiteral(" — siatka taktów i autotune pasują do bitu");
+            emit st->message(msg);
         });
     });
 }

@@ -221,6 +221,9 @@ public:
     Q_INVOKABLE void setCycle(double start, double end);
     Q_INVOKABLE void cycleClip(int id);                         // region pętli = klip
     Q_INVOKABLE void importFiles(const QVariantList &urls, int track, double start);
+    // Gotowy bit (MP3, WAV…): rozpoznaje tempo i tonację, ustawia je w projekcie i kładzie bit na siatce taktów.
+    // Bez otwartego projektu tworzy nowy „na swoim bicie” — ścieżki na wokal, dubel i ad-libsy.
+    Q_INVOKABLE void importBeat(const QVariant &url);
 
     // Transport
     Q_INVOKABLE void play();
@@ -305,6 +308,7 @@ private:
         QString preset;
         // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
         QString kind = QStringLiteral("audio");
+        bool beat = false;              // bit z pliku (rodzaj audio) — inny podpis i ikona w nagłówku
         QJsonObject pattern;
         QList<Clip> clips;
     };

@@ -12,6 +12,7 @@ Item {
     signal newRequested(string genre)
     signal openRequested()
     signal bundleRequested()
+    signal beatRequested()
     signal menuRequested(var project, Item item, real x, real y)
 
     // ——— Pasek boczny ———
@@ -115,6 +116,13 @@ Item {
                 id: starters
                 x: 28; y: newLabel.y + newLabel.height + 12
                 spacing: 16
+                StarterCard {
+                    title: "Na swoim bicie"
+                    hint: "Wrzuć bit MP3 lub WAV — tempo i tonacja ustawią się same"
+                    icon: "audioTrack"
+                    colors: ["#B86BFF", "#5B21B6"]
+                    onClicked: start.beatRequested()
+                }
                 StarterCard {
                     title: "Nowy projekt"
                     hint: "Pusta piosenka z metronomem — ścieżki na wokal i gitarę"
@@ -283,7 +291,7 @@ Item {
         property string hint
         property string icon
         property var colors
-        width: 300; height: 92; radius: 16
+        width: 290; height: 92; radius: 16
         baseColor: Theme.fill
         Rectangle {
             x: 16; anchors.verticalCenter: parent.verticalCenter
