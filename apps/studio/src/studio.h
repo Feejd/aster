@@ -65,6 +65,9 @@ class Studio : public QObject
     Q_PROPERTY(bool countingIn READ countingIn NOTIFY positionChanged)
     Q_PROPERTY(double position READ position NOTIFY positionChanged)
     Q_PROPERTY(double recordStart READ recordStart NOTIFY transportChanged)
+    // Nagrywanie w pętli: które podejście trwa (od 1) i gdzie w nagraniu się zaczyna (s) — do rysowania
+    Q_PROPERTY(int recordTake READ recordTake NOTIFY positionChanged)
+    Q_PROPERTY(double recordTakeOffset READ recordTakeOffset NOTIFY positionChanged)
     Q_PROPERTY(QVariantList levels READ levels NOTIFY levelsChanged)        // szczyt ścieżek 0…1
     Q_PROPERTY(QVariantList masterLevel READ masterLevel NOTIFY levelsChanged)
     Q_PROPERTY(double inputLevel READ inputLevel NOTIFY levelsChanged)
@@ -144,6 +147,8 @@ public:
     bool countingIn() const { return recording() && m_position < recordStart(); }
     double position() const { return m_position; }
     double recordStart() const { return double(m_engine.recordStart()) / Engine::Rate; }
+    int recordTake() const;
+    double recordTakeOffset() const;
     QVariantList levels() const { return m_levels; }
     QVariantList masterLevel() const { return {m_master[0], m_master[1]}; }
     double inputLevel() const { return m_input; }
@@ -225,6 +230,7 @@ public:
     Q_INVOKABLE void setCycle(double start, double end);
     Q_INVOKABLE void cycleClip(int id);                         // region pętli = klip
     Q_INVOKABLE void importFiles(const QVariantList &urls, int track, double start);
+    Q_INVOKABLE void setClipTake(int id, int take);             // podejście z nagrywania w pętli (comping: podziel i wybierz)
     // Gotowy bit (MP3, WAV…): rozpoznaje tempo i tonację, ustawia je w projekcie i kładzie bit na siatce taktów.
     // Bez otwartego projektu tworzy nowy „na swoim bicie” — ścieżki na wokal, dubel i ad-libsy.
     Q_INVOKABLE void importBeat(const QVariant &url);
@@ -297,6 +303,10 @@ private:
         long long fadeIn = 0, fadeOut = 0;
         double gain = 0;                // dB
         bool loop = false;
+        // Podejścia z nagrywania w pętli: wszystkie w jednym pliku. takes[k] — o ile początek fragmentu
+        // podejścia k jest dalej w pliku niż podejścia 0 (stałe przy przesuwaniu, przycinaniu i dzieleniu klipu)
+        QList<long long> takes;
+        int take = 0;
     };
     struct Track
     {
@@ -372,6 +382,7 @@ private:
     double m_cycleStart = 0, m_cycleEnd = 0;
     double m_latencyMs = 0;
     bool m_monitor = false;
+    long long m_recLoopStart = 0, m_recLoopEnd = 0;   // region pętli przy nagrywaniu (ramki); równe — bez pętli
     void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)
     QList<Track> m_tracks;
     QVariantList m_tracksView, m_mixView;

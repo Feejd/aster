@@ -224,9 +224,13 @@ Window {
             { label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "dup" },
             { label: "Ćwicz w pętli", icon: "repeat", action: "cycle" },
             { label: "Zmień nazwę…", icon: "pencil", action: "renameClip" },
-            { separator: true },
+            { separator: true }
+        ].concat(Array.from({ length: c.takes || 0 }, (_, k) => ({
+            label: "Podejście " + (k + 1) + ((c.takeOk || [])[k] ? "" : " (niepełne)"),
+            icon: k === c.take ? "check" : "", action: "take:" + k, enabled: !!(c.takeOk || [])[k]
+        }))).concat(c.takes > 1 ? [{ separator: true }] : []).concat([
             { label: "Usuń klip", icon: "trash", shortcut: "Del", action: "remove", danger: true }
-        ]);
+        ]));
     }
     function trackMenu(track, item, x, y) {
         Studio.selectedTrack = track;
@@ -277,6 +281,7 @@ Window {
         else if (a === "cycle") Studio.cycleClip(menu.clipId);
         else if (a === "renameClip") { renameSheet.clipId = menu.clipId; renameField.text = Studio.clip(menu.clipId).name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "remove") Studio.removeClip(menu.clipId);
+        else if (a.startsWith("take:")) Studio.setClipTake(menu.clipId, Number(a.substring(5)));
         else if (a === "rename") { renameSheet.clipId = 0; renameField.text = Studio.tracks[menu.track].name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "arm") Studio.setTrackArmed(menu.track, !Studio.tracks[menu.track].armed);
         else if (a === "import") importDialog.open();

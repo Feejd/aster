@@ -268,7 +268,7 @@ Item {
                             border.width: 1; border.color: "#E5484D"
                             Text {
                                 x: 8; y: 3
-                                text: "● Nagrywanie"
+                                text: Studio.recordTake > 0 ? "● Nagrywanie — podejście " + Studio.recordTake : "● Nagrywanie"
                                 color: "#E5484D"
                                 font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
                             }
@@ -278,7 +278,7 @@ Item {
                                 width: Math.max(0, Math.min(liveClip.width, tl.scrollX + tl.viewW - liveClip.x) - leftPx)
                                 height: parent.height - 22
                                 live: true
-                                from: leftPx / tl.pps
+                                from: Studio.recordTakeOffset + leftPx / tl.pps
                                 pxPerSec: tl.pps
                                 color: "#E5484D"
                                 version: Math.floor(Studio.position * 15)
@@ -471,7 +471,7 @@ Item {
         Text {
             x: 52; y: 27
             width: parent.width - 90
-            text: th.track.armed ? th.kindInfo.label + " · " + ["wejście: oba kanały", "wejście: lewy", "wejście: prawy"][th.track.input]
+            text: th.track.armed ? th.kindInfo.label + " · " + ["wejście L+P", "wejście L", "wejście P"][th.track.input]
                                  : th.kindInfo.label + (th.presetLabel && !th.kindInfo.label.includes(th.presetLabel) ? " · " + th.presetLabel : "")
             elide: Text.ElideRight
             color: Theme.text2
@@ -622,13 +622,42 @@ Item {
                 spacing: 4
                 Icon { visible: ci.cl.loop; anchors.verticalCenter: parent.verticalCenter; d: Icons.repeat; size: 11; stroke: 2; color: Theme.dark ? "white" : "#16181D" }
                 Text {
-                    width: Math.max(0, ci.width - 30)
+                    width: Math.max(0, ci.width - 30 - (takeBadge.visible ? takeBadge.width + 4 : 0))
                     text: ci.cl.missing ? ci.cl.name + " (brak pliku)" : ci.cl.name
                     elide: Text.ElideRight
                     color: Theme.dark ? "white" : "#16181D"
                     font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
                 }
             }
+        }
+        // Podejścia z nagrywania w pętli: klik — następne, które obejmuje ten kawałek
+        Rectangle {
+            id: takeBadge
+            visible: (ci.cl.takes || 0) > 1 && ci.width > 70
+            anchors.right: parent.right; anchors.rightMargin: 3
+            y: 2
+            width: takeText.implicitWidth + 12; height: 14; radius: 7
+            color: takeArea.containsMouse ? "white" : Qt.rgba(1, 1, 1, Theme.dark ? 0.25 : 0.7)
+            Text {
+                id: takeText
+                anchors.centerIn: parent
+                text: "podejście " + ((ci.cl.take || 0) + 1) + "/" + (ci.cl.takes || 0)
+                color: "#16181D"
+                font.family: Theme.font; font.pixelSize: 9; font.weight: Font.Bold
+            }
+            MouseArea {
+                id: takeArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    const n = ci.cl.takes, ok = ci.cl.takeOk || [];
+                    for (let i = 1; i < n; ++i) {
+                        const k = (ci.cl.take + i) % n;
+                        if (ok[k]) { Studio.setClipTake(ci.cl.id, k); break; }
+                    }
+                }
+            }
+            Tip { shown: takeArea.containsMouse; text: "Następne podejście (prawy przycisk — lista)" }
         }
         Waveform {
             readonly property real leftPx: Math.max(0, tl.scrollX - ci.x)

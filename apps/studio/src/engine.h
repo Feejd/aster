@@ -151,7 +151,7 @@ public:
     long long position() const;
     bool playing() const { return m_playing.load(); }
     void setMetronome(bool on) { m_metronome.store(on); }
-    // Region pętli odtwarzania (ćwiczenie fragmentu); nie działa w trakcie nagrywania
+    // Region pętli odtwarzania (ćwiczenie fragmentu); przy nagrywaniu — podejścia jedno po drugim
     void setCycle(bool on, long long start, long long end);
     void setLatencyOffset(long long frames) { m_extraLatency.store(frames); }
     void readMeters(std::vector<float> &tracks, float master[2]);   // szczyty od ostatniego odczytu
@@ -163,6 +163,7 @@ public:
     bool recording() const { return m_recThread.joinable(); }
     long long recordStart() const { return m_recStart; }
     std::vector<float> livePeaks() const;  // szczyty nagrywanego dźwięku (do rysowania w trakcie)
+    long long recordedFrames() const;       // ile już nagrano (z dokładnością do PeakStep)
 
     // Odsłuch pojedynczego dźwięku (klik w piano rollu, klawiatura) — gra też przy zatrzymanym transporcie.
     // Dźwięk trzymany jest po stronie interfejsu jeszcze kilka sekund, więc wątek audio nigdy go nie zwalnia.

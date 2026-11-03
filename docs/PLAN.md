@@ -228,8 +228,17 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
         do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
-  - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
-        automatyka głośności
+  - [x] praca raperów na gotowym bicie: „Na swoim bicie” (ekran startowy) i „Bit z pliku” (menu ścieżek) —
+        `src/analysis.*` rozpoznaje tempo (strumień nastąpień, autokorelacja do 16 uderzeń; trafia co do 0,1 BPM),
+        fazę uderzeń (pełne i dolne pasmo, pierwszeństwo pierwszego dźwięku) i tonację (szczyty widma 30–1000 Hz,
+        profile Krumhansla); projekt dostaje tempo i tonację bitu, bit ląduje na siatce (cisza przed „raz” przycięta).
+        Próby na 6 szablonach: tempo 10/11 (drill bez akordów — połowa), tonacja 7/11 (pomyłki o kwartę), faza 11/11
+  - [x] odsłuch głosu w słuchawkach z efektami uzbrojonej ścieżki (autotune na żywo), ostrzeżenie o sprzężeniu
+  - [x] nagrywanie w pętli: każde przejście regionu to podejście (jeden plik, przesunięcia w klipie), domyślnie
+        ostatnie pełne; wybór w zakładce Klip, menu klipu albo plakietką na klipie; comping = podziel i wybierz
+  - [ ] Dalej (raperzy): punch-in, przyciski „Dubel”/„Ad-lib”, odszumianie i de-esser, tekst z prompterem i rymami,
+        znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
+        separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
         stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
   - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,

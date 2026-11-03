@@ -568,8 +568,9 @@ void Engine::onPlayback()
     if (m_playing.load()) {
         const long long cie = m_countInEnd.load();
         const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
-        // Region pętli: po dojściu do końca wracamy na początek (w środku bloku, bez przerwy)
-        const bool cycle = m_cycle.load() && !m_recActive.load();
+        // Region pętli: po dojściu do końca wracamy na początek (w środku bloku, bez przerwy).
+        // W trakcie nagrywania też — każde przejście to kolejne podejście (nagranie leci ciągiem)
+        const bool cycle = m_cycle.load();
         const long long cs = m_cycleStart.load(), ce = m_cycleEnd.load();
         uint32_t done = 0;
         while (done < n) {
@@ -879,6 +880,12 @@ std::shared_ptr<AudioSource> Engine::stopRecording(long long *start)
     src->computePeaks();
     m_recData = {};
     return src;
+}
+
+long long Engine::recordedFrames() const
+{
+    QMutexLocker lock(&m_liveMutex);
+    return (long long)(m_livePeaks.size() / 2) * AudioSource::PeakStep;
 }
 
 std::vector<float> Engine::livePeaks() const

@@ -194,6 +194,26 @@ Item {
                     color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold
                 }
                 Card {
+                    visible: insp.hasClip && (insp.cl.takes || 0) > 1
+                    title: "Podejścia"
+                    hint: "Nagrane w pętli, jedno po drugim. Podziel klip (S), żeby z każdego kawałka wziąć inne podejście."
+                    Flow {
+                        width: parent ? parent.width : 0
+                        spacing: 6
+                        Repeater {
+                            model: insp.hasClip ? (insp.cl.takes || 0) : 0
+                            delegate: Chip {
+                                required property int index
+                                label: String(index + 1)
+                                hint: (insp.cl.takeOk || [])[index] ? "Podejście " + (index + 1) : "Podejście " + (index + 1) + " nie obejmuje tego kawałka"
+                                on: insp.cl.take === index
+                                opacity: (insp.cl.takeOk || [])[index] ? 1 : 0.4
+                                onClicked: Studio.setClipTake(insp.cl.id, index)
+                            }
+                        }
+                    }
+                }
+                Card {
                     visible: insp.hasClip
                     title: "Głośność"
                     FxSlider {

@@ -440,7 +440,14 @@ QJsonObject Studio::toJson() const
                                      {QStringLiteral("fadeIn"), double(c.fadeIn)},
                                      {QStringLiteral("fadeOut"), double(c.fadeOut)},
                                      {QStringLiteral("gain"), c.gain},
-                                     {QStringLiteral("loop"), c.loop}});
+                                     {QStringLiteral("loop"), c.loop},
+                                     {QStringLiteral("takes"), [&] {
+                                          QJsonArray a;
+                                          for (long long v : c.takes)
+                                              a.append(double(v));
+                                          return a;
+                                      }()},
+                                     {QStringLiteral("take"), c.take}});
         tracks.append(QJsonObject{{QStringLiteral("id"), t.id},
                                   {QStringLiteral("name"), t.name},
                                   {QStringLiteral("color"), t.color},
@@ -569,6 +576,9 @@ void Studio::fromJson(const QJsonObject &o)
             c.fadeIn = std::max(0LL, fr(co.value(QStringLiteral("fadeIn"))));
             c.fadeOut = std::max(0LL, fr(co.value(QStringLiteral("fadeOut"))));
             c.gain = std::clamp(co.value(QStringLiteral("gain")).toDouble(), -36.0, 12.0);
+            for (const QJsonValue &v : co.value(QStringLiteral("takes")).toArray())
+                c.takes.append(fr(v));
+            c.take = c.takes.isEmpty() ? 0 : std::clamp(co.value(QStringLiteral("take")).toInt(), 0, int(c.takes.size()) - 1);
             if (c.file.isEmpty() || c.length <= 0 || c.srcLen <= 0)
                 continue;
             t.clips.append(c);
@@ -636,6 +646,17 @@ void Studio::rebuildView()
                                      {QStringLiteral("srcLength"), c.srcLen / R},
                                      {QStringLiteral("loopOffset"), c.offset / R},
                                      {QStringLiteral("srcDuration"), src ? src->frames / R : 0.0},
+                                     {QStringLiteral("takes"), int(c.takes.size())},
+                                     {QStringLiteral("take"), c.take},
+                                     {QStringLiteral("takeOk"), [&] {
+                                          // Które podejścia obejmują ten kawałek (ostatnie bywa niepełne)
+                                          QVariantList ok;
+                                          for (long long v : c.takes) {
+                                              const long long s0 = c.srcStart + v - c.takes.value(c.take);
+                                              ok.append(src && s0 >= 0 && s0 + c.srcLen <= src->frames);
+                                          }
+                                          return ok;
+                                      }()},
                                      {QStringLiteral("loop"), c.loop},
                                      {QStringLiteral("fadeIn"), c.fadeIn / R},
                                      {QStringLiteral("fadeOut"), c.fadeOut / R},
@@ -1471,10 +1492,10 @@ void Studio::record()
     if (ti < 0) {
         // Zaznaczona ścieżka nagrania, a gdy zaznaczony jest bit — pierwsza ścieżka nagrania (albo nowa)
         ti = std::clamp(m_selTrack, 0, int(m_tracks.size()) - 1);
-        if (ti < 0 || m_tracks[ti].kind != QLatin1String("audio")) {
+        if (ti < 0 || m_tracks[ti].kind != QLatin1String("audio") || m_tracks[ti].beat) {
             ti = -1;
             for (int i = 0; i < m_tracks.size() && ti < 0; ++i)
-                if (m_tracks[i].kind == QLatin1String("audio"))
+                if (m_tracks[i].kind == QLatin1String("audio") && !m_tracks[i].beat)
                     ti = i;
             if (ti < 0) {
                 addTrack(QStringLiteral("Wokal"));
@@ -1489,6 +1510,13 @@ void Studio::record()
     m_recTrack = ti;
     updateMonitor();
     m_recPath = uniqueAudioPath(m_tracks[ti].name, QStringLiteral("wav"));
+    // Pętla włączona: nagrywanie od jej początku, każde przejście to nowe podejście
+    m_recLoopStart = m_recLoopEnd = 0;
+    if (m_cycle && m_cycleEnd - m_cycleStart > 0.25) {
+        m_recLoopStart = frames(m_cycleStart);
+        m_recLoopEnd = frames(m_cycleEnd);
+        m_position = m_cycleStart;
+    }
     const long long start = frames(m_position);
     if (!m_engine.startRecording(m_recPath, start, m_tracks[ti].input)) {
         emit message(QStringLiteral("Nie ma wejścia dźwięku — podłącz mikrofon i wybierz go w ustawieniach dźwięku."));
@@ -1526,12 +1554,72 @@ void Studio::finishRecording()
     c.name = QFileInfo(m_recPath).completeBaseName();
     c.start = std::max(0LL, start);
     c.length = c.srcLen = src->frames;
+    const long long cs = m_recLoopStart, ce = m_recLoopEnd, len = ce - cs;
+    int passes = 1;
+    if (len > 0 && start < ce && start + src->frames > ce + Engine::Rate / 4) {
+        // Nagrywanie w pętli: przejście 0 to [start, ce), kolejne zaczynają się w pliku co len.
+        // Klip na całym regionie pętli; domyślnie ostatnie pełne podejście
+        const long long first = ce - start;
+        passes = 1 + int((src->frames - first + len - 1) / len);
+        QList<long long> at;                    // gdzie w pliku jest początek regionu (cs) w podejściu k
+        for (int k = 0; k < passes; ++k)
+            at.append(k == 0 ? cs - start : first + (k - 1) * len);
+        int best = 0;
+        for (int k = passes - 1; k > 0; --k)
+            if (at[k] + len <= src->frames) {
+                best = k;
+                break;
+            }
+        for (int k = 0; k < passes; ++k)
+            c.takes.append(at[k] - at[0]);
+        c.take = best;
+        c.start = best == 0 ? std::max(cs, start) : cs;
+        c.srcStart = at[best] + (c.start - cs);
+        c.length = c.srcLen = ce - c.start;
+    }
     carve(ti, c.start, c.start + c.length, 0);
     m_tracks[ti].clips.append(c);
     m_selClip = c.id;
     emit selectionChanged();
     changed();
     save();          // nagrania nie giną, nawet gdy program się zamknie
+    if (passes > 1)
+        emit message(QStringLiteral("Nagrane podejścia: %1 — wybierz najlepsze w zakładce Klip albo pod prawym przyciskiem. "
+                                    "Podziel klip (S), żeby z każdego kawałka wziąć inne.").arg(passes));
+}
+
+void Studio::setClipTake(int id, int take)
+{
+    Clip *c = findClip(id);
+    if (!c || take < 0 || take >= c->takes.size() || take == c->take)
+        return;
+    const SourcePtr src = m_sources.value(c->file);
+    const long long s = c->srcStart + c->takes[take] - c->takes[c->take];
+    if (!src || s < 0 || s + c->srcLen > src->frames) {
+        emit message(QStringLiteral("Podejście %1 nie obejmuje tego fragmentu — nagrywanie skończyło się wcześniej.").arg(take + 1));
+        return;
+    }
+    checkpoint();
+    c->srcStart = s;
+    c->take = take;
+    changed();
+}
+
+int Studio::recordTake() const
+{
+    const long long len = m_recLoopEnd - m_recLoopStart;
+    if (!recording() || len <= 0)
+        return 0;
+    const long long first = m_recLoopEnd - m_engine.recordStart(), f = m_engine.recordedFrames();
+    return f < first ? 1 : 2 + int((f - first) / len);
+}
+
+double Studio::recordTakeOffset() const
+{
+    const int k = recordTake();
+    if (k <= 1)
+        return 0;
+    return double(m_recLoopEnd - m_engine.recordStart() + (k - 2) * (m_recLoopEnd - m_recLoopStart)) / Engine::Rate;
 }
 
 void Studio::tick()
