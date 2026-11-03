@@ -1,6 +1,7 @@
 # Grafika (aster-grafika) — budowana z głównego CMakeLists.txt repozytorium.
 # Rysowanie przez QPainter (to samo na ekranie i w eksporcie), PDF przez QPdfWriter, plik projektu — ZIP (QZipWriter z Qt).
 find_package(Qt6 REQUIRED COMPONENTS CorePrivate Svg Network)
+find_package(KF6Prison REQUIRED)            # kody QR i kreskowe
 
 qt_add_executable(aster-grafika src/main.cpp)
 target_include_directories(aster-grafika PRIVATE src)
@@ -23,6 +24,7 @@ set(GRAFIKA_QML
     qml/IconToggle.qml
     qml/Section.qml
     qml/SearchField.qml
+    qml/TextBox.qml
 )
 foreach(f ${GRAFIKA_QML})
     get_filename_component(name ${f} NAME)
@@ -62,6 +64,7 @@ target_link_libraries(aster-grafika PRIVATE
     Qt6::DBus
     Qt6::Svg
     Qt6::Network
+    KF6::Prison
     aster-uiplugin
 )
 

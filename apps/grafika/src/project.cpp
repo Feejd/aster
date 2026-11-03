@@ -988,22 +988,26 @@ QString Project::exportFile(const QString &format, qreal scale, const QString &t
     commit();
     const QVariantMap doc = pageDocument(m_page);
     QString path = target.startsWith(QLatin1String("file:")) ? QUrl(target).toLocalFile() : target;
+    // „pdf-print” — PDF dla drukarni: spad 3 mm i znaczniki cięcia
+    const bool forPrint = format == QLatin1String("pdf-print");
+    const bool pdfOut = format == QLatin1String("pdf") || forPrint;
     if (path.isEmpty()) {
-        const QString dir = (format == QLatin1String("pdf") ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                                                             : QStandardPaths::writableLocation(QStandardPaths::PicturesLocation))
+        const QString dir = (pdfOut ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                    : QStandardPaths::writableLocation(QStandardPaths::PicturesLocation))
                             + QStringLiteral("/Grafiki");
         QDir().mkpath(dir);
-        path = uniquePath(dir, m_name, format);
+        path = uniquePath(dir, forPrint ? m_name + QStringLiteral(" (do druku)") : m_name, pdfOut ? QStringLiteral("pdf") : format);
     }
 
-    if (format == QLatin1String("pdf")) {
+    if (pdfOut) {
         QPdfWriter pdf(path);
         pdf.setCreator(QStringLiteral("Aster Grafika"));
         pdf.setTitle(m_name);
         // Rozmiar do druku (A4, plakat) albo piksele jak na ekranie (96 na cal)
         const QSizeF mm = !m_print.isEmpty() ? QSizeF(num(m_print, "width"), num(m_print, "height"))
                                              : QSizeF(m_width / 96 * 25.4, m_height / 96 * 25.4);
-        pdf.setPageSize(QPageSize(mm, QPageSize::Millimeter));
+        const qreal bleedMm = forPrint ? 3 : 0, edgeMm = forPrint ? 9 : 0;      // spad i pas na znaczniki
+        pdf.setPageSize(QPageSize(mm + QSizeF(2 * edgeMm, 2 * edgeMm), QPageSize::Millimeter));
         pdf.setPageMargins(QMarginsF(0, 0, 0, 0));
         pdf.setResolution(300);
         QPainter p;
@@ -1013,13 +1017,30 @@ QString Project::exportFile(const QString &format, qreal scale, const QString &t
         }
         p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
         // Wszystkie strony, każda na osobnej stronie PDF
+        const qreal perMm = pdf.width() / (mm.width() + 2 * edgeMm);              // punkty urządzenia na milimetr
+        const qreal k = mm.width() * perMm / m_width;                             // na piksel projektu
         for (int i = 0; i < m_pages.size(); ++i) {
             if (i > 0)
                 pdf.newPage();
             p.save();
-            p.scale(pdf.width() / m_width, pdf.height() / m_height);
-            Art::paintPage(&p, pageDocument(i), this);
+            p.translate(edgeMm * perMm, edgeMm * perMm);
+            p.scale(k, k);
+            Art::paintPage(&p, pageDocument(i), this, bleedMm * perMm / k);
             p.restore();
+            if (forPrint) {
+                // Znaczniki cięcia w rogach, poza spadem
+                p.setPen(QPen(Qt::black, 0.25 / 72 * 25.4 * perMm));
+                const qreal x0 = edgeMm * perMm, y0 = edgeMm * perMm, x1 = x0 + mm.width() * perMm, y1 = y0 + mm.height() * perMm;
+                const qreal gap = (bleedMm + 1) * perMm, len = (edgeMm - bleedMm - 2) * perMm;
+                for (const qreal x : {x0, x1}) {
+                    p.drawLine(QPointF(x, y0 - gap), QPointF(x, y0 - gap - len));
+                    p.drawLine(QPointF(x, y1 + gap), QPointF(x, y1 + gap + len));
+                }
+                for (const qreal y : {y0, y1}) {
+                    p.drawLine(QPointF(x0 - gap, y), QPointF(x0 - gap - len, y));
+                    p.drawLine(QPointF(x1 + gap, y), QPointF(x1 + gap + len, y));
+                }
+            }
         }
         p.end();
         return path;

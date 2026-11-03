@@ -50,7 +50,8 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `caps` (wielkie litery), `color`, `align` (`left` / `center` / `right`), `spacing` (odstęp liter w częściach wielkości
   czcionki), `lineHeight` (wysokość wiersza w wielkościach czcionki), `outline` (grubość obrysu w częściach wielkości) i
   `outlineColor`, `bg` (kolor tła pod każdym wierszem) z `bgPadding` i `bgRadius` (w wielkościach czcionki), `curve`
-(−1–1, tekst po łuku w górę albo w dół, jeden wiersz). Tekst łamie się do szerokości `w`; `h` program liczy sam.
+(−1–1, tekst po łuku w górę albo w dół, jeden wiersz), `list` (`bullet` albo `number` — punkty lub numery przed akapitami),
+`color2` i `gradientAngle` (przejście kolorów liter). Tekst łamie się do szerokości `w`; `h` program liczy sam.
 - `shape`: `shape` = `rect` (`radius`), `ellipse`, `triangle`, `star`, `heart`, `line`, `arrow`; `fill` (pusty — bez
   wypełnienia), `fill2` i `gradientAngle` (przejście kolorów; `gradient: "radial"` — od środka), `stroke`, `strokeWidth`, `dash`. Linia i strzałka biegną
   poziomo przez środek pola, kolor z `stroke`.
@@ -59,5 +60,9 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `brightness`, `contrast`, `saturation` (−1–1) i `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.
+- `code`: `kind` (`qr`, `code128`, `ean13`), `data` albo dla Wi-Fi `qrType: "wifi"` z `ssid` i `pass`; `color` (kod),
+  `bg` (tło, puste — przezroczyste). Rysowany jako kształt (ostry w PDF), biblioteka KDE Prison.
+- `chart`: `chart` (`column`, `bar`, `line`, `pie`, `donut`), `data` — lista `{ label, value, color }`, `values` (false —
+  bez liczb), `size` (wielkość napisów), `color` (napisy), `font`.
 - `vector`: `src` (plik SVG z `images/` — ikona albo naklejka), rysowana ostro w każdym rozmiarze; `color` zastępuje
   `currentColor` (jednokolorowe ikony), `flipX`.

@@ -44,6 +44,7 @@ Item {
     Text {
         x: 18; y: 16
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
+            : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
             : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
@@ -262,6 +263,12 @@ Item {
                     IconToggle { icon: "alignLeft"; on: !ins.el.align || ins.el.align === "left"; onClicked: ins.set({ align: "left" }) }
                     IconToggle { icon: "alignCenter"; on: ins.el.align === "center"; onClicked: ins.set({ align: "center" }) }
                     IconToggle { icon: "alignRight"; on: ins.el.align === "right"; onClicked: ins.set({ align: "right" }) }
+                }
+                Row {
+                    spacing: 2
+                    // Listy: punkty albo numery przed każdym akapitem
+                    IconToggle { label: "•"; on: ins.el.list === "bullet"; onClicked: ins.set({ list: on ? null : "bullet", align: on ? ins.el.align : "left" }) }
+                    IconToggle { label: "1."; on: ins.el.list === "number"; onClicked: ins.set({ list: on ? null : "number", align: on ? ins.el.align : "left" }) }
                 }
             }
             Section {
@@ -556,6 +563,141 @@ Item {
                     visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter)
                     text: "Przywróć oryginał"
                     onClicked: ins.set({ brightness: null, contrast: null, saturation: null, filter: null })
+                }
+            }
+
+            // ——— Kod QR i kreskowy ———
+            Section {
+                visible: ins.type === "code"
+                title: "Rodzaj"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Chip { text: "Link / tekst"; on: ins.el.kind === "qr" && ins.el.qrType !== "wifi"; onClicked: ins.set({ kind: "qr", qrType: null, h: ins.el.w }) }
+                    Chip { text: "Wi-Fi"; on: ins.el.qrType === "wifi"; onClicked: ins.set({ kind: "qr", qrType: "wifi", ssid: ins.el.ssid || "", pass: ins.el.pass || "", h: ins.el.w }) }
+                    Chip { text: "Kod kreskowy"; on: ins.el.kind === "code128"; onClicked: ins.set({ kind: "code128", qrType: null, h: Math.round(ins.el.w * 0.35) }) }
+                    Chip { text: "EAN-13"; on: ins.el.kind === "ean13"; onClicked: ins.set({ kind: "ean13", qrType: null, data: /^\d{12,13}$/.test(ins.el.data || "") ? ins.el.data : "590123412345", h: Math.round(ins.el.w * 0.45) }) }
+                }
+                TextBox {
+                    visible: ins.el.qrType !== "wifi"
+                    label: ins.el.kind === "qr" ? "Adres strony albo tekst" : ins.el.kind === "ean13" ? "12 albo 13 cyfr" : "Treść kodu"
+                    text: ins.el.data || ""
+                    placeholder: "https://…"
+                    onEdited: (t, done) => ins.set({ data: t }, done)
+                }
+                TextBox {
+                    visible: ins.el.qrType === "wifi"
+                    label: "Nazwa sieci"
+                    text: ins.el.ssid || ""
+                    onEdited: (t, done) => ins.set({ ssid: t }, done)
+                }
+                TextBox {
+                    visible: ins.el.qrType === "wifi"
+                    label: "Hasło (puste — sieć bez hasła)"
+                    text: ins.el.pass || ""
+                    secret: true
+                    onEdited: (t, done) => ins.set({ pass: t }, done)
+                }
+                Text {
+                    visible: ins.el.qrType === "wifi"
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Goście zeskanują kod aparatem telefonu i połączą się bez przepisywania hasła."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                }
+                Row {
+                    spacing: 8
+                    ColorWell {
+                        id: codeWell
+                        label: "Kod"
+                        value: ins.el.color || "#000000"
+                        onClicked: ins.editor.pickColor(codeWell, value, false, (c, done) => ins.set({ color: c }, done))
+                    }
+                    ColorWell {
+                        id: codeBgWell
+                        label: "Tło"
+                        value: ins.el.bg === undefined ? "#FFFFFF" : ins.el.bg
+                        onClicked: ins.editor.pickColor(codeBgWell, value, true, (c, done) => ins.set({ bg: c }, done))
+                    }
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Ciemny kod na jasnym tle skanuje się najpewniej."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                }
+            }
+
+            // ——— Wykres ———
+            Section {
+                visible: ins.type === "chart"
+                title: "Rodzaj wykresu"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "column", label: "Słupki" }, { id: "bar", label: "Poziome" }, { id: "line", label: "Linia" }, { id: "pie", label: "Koło" }, { id: "donut", label: "Pierścień" }]
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.label
+                            on: (ins.el.chart || "column") === modelData.id
+                            onClicked: ins.set({ chart: modelData.id })
+                        }
+                    }
+                }
+            }
+            Section {
+                visible: ins.type === "chart"
+                title: "Dane"
+                Repeater {
+                    model: ins.type === "chart" ? (ins.el.data || []).length : 0
+                    delegate: Row {
+                        id: drow
+                        required property int index
+                        readonly property var item: (ins.el.data || [])[index] || ({})
+                        spacing: 6
+                        function put(patch, done) {
+                            const list = (ins.el.data || []).map(o => Object.assign({}, o));
+                            Object.assign(list[drow.index], patch);
+                            ins.set({ data: list }, done);
+                        }
+                        ColorWell {
+                            id: dWell
+                            value: drow.item.color || ["#5B7CFA", "#FF7A59", "#22B07D", "#FFB300", "#E53961", "#7E57C2", "#00ACC1", "#8D6E63"][drow.index % 8]
+                            onClicked: ins.editor.pickColor(dWell, value, false, (c, done) => drow.put({ color: c }, done))
+                        }
+                        TextBox { width: 110; text: drow.item.label || ""; placeholder: "Podpis"; onEdited: (t, done) => drow.put({ label: t }, done) }
+                        TextBox {
+                            width: 62; numeric: true
+                            text: drow.item.value === undefined ? "" : String(drow.item.value)
+                            onEdited: (t, done) => { const v = Number(t.replace(",", ".")); if (!isNaN(v)) drow.put({ value: v }, done); }
+                        }
+                        IconToggle {
+                            icon: "trash"
+                            onClicked: ins.set({ data: (ins.el.data || []).filter((o, i) => i !== drow.index) })
+                        }
+                    }
+                }
+                Row {
+                    spacing: 8
+                    Btn { text: "Dodaj wiersz"; icon: "plus"; onClicked: ins.set({ data: (ins.el.data || []).concat([{ label: "Nowy", value: 10 }]) }) }
+                    Chip { text: "Wartości"; on: ins.el.values !== false; onClicked: ins.set({ values: on ? false : null }) }
+                }
+                Row {
+                    spacing: 8
+                    ColorWell {
+                        id: chartInk
+                        label: "Napisy"
+                        value: ins.el.color || "#3D4048"
+                        onClicked: ins.editor.pickColor(chartInk, value, false, (c, done) => ins.set({ color: c }, done))
+                    }
+                }
+                ValueSlider {
+                    label: "Wielkość napisów"
+                    from: 6; to: Math.max(40, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.06)); step: 1
+                    value: ins.el.size || 24
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ size: v }, done)
                 }
             }
 

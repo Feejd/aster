@@ -1,8 +1,11 @@
 #include "art.h"
 
 #include <QCache>
+#include <QFontMetricsF>
 #include <QGlyphRun>
+#include <Prison/Barcode>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QLinearGradient>
 #include <QMutex>
 #include <QPainter>
@@ -69,11 +72,30 @@ QString curvedText(const QVariantMap &el)
     return el.value(QStringLiteral("text")).toString().simplified();
 }
 
+// Lista: `list` = "bullet" (•) albo "number" (1. 2. …) — znak przed każdym akapitem, puste wiersze bez znaku
+QString listPrefix(const QVariantMap &el, int n)
+{
+    const QString list = el.value(QStringLiteral("list")).toString();
+    if (list == QLatin1String("bullet"))
+        return QStringLiteral("•\u2002");
+    if (list == QLatin1String("number"))
+        return QString::number(n) + QStringLiteral(".\u2002");
+    return {};
+}
+
 QString layoutText(const QVariantMap &el)
 {
     QString t = el.value(QStringLiteral("text")).toString();
-    t.replace(QLatin1Char('\n'), QChar::LineSeparator);
-    return t;
+    if (el.value(QStringLiteral("list")).toString().isEmpty()) {
+        t.replace(QLatin1Char('\n'), QChar::LineSeparator);
+        return t;
+    }
+    QStringList lines = t.split(QLatin1Char('\n'));
+    int n = 0;
+    for (QString &line : lines)
+        if (!line.trimmed().isEmpty())
+            line.prepend(listPrefix(el, ++n));
+    return lines.join(QChar::LineSeparator);
 }
 
 // Układa tekst w wiersze o wysokości size × lineHeight; zwraca wysokość bloku
@@ -85,15 +107,27 @@ qreal layout(QTextLayout &tl, const QVariantMap &el, qreal width)
     tl.setTextOption(opt);
     tl.setCacheEnabled(true);
     const qreal lineH = qMax(1.0, num(el, "size", 48)) * num(el, "lineHeight", 1.2);
+    // Lista wyrównana do lewej: zawinięte wiersze zaczynają się pod tekstem, nie pod znakiem
+    const bool hanging = !el.value(QStringLiteral("list")).toString().isEmpty() && textAlign(el) == Qt::AlignLeft && width > 0;
+    const QFontMetricsF fm(tl.font());
+    qreal indent = 0;                           // szerokość znaku bieżącego akapitu („•”, „12.”)
+    const QString text = tl.text();
     qreal y = 0;
     tl.beginLayout();
     for (;;) {
         QTextLine line = tl.createLine();
         if (!line.isValid())
             break;
+        const int start = line.textStart();
+        const bool first = start == 0 || text.at(start - 1) == QChar::LineSeparator;
+        if (hanging && first) {
+            const int end = text.indexOf(QChar(0x2002), start);
+            indent = end >= 0 && end - start < 6 ? fm.horizontalAdvance(text.mid(start, end - start + 1)) : 0;
+        }
+        const bool cont = hanging && !first && indent > 0;
         if (width > 0)
-            line.setLineWidth(width);
-        line.setPosition(QPointF(0, y + (lineH - line.height()) / 2));
+            line.setLineWidth(cont ? width - indent : width);
+        line.setPosition(QPointF(cont ? indent : 0, y + (lineH - line.height()) / 2));
         y += lineH;
     }
     tl.endLayout();
@@ -489,6 +523,242 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
     return img;
 }
 
+// ——— Kody QR i kreskowe ———
+
+// Treść kodu: zwykły tekst/adres albo Wi-Fi (sieć i hasło w formacie, który rozumieją aparaty telefonów)
+QString codeData(const QVariantMap &el)
+{
+    if (el.value(QStringLiteral("qrType")).toString() == QLatin1String("wifi")) {
+        auto esc = [](QString s) {
+            for (const char *c : {"\\", ";", ",", ":", "\""})
+                s.replace(QLatin1String(c), QLatin1String("\\") + QLatin1String(c));
+            return s;
+        };
+        const QString pass = el.value(QStringLiteral("pass")).toString();
+        return QStringLiteral("WIFI:T:%1;S:%2;P:%3;;").arg(pass.isEmpty() ? QStringLiteral("nopass") : QStringLiteral("WPA"),
+                                                           esc(el.value(QStringLiteral("ssid")).toString()), esc(pass));
+    }
+    return el.value(QStringLiteral("data")).toString();
+}
+
+// Moduły kodu jako kształt (ostry w PDF); wynik w pamięci podręcznej. size — liczba modułów
+QPainterPath codePath(const QString &kind, const QString &data, QSizeF *size)
+{
+    static QMutex lock;
+    static QHash<QString, QPair<QPainterPath, QSizeF>> cache;
+    const QString key = kind + QLatin1Char('|') + data;
+    QMutexLocker l(&lock);
+    if (cache.contains(key)) {
+        *size = cache.value(key).second;
+        return cache.value(key).first;
+    }
+    const Prison::BarcodeType type = kind == QLatin1String("ean13") ? Prison::EAN13 : kind == QLatin1String("code128") ? Prison::Code128 : Prison::QRCode;
+    QPainterPath path;
+    QSizeF s;
+    if (auto code = Prison::Barcode::create(type)) {
+        code->setData(data);
+        const QImage img = code->toImage(code->minimumSize());
+        s = img.size();
+        // Ciemne piksele najmniejszego obrazu kodu = moduły; poziome odcinki łączone w prostokąty
+        for (int y = 0; y < img.height(); ++y) {
+            int run = -1;
+            for (int x = 0; x <= img.width(); ++x) {
+                const bool dark = x < img.width() && qGray(img.pixel(x, y)) < 128 && qAlpha(img.pixel(x, y)) > 128;
+                if (dark && run < 0)
+                    run = x;
+                if (!dark && run >= 0) {
+                    path.addRect(QRectF(run, y, x - run, 1));
+                    run = -1;
+                }
+            }
+        }
+        path = path.simplified();
+    }
+    if (cache.size() > 200)
+        cache.clear();
+    cache.insert(key, {path, s});
+    *size = s;
+    return path;
+}
+
+void paintCode(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QString kind = el.value(QStringLiteral("kind"), QStringLiteral("qr")).toString();
+    const QColor bg = color(el, "bg", Qt::white);
+    const qreal radius = num(el, "radius", 0);
+    p->setPen(Qt::NoPen);
+    if (bg.alpha() > 0) {
+        p->setBrush(bg);
+        p->drawRoundedRect(QRectF(0, 0, w, h), radius, radius);
+    }
+    QSizeF modules;
+    const QPainterPath path = codePath(kind, codeData(el), &modules);
+    if (path.isEmpty() || modules.isEmpty()) {
+        // Złe dane (np. EAN-13 bez 12–13 cyfr) — przekreślone pole zamiast kodu
+        QPen pen(QColor(229, 57, 53), qMax(1.0, qMin(w, h) * 0.02));
+        p->setPen(pen);
+        p->drawLine(QPointF(w * 0.2, h * 0.2), QPointF(w * 0.8, h * 0.8));
+        p->drawLine(QPointF(w * 0.8, h * 0.2), QPointF(w * 0.2, h * 0.8));
+        return;
+    }
+    // Margines (strefa ciszy) i skala: kwadratowe moduły QR, kod kreskowy rozciągnięty na całe pole
+    const qreal m = qMin(w, h) * 0.06;
+    const QRectF area(m, m, w - 2 * m, h - 2 * m);
+    qreal sx = area.width() / modules.width(), sy = area.height() / modules.height();
+    if (kind == QLatin1String("qr"))
+        sx = sy = qMin(sx, sy);
+    QTransform t;
+    t.translate(area.center().x() - modules.width() * sx / 2, area.center().y() - modules.height() * sy / 2);
+    t.scale(sx, sy);
+    p->setBrush(color(el, "color", Qt::black));
+    p->drawPath(t.map(path));
+}
+
+// ——— Wykresy ———
+
+// data: [{ label, value, color }]; chart = column | bar | pie | donut | line
+void paintChart(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QVariantList data = el.value(QStringLiteral("data")).toList();
+    const QString chart = el.value(QStringLiteral("chart"), QStringLiteral("column")).toString();
+    static const char *palette[] = {"#5B7CFA", "#FF7A59", "#22B07D", "#FFB300", "#E53961", "#7E57C2", "#00ACC1", "#8D6E63"};
+    auto colorAt = [&](int i) {
+        const QColor c = color(data.at(i).toMap(), "color");
+        return c.isValid() && c.alpha() > 0 ? c : QColor::fromString(QLatin1String(palette[i % 8]));
+    };
+    const QColor ink = color(el, "color", QColor(0x3D, 0x40, 0x48));
+    const qreal fs = qMax(6.0, num(el, "size", qMin(w, h) * 0.06));
+    QFont font(el.value(QStringLiteral("font"), QStringLiteral("Geist")).toString());
+    font.setPixelSize(qMax(1, qRound(fs)));
+    font.setHintingPreference(QFont::PreferNoHinting);
+    p->setFont(font);
+    const QFontMetricsF fm(font);
+    const bool values = el.value(QStringLiteral("values"), true).toBool();
+    if (data.isEmpty())
+        return;
+    qreal max = 0, sum = 0;
+    for (const QVariant &v : data) {
+        max = qMax(max, v.toMap().value(QStringLiteral("value")).toDouble());
+        sum += qMax(0.0, v.toMap().value(QStringLiteral("value")).toDouble());
+    }
+    auto fmt = [](qreal v) { return QLocale(QLocale::Polish).toString(v, 'g', 6); };
+    const int n = data.size();
+
+    if (chart == QLatin1String("pie") || chart == QLatin1String("donut")) {
+        // Koło po lewej, legenda po prawej (albo pod spodem w wąskim polu)
+        const bool side = w >= h * 1.2;
+        const qreal d = side ? qMin(h, w * 0.55) : qMin(w, h - (fm.height() * 1.4) * n);
+        const QRectF circle(side ? 0 : (w - d) / 2, side ? (h - d) / 2 : 0, d, d);
+        qreal start = 90 * 16;
+        for (int i = 0; i < n; ++i) {
+            const qreal v = qMax(0.0, data.at(i).toMap().value(QStringLiteral("value")).toDouble());
+            const qreal span = sum > 0 ? -v / sum * 360 * 16 : 0;
+            p->setPen(QPen(color(el, "bg", Qt::white), qMax(1.0, d * 0.008)));
+            p->setBrush(colorAt(i));
+            p->drawPie(circle, int(start), int(span));
+            start += span;
+        }
+        if (chart == QLatin1String("donut")) {
+            p->setPen(Qt::NoPen);
+            const QColor hole = color(el, "bg", Qt::white);
+            p->setBrush(hole.alpha() > 0 ? hole : QColor(Qt::white));
+            const qreal k = d * 0.28;
+            p->drawEllipse(circle.adjusted(k, k, -k, -k));
+        }
+        qreal ly = side ? (h - fm.height() * 1.5 * n) / 2 : d + fm.height() * 0.6;
+        const qreal lx = side ? d + fs * 1.4 : fs;
+        for (int i = 0; i < n; ++i) {
+            const QVariantMap it = data.at(i).toMap();
+            p->setPen(Qt::NoPen);
+            p->setBrush(colorAt(i));
+            p->drawRoundedRect(QRectF(lx, ly + fm.height() * 0.2, fm.height() * 0.6, fm.height() * 0.6), fs * 0.12, fs * 0.12);
+            p->setPen(ink);
+            const qreal v = it.value(QStringLiteral("value")).toDouble();
+            const QString text = it.value(QStringLiteral("label")).toString() + (values && sum > 0 ? QStringLiteral(" · %1%").arg(qRound(v / sum * 100)) : QString());
+            p->drawText(QRectF(lx + fm.height(), ly, w - lx - fm.height(), fm.height()), Qt::AlignLeft | Qt::AlignVCenter, text);
+            ly += fm.height() * 1.5;
+        }
+        return;
+    }
+
+    const bool bars = chart == QLatin1String("bar");
+    const qreal labelSpace = bars ? 0 : fm.height() * 1.4;
+    const qreal valueSpace = values ? fm.height() * 1.3 : 0;
+    if (bars) {
+        // Poziome słupki: podpisy po lewej, wartości za słupkiem
+        qreal lw = 0;
+        for (const QVariant &v : data)
+            lw = qMax(lw, fm.horizontalAdvance(v.toMap().value(QStringLiteral("label")).toString()));
+        lw = qMin(lw + fs * 0.6, w * 0.4);
+        const qreal vw = values ? fm.horizontalAdvance(fmt(max)) + fs * 0.6 : 0;
+        const qreal row = h / n, bh = row * 0.62;
+        for (int i = 0; i < n; ++i) {
+            const QVariantMap it = data.at(i).toMap();
+            const qreal v = qMax(0.0, it.value(QStringLiteral("value")).toDouble());
+            const qreal y = i * row + (row - bh) / 2;
+            const qreal len = max > 0 ? (w - lw - vw) * v / max : 0;
+            p->setPen(ink);
+            p->drawText(QRectF(0, i * row, lw - fs * 0.6, row), Qt::AlignRight | Qt::AlignVCenter, it.value(QStringLiteral("label")).toString());
+            p->setPen(Qt::NoPen);
+            p->setBrush(colorAt(i));
+            p->drawRoundedRect(QRectF(lw, y, qMax(len, 1.0), bh), qMin(bh, len) * 0.18, qMin(bh, len) * 0.18);
+            if (values) {
+                p->setPen(ink);
+                p->drawText(QRectF(lw + len + fs * 0.4, i * row, vw, row), Qt::AlignLeft | Qt::AlignVCenter, fmt(v));
+            }
+        }
+        return;
+    }
+    const qreal plotH = h - labelSpace - valueSpace;
+    const qreal colW = w / n;
+    if (chart == QLatin1String("line")) {
+        QPainterPath line;
+        QList<QPointF> pts;
+        for (int i = 0; i < n; ++i) {
+            const qreal v = data.at(i).toMap().value(QStringLiteral("value")).toDouble();
+            pts.append(QPointF(colW * (i + 0.5), valueSpace + plotH - (max > 0 ? plotH * v / max : 0)));
+        }
+        line.moveTo(pts.first());
+        for (int i = 1; i < pts.size(); ++i)
+            line.lineTo(pts.at(i));
+        QPen pen(colorAt(0), qMax(2.0, fs * 0.22));
+        pen.setJoinStyle(Qt::RoundJoin);
+        pen.setCapStyle(Qt::RoundCap);
+        p->setPen(pen);
+        p->setBrush(Qt::NoBrush);
+        p->drawPath(line);
+        for (int i = 0; i < n; ++i) {
+            p->setPen(Qt::NoPen);
+            p->setBrush(colorAt(0));
+            p->drawEllipse(pts.at(i), fs * 0.32, fs * 0.32);
+            const QVariantMap it = data.at(i).toMap();
+            p->setPen(ink);
+            if (values)
+                p->drawText(QRectF(colW * i, pts.at(i).y() - fm.height() * 1.3, colW, fm.height()), Qt::AlignCenter, fmt(it.value(QStringLiteral("value")).toDouble()));
+            p->drawText(QRectF(colW * i, h - labelSpace, colW, labelSpace), Qt::AlignCenter, it.value(QStringLiteral("label")).toString());
+        }
+        return;
+    }
+    // Słupki pionowe
+    const qreal bw = colW * 0.62;
+    for (int i = 0; i < n; ++i) {
+        const QVariantMap it = data.at(i).toMap();
+        const qreal v = qMax(0.0, it.value(QStringLiteral("value")).toDouble());
+        const qreal bh = max > 0 ? plotH * v / max : 0;
+        const QRectF bar(colW * i + (colW - bw) / 2, valueSpace + plotH - bh, bw, qMax(bh, 1.0));
+        p->setPen(Qt::NoPen);
+        p->setBrush(colorAt(i));
+        const qreal r = qMin(bw, bh) * 0.12;
+        p->drawRoundedRect(bar, r, r);
+        p->setPen(ink);
+        if (values)
+            p->drawText(QRectF(colW * i, bar.top() - fm.height() * 1.25, colW, fm.height()), Qt::AlignCenter, fmt(v));
+        p->drawText(QRectF(colW * i, h - labelSpace, colW, labelSpace), Qt::AlignCenter, it.value(QStringLiteral("label")).toString());
+    }
+}
+
 // Ikona albo naklejka (SVG). `color` zastępuje currentColor — jednokolorowe ikony da się przefarbować
 void paintVector(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
@@ -705,6 +975,10 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
         paintPicture(p, el, images);
     else if (type == QLatin1String("vector"))
         paintVector(p, el, images);
+    else if (type == QLatin1String("code"))
+        paintCode(p, el);
+    else if (type == QLatin1String("chart"))
+        paintChart(p, el);
     p->restore();
 }
 
@@ -727,12 +1001,16 @@ void paintBackground(QPainter *p, const QVariantMap &bg, const QSizeF &page, con
     }
 }
 
-void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images)
+void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images, qreal bleed)
 {
     const QSizeF page(num(doc, "width", 1080), num(doc, "height", 1080));
     p->save();
-    p->setClipRect(QRectF(QPointF(0, 0), page));
-    paintBackground(p, doc.value(QStringLiteral("background")).toMap(), page, images);
+    // Spad (druk): tło i elementy wychodzą o `bleed` poza stronę, żeby po przycięciu nie było białych brzegów
+    p->setClipRect(QRectF(QPointF(0, 0), page).adjusted(-bleed, -bleed, bleed, bleed));
+    p->save();
+    p->translate(-bleed, -bleed);
+    paintBackground(p, doc.value(QStringLiteral("background")).toMap(), page + QSizeF(2 * bleed, 2 * bleed), images);
+    p->restore();
     const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
     for (const QVariant &v : elements) {
         const QVariantMap el = v.toMap();

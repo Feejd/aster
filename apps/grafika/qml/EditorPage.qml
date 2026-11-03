@@ -396,6 +396,7 @@ Item {
         else if (cmd === "dup") duplicate();
         else if (cmd === "group") group();
         else if (cmd === "addpage") project.addPage();
+        else if (cmd === "addextra") side.addExtra(side.extras[Number(arg)]);
         else if (cmd === "duppage") project.duplicatePage(project.currentPage);
         else if (cmd === "page") goToPage(Number(arg));
         else if (cmd === "exportpages") { const p = project.exportFile(arg, 0.5, "/tmp/grafika-strony." + arg, true); app.toast(p, p); }
@@ -761,6 +762,7 @@ Item {
         property string format: "png"
         property real size: 1           // mnożnik rozmiaru PNG/JPG
         property bool allPages: true    // kilka stron: każda do osobnego pliku
+        property bool printMarks: false // PDF: spad i znaczniki cięcia
         cardWidth: 320
         Column {
             width: parent.width
@@ -780,6 +782,22 @@ Item {
                     text: exportPop.format === "png" ? "Najlepsza jakość — do mediów społecznościowych i na ekran."
                         : exportPop.format === "jpg" ? "Mniejszy plik — do wysłania mailem albo komunikatorem."
                         : "Do druku: ostre litery w każdym powiększeniu. Zapisuje się w Dokumenty/Grafiki."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                }
+            }
+            Section {
+                visible: exportPop.format === "pdf"
+                title: "Druk"
+                Row {
+                    spacing: 6
+                    Chip { text: "Zwykły"; on: !exportPop.printMarks; onClicked: exportPop.printMarks = false }
+                    Chip { text: "Do drukarni"; on: exportPop.printMarks; onClicked: exportPop.printMarks = true }
+                }
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: exportPop.printMarks ? "Ze spadem 3 mm i znacznikami cięcia — tego zwykle wymagają drukarnie (wizytówki, ulotki, plakaty)."
+                        : "Dokładnie w rozmiarze strony — do wydruku w domu albo wysłania."
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
                 }
             }
@@ -824,7 +842,7 @@ Item {
                     primary: true
                     icon: "download"
                     text: exportPop.format === "pdf" ? "Zapisz PDF" : "Zapisz w Obrazy/Grafiki"
-                    onClicked: ed.exportNow(exportPop.format, exportPop.format === "pdf" ? 1 : exportPop.size)
+                    onClicked: ed.exportNow(exportPop.format === "pdf" && exportPop.printMarks ? "pdf-print" : exportPop.format, exportPop.format === "pdf" ? 1 : exportPop.size)
                 }
                 Btn {
                     width: parent.width

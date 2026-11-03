@@ -37,7 +37,7 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
 // Tło strony: { type: "color" | "gradient" | "radial" | "image", color, color2, angle, src }
 void paintBackground(QPainter *p, const QVariantMap &bg, const QSizeF &page, const ImageSource *images);
 // Cała strona: { width, height, background, elements: [...] } w układzie strony (piksele projektu)
-void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images);
+void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images, qreal bleed = 0);
 // Strona jako obraz o podanym rozmiarze (miniatury, PNG, JPG)
 QImage renderPage(const QVariantMap &doc, const QSize &size, const ImageSource *images, const QColor &under = Qt::transparent);
 

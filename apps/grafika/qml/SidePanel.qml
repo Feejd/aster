@@ -225,6 +225,32 @@ Item {
         el.w = Math.min(project.pageWidth * 0.86, project.naturalWidth(el) + el.size * 0.2);
         editor.addElement(el);
     }
+    // Kody QR i kreskowe, wykresy
+    readonly property var sampleData: [{ label: "Pon", value: 12 }, { label: "Wt", value: 19 }, { label: "Śr", value: 15 }, { label: "Czw", value: 24 }, { label: "Pt", value: 30 }]
+    readonly property var extras: [
+        { label: "Kod QR", preview: { type: "code", kind: "qr", data: "https://aster.local" },
+          el: { type: "code", kind: "qr", data: "https://twojastrona.pl", color: "#16181D", bg: "#FFFFFF", side: 0.3 } },
+        { label: "Wi-Fi", preview: { type: "code", kind: "qr", qrType: "wifi", ssid: "Aster", pass: "aster" },
+          el: { type: "code", kind: "qr", qrType: "wifi", ssid: "Nazwa sieci", pass: "hasło", color: "#16181D", bg: "#FFFFFF", side: 0.3 } },
+        { label: "Kod kreskowy", preview: { type: "code", kind: "code128", data: "ASTER", h: 60 },
+          el: { type: "code", kind: "code128", data: "ASTER-2026", color: "#16181D", bg: "#FFFFFF", side: 0.5, ratio: 0.35 } },
+        { label: "Słupki", preview: { type: "chart", chart: "column", data: sp.sampleData, values: false },
+          el: { type: "chart", chart: "column", data: sp.sampleData, side: 0.6, ratio: 0.6 } },
+        { label: "Koło", preview: { type: "chart", chart: "donut", data: sp.sampleData.slice(0, 3), values: false, size: 0.1 },
+          el: { type: "chart", chart: "donut", data: [{ label: "Tak", value: 62 }, { label: "Nie", value: 25 }, { label: "Nie wiem", value: 13 }], side: 0.6, ratio: 0.55 } },
+        { label: "Linia", preview: { type: "chart", chart: "line", data: sp.sampleData, values: false },
+          el: { type: "chart", chart: "line", data: sp.sampleData, side: 0.6, ratio: 0.55 } }
+    ]
+    function addExtra(x) {
+        const el = Object.assign({}, x.el);
+        const side = Math.round(base * el.side);
+        el.w = side;
+        el.h = Math.round(side * (el.ratio || 1));
+        if (el.type === "chart") { el.size = Math.round(base * 0.026); el.color = "#3D4048"; }
+        delete el.side; delete el.ratio;
+        editor.addElement(el);
+    }
+
     function addShape(s) {
         const line = s.shape === "line" || s.shape === "arrow";
         const side = Math.round(base * 0.36);
@@ -521,6 +547,37 @@ Item {
                         wrapMode: Text.WordWrap
                         text: "Ikony i naklejki z Iconify — z zestawów na wolnych licencjach, do użytku bez podpisu."
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    }
+                    Text {
+                        text: "Kody i wykresy"
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                    }
+                    Grid {
+                        columns: 3
+                        spacing: 8
+                        Repeater {
+                            model: sp.extras
+                            delegate: HoverButton {
+                                id: ex
+                                required property var modelData
+                                width: (elementsCol.width - 16) / 3
+                                height: width + 16
+                                radius: 12
+                                baseColor: Theme.fill
+                                onClicked: sp.addExtra(modelData)
+                                ArtView {
+                                    x: 12; y: 10
+                                    width: ex.width - 24; height: ex.width - 24
+                                    element: Object.assign({ w: 100, h: 100, size: 9, color: Theme.dark ? "#ECEEF3" : "#3D4048", bg: "" }, ex.modelData.preview)
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                                    text: ex.modelData.label
+                                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                                }
+                            }
+                        }
                     }
                     Text {
                         text: "Kształty"
