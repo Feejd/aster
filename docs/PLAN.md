@@ -37,7 +37,10 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Ekran logowania Aster (motyw SDDM: rozmyta tapeta, zegar, karta użytkownika, inne osoby, zasilanie);
       SDDM zamiast Plasma Login Managera z Fedory 44 (ten nie przyjmuje własnych motywów)
 - [x] Ekran blokady Aster (pakiet powłoki org.aster.shell dla kscreenlocker): wygląd ekranu logowania, PAM, Caps Lock, uśpienie
-- [ ] Ikony i kursor w stylu Aster.
+- [x] Kursor Aster (`tools/make-cursors.py`, budowany z CMake): grafit z białą obwódką i miękkim cieniem, kółko ładowania
+      w akcencie Aster; 29 kształtów + wszystkie nazwy CSS/X11, SVG dla KWin (ostry w każdej skali) i Xcursor 24–96;
+      domyślny w KDE, GTK i na ekranie logowania
+- [ ] Ikony w stylu Aster.
 - [ ] Wygląd aplikacji GTK (Firefox, LibreOffice) dopasowany do reszty.
 
 ## Etap 3b — system bez programów Fedory/KDE (najpierw to, potem programy użytkowe)

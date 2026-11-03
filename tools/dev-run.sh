@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD:-$HOME/aster-build}"
 
 # Brak narzędzi albo nowych bibliotek (doszły w nowszej wersji kodu) → przygotowanie maszyny
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 
 # Stary katalog budowania z czasów, gdy budowała się sama powłoka — zacznij od nowa
 [ -f "$BUILD/CMakeCache.txt" ] && ! grep -q "CMAKE_HOME_DIRECTORY:INTERNAL=$ROOT\$" "$BUILD/CMakeCache.txt" && rm -rf "$BUILD"
@@ -36,6 +36,15 @@ cp "$APPS/org.aster.emoji.desktop" "$ROOT/apps/emoji/org.kde.plasma.emojier.desk
 kwriteconfig6 --file kglobalaccelrc --group org.kde.plasma.emojier.desktop --key _launch "Meta+Ctrl+Alt+Shift+Space,Meta+Ctrl+Alt+Shift+Space,Emoji Selector" 2>/dev/null || true
 update-desktop-database "$APPS" >/dev/null 2>&1 || true     # adresy aster-settings:wifi itp.
 kbuildsycoca6 >/dev/null 2>&1 || true
+
+# Kursor Aster (zbudowany z tools/make-cursors.py) dla tego użytkownika — od razu, także w programach GTK
+if [ -f "$BUILD/cursors/Aster/index.theme" ]; then
+    mkdir -p "$HOME/.local/share/icons"
+    rm -rf "${HOME:?}/.local/share/icons/Aster" && cp -a "$BUILD/cursors/Aster" "$HOME/.local/share/icons/Aster"
+    kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme Aster 2>/dev/null || true
+    plasma-apply-cursortheme Aster >/dev/null 2>&1 || true
+    gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
+fi
 
 # Czcionka Aster (Geist) dla tego użytkownika — także w programach KDE i na paskach tytułu
 FONTS="$HOME/.local/share/fonts/aster-geist"

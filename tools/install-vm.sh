@@ -22,7 +22,7 @@ if [ "$1" = "--undo" ]; then
 fi
 
 # Budowanie (te same pakiety i katalog co dev-run.sh)
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr >/dev/null
 cmake --build "$BUILD"
 
@@ -39,6 +39,10 @@ sudo systemctl --global enable aster-shell.service
 fc-cache -f >/dev/null 2>&1 || true
 # Programy KDE zastąpione przez Aster znikają ze Startu (pakiety zostają; całkiem usuwa je: sudo sh image/debloat.sh)
 sh "$ROOT/image/debloat.sh" --hide
+# Kursor Aster (zainstalowany w /usr/share/icons/Aster) — od razu, także w programach GTK
+kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme Aster 2>/dev/null || true
+plasma-apply-cursortheme Aster >/dev/null 2>&1 || true
+gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
 
 echo "==> Ekran startowy Aster (przebudowa initramfs — chwilę potrwa)…"
 rpm -q plymouth-plugin-script >/dev/null 2>&1 || sudo dnf install -y plymouth-plugin-script
@@ -59,7 +63,7 @@ sudo mkdir -p /etc/systemd/system/sddm.service.d
 sudo cp "$ROOT/image/boot/10-aster-plymouth.conf" /etc/systemd/system/sddm.service.d/10-aster-plymouth.conf
 sudo systemctl daemon-reload
 sudo mkdir -p /etc/sddm.conf.d
-printf '[Theme]\nCurrent=aster\n' | sudo tee /etc/sddm.conf.d/10-aster.conf >/dev/null
+printf '[Theme]\nCurrent=aster\nCursorTheme=Aster\n' | sudo tee /etc/sddm.conf.d/10-aster.conf >/dev/null
 # Ukryj sesję Plasmy na liście (zostaje w systemie; wraca po aktualizacji pakietu plasma-workspace)
 for s in /usr/share/wayland-sessions/plasma*.desktop; do
     [ -f "$s" ] && ! grep -q "^Hidden=true" "$s" && sudo sed -i '/^\[Desktop Entry\]/a NoDisplay=true\nHidden=true' "$s"

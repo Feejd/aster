@@ -70,4 +70,21 @@ install(DIRECTORY ../data/shell/org.aster.shell DESTINATION ${CMAKE_INSTALL_DATA
 # Ekran logowania (motyw SDDM)
 install(DIRECTORY ../data/sddm/aster DESTINATION ${CMAKE_INSTALL_DATADIR}/sddm/themes)
 install(FILES ../data/branding/aster.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+# Kursor Aster: rysowany z SVG przy budowaniu (tools/make-cursors.py — rsvg-convert i xcursorgen)
+find_program(ASTER_RSVG rsvg-convert)
+find_program(ASTER_XCURSORGEN xcursorgen)
+find_package(Python3 COMPONENTS Interpreter)
+if(ASTER_RSVG AND ASTER_XCURSORGEN AND Python3_FOUND)
+    set(ASTER_CURSORS ${CMAKE_BINARY_DIR}/cursors/Aster)
+    add_custom_command(
+        OUTPUT ${ASTER_CURSORS}/index.theme
+        COMMAND Python3::Interpreter ${CMAKE_SOURCE_DIR}/tools/make-cursors.py ${ASTER_CURSORS}
+        DEPENDS ${CMAKE_SOURCE_DIR}/tools/make-cursors.py
+        COMMENT "Kursor Aster"
+        VERBATIM)
+    add_custom_target(aster-cursors ALL DEPENDS ${ASTER_CURSORS}/index.theme)
+    install(DIRECTORY ${ASTER_CURSORS} DESTINATION ${CMAKE_INSTALL_DATADIR}/icons)
+else()
+    message(WARNING "Bez rsvg-convert/xcursorgen (librsvg2-tools, xcursorgen) — kursor Aster nie zostanie zbudowany")
+endif()
 install(FILES ../session/aster-shell.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
