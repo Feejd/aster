@@ -38,6 +38,34 @@ Item {
     signal edited()
     signal definitionRequested(int seq)
     signal quickFixRequested()
+    // Konflikty łączenia i autor wierszy (git blame)
+    property var conflicts: []
+    property bool showBlame: true
+    property var blameCommits: []
+    property var blameLines: []
+    function refreshBlame() { if (path && showBlame && Project.isGit) Project.blame(path, te.text); }
+    function updateConflicts() { conflicts = te.text.indexOf("<<<<<<<") >= 0 ? TextOps.conflicts(te.textDocument) : []; }
+    function resolve(startLine, choice) { TextOps.resolveConflict(te.textDocument, startLine, choice); Qt.callLater(updateConflicts); }
+    function lineY(n) { return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, n)).y + te.y; }
+    function ago(t) {
+        const s = Math.max(0, Date.now() / 1000 - t);
+        if (s < 60) return "przed chwilą";
+        if (s < 3600) return Math.floor(s / 60) + " min temu";
+        if (s < 86400) return Math.floor(s / 3600) + " godz. temu";
+        const d = Math.floor(s / 86400);
+        if (d === 1) return "wczoraj";
+        if (d < 30) return d + " dni temu";
+        if (d < 365) return Math.floor(d / 30) + " mies. temu";
+        return new Date(t * 1000).toLocaleDateString(Qt.locale("pl_PL"), "d.MM.yyyy");
+    }
+    readonly property string blameText: {
+        if (!showBlame || !blameLines.length) return "";
+        const c = blameCommits[blameLines[lineCol.y]];
+        if (!c) return "";
+        if (c.uncommitted) return "Ty · niezatwierdzone";
+        return (c.author || "") + ", " + ago(c.time || 0) + " · " + (c.summary || "");
+    }
+    onShowBlameChanged: if (showBlame) refreshBlame(); else { blameCommits = []; blameLines = []; }
     property int sigSeq: -1
     signal contextMenuRequested(Item item, real x, real y)
 
@@ -53,6 +81,7 @@ Item {
         lspPath = path;
         Lsp.open(path, text);
         serverInfo = Lsp.serverFor(path);
+        updateConflicts();
     }
     onPathChanged: {
         // Zmiana nazwy pliku — serwer języka dostaje „nowy” dokument
@@ -63,7 +92,7 @@ Item {
         serverInfo = Lsp.serverFor(path);
     }
     Component.onDestruction: if (lspPath) Lsp.close(lspPath)
-    function requestBase() { if (path) Project.requestBase(path); }
+    function requestBase() { if (path) Project.requestBase(path); refreshBlame(); }
     function markSaved() { te.textDocument.modified = false; }
     function focusEditor() { te.forceActiveFocus(); }
     function ensureVisible() {
@@ -198,6 +227,8 @@ Item {
         if (lspOn) { Lsp.update(path, te.text); hoverSeq = Lsp.hover(path, line - 1, col - 1); }
     }
     Timer { id: lspTimer; interval: 350; onTriggered: if (page.lspOn) Lsp.update(page.path, te.text) }
+    Timer { id: conflictTimer; interval: 200; onTriggered: page.updateConflicts() }
+    Timer { id: blameTimer; interval: 1500; onTriggered: page.refreshBlame() }
     Timer { id: signatureTimer; interval: 80; onTriggered: page.requestSignature() }
     Timer { id: completionTimer; interval: 120; onTriggered: page.requestCompletion() }
     Timer {
@@ -243,6 +274,11 @@ Item {
 
     Connections {
         target: Project
+        function onBlameReady(p, commits, lines) {
+            if (p !== page.path) return;
+            page.blameCommits = commits;
+            page.blameLines = lines;
+        }
         function onBaseReady(p, text, ok) {
             if (p !== page.path) return;
             gutter.baseText = text;
@@ -345,6 +381,40 @@ Item {
             }
         }
 
+        // Konflikty łączenia: moja wersja na zielono, przychodząca na niebiesko, przyciski przy znaczniku <<<<<<<
+        Repeater {
+            model: page.conflicts
+            delegate: Item {
+                id: block
+                required property var modelData
+                readonly property real y0: { te.length; return page.lineY(modelData.startLine); }
+                readonly property real y1: { te.length; return page.lineY(modelData.startLine + 1); }
+                readonly property real yb: { te.length; return page.lineY(modelData.baseLine >= 0 ? modelData.baseLine : modelData.sepLine); }
+                readonly property real ys: { te.length; return page.lineY(modelData.sepLine); }
+                readonly property real ys1: { te.length; return page.lineY(modelData.sepLine + 1); }
+                readonly property real ye: { te.length; return page.lineY(modelData.endLine); }
+                readonly property real ye1: { te.length; return page.lineY(modelData.endLine) + fm.height * 1.0 + 3; }
+                readonly property color oursColor: Theme.dark ? "#3FB950" : "#1A7F37"
+                readonly property color theirsColor: Theme.dark ? "#58A6FF" : "#0969DA"
+                width: Math.max(flick.width, flick.contentWidth)
+                Rectangle { y: block.y0; width: parent.width; height: block.y1 - block.y0; color: Qt.rgba(block.oursColor.r, block.oursColor.g, block.oursColor.b, 0.28) }
+                Rectangle { y: block.y1; width: parent.width; height: block.yb - block.y1; color: Qt.rgba(block.oursColor.r, block.oursColor.g, block.oursColor.b, 0.10) }
+                Rectangle { y: block.yb; width: parent.width; height: block.ys1 - block.yb; color: Qt.rgba(0.5, 0.5, 0.5, 0.12) }
+                Rectangle { y: block.ys1; width: parent.width; height: block.ye - block.ys1; color: Qt.rgba(block.theirsColor.r, block.theirsColor.g, block.theirsColor.b, 0.10) }
+                Rectangle { y: block.ye; width: parent.width; height: block.ye1 - block.ye; color: Qt.rgba(block.theirsColor.r, block.theirsColor.g, block.theirsColor.b, 0.28) }
+                Row {
+                    z: 4
+                    readonly property rect endRect: { te.length; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, block.modelData.startLine)
+                                                                                                  + TextOps.lineText(te.textDocument, block.modelData.startLine).length); }
+                    x: te.x + endRect.x + 18; y: block.y0 + (block.y1 - block.y0 - 20) / 2
+                    spacing: 4
+                    ConflictBtn { text: "Zostaw moją"; tint: block.oursColor; onClicked: page.resolve(block.modelData.startLine, "ours") }
+                    ConflictBtn { text: "Weź przychodzącą (" + block.modelData.theirs + ")"; tint: block.theirsColor; onClicked: page.resolve(block.modelData.startLine, "theirs") }
+                    ConflictBtn { text: "Obie"; tint: Theme.text2; onClicked: page.resolve(block.modelData.startLine, "both") }
+                }
+            }
+        }
+
         // Błędy i ostrzeżenia z serwera języka — podkreślenie fragmentu (w widocznej części)
         Repeater {
             model: {
@@ -400,7 +470,11 @@ Item {
                 if (completion.visible && page.lineCol.y !== completion.line) completion.hide();
             }
             onLengthChanged: { Qt.callLater(page.updateFirstLine); page.edited(); }
-            onTextChanged: if (page.lspOn) lspTimer.restart()
+            onTextChanged: {
+                if (page.lspOn) lspTimer.restart();
+                conflictTimer.restart();
+                if (page.showBlame && page.blameLines.length) blameTimer.restart();
+            }
             onActiveFocusChanged: if (!activeFocus) { completion.hide(); sig.text = ""; }
 
             HoverHandler {
@@ -436,6 +510,17 @@ Item {
             baseColor: Theme.dark ? Qt.rgba(0.89, 0.70, 0.25, 0.18) : Qt.rgba(0.75, 0.53, 0, 0.12)
             onClicked: page.quickFixRequested()
             Icon { anchors.centerIn: parent; d: Icons.bolt; size: 13; stroke: 1.8; color: Theme.dark ? "#E3B341" : "#9A6700" }
+        }
+
+        // Autor bieżącego wiersza (git blame) — szary dopisek za końcem wiersza
+        Text {
+            readonly property rect endRect: { te.length; page.lineCol; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
+            visible: page.blameText !== "" && te.activeFocus && te.selectedText === "" && !page.conflicts.length
+            x: te.x + endRect.x + (page.lspOn && page.lineHasProblem ? 48 : 28)
+            y: te.y + endRect.y + (endRect.height - height) / 2
+            text: page.blameText
+            color: Theme.text2; opacity: 0.6
+            font.family: Theme.font; font.pixelSize: 12; font.italic: true
         }
 
         WheelHandler {
@@ -580,6 +665,14 @@ Item {
         te.insert(pos, ch + pairs[ch]);
         te.cursorPosition = pos + 1;
         return true;
+    }
+    component ConflictBtn: HoverButton {
+        id: cb
+        property string text
+        property color tint
+        width: cbText.implicitWidth + 16; height: 20; radius: 6
+        baseColor: Qt.rgba(cb.tint.r, cb.tint.g, cb.tint.b, Theme.dark ? 0.22 : 0.14)
+        Text { id: cbText; anchors.centerIn: parent; text: cb.text; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
     }
     function updateBracket() { bracket = TextOps.matchBracket(te.textDocument, te.cursorPosition); }
     function updateFirstLine() { hl.firstLine = te.getText(0, Math.min(te.length, 120)).split("\n")[0]; }

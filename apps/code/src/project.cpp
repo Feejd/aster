@@ -135,6 +135,14 @@ bool Project::open(const QString &pathOrUrl)
     p.start(QStringLiteral("git"), {QStringLiteral("-C"), m_root, QStringLiteral("rev-parse"), QStringLiteral("--show-toplevel")});
     if (p.waitForFinished(3000) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0)
         m_gitTop = QDir::cleanPath(QString::fromUtf8(p.readAllStandardOutput()).trimmed());
+    // Katalog .git (w worktree to plik ze wskazaniem) — do sprawdzania, czy trwa łączenie
+    m_gitDir.clear();
+    if (!m_gitTop.isEmpty()) {
+        QProcess d;
+        d.start(QStringLiteral("git"), {QStringLiteral("-C"), m_gitTop, QStringLiteral("rev-parse"), QStringLiteral("--absolute-git-dir")});
+        if (d.waitForFinished(3000) && d.exitCode() == 0)
+            m_gitDir = QString::fromUtf8(d.readAllStandardOutput()).trimmed();
+    }
     m_branch.clear();
     m_head.clear();
     m_upstream.clear();
@@ -476,6 +484,10 @@ void Project::refreshGit()
 {
     if (m_gitTop.isEmpty())
         return;
+    if (const bool merging = !m_gitDir.isEmpty() && QFileInfo::exists(m_gitDir + QStringLiteral("/MERGE_HEAD")); merging != m_merging) {
+        m_merging = merging;
+        Q_EMIT gitChanged();
+    }
     if (m_status) {
         m_statusAgain = true;               // kolejne odświeżenie po bieżącym
         return;
@@ -930,6 +942,81 @@ void Project::applyHunk(const QString &path, bool staged, int index, const QStri
             m_tree->refresh();
         Q_EMIT gitDone(QStringLiteral("hunk"), ok, ok ? QString() : QStringLiteral("Nie udało się: ") + msg.section(QLatin1Char('\n'), 0, 0).left(200));
     });
+}
+
+// ——— Łączenie z konfliktami i autor wiersza ———
+
+QString Project::mergeMessage() const
+{
+    QFile f(m_gitDir + QStringLiteral("/MERGE_MSG"));
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    // Bez linii komentarzy (#), które git dopisuje przy konfliktach
+    QStringList out;
+    for (const QString &l : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n')))
+        if (!l.startsWith(QLatin1Char('#')))
+            out << l;
+    return out.join(QLatin1Char('\n')).trimmed();
+}
+
+void Project::mergeAbort()
+{
+    runGit(QStringLiteral("merge"), {QStringLiteral("merge"), QStringLiteral("--abort")}, {}, [this](bool ok, const QString &msg) {
+        m_tree->refresh();
+        Q_EMIT gitDone(QStringLiteral("merge"), ok, ok ? QStringLiteral("Przerwano łączenie — pliki wróciły do stanu sprzed niego") : msg.left(200));
+    });
+}
+
+void Project::blame(const QString &path, const QString &text)
+{
+    if (m_gitTop.isEmpty() || !path.startsWith(m_gitTop + QLatin1Char('/')))
+        return;
+    // --contents - : treść z edytora (także niezapisana), więc wiersze się zgadzają
+    auto *p = new QProcess(this);
+    p->setWorkingDirectory(m_gitTop);
+    connect(p, &QProcess::finished, this, [this, p, path](int code, QProcess::ExitStatus) {
+        p->deleteLater();
+        if (code != 0) {
+            Q_EMIT blameReady(path, {}, {});
+            return;
+        }
+        // Format porcelain: „hash wiersz_oryg wiersz [liczba]”, nagłówki zatwierdzenia przy pierwszym wystąpieniu, „\ttreść”
+        QHash<QString, int> index;
+        QVariantList commits, lines;
+        QVariantMap cur;
+        QString hash;
+        for (const QString &l : QString::fromUtf8(p->readAllStandardOutput()).split(QLatin1Char('\n'))) {
+            if (l.startsWith(QLatin1Char('\t'))) {
+                if (!index.contains(hash)) {
+                    index.insert(hash, int(commits.size()));
+                    const bool uncommitted = hash.startsWith(QLatin1String("0000000"));
+                    cur.insert(QStringLiteral("hash"), hash.left(8));
+                    cur.insert(QStringLiteral("uncommitted"), uncommitted);
+                    commits << cur;
+                }
+                lines << index.value(hash);
+                cur.clear();
+                continue;
+            }
+            static const QRegularExpression header(QStringLiteral("^[0-9a-f]{40} \\d+ \\d+"));
+            if (header.match(l).hasMatch()) {
+                hash = l.left(40);
+                continue;
+            }
+            if (l.startsWith(QLatin1String("author ")))
+                cur.insert(QStringLiteral("author"), l.mid(7));
+            else if (l.startsWith(QLatin1String("author-time ")))
+                cur.insert(QStringLiteral("time"), l.mid(12).toLongLong());
+            else if (l.startsWith(QLatin1String("summary ")))
+                cur.insert(QStringLiteral("summary"), l.mid(8));
+        }
+        Q_EMIT blameReady(path, commits, lines);
+    });
+    connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
+    p->start(QStringLiteral("git"), {QStringLiteral("blame"), QStringLiteral("--porcelain"), QStringLiteral("--contents"), QStringLiteral("-"),
+                                     QStringLiteral("--"), gitRelative(path)});
+    p->write(text.toUtf8());
+    p->closeWriteChannel();
 }
 
 // ——— Gałęzie i odkładanie zmian ———

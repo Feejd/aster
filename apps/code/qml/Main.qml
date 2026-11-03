@@ -33,6 +33,7 @@ Window {
         property real fontSize: 13.5
         property bool wrap: false
         property bool sidebar: true
+        property bool blame: true
     }
 
     // ——— Karty ———
@@ -114,6 +115,7 @@ Window {
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
             Lsp.saved(t.path);
+            p.refreshBlame();
             tabs.setProperty(i, "changedOnDisk", false);
             pin(i);
             revision++;
@@ -565,6 +567,8 @@ Window {
         { label: "Git: połącz gałąź z bieżącą…", shortcut: "", action: "git:merge", icon: "gitBranch" },
         { label: "Git: usuń gałąź…", shortcut: "", action: "git:deleteBranch", icon: "trash" },
         { label: "Git: odłóż zmiany (stash)", shortcut: "", action: "git:stash", icon: "archive" },
+        { label: "Git: autor wiersza — pokaż/ukryj", shortcut: "", action: "blame", icon: "user" },
+        { label: "Git: przerwij łączenie", shortcut: "", action: "git:mergeAbort", icon: "close" },
         { label: "Git: przywróć odłożone zmiany", shortcut: "", action: "git:stashPop", icon: "undo" },
         { label: "Kopiuj ścieżkę pliku", shortcut: "", action: "copyPath", icon: "copy" },
         { label: "Kopiuj ścieżkę względną", shortcut: "", action: "copyRel", icon: "copy" },
@@ -625,6 +629,8 @@ Window {
         else if (a === "git:merge") palette.openBranches("merge");
         else if (a === "git:deleteBranch") palette.openBranches("delete");
         else if (a === "git:stash") whenSaved(() => Project.stash(false));
+        else if (a === "blame") prefs.blame = !prefs.blame;
+        else if (a === "git:mergeAbort") whenSaved(() => Project.mergeAbort());
         else if (a === "git:stashPop") Project.stash(true);
         else if (a === "copyPath") { if (curPath) Project.copyText(curPath); }
         else if (a === "copyRel") { if (curPath) Project.copyText(Project.relative(curPath)); }
@@ -668,6 +674,7 @@ Window {
             { label: "Pasek boczny", icon: prefs.sidebar ? "check" : "", shortcut: "Ctrl+B", action: "sidebar" },
             { label: "Terminal", icon: win.terminalShown ? "check" : "", shortcut: "Ctrl+`", action: "terminal" },
             { label: "Zawijaj wiersze", icon: prefs.wrap ? "check" : "", shortcut: "Alt+Z", action: "wrap" },
+            { label: "Autor wiersza (git)", icon: prefs.blame ? "check" : "", action: "blame" },
             { separator: true },
             { label: "Zamknij folder", icon: "close", action: "closeFolder" }
         ]);
@@ -736,6 +743,8 @@ Window {
         else if (what.startsWith("commitmsg:")) { showView(2); changesView.setMessage(arg); }
         else if (what === "commit") changesView.commitNow();
         else if (what === "push") Project.push();
+        else if (what === "save") save(current);
+        else if (what.startsWith("resolve:")) { if (cur) { const r = arg.split(","); cur.resolve(Number(r[0]) - 1, r[1]); } }
         else if (what.startsWith("branches:")) { palette.openBranches(arg.split(",")[0]); }
         else if (what.startsWith("newbranch:")) branchAction("checkout", arg, false, true);
         else if (what.startsWith("checkout:")) branchAction("checkout", arg, false, false);
@@ -956,6 +965,7 @@ Window {
                         height: editorArea.height - y
                         visible: index === win.current
                         wrap: prefs.wrap
+                        showBlame: prefs.blame
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)

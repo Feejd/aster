@@ -365,3 +365,66 @@ QVariantMap TextOps::wordAt(QQuickTextDocument *doc, int position) const
     c.setPosition(b, QTextCursor::KeepAnchor);
     return {{QStringLiteral("start"), a}, {QStringLiteral("end"), b}, {QStringLiteral("text"), c.selectedText()}};
 }
+
+QVariantList TextOps::conflicts(QQuickTextDocument *doc) const
+{
+    if (!doc || !doc->textDocument())
+        return {};
+    QTextDocument *d = doc->textDocument();
+    QVariantList out;
+    int start = -1, base = -1, sep = -1;
+    QString ours;
+    for (QTextBlock b = d->begin(); b.isValid(); b = b.next()) {
+        const QString t = b.text();
+        const int n = b.blockNumber();
+        if (t.startsWith(QLatin1String("<<<<<<<"))) {
+            start = n;
+            base = sep = -1;
+            ours = t.mid(7).trimmed();
+        } else if (start >= 0 && sep < 0 && t.startsWith(QLatin1String("|||||||"))) {
+            base = n;
+        } else if (start >= 0 && t.startsWith(QLatin1String("=======")) && sep < 0) {
+            sep = n;
+        } else if (start >= 0 && sep >= 0 && t.startsWith(QLatin1String(">>>>>>>"))) {
+            out << QVariantMap{{QStringLiteral("startLine"), start}, {QStringLiteral("baseLine"), base},
+                               {QStringLiteral("sepLine"), sep}, {QStringLiteral("endLine"), n},
+                               {QStringLiteral("ours"), ours.isEmpty() ? QStringLiteral("HEAD") : ours},
+                               {QStringLiteral("theirs"), t.mid(7).trimmed()}};
+            start = -1;
+        }
+    }
+    return out;
+}
+
+bool TextOps::resolveConflict(QQuickTextDocument *doc, int startLine, const QString &choice)
+{
+    for (const QVariant &v : conflicts(doc)) {
+        const QVariantMap c = v.toMap();
+        if (c.value(QStringLiteral("startLine")).toInt() != startLine)
+            continue;
+        QTextDocument *d = doc->textDocument();
+        const int sl = startLine, bl = c.value(QStringLiteral("baseLine")).toInt();
+        const int ml = c.value(QStringLiteral("sepLine")).toInt(), el = c.value(QStringLiteral("endLine")).toInt();
+        const auto linesText = [d](int a, int b) {           // wiersze a…b−1 razem z końcami wierszy
+            if (a >= b)
+                return QString();
+            const QTextBlock x = d->findBlockByNumber(a), y = d->findBlockByNumber(b);
+            QTextCursor c(d);
+            c.setPosition(x.position());
+            c.setPosition(y.position(), QTextCursor::KeepAnchor);
+            return c.selectedText().replace(QChar::ParagraphSeparator, QLatin1Char('\n'));
+        };
+        const QString oursText = linesText(sl + 1, bl >= 0 ? bl : ml), theirsText = linesText(ml + 1, el);
+        const QString result = choice == QLatin1String("ours") ? oursText : choice == QLatin1String("theirs") ? theirsText : oursText + theirsText;
+        const QTextBlock first = d->findBlockByNumber(sl), last = d->findBlockByNumber(el);
+        QTextCursor cur(d);
+        cur.beginEditBlock();
+        cur.setPosition(first.position());
+        // Do końca wiersza >>>>>>> razem z jego końcem (jeśli nie ostatni)
+        cur.setPosition(last.next().isValid() ? last.next().position() : last.position() + last.length() - 1, QTextCursor::KeepAnchor);
+        cur.insertText(result);
+        cur.endEditBlock();
+        return true;
+    }
+    return false;
+}

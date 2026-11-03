@@ -38,6 +38,7 @@ class Project : public QObject
     Q_PROPERTY(QString upstream READ upstream NOTIFY gitChanged)           // „origin/main” albo pusty
     Q_PROPERTY(QVariantList commits READ commits NOTIFY gitChanged)        // ostatnie: [{ hash, subject, author, time }]
     Q_PROPERTY(QString gitBusy READ gitBusy NOTIFY gitBusyChanged)         // trwająca operacja: commit, push, pull…
+    Q_PROPERTY(bool merging READ merging NOTIFY gitChanged)                // trwa łączenie (MERGE_HEAD)
 
     Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)    // [{ path, rel, name, matches: [...] }]
     Q_PROPERTY(int resultCount READ resultCount NOTIFY resultsChanged)
@@ -68,6 +69,7 @@ public:
     QString upstream() const { return m_upstream; }
     QVariantList commits() const { return m_commits; }
     QString gitBusy() const { return m_gitBusy; }
+    bool merging() const { return m_merging; }
     QVariantList results() const { return m_results; }
     int resultCount() const { return m_resultCount; }
     bool resultsTruncated() const { return m_truncated; }
@@ -126,6 +128,10 @@ public:
     Q_INVOKABLE void mergeBranch(const QString &name);
     Q_INVOKABLE void deleteBranch(const QString &name);
     Q_INVOKABLE void stash(bool pop);
+    Q_INVOKABLE QString mergeMessage() const;                    // opis z .git/MERGE_MSG
+    Q_INVOKABLE void mergeAbort();
+    // Autor każdego wiersza (treść z edytora); wynik: blameReady(ścieżka, zatwierdzenia, indeks zatwierdzenia na wiersz)
+    Q_INVOKABLE void blame(const QString &path, const QString &text);
 
     // Szybkie otwieranie i szukanie
     Q_INVOKABLE void refreshFiles();
@@ -145,6 +151,7 @@ Q_SIGNALS:
     void baseReady(const QString &path, const QString &text, bool ok);
     void gitDone(const QString &op, bool ok, const QString &message);
     void gitBusyChanged();
+    void blameReady(const QString &path, const QVariantList &commits, const QVariantList &lines);
 
 private:
     void addRecent(const QString &path);
@@ -163,7 +170,8 @@ private:
 
     QPointer<QProcess> m_status;
     bool m_statusAgain = false;
-    QString m_branch, m_head, m_upstream, m_gitBusy;
+    QString m_branch, m_head, m_upstream, m_gitBusy, m_gitDir;
+    bool m_merging = false;
     QVariantList m_commits;
     int m_ahead = 0, m_behind = 0;
     QVariantList m_changes;

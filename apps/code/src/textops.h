@@ -37,4 +37,8 @@ public:
     Q_INVOKABLE int applyEdits(QQuickTextDocument *doc, const QVariantList &edits);
     // Słowo (nazwa) pod pozycją: { start, end, text }
     Q_INVOKABLE QVariantMap wordAt(QQuickTextDocument *doc, int position) const;
+    // Bloki konfliktu (<<<<<<< / ||||||| / ======= / >>>>>>>): [{ start, end, startLine, sepLine, endLine, ours, theirs }]
+    Q_INVOKABLE QVariantList conflicts(QQuickTextDocument *doc) const;
+    // choice: ours | theirs | both — zamienia blok zaczynający się w wierszu startLine
+    Q_INVOKABLE bool resolveConflict(QQuickTextDocument *doc, int startLine, const QString &choice);
 };

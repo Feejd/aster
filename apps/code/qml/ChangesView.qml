@@ -31,11 +31,19 @@ Item {
         return new Date(t * 1000).toLocaleDateString(Qt.locale("pl_PL"), "d.MM.yyyy");
     }
     readonly property var staged: Project.changes.filter(c => !!c.index)
-    readonly property var unstaged: Project.changes.filter(c => !!c.work)
+    readonly property var unstaged: Project.changes.filter(c => !!c.work && c.work !== "C")
+    // Łączenie z konfliktami — opis zatwierdzenia z .git/MERGE_MSG
+    Connections {
+        target: Project
+        function onGitChanged() { if (Project.merging && !msg.text) msg.text = Project.mergeMessage(); }
+    }
     function focusMessage() { msg.forceActiveFocus(); }
     function setMessage(t) { msg.text = t; }
+    readonly property var conflicted: Project.changes.filter(c => c.work === "C")
     function commitNow() {
         if (Project.gitBusy) return;
+        // Z nierozwiązanymi konfliktami zatwierdzenie zapisałoby znaczniki <<<<<<< w plikach
+        if (conflicted.length) { Project.gitDone("commit", false, "Najpierw rozwiąż konflikty i dodaj pliki (+): " + conflicted.map(c => c.name).join(", ")); return; }
         Project.commit(msg.text, amend, staged.length === 0);
     }
     Connections {
@@ -47,6 +55,10 @@ Item {
 
     readonly property var rows: {
         const out = [];
+        if (conflicted.length) {
+            out.push({ kind: "header", title: "KONFLIKTY", count: conflicted.length, which: "conflict" });
+            conflicted.forEach(c => out.push(Object.assign({ kind: "file", which: "conflict", letter: "C" }, c)));
+        }
         if (staged.length) {
             out.push({ kind: "header", title: "DODANE DO ZATWIERDZENIA", count: staged.length, which: "staged" });
             staged.forEach(c => out.push(Object.assign({ kind: "file", which: "staged", letter: c.index }, c)));
@@ -65,6 +77,30 @@ Item {
         x: 10; width: parent.width - 20
         spacing: 8
         visible: Project.isGit
+
+        // Trwa łączenie gałęzi
+        Rectangle {
+            visible: Project.merging
+            width: parent.width; height: mergeCol.implicitHeight + 20; radius: 10
+            color: Qt.rgba(0.89, 0.55, 0.1, Theme.dark ? 0.18 : 0.12)
+            Column {
+                id: mergeCol
+                x: 12; y: 10; width: parent.width - 24
+                spacing: 8
+                Text {
+                    width: parent.width; wrapMode: Text.Wrap
+                    text: cv.conflicted.length ? "Łączenie gałęzi: konflikty w " + cv.conflicted.length + (cv.conflicted.length === 1 ? " pliku" : " plikach") + ". Wybierz w edytorze, którą wersję zostawić, zapisz i dodaj plik (+)."
+                                               : "Konflikty rozwiązane — zatwierdź, żeby zakończyć łączenie."
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.15
+                }
+                HoverButton {
+                    width: abortText.implicitWidth + 20; height: 26; radius: 7
+                    baseColor: Theme.fill
+                    onClicked: Project.mergeAbort()
+                    Text { id: abortText; anchors.centerIn: parent; text: "Przerwij łączenie"; color: Theme.danger; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                }
+            }
+        }
 
         // Gałąź i synchronizacja
         Rectangle {
@@ -210,7 +246,7 @@ Item {
                 Row {
                     anchors.right: parent.right; anchors.rightMargin: 10
                     anchors.bottom: parent.bottom; anchors.bottomMargin: 2
-                    visible: row.modelData.which !== "log" && row.modelData.count > 0
+                    visible: row.modelData.which !== "log" && row.modelData.which !== "conflict" && row.modelData.count > 0
                     RowBtn {
                         visible: row.modelData.which === "work"
                         icon: "undo"
@@ -239,7 +275,12 @@ Item {
                     id: fileArea
                     anchors.fill: parent
                     hoverEnabled: true
-                    onClicked: if (!row.modelData.isDir) cv.showDiff(row.modelData.path, row.modelData.which === "staged")
+                    onClicked: {
+                        if (row.modelData.isDir) return;
+                        // Plik z konfliktem otwiera się w edytorze — tam są przyciski wyboru wersji
+                        if (row.modelData.which === "conflict") cv.openFile(row.modelData.path);
+                        else cv.showDiff(row.modelData.path, row.modelData.which === "staged");
+                    }
                     onDoubleClicked: if (row.modelData.letter !== "D" && !row.modelData.isDir) cv.openFile(row.modelData.path)
                 }
                 FileIcon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: row.modelData.name || ""; isDir: !!row.modelData.isDir; size: 15 }
