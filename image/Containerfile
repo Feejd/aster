@@ -5,7 +5,7 @@ ARG FEDORA=44
 
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules python3 \
-        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel qt6-qtsvg-devel kf6-prison-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel qt6-qtsvg-devel kf6-prison-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
@@ -21,6 +21,7 @@ FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
 RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd \
         mlt mlt-qt6 openh264 whisper-cpp \
+RUN dnf install -y google-roboto-fonts layer-shell-qt libvterm jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib libsndfile libsamplerate alsa-lib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd \
         glibc-langpack-pl glibc-langpack-en glibc-langpack-de glibc-langpack-uk glibc-langpack-cs glibc-langpack-fr glibc-langpack-es glibc-langpack-it \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalService org.aster.terminal.desktop \

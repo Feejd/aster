@@ -209,4 +209,106 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
 - [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264
 - [ ] Aster Code — edytor kodu w stylu Aster
+- [x] Studio (nazwa robocza) — `apps/studio`, proste studio nagrań dla amatorów (nagrać wokal i gitarę, ułożyć pętle,
+      zmiksować piosenkę); pierwsza wersja w drzewie, docelowo Flatpak w Sklepie Aster:
+  - [x] projekt = folder w Muzyka/Studio: `projekt.json` (tempo, metrum, ścieżki, klipy w ramkach 48 kHz) + `audio/`
+        (nagrania i kopie importowanych plików) + `Eksport/`; ostatnie projekty na ekranie startowym, zapis przy zamknięciu
+  - [x] tempo (z „Wystukaj”), metrum, metronom (akcent na raz), odliczanie taktu przed nagraniem
+  - [x] nagrywanie na zaznaczoną ścieżkę (jedna gotowa naraz, kanał wejścia: oba/lewy/prawy), kształt fali na żywo,
+        kompensacja opóźnień wejścia i wyjścia z PipeWire + ręczna korekta; nagranie zapisuje się od razu (WAV 24 bity)
+  - [x] oś czasu z siatką taktów: przesuwanie klipów (także między ścieżkami), przycinanie, dzielenie, pętla
+        (wydłużanie prawym brzegiem, faza pętli zachowana przy przycinaniu i dzieleniu), duplikowanie, przyciąganie
+        do taktu/miary/ósemki/szesnastki (Shift — bez), powiększanie, cofanie i ponawianie
+  - [x] import WAV/FLAC/OGG/Opus/MP3 przeciąganiem lub z okna (libsndfile; przepróbkowanie libsamplerate)
+  - [x] mikser: głośność (−∞…+6 dB), panorama, wycisz/solo, wskaźniki poziomu, suma z ochroną przed przesterowaniem
+  - [x] wybór wyjścia i wejścia dźwięku (urządzenia z PipeWire), poziom wejścia
+  - [x] eksport miksu (ten sam kod co odsłuch) do MP3, WAV 16 bit, OGG Vorbis, FLAC
+  - [ ] Nazwa programu (propozycje: „Próba”, „Scena”, „Nuta”)
+  - [x] efekty na ścieżkach (`src/dsp.h`, bez alokacji w wątku audio): korektor 3-pasmowy + usuwanie dudnienia
+        (80 Hz), kompresor jednym suwakiem, wspólny pogłos z wielkością sali; gotowe brzmienia (Wokal, Gitara, Bas,
+        Perkusja, Radio, Daleko); panel z prawej (E) z brzmieniem ścieżki i ustawieniami klipu
+  - [x] głośność klipu, narastanie i wyciszanie (uchwyty na klipie i suwaki w panelu)
+  - [x] region pętli odtwarzania do ćwiczenia (C, przeciąganie po linijce, „Ćwicz w pętli” z menu klipu) —
+        zawijanie w środku bloku audio, sprawdzone przez PipeWire w kontenerze
+  - [x] nowe nagranie zastępuje to, co było pod nim na ścieżce (stare klipy przycięte/podzielone, Ctrl+Z przywraca)
+  - [x] Kierunek „zrób kawałek, który brzmi”: Beat Maker (`src/beatsynth.*`) — perkusja i bas 808 syntezowane
+        w programie (bez sampli, nic obcego), zestawy Trap / Drill / Boom bap / Lo-fi / House / Pop, siatka szesnastek
+        z malowaniem, rolki hi-hatów ×2–×4, ciche uderzenia, swing, 1/2/4 takty; 808 z mini-pianinem w skali molowej,
+        tonacją i ślizgiem; wzór → pętla audio w `audio/_bit-N.wav` (gra z mikserem, efektami, eksportem; zmiana tempa
+        przelicza pętle)
+  - [x] szablony gatunków przy nowym projekcie i na ekranie startowym: bit, 808, dwie ścieżki wokalu z łańcuchem
+        efektów, mastering gatunku — wystarczy nagrać głos (podkład Trap: −8,6 dBFS RMS, szczyt −0,2 dBFS)
+  - [x] efekty jak w trapie: echo zgrane z tempem (1/4, 1/8, 1/8 z kropką, ping-pong), ciepło/przester;
+        presety w grupach (Wokal pop, Wokal trap, Rap, Chórki; Gitara, Bas, Perkusja, 808; Radio, Lo-fi, Daleko)
+  - [x] mastering sumy: korektor, kompresor „sklejający”, szerokość stereo, dociśnięcie do ogranicznika z wyprzedzeniem;
+        presety Trap / hip-hop, Pop, Ciepły, Głośny, Lo-fi
+  - [x] autotune (`src/tune.h`): wykrywanie wysokości YIN (sygnał zmniejszony do 12 kHz, co ~5 ms, 70–1000 Hz),
+        dociąganie do najbliższej nuty tonacji projektu (moll/dur, „Jak w 808”), szybkość od naturalnej do „efektu
+        trap”, przesuwanie wysokości linią opóźniającą z dwoma odczytami co okres głosu; w presetach Wokal trap (90%),
+        Wokal pop, Chórki. Test: A4 −40 c → ±3 c, 302 Hz → D4, ześlizg przyciągnięty do nut a-moll; na żywo nadąża
+  - [ ] Dalej: autotune dokładniejszy przy dużych przesunięciach (PSOLA z zachowaniem formantów), wybór nut ręcznie
+        (edytor wysokości jak w programach do korekcji), de-esser, bramka szumów, wtyczki LV2 (lilv)
+  - [x] ścieżka Akordy: brzmienia Pianino, Klawisze elektryczne (FM), Pad (rozstrojone piły), Pluck (Karplus–Strong),
+        Dzwonki (FM), Lead; rytmy (cały takt, półnuty, staccato, arpeggio ósemki/szesnastki), oktawa, septymy; progresje
+        (Smutna, Mroczna, Epicka, Rozmarzona, Z nadzieją, Dwa akordy) i akord na każdy takt z nazwami w tonacji projektu
+        (np. fis-moll → D-dur → A-dur → E-dur); prowadzenie głosów (najbliższy przewrót); zmiana tonacji przelicza akordy;
+        szablony gatunków mają gotową ścieżkę akordów; nieużywane pętle „_…” sprzątane przy zamknięciu projektu
+  - [x] piano roll (ścieżka Melodia): klawiatura C2–C7, siatka szesnastek na 1–8 taktów, klik dodaje nutę (długość
+        1/16…cała), przeciąganie przesuwa, prawy brzeg zmienia długość, prawy klik / dwuklik usuwa; wiersze tonacji
+        podświetlone, „Tylko nuty skali”; te same brzmienia co Akordy; „Zamień na nuty” przenosi akordy do piano rolla
+        bez zmiany brzmienia (eksport identyczny)
+  - [x] odsłuch: klik w piano rollu, na klawiaturze ekranowej, w Beat Makerze (krok i nazwa wiersza) i w nutach 808
+        od razu gra dźwięk — 8 głosów odsłuchu w wątku audio, także przy zatrzymanym transporcie
+  - [x] klawiatura komputera jak pianino w piano rollu (A S D F G H J K / W E T Y U O, Z/X — oktawa), wciśnięte
+        klawisze podświetlone; „Nagrywaj nuty” — granie w trakcie odtwarzania zapisuje nuty wyrównane do szesnastek
+  - [x] klawiatury MIDI na USB (`src/midiinput.*`, sekwencer ALSA — przez niego PipeWire pokazuje urządzenia MIDI):
+        samo podłącza się do każdej klawiatury, także wpiętej w trakcie pracy; nuty z siłą uderzenia do odsłuchu
+        i nagrywania w piano rollu (bez otwartego piano rolla — odsłuch na ścieżce Melodia/Akordy); lista klawiatur
+        w ustawieniach dźwięku; bez sekwencera po cichu nic nie robi. W kontenerze nie ma /dev/snd/seq — prawdziwą
+        klawiaturę sprawdzić w maszynie wirtualnej (przekazanie USB)
+  - [x] granie na żywo: 16 głosów syntezatora w wątku audio (`src/synthvoice.h` — ten sam głos liczy też nuty
+        ścieżek), polecenia przez kolejkę bez blokad; nuta brzmi, dopóki klawisz (komputer, MIDI, klawiatura ekranowa)
+        jest wciśnięty, potem wybrzmiewa jak instrument; przy braku wolnego głosu zabierany najstarszy
+  - [x] granie na żywo przez efekty ścieżki: głosy przypisane do ścieżki wchodzą do miksera przed jej łańcuchem
+        (autotune, korektor, przester, kompresor, głośność, panorama, pogłos, echo, mastering); mikser pracuje też przy
+        zatrzymanym transporcie (bez klipów), więc słychać ogony pogłosu i echa; wycisz/solo obowiązują
+  - [ ] Dalej: pedał sustain, pokrętła klawiatury do suwaków, kopiowanie taktów, biblioteka pętli,
+        przełącznik A/B masteringu
+  - [x] udostępnianie bez serwera (`src/share.*`): arkusz „Udostępnij” z okładką generowaną z kształtu fali piosenki,
+        tytułu i wykonawcy; piosenka jako MP3 z tagami i okładką (TagLib) w <projekt>/Udostępnione; projekt do remiksu
+        jako paczka ZIP (libarchive, tylko używane pliki); wysyłka na sparowany telefon (KDE Connect), e-mailem
+        (xdg-email z załącznikiem), schowek (wklejenie w komunikatorze/Plikach), „Pokaż w folderze”; otwarcie paczki
+        od znajomego (ekran startowy) tworzy nowy projekt „(remiks)” — bez nadpisywania
+  - [ ] Dalej (społecznościowo, jak BandLab): link do odsłuchu i wspólna praca na żywo — wymaga serwera Aster;
+        wideo z okładką i falą do social mediów (ffmpeg); typ pliku paczki w systemie (dwuklik otwiera Studio)
+  - [ ] Dalej: instrumenty MIDI (klawiatura na ekranie i z USB, pianino, perkusja, syntezator — np. FluidSynth z SoundFontem
+        na wolnej licencji), ścieżki MIDI z edytorem nut
+  - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
+        do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
+  - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
+        automatyka głośności
+  - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
+        stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
+  - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,
+        przełączanie urządzeń w trakcie, zachowanie przy niedoborach bufora (xrun)
+
+### Studio — wybór silnika dźwięku
+Wybór: **bezpośrednio PipeWire** (`pw_stream`, wątek czasu rzeczywistego PipeWire) + **libsndfile** (odczyt i zapis
+WAV/FLAC/OGG/Opus/MP3) + **libsamplerate** (przepróbkowanie importu do 48 kHz). Wszystko w repozytoriach Fedory 44
+(`pipewire-devel`, `libsndfile-devel`, `libsamplerate-devel`), małe, na licencjach MIT/LGPL/BSD.
+
+Dlaczego nie gotowy silnik: Tracktion Engine stoi na JUCE (GPLv3 albo licencja komercyjna, JUCE nie ma w Fedorze),
+dokłada kilkaset tysięcy wierszy C++ i własny model projektu — za dużo jak na pierwsze proste studio. Własny silnik
+wystarczy do ścieżek audio, a efekty dołożymy przez LV2 (lilv, też w Fedorze). Rubberband (GPL, w Fedorze) wejdzie
+przy dopasowaniu pętli do tempa. JACK API niepotrzebne — PipeWire i tak je emuluje, a natywny `pw_stream` daje wybór
+urządzenia (`target.object`) i opóźnienia (`pw_stream_get_time_n`).
+
+Zasady w kodzie (`apps/studio/src/engine.*`):
+- dźwięk w wątku czasu rzeczywistego PipeWire (`PW_STREAM_FLAG_RT_PROCESS`), bez blokad i bez alokacji;
+- stan miksu to niezmienna migawka (`Snapshot`) budowana w wątku interfejsu i podawana przez wymianę wskaźnika
+  atomowego; starą migawkę wątek audio oddaje przez kolejkę i zwalnia ją wątek interfejsu;
+- nagranie: wątek audio wkłada próbki do bufora pierścieniowego (jeden pisze, jeden czyta), osobny wątek zapisuje WAV;
+- odtwarzanie i eksport używają tego samego miksera (`Renderer`), więc eksport brzmi jak odsłuch;
+- test w kontenerze (wirtualne głośniki i pętla zwrotna z wyjścia do wejścia): nagrany metronom wypada 5 ms
+  (jeden kwant pętli zwrotnej) po mierze.
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Studio
+GenericName=Studio nagrań
+Comment=Nagraj wokal i gitarę, ułóż pętle i zmiksuj piosenkę
+Exec=aster-studio %F
+Icon=audio-x-generic
+Terminal=false
+Categories=AudioVideo;Audio;Recorder;Music;
+Keywords=studio;nagrywanie;miks;mikser;ścieżki;pętle;piosenka;daw;wokal;gitara;metronom;recording;
+StartupWMClass=aster-studio
