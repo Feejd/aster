@@ -30,6 +30,8 @@ class Project : public QAbstractListModel, public ImageSource
     Q_PROPERTY(QStringList colors READ colors NOTIFY colorsChanged)
     Q_PROPERTY(int pageCount READ pageCount NOTIFY pagesChanged)
     Q_PROPERTY(int currentPage READ currentPage NOTIFY pagesChanged)
+    Q_PROPERTY(QVariantMap guides READ guides NOTIFY guidesChanged)     // { x: [...], y: [...] } — prowadnice wszystkich stron
+    Q_PROPERTY(QVariantMap print READ print NOTIFY pageChanged)
 
 public:
     enum Roles { ElementRole = Qt::UserRole + 1, IdRole };
@@ -54,6 +56,8 @@ public:
     QStringList colors() const;
     int pageCount() const { return int(m_pages.size()); }
     int currentPage() const { return m_page; }
+    QVariantMap guides() const { return m_guides; }
+    QVariantMap print() const { return m_print; }
 
     QImage image(const QString &key, qreal pixels) const override;
     QByteArray vector(const QString &key) const override;
@@ -77,6 +81,7 @@ public:
     Q_INVOKABLE void duplicatePage(int page);
     Q_INVOKABLE void removePage(int page);
     Q_INVOKABLE void movePage(int from, int to);
+    Q_INVOKABLE void setGuides(const QVariantMap &guides, bool commit = true);
 
     // ——— Elementy (po id, bo indeks zmienia się przy zmianie kolejności) ———
     Q_INVOKABLE QString add(const QVariantMap &element);
@@ -119,6 +124,7 @@ Q_SIGNALS:
     void imagesChanged();
     void colorsChanged();
     void pagesChanged();
+    void guidesChanged();
     void changed();                 // każda zmiana treści (do zapisu automatycznego)
     void reset();                   // nowa zawartość (cofanie, otwarcie) — zaznaczenie mogło zniknąć
     void error(const QString &message);
@@ -149,6 +155,7 @@ private:
     qreal m_width = 1080;
     qreal m_height = 1080;
     QVariantMap m_background;
+    QVariantMap m_guides;
     QVariantMap m_print;            // rozmiar do druku w mm (PDF), np. A4
     QVariantList m_elements;
     QVariantList m_pages;           // { background, elements } każdej strony (bieżąca — stan sprzed storePage)

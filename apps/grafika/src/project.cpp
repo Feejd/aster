@@ -80,6 +80,8 @@ QVariantMap Project::document() const
     doc[QStringLiteral("elements")] = m_elements;
     doc[QStringLiteral("pages")] = pages();
     doc[QStringLiteral("page")] = m_page;
+    if (!m_guides.value(QStringLiteral("x")).toList().isEmpty() || !m_guides.value(QStringLiteral("y")).toList().isEmpty())
+        doc[QStringLiteral("guides")] = m_guides;
     return doc;
 }
 
@@ -123,6 +125,16 @@ QVariantMap Project::pageDocument(int page) const
 }
 
 // Przejście na inną stronę nie jest krokiem cofania — cofnięcie wraca na stronę, na której była zmiana
+void Project::setGuides(const QVariantMap &guides, bool commitNow)
+{
+    if (guides == m_guides)
+        return;
+    m_guides = guides;
+    Q_EMIT guidesChanged();
+    if (commitNow)
+        commit();
+}
+
 void Project::goToPage(int page)
 {
     if (page == m_page || page < 0 || page >= m_pages.size())
@@ -225,6 +237,11 @@ void Project::load(const QVariantMap &doc)
     m_width = qMax(16.0, num(doc, "width", 1080));
     m_height = qMax(16.0, num(doc, "height", 1080));
     m_print = doc.value(QStringLiteral("print")).toMap();
+    const QVariantMap guides = doc.value(QStringLiteral("guides")).toMap();
+    if (guides != m_guides) {
+        m_guides = guides;
+        Q_EMIT guidesChanged();
+    }
     // Stary zapis (jedna strona) — background i elements na wierzchu
     m_pages = doc.value(QStringLiteral("pages")).toList();
     if (m_pages.isEmpty())
@@ -540,6 +557,18 @@ void Project::setPageSize(qreal width, qreal height, bool fit)
     commit();
     width = qMax(16.0, width);
     height = qMax(16.0, height);
+    // Prowadnice zostają w tym samym miejscu względem strony
+    if (!m_guides.isEmpty()) {
+        QVariantMap g;
+        for (const auto &[axis, k] : {std::pair{QStringLiteral("x"), width / m_width}, std::pair{QStringLiteral("y"), height / m_height}}) {
+            QVariantList list;
+            for (const QVariant &v : m_guides.value(axis).toList())
+                list.append(std::round(v.toDouble() * k * 10) / 10);
+            g[axis] = list;
+        }
+        m_guides = g;
+        Q_EMIT guidesChanged();
+    }
     // Dopasowanie: treść skalowana do mniejszego z boków i wyśrodkowana; tło wypełnia nową stronę samo
     if (fit) {
         const qreal k = qMin(width / m_width, height / m_height);

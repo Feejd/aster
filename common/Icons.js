@@ -160,3 +160,4 @@ var unlock = "M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 
 var crop = "M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14";
 var distributeH = "M4 4v16M20 4v16M10 8h4v8h-4z";
 var distributeV = "M4 4h16M4 20h16M8 10h8v4H8z";
+var ruler = "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4";

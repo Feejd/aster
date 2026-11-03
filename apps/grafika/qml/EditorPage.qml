@@ -26,6 +26,8 @@ Item {
 
     onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "templates"; stage.forceActiveFocus(); }
 
+    Settings { id: viewSettings; category: "Grafika"; property bool rulers: false }
+
     // ——— Działania ———
     function addElement(el) {
         stage.stopEditing();
@@ -292,19 +294,22 @@ Item {
         app.toast("Skopiowano styl — zaznacz inne elementy i wybierz „Wklej styl” (Ctrl+Alt+V)", "");
     }
     function pasteStyle() {
-        if (!styleClip) return;
+        if (styleClip && applyStyle(styleClip) === 0) app.toast("Styl pasuje tylko do elementów tego samego rodzaju", "");
+    }
+    // Styl (pola wyglądu) na zaznaczone elementy tego samego rodzaju; zwraca, ile się zmieniło
+    function applyStyle(st) {
         let n = 0;
         for (const id of many) {
             const el = project.get(id);
-            if (el.type !== styleClip.type || el.locked) continue;
+            if (el.type !== st.type || el.locked) continue;
             const patch = {};
-            for (const k in el) if (styleSkip.indexOf(k) < 0 && !(k in styleClip)) patch[k] = null;
-            for (const k in styleClip) if (k !== "type") patch[k] = styleClip[k];
+            for (const k in el) if (styleSkip.indexOf(k) < 0 && !(k in st)) patch[k] = null;
+            for (const k in st) if (k !== "type") patch[k] = st[k];
             project.change(id, patch, false);
             n += 1;
         }
         project.commit();
-        if (n === 0) app.toast("Styl pasuje tylko do elementów tego samego rodzaju", "");
+        return n;
     }
 
     function copyImage() {
@@ -363,6 +368,11 @@ Item {
         else if (a === "bgtab") side.tab = "background";
         else if (a === "layers") side.tab = "layers";
         else if (a === "selectAll") stage.selectAll();
+        else if (a === "rulers") stage.rulers = !stage.rulers;
+        else if (a.startsWith("guides:")) {
+            if (a === "guides:clear") project.setGuides({});
+            else stage.addGuides(a.substring(7));
+        }
         else if (a === "lock") setLocked(true);
         else if (a === "group") group();
         else if (a === "copyStyle") copyStyle();
@@ -412,6 +422,13 @@ Item {
             items.push({ label: "Wklej", icon: "paste", shortcut: "Ctrl+V", action: "paste" });
             items.push({ label: "Zaznacz wszystko", icon: "check", shortcut: "Ctrl+A", action: "selectAll" });
             items.push({ label: "Zmień tło", icon: "palette", action: "bgtab" });
+            items.push({ separator: true });
+            items.push({ label: stage.rulers ? "Ukryj linijki i prowadnice" : "Pokaż linijki i prowadnice", icon: "ruler", shortcut: "Ctrl+R", action: "rulers" });
+            items.push({ label: "Prowadnice na środku", icon: "plus", action: "guides:center" });
+            items.push({ label: "Prowadnice marginesów", icon: "crop", action: "guides:margins" });
+            items.push({ label: "Podział na trzy części", icon: "gridLines", action: "guides:thirds" });
+            if (stage.rulers && ((project.guides.x || []).length + (project.guides.y || []).length) > 0)
+                items.push({ label: "Usuń prowadnice", icon: "trash", action: "guides:clear", danger: true });
         }
         const p = stage.mapToItem(ed, x, y);
         menu.openAt(p.x, Math.min(p.y, ed.height - items.length * 34 - 20), items);
@@ -457,6 +474,19 @@ Item {
         else if (cmd === "image") addImageFile(arg);
         else if (cmd === "undo") project.undo();
         else if (cmd === "zoom") stage.zoomTo(Number(arg));
+        else if (cmd === "menuaction") runMenu(arg);
+        else if (cmd === "savestyle") side.saveTextStyle();
+        else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
+        else if (cmd === "guides") project.setGuides(JSON.parse(arg));
+        else if (cmd === "snapmove") {
+            // Przesunięcie jak myszą (bez puszczania — znaczniki zostają): indeks,x,y
+            const [i, x, y] = arg.split(",").map(Number);
+            const id = project.idAt(i);
+            stage.select(id);
+            stage.prepareSnap([id]);
+            const r = stage.snapMove(project.get(id), x, y);
+            project.change(id, { x: r.x, y: r.y }, false);
+        }
     }
 
     // ——— Skróty ———
@@ -501,6 +531,7 @@ Item {
     Shortcut { sequence: "Ctrl+E"; enabled: ed.visible; onActivated: exportPop.openAt(exportBtn) }
     Shortcut { sequences: ["Ctrl+=", "Ctrl++", StandardKey.ZoomIn]; enabled: ed.visible; onActivated: stage.zoomBy(1.25) }
     Shortcut { sequences: ["Ctrl+-", StandardKey.ZoomOut]; enabled: ed.visible; onActivated: stage.zoomBy(0.8) }
+    Shortcut { sequence: "Ctrl+R"; enabled: ed.visible; onActivated: stage.rulers = !stage.rulers }
     Shortcut { sequence: "Ctrl+0"; enabled: ed.visible; onActivated: stage.fit = true }
     Shortcut { sequence: "Ctrl+1"; enabled: ed.visible; onActivated: stage.zoomTo(1) }
     Shortcut { sequence: "T"; enabled: ed.active && !ed.typing; onActivated: side.addTextStyle(side.textStyles[2]) }
@@ -619,6 +650,12 @@ Item {
                 ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; enabled: ed.project.canUndo; onClicked: ed.project.undo() }
                 ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
                 Item { width: 8; height: 1 }
+                ToolBtn {
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon: "ruler"
+                    baseColor: stage.rulers ? Theme.accentSoft : "transparent"
+                    onClicked: stage.rulers = !stage.rulers
+                }
                 ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; onClicked: stage.zoomBy(0.8) }
                 HoverButton {
                     anchors.verticalCenter: parent.verticalCenter
@@ -652,6 +689,8 @@ Item {
             width: parent.width - inspector.width
             height: parent.height - y - pageBar.height
             project: ed.project
+            rulers: viewSettings.rulers
+            onRulersChanged: viewSettings.rulers = rulers
             onMenuRequested: (x, y) => ed.showContextMenu(x, y)
         }
 

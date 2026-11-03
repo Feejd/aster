@@ -22,12 +22,16 @@ Item {
     property var current: ({})                 // dane zaznaczonego elementu
     property bool fit: true                     // powiększenie „dopasuj do okna”
     property real userZoom: 1
-    readonly property real fitZoom: Math.max(0.02, Math.min((width - 96) / project.pageWidth, (height - 96) / project.pageHeight))
+    readonly property real fitZoom: Math.max(0.02, Math.min((width - ruler - 96) / project.pageWidth, (height - ruler - 96) / project.pageHeight))
     readonly property real zoom: fit ? fitZoom : userZoom
     property var guidesX: []
     property var guidesY: []
     property var snapX: []
     property var snapY: []
+    property var snapRects: []                  // pozostałe elementy (prostokąty) — do równych odstępów
+    property var gaps: []                       // znaczniki równych odstępów: { axis, s, e, c }
+    property bool rulers: false                 // linijki i własne prowadnice (project.guides)
+    readonly property real ruler: rulers ? 20 : 0
     property string hint: ""                    // np. wymiary albo kąt podczas zmiany
     signal menuRequested(real x, real y)
 
@@ -191,18 +195,60 @@ Item {
         const cx = x + el.w / 2, cy = y + el.h / 2;
         return { xs: [cx - aw / 2, cx, cx + aw / 2], ys: [cy - ah / 2, cy, cy + ah / 2] };
     }
-    function prepareSnap(ids) {
+    // ——— Prowadnice ———
+    property var dragGuide: null                // przeciągana: { axis, index (−1 — nowa z linijki), v }
+    readonly property real unitsPerPx: project.print.width ? project.print.width / project.pageWidth : 1   // mm albo px
+    readonly property string unit: project.print.width ? "mm" : "px"
+    function moveGuide(axis, index, v) {
+        const t = nearest([v], axis === "x" ? snapX : snapY);
+        if (t) v = t.t;
+        v = Math.round(v * 10) / 10;
+        dragGuide = { axis: axis, index: index, v: v };
+        const size = axis === "x" ? project.pageWidth : project.pageHeight;
+        hint = v < 0 || v > size ? "Puść, żeby usunąć prowadnicę"
+             : (axis === "x" ? "X " : "Y ") + Math.round(v * unitsPerPx * 10) / 10 + " " + unit;
+    }
+    function dropGuide() {
+        const g = dragGuide;
+        dragGuide = null;
+        hint = "";
+        if (!g) return;
+        const size = g.axis === "x" ? project.pageWidth : project.pageHeight;
+        const all = { x: (project.guides.x || []).slice(), y: (project.guides.y || []).slice() };
+        if (g.index >= 0) all[g.axis].splice(g.index, 1);
+        if (g.v >= 0 && g.v <= size) all[g.axis].push(g.v);
+        project.setGuides(all);
+    }
+    function addGuides(kind) {
+        const W = project.pageWidth, H = project.pageHeight, m = Math.round(Math.min(W, H) * 0.05);
+        const all = { x: (project.guides.x || []).slice(), y: (project.guides.y || []).slice() };
+        const put = (axis, v) => { if (all[axis].every(o => Math.abs(o - v) > 0.5)) all[axis].push(v); };
+        if (kind === "center") { put("x", W / 2); put("y", H / 2); }
+        else if (kind === "margins") { put("x", m); put("x", W - m); put("y", m); put("y", H - m); }
+        else if (kind === "thirds") { put("x", Math.round(W / 3)); put("x", Math.round(W * 2 / 3)); put("y", Math.round(H / 3)); put("y", Math.round(H * 2 / 3)); }
+        rulers = true;
+        project.setGuides(all);
+    }
+
+    function prepareSnap(ids, noGuides) {
         const W = project.pageWidth, H = project.pageHeight;
         const xs = [0, W / 2, W], ys = [0, H / 2, H];
+        const rects = [];
         const all = project.document().elements;
         for (const o of all) {
             if (ids.indexOf(o.id) >= 0 || o.hidden) continue;
             const b = box(o, o.x, o.y);
             xs.push(...b.xs);
             ys.push(...b.ys);
+            rects.push(rectOf(b));
+        }
+        if (rulers && !noGuides) {
+            xs.push(...(project.guides.x || []));
+            ys.push(...(project.guides.y || []));
         }
         snapX = xs;
         snapY = ys;
+        snapRects = rects;
     }
     function nearest(edges, targets) {
         const thr = 7 / zoom;
@@ -213,13 +259,72 @@ Item {
                     best = { d: t - e, t: t };
         return best;
     }
+    function rectOf(b) { return { x: b.xs[0], y: b.ys[0], w: b.xs[2] - b.xs[0], h: b.ys[2] - b.ys[0] }; }
+
+    // Równe odstępy w osi "x" albo "y": przesuwany prostokąt m ustawia się tak, żeby odstępy od sąsiadów
+    // były równe albo takie jak między dwoma innymi elementami w tym samym rzędzie. Zwraca { d, gaps } albo null.
+    function spacing(m, axis) {
+        const X = axis, Y = axis === "x" ? "y" : "x", W = axis === "x" ? "w" : "h", H = axis === "x" ? "h" : "w";
+        const thr = 7 / zoom;
+        const band = snapRects.filter(r => r[Y] < m[Y] + m[H] && r[Y] + r[H] > m[Y]);
+        if (band.length === 0) return null;
+        const end = r => r[X] + r[W];
+        const L = band.filter(r => end(r) <= m[X] + thr && r[X] < m[X]).sort((a, b) => end(b) - end(a))[0];
+        const R = band.filter(r => r[X] >= end(m) - thr && end(r) > end(m)).sort((a, b) => a[X] - b[X])[0];
+        const gap = (a, b) => {
+            const lo = Math.max(a[Y], b[Y]), hi = Math.min(a[Y] + a[H], b[Y] + b[H]);
+            return { axis: axis, s: end(a), e: b[X], c: lo < hi ? (lo + hi) / 2 : b[Y] + b[H] / 2 };
+        };
+        const cands = [];
+        if (L && R) {
+            const g = (R[X] - end(L) - m[W]) / 2;
+            if (g > 1) cands.push({ p: end(L) + g, l: true, r: true, pairs: [] });
+        }
+        // Odstępy między innymi elementami w tym rzędzie
+        for (const a of band) {
+            const b = band.filter(r => r[X] >= end(a) - 0.5).sort((p, q) => p[X] - q[X])[0];
+            if (!b) continue;
+            const g = b[X] - end(a);
+            if (g < 1) continue;
+            if (L && L !== a) cands.push({ p: end(L) + g, l: true, pairs: [[a, b]] });
+            if (R && R !== b) cands.push({ p: R[X] - g - m[W], r: true, pairs: [[a, b]] });
+        }
+        let best = null;
+        for (const c of cands)
+            if (Math.abs(c.p - m[X]) < thr && (best === null || Math.abs(c.p - m[X]) < Math.abs(best.p - m[X]))) best = c;
+        if (!best) return null;
+        const at = Object.assign({}, m);
+        at[X] = best.p;
+        const gaps = [];
+        if (best.l) gaps.push(gap(L, at));
+        if (best.r) gaps.push(gap(at, R));
+        for (const [a, b] of best.pairs) gaps.push(gap(a, b));
+        return { d: best.p - m[X], gaps: gaps };
+    }
+    // Przyciąganie prostokątu m (krawędzie, środek, linie, równe odstępy); zwraca przesunięcie
+    function snapRect(m) {
+        let sx = nearest([m.x, m.x + m.w / 2, m.x + m.w], snapX), sy = nearest([m.y, m.y + m.h / 2, m.y + m.h], snapY);
+        const px = spacing(m, "x");
+        if (px && (!sx || Math.abs(px.d) <= Math.abs(sx.d))) sx = { d: px.d, t: null };
+        const moved = Object.assign({}, m, { x: m.x + (sx ? sx.d : 0) });
+        const py = spacing(moved, "y");
+        if (py && (!sy || Math.abs(py.d) <= Math.abs(sy.d))) sy = { d: py.d, t: null };
+        const done = Object.assign({}, moved, { y: m.y + (sy ? sy.d : 0) });
+        guidesX = sx && sx.t !== null ? [sx.t] : [];
+        guidesY = sy && sy.t !== null ? [sy.t] : [];
+        const gx = sx && sx.t === null ? spacing(done, "x") : null, gy = sy && sy.t === null ? spacing(done, "y") : null;
+        gaps = (gx ? gx.gaps : []).concat(gy ? gy.gaps : []);
+        return { dx: sx ? sx.d : 0, dy: sy ? sy.d : 0 };
+    }
     // Przesuwanie kilku elementów: przyciąga prostokąt całej grupy (g — prostokąt na początku)
     function snapGroup(g, dx, dy) {
-        const xs = [g.x + dx, g.x + dx + g.w / 2, g.x + dx + g.w], ys = [g.y + dy, g.y + dy + g.h / 2, g.y + dy + g.h];
-        const sx = nearest(xs, snapX), sy = nearest(ys, snapY);
-        guidesX = sx ? [sx.t] : [];
-        guidesY = sy ? [sy.t] : [];
-        return { dx: dx + (sx ? sx.d : 0), dy: dy + (sy ? sy.d : 0) };
+        const s = snapRect({ x: g.x + dx, y: g.y + dy, w: g.w, h: g.h });
+        return { dx: dx + s.dx, dy: dy + s.dy };
+    }
+    function endSnap() {
+        guidesX = [];
+        guidesY = [];
+        gaps = [];
     }
     // Zmiana rozmiaru: przesuwana krawędź przyciąga się do linii (tylko bez obrotu)
     function snapResize(g, s, hx, hy, keep, text) {
@@ -238,13 +343,8 @@ Item {
         return g;
     }
     function snapMove(el, x, y) {
-        const b = box(el, x, y);
-        const sx = nearest(b.xs, snapX), sy = nearest(b.ys, snapY);
-        if (sx) x += sx.d;
-        if (sy) y += sy.d;
-        guidesX = sx ? [sx.t] : [];
-        guidesY = sy ? [sy.t] : [];
-        return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+        const s = snapRect(rectOf(box(el, x, y)));
+        return { x: Math.round((x + s.dx) * 10) / 10, y: Math.round((y + s.dy) * 10) / 10 };
     }
 
     // Zmiana rozmiaru uchwytem (hx, hy ∈ −1, 0, 1) w układzie obróconego elementu; przeciwległy róg stoi w miejscu
@@ -291,6 +391,8 @@ Item {
     Flickable {
         id: flick
         anchors.fill: parent
+        anchors.leftMargin: stage.ruler
+        anchors.topMargin: stage.ruler
         contentWidth: Math.max(width, page.width + 96)
         contentHeight: Math.max(height, page.height + 96)
         boundsBehavior: Flickable.StopAtBounds
@@ -483,8 +585,7 @@ Item {
                                 }
                             }
                             onReleased: {
-                                stage.guidesX = [];
-                                stage.guidesY = [];
+                                stage.endSnap();
                                 if (moved) stage.project.commit();
                                 else if (pickOne) stage.select(d.uid);
                             }
@@ -496,6 +597,58 @@ Item {
                         }
                     }
                 }
+            }
+
+            // Własne prowadnice — przeciągnij, żeby przesunąć; poza stronę — usuwa
+            Repeater {
+                model: stage.rulers ? (stage.project.guides.x || []) : []
+                delegate: Rectangle {
+                    id: vg
+                    required property real modelData
+                    required property int index
+                    readonly property bool dragged: stage.dragGuide !== null && stage.dragGuide.axis === "x" && stage.dragGuide.index === index
+                    x: (dragged ? stage.dragGuide.v : modelData) * stage.zoom - 0.5
+                    y: -page.y
+                    width: 1; height: flick.contentHeight
+                    color: "#00A3E0"
+                    MouseArea {
+                        anchors.fill: parent; anchors.leftMargin: -3; anchors.rightMargin: -3
+                        cursorShape: Qt.SplitHCursor
+                        onPressed: { stage.prepareSnap([], true); stage.moveGuide("x", vg.index, vg.modelData); }
+                        onPositionChanged: (e) => { if (pressed) stage.moveGuide("x", vg.index, mapToItem(page, e.x, e.y).x / stage.zoom); }
+                        onReleased: stage.dropGuide()
+                    }
+                }
+            }
+            Repeater {
+                model: stage.rulers ? (stage.project.guides.y || []) : []
+                delegate: Rectangle {
+                    id: hg
+                    required property real modelData
+                    required property int index
+                    readonly property bool dragged: stage.dragGuide !== null && stage.dragGuide.axis === "y" && stage.dragGuide.index === index
+                    y: (dragged ? stage.dragGuide.v : modelData) * stage.zoom - 0.5
+                    x: -page.x
+                    height: 1; width: flick.contentWidth
+                    color: "#00A3E0"
+                    MouseArea {
+                        anchors.fill: parent; anchors.topMargin: -3; anchors.bottomMargin: -3
+                        cursorShape: Qt.SplitVCursor
+                        onPressed: { stage.prepareSnap([], true); stage.moveGuide("y", hg.index, hg.modelData); }
+                        onPositionChanged: (e) => { if (pressed) stage.moveGuide("y", hg.index, mapToItem(page, e.x, e.y).y / stage.zoom); }
+                        onReleased: stage.dropGuide()
+                    }
+                }
+            }
+            // Nowa prowadnica wyciągana z linijki
+            Rectangle {
+                readonly property bool hor: stage.dragGuide !== null && stage.dragGuide.axis === "y"
+                visible: stage.dragGuide !== null && stage.dragGuide.index < 0
+                x: hor ? -page.x : (stage.dragGuide ? stage.dragGuide.v : 0) * stage.zoom - 0.5
+                y: hor ? (stage.dragGuide ? stage.dragGuide.v : 0) * stage.zoom - 0.5 : -page.y
+                width: hor ? flick.contentWidth : 1
+                height: hor ? 1 : flick.contentHeight
+                color: "#00A3E0"
             }
 
             // Ramka zaznaczania
@@ -576,6 +729,38 @@ Item {
                     y: modelData * stage.zoom - 0.5; x: -12
                     height: 1; width: page.width + 24
                     color: "#FF3D9A"
+                }
+            }
+
+            // Równe odstępy — odcinki z odległością
+            Repeater {
+                model: stage.gaps
+                delegate: Item {
+                    id: gp
+                    required property var modelData
+                    readonly property bool hor: modelData.axis === "x"
+                    readonly property real len: (modelData.e - modelData.s) * stage.zoom
+                    x: (hor ? modelData.s : modelData.c) * stage.zoom
+                    y: (hor ? modelData.c : modelData.s) * stage.zoom
+                    Rectangle { width: gp.hor ? gp.len : 1; height: gp.hor ? 1 : gp.len; color: "#FF3D9A" }
+                    Rectangle { x: gp.hor ? 0 : -4; y: gp.hor ? -4 : 0; width: gp.hor ? 1 : 9; height: gp.hor ? 9 : 1; color: "#FF3D9A" }
+                    Rectangle {
+                        x: gp.hor ? gp.len - 1 : -4; y: gp.hor ? -4 : gp.len - 1
+                        width: gp.hor ? 1 : 9; height: gp.hor ? 9 : 1; color: "#FF3D9A"
+                    }
+                    Rectangle {
+                        x: gp.hor ? (gp.len - width) / 2 : 10
+                        y: gp.hor ? 10 : (gp.len - height) / 2
+                        width: gapText.implicitWidth + 8; height: 16; radius: 4
+                        color: "#FF3D9A"
+                        Text {
+                            id: gapText
+                            anchors.centerIn: parent
+                            text: Math.round((gp.modelData.e - gp.modelData.s) * stage.unitsPerPx * 10) / 10
+                            color: "white"
+                            font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; font.features: { "tnum": 1 }
+                        }
+                    }
                 }
             }
 
@@ -724,6 +909,97 @@ Item {
                 }
             }
         }
+    }
+
+    // Linijki: w milimetrach przy projektach do druku, inaczej w pikselach.
+    // Przeciągnięcie z linijki na stronę dodaje prowadnicę; prawy przycisk — menu prowadnic.
+    Repeater {
+        model: stage.rulers ? ["x", "y"] : []
+        delegate: Rectangle {
+            id: rl
+            required property string modelData
+            readonly property bool hor: modelData === "x"
+            x: hor ? stage.ruler : 0
+            y: hor ? 0 : stage.ruler
+            width: hor ? stage.width - stage.ruler : stage.ruler
+            height: hor ? stage.ruler : stage.height - stage.ruler
+            color: Theme.dark ? "#1C1E25" : "#F4F5F8"
+            Rectangle { x: rl.hor ? 0 : parent.width - 1; y: rl.hor ? parent.height - 1 : 0; width: rl.hor ? parent.width : 1; height: rl.hor ? 1 : parent.height; color: Theme.line }
+            Canvas {
+                id: ticks
+                anchors.fill: parent
+                readonly property var key: [stage.zoom, flick.contentX, flick.contentY, page.x, page.y, width, height, Theme.dark, stage.unitsPerPx,
+                                            stage.selection.length > 0 ? JSON.stringify(stage.selection.length > 1 ? stage.group : stage.current) : ""]
+                onKeyChanged: requestPaint()
+                onPaint: {
+                    const ctx = getContext("2d");
+                    ctx.reset();
+                    const len = rl.hor ? width : height;
+                    const origin = (rl.hor ? page.x - flick.contentX : page.y - flick.contentY);      // początek strony w linijce
+                    const ppu = stage.zoom / stage.unitsPerPx;                                         // piksele ekranu na jednostkę
+                    const size = (rl.hor ? stage.project.pageWidth : stage.project.pageHeight) * stage.zoom;
+                    ctx.fillStyle = Theme.dark ? "#262933" : "#FFFFFF";
+                    if (rl.hor) ctx.fillRect(origin, 0, size, height - 1); else ctx.fillRect(0, origin, width - 1, size);
+                    // Zaznaczony element na linijce
+                    const g = stage.selection.length > 1 ? stage.group : stage.current;
+                    if (stage.selection.length > 0 && g.w !== undefined) {
+                        ctx.fillStyle = Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.22);
+                        if (rl.hor) ctx.fillRect(origin + g.x * stage.zoom, 0, g.w * stage.zoom, height - 1);
+                        else ctx.fillRect(0, origin + g.y * stage.zoom, width - 1, g.h * stage.zoom);
+                    }
+                    let step = 1;
+                    for (const s of [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]) { step = s; if (s * ppu >= 46) break; }
+                    const minor = step / (String(step)[0] === "2" ? 4 : 5);
+                    ctx.strokeStyle = Theme.dark ? "#6B7280" : "#9AA0AC";
+                    ctx.fillStyle = Theme.text2;
+                    ctx.font = "9px sans-serif";
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    const first = Math.floor(-origin / ppu / minor) * minor;
+                    for (let v = first; v * ppu + origin < len; v += minor) {
+                        const p = Math.round(origin + v * ppu) + 0.5;
+                        const major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+                        const t = major ? 10 : 4;
+                        if (rl.hor) { ctx.moveTo(p, height - t); ctx.lineTo(p, height); }
+                        else { ctx.moveTo(width - t, p); ctx.lineTo(width, p); }
+                        if (major) {
+                            const label = String(Math.round(v));
+                            if (rl.hor) ctx.fillText(label, p + 3, 9);
+                            else { ctx.save(); ctx.translate(9, p + 3); ctx.rotate(-Math.PI / 2); ctx.fillText(label, -ctx.measureText(label).width - 3, 0); ctx.restore(); }
+                        }
+                    }
+                    ctx.stroke();
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: rl.hor ? Qt.SplitVCursor : Qt.SplitHCursor
+                onPressed: (e) => {
+                    if (e.button === Qt.RightButton) {
+                        stage.clearSelection();
+                        const p = mapToItem(stage, e.x, e.y);
+                        stage.menuRequested(p.x, p.y);
+                        return;
+                    }
+                    stage.prepareSnap([], true);
+                }
+                onPositionChanged: (e) => {
+                    if (!(pressedButtons & Qt.LeftButton)) return;
+                    const p = mapToItem(page, e.x, e.y);
+                    // Z górnej linijki — prowadnica pozioma, z bocznej — pionowa
+                    if (rl.hor) stage.moveGuide("y", -1, p.y / stage.zoom);
+                    else stage.moveGuide("x", -1, p.x / stage.zoom);
+                }
+                onReleased: stage.dropGuide()
+            }
+        }
+    }
+    Rectangle {
+        visible: stage.rulers
+        width: stage.ruler; height: stage.ruler
+        color: Theme.dark ? "#1C1E25" : "#F4F5F8"
+        Text { anchors.centerIn: parent; text: stage.unit; color: Theme.text2; font.family: Theme.font; font.pixelSize: 8 }
     }
 
     MouseArea {

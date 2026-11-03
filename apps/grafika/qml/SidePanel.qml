@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtCore
 import Aster.Ui
 import Aster.Grafika
 
@@ -224,6 +225,45 @@ Item {
         { color: "#FFE29F", color2: "#FF719A", angle: 0, type: "radial" }
     ]
 
+    // Moje style tekstu — zapisane w ustawieniach programu, wspólne dla wszystkich projektów.
+    // Wielkość pamiętana względem krótszego boku strony, żeby pasowała też do innego formatu.
+    Settings { id: mine; category: "Grafika"; property string textStyles: "[]" }
+    readonly property var myStyles: { try { return JSON.parse(mine.textStyles); } catch (e) { return []; } }
+    readonly property var selText: {
+        const id = editor ? editor.sel : "";
+        const el = id !== "" ? project.get(id) : ({});
+        return el.type === "text" ? el : null;
+    }
+    function saveTextStyle() {
+        const el = editor.sel !== "" ? project.get(editor.sel) : null;
+        if (!el || el.type !== "text") return;
+        const st = { type: "text" };
+        for (const k in el) if (editor.styleSkip.indexOf(k) < 0) st[k] = el[k];
+        st.rel = Math.round(el.size / base * 10000) / 10000;
+        delete st.size;
+        st.sample = (el.text || "Tekst").split("\n")[0].trim().substring(0, 28) || "Tekst";
+        const same = JSON.stringify(Object.assign({}, st, { sample: "" }));
+        const list = myStyles.filter(o => JSON.stringify(Object.assign({}, o, { sample: "" })) !== same);
+        mine.textStyles = JSON.stringify([st].concat(list).slice(0, 24));
+        editor.app.toast("Zapisano styl — znajdziesz go w zakładce Tekst w każdym projekcie", "");
+    }
+    function removeTextStyle(i) {
+        const list = myStyles.slice();
+        list.splice(i, 1);
+        mine.textStyles = JSON.stringify(list);
+    }
+    // Kliknięcie stylu: zaznaczone teksty dostają ten wygląd, a bez zaznaczenia — nowy tekst
+    function useTextStyle(st) {
+        const look = Object.assign({}, st, { size: Math.max(4, Math.round(st.rel * base)) });
+        delete look.rel;
+        delete look.sample;
+        if (editor.many.some(id => project.get(id).type === "text")) { editor.applyStyle(look); return; }
+        const el = Object.assign({}, look, { text: st.sample });
+        if (Library.fonts.indexOf(el.font) < 0) el.font = "Geist";
+        el.w = Math.min(project.pageWidth * 0.86, project.naturalWidth(el) + el.size * 0.2);
+        editor.addElement(el);
+    }
+
     function addTextStyle(s) {
         const el = {
             type: "text", text: s.text || s.label.replace(/„|”/g, ""), font: s.font, size: Math.round(base * s.size), weight: s.weight,
@@ -405,6 +445,83 @@ Item {
                     visible: sp.tab === "text"
                     width: parent.width
                     spacing: 8
+                    // Moje style
+                    Item {
+                        width: parent.width; height: 22
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Moje style"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        }
+                    }
+                    Text {
+                        visible: sp.myStyles.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Zaznacz tekst na stronie i zapisz jego wygląd — potem użyjesz go jednym kliknięciem w każdym projekcie."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+                    }
+                    Repeater {
+                        model: sp.myStyles
+                        delegate: HoverButton {
+                            id: my
+                            required property var modelData
+                            required property int index
+                            readonly property real preview: Math.min(24, Math.max(13, (modelData.rel || 0.05) * 290))
+                            width: textCol.width
+                            height: Math.max(46, mylabel.implicitHeight + 20)
+                            radius: 12
+                            baseColor: Theme.fill
+                            onClicked: sp.useTextStyle(modelData)
+                            Rectangle {
+                                visible: !!my.modelData.bg
+                                anchors.centerIn: mylabel
+                                width: Math.min(parent.width - 12, mylabel.contentWidth + 16); height: mylabel.contentHeight + 8
+                                radius: 6
+                                color: my.modelData.bg || "transparent"
+                            }
+                            Text {
+                                id: mylabel
+                                anchors.centerIn: parent
+                                width: parent.width - 56
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                                text: my.modelData.sample
+                                readonly property string c: my.modelData.color || "#16181D"
+                                color: my.modelData.outline || my.modelData.bg ? c : (Theme.dark && c.toLowerCase() < "#555555" ? Theme.text
+                                     : !Theme.dark && c.toLowerCase() > "#e8e8e8" ? "#16181D" : c)
+                                style: my.modelData.outline ? Text.Outline : Text.Normal
+                                styleColor: my.modelData.outlineColor || "transparent"
+                                font.family: Library.fonts.indexOf(my.modelData.font) >= 0 ? my.modelData.font : Theme.font
+                                font.pixelSize: my.preview
+                                font.weight: my.modelData.weight || 400
+                                font.variableAxes: ({ "wght": my.modelData.weight || 400 })
+                                font.italic: !!my.modelData.italic
+                                font.capitalization: my.modelData.caps ? Font.AllUppercase : Font.MixedCase
+                                font.letterSpacing: (my.modelData.spacing || 0) * my.preview
+                            }
+                            HoverButton {
+                                anchors.right: parent.right; anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 26; height: 26; radius: 13
+                                visible: my.hovered || hovered
+                                onClicked: sp.removeTextStyle(my.index)
+                                Icon { anchors.centerIn: parent; d: Icons.close; size: 12; stroke: 2; color: Theme.text2 }
+                            }
+                        }
+                    }
+                    Btn {
+                        width: parent.width
+                        icon: "plus"
+                        text: "Zapisz styl zaznaczonego tekstu"
+                        enabled: sp.selText !== null
+                        onClicked: sp.saveTextStyle()
+                    }
+                    Text {
+                        topPadding: 8
+                        text: "Gotowe style"
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                    }
                     Repeater {
                         model: sp.textStyles
                         delegate: HoverButton {

@@ -22,7 +22,8 @@ Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zd
   "background": { "type": "radial", "color": "#ffffff", "color2": "#dde7ff" },
   "elements": [ … od spodu do wierzchu … ],
   "pages": [ { "background": { … }, "elements": [ … ] }, … ],
-  "page": 0
+  "page": 0,
+  "guides": { "x": [540], "y": [120, 960] }
 }
 ```
 
@@ -30,6 +31,8 @@ Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zd
   `page` — strona otwarta przy zapisie. `background` i `elements` na wierzchu to ta sama strona (zapis jednostronicowy
   i szablony mają tylko je). PDF zawiera wszystkie strony; PNG/JPG — jedną albo każdą do pliku `nazwa-1`, `nazwa-2`…
   Miniatura pliku pokazuje pierwszą stronę.
+- Prowadnice: `guides` (opcjonalne) — własne linie pomocnicze wspólne dla wszystkich stron, w pikselach projektu:
+  `x` — pionowe, `y` — poziome. Widać je i przyciągają tylko przy włączonych linijkach; nie trafiają do eksportu.
 
 - Wymiary w pikselach projektu. `print` (opcjonalne) — rozmiar do druku w mm; PDF ma wtedy dokładnie ten format,
   a bez niego stronę liczy się jak ekran (96 pikseli na cal).
