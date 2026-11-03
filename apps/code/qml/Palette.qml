@@ -18,7 +18,10 @@ Item {
     signal commandChosen(string action)
     signal lineChosen(int line)
     signal branchChosen(string mode, string name, bool remote, bool isNew)
-    property string special: ""          // "", "checkout", "merge", "delete"
+    property string special: ""          // "", "checkout", "merge", "delete", "tasks"
+    property var taskList: []
+    signal taskChosen(var task)
+    function openTasks(list) { taskList = list; openBranches("tasks"); }
     property var symbols: []             // symbole z serwera języka (dla „@” i „#”)
     property bool symbolsLoading: false
     signal symbolChosen(string path, int line, int col)
@@ -75,6 +78,15 @@ Item {
                             .map(c => ({ kind: "command", label: c.label, shortcut: c.shortcut || "", action: c.action, icon: c.icon || "" }));
         } else if (mode === "branches") {
             const q = t.trim().toLowerCase();
+            if (special === "tasks") {
+                // Zadania projektu i ostatnie własne polecenia; wpisany tekst — „Uruchom polecenie”
+                const hay = (x) => (x.label + " " + x.command).toLowerCase();
+                const list = taskList.filter(x => !q || hay(x).indexOf(q) >= 0).map(x => ({ kind: "task", label: x.label, task: x }));
+                if (t.trim() && !taskList.some(x => x.command === t.trim()))
+                    list.push({ kind: "task", label: "Uruchom polecenie: " + t.trim(), task: { label: t.trim(), command: t.trim(), group: "custom", custom: true } });
+                items = list;
+                return;
+            }
             let list = Project.branches().filter(b => !q || b.name.toLowerCase().indexOf(q) >= 0);
             if (special !== "checkout") list = list.filter(b => !b.current && (special === "merge" || !b.remote));
             const out = list.map(b => ({ kind: "branch", label: b.name, branch: b }));
@@ -112,7 +124,8 @@ Item {
         if (!it) return;
         const sp = special;
         close();
-        if (it.kind === "symbol") symbolChosen(it.symbol.path || "", it.symbol.line, it.symbol.col);
+        if (it.kind === "task") taskChosen(it.task);
+        else if (it.kind === "symbol") symbolChosen(it.symbol.path || "", it.symbol.line, it.symbol.col);
         else if (it.kind === "branch") branchChosen(sp, it.branch.name, it.branch.remote, false);
         else if (it.kind === "newBranch") branchChosen(sp, it.name, false, true);
         else if (it.kind === "file") fileChosen(it.path);
@@ -150,7 +163,7 @@ Item {
             border.width: 1.5; border.color: Theme.accent
             Icon {
                 x: 10; anchors.verticalCenter: parent.verticalCenter
-                d: pal.mode === "commands" ? Icons.apps : pal.mode === "line" ? Icons.arrow : pal.mode === "branches" ? Icons.gitBranch : Icons.search
+                d: pal.mode === "commands" ? Icons.apps : pal.mode === "line" ? Icons.arrow : pal.mode === "branches" ? (pal.special === "tasks" ? Icons.play : Icons.gitBranch) : Icons.search
                 size: 15; color: Theme.text2
             }
             TextInput {
@@ -172,7 +185,8 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !field.text
-                    text: pal.special === "checkout" ? "Wybierz gałąź albo wpisz nazwę nowej"
+                    text: pal.special === "tasks" ? "Wybierz zadanie albo wpisz polecenie"
+                        : pal.special === "checkout" ? "Wybierz gałąź albo wpisz nazwę nowej"
                         : pal.special === "merge" ? "Którą gałąź połączyć z bieżącą?"
                         : pal.special === "delete" ? "Którą gałąź usunąć?"
                         : "Szukaj pliku po nazwie (> polecenia, : wiersz)"
@@ -188,6 +202,7 @@ Item {
                                                                  || field.text.length > (pal.mode === "commands" ? 1 : 0)))
             text: pal.mode === "line" ? (parseInt(field.text.slice(1)) > 0 ? "Enter — przejdź do wiersza " + parseInt(field.text.slice(1)) : "Wpisz numer wiersza")
                                       : pal.mode === "commands" ? "Brak takiego polecenia"
+                                      : pal.special === "tasks" ? "Nie znaleziono zadań — wpisz polecenie, np. make"
                                       : pal.mode === "branches" ? "Brak innych gałęzi"
                                       : pal.mode === "symbols" || pal.mode === "workspace" ? (pal.symbolsLoading ? "Pytam serwer języka…"
                                           : pal.symbolsNote ? pal.symbolsNote
@@ -226,6 +241,13 @@ Item {
                     Text { anchors.centerIn: parent; text: parent.ki[0]; color: parent.ki[1]; font.family: "JetBrains Mono"; font.pixelSize: 11; font.weight: Font.Bold }
                 }
                 Icon {
+                    visible: row.modelData.kind === "task"
+                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                    d: row.modelData.kind !== "task" ? "" : row.modelData.task.group === "build" ? Icons.bolt : row.modelData.task.group === "test" ? Icons.check
+                     : row.modelData.task.group === "custom" || row.modelData.task.recent ? Icons.prompt : Icons.play
+                    size: 15; color: Theme.text2
+                }
+                Icon {
                     visible: row.modelData.kind === "branch" || row.modelData.kind === "newBranch"
                     x: 10; anchors.verticalCenter: parent.verticalCenter
                     d: row.modelData.kind === "newBranch" ? Icons.plus : row.modelData.kind === "branch" && row.modelData.branch.remote ? Icons.globe : Icons.gitBranch
@@ -253,9 +275,10 @@ Item {
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: row.modelData.kind === "file" || row.modelData.kind === "branch" || row.modelData.kind === "symbol"
+                        visible: row.modelData.kind === "file" || row.modelData.kind === "branch" || row.modelData.kind === "symbol" || row.modelData.kind === "task"
                         width: Math.max(0, parent.width - nameText.width - 8); elide: row.modelData.kind === "file" ? Text.ElideLeft : Text.ElideRight
-                        text: row.modelData.kind === "branch" ? (row.modelData.branch.subject || "")
+                        text: row.modelData.kind === "task" ? (row.modelData.task.label !== row.modelData.task.command ? row.modelData.task.command : "")
+                            : row.modelData.kind === "branch" ? (row.modelData.branch.subject || "")
                             : row.modelData.kind === "symbol" ? (pal.mode === "workspace" ? (row.modelData.symbol.container ? row.modelData.symbol.container + " · " : "") + (row.modelData.symbol.rel || "")
                                                                                           : row.modelData.symbol.detail || "")
                             : (row.modelData.dir || "")
@@ -268,6 +291,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.modelData.kind === "command" ? row.modelData.shortcut
                         : row.modelData.kind === "branch" ? (row.modelData.branch.current ? "bieżąca" : row.modelData.branch.remote ? "zdalna" : "")
+                        : row.modelData.kind === "task" ? (row.modelData.task.recent ? "ostatnio" : { build: "budowanie", run: "uruchom", test: "testy", other: row.modelData.task.source || "", custom: "" }[row.modelData.task.group] || "")
                         : row.modelData.kind === "symbol" ? "wiersz " + (row.modelData.symbol.line + 1)
                         : (row.modelData.opened ? "otwarty" : "")
                     color: Theme.text2; font.family: Theme.font; font.pixelSize: 12

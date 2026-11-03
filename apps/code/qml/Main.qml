@@ -45,6 +45,7 @@ Window {
         property bool finalNewline: false
         property bool autoFetch: true
         property bool lsp: true
+        property string recentTasks: "{}"        // folder projektu → ostatnie polecenia (JSON)
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
 
@@ -532,6 +533,46 @@ Window {
         pin(i);
         searchView.run();
     }
+    // ——— Zadania (Ctrl+Shift+B) ———
+    function recentTasksFor() {
+        try { return (JSON.parse(prefs.recentTasks)[Project.root] || []); } catch (e) { return []; }
+    }
+    function taskList() {
+        const recent = recentTasksFor().map(t => Object.assign({}, t, { recent: true }));
+        const found = Tasks.detect(Project.root).filter(t => !recent.some(r => r.command === t.command));
+        return recent.concat(found);
+    }
+    function showTasks() { if (hasProject) palette.openTasks(taskList()); }
+    function runTask(t) {
+        saveAll();
+        Tasks.run(t.label, t.command, t.cwd || Project.root);
+        // Ostatnie 6 poleceń na projekt — na górze listy
+        let all = {};
+        try { all = JSON.parse(prefs.recentTasks); } catch (e) {}
+        const list = (all[Project.root] || []).filter(r => r.command !== t.command);
+        list.unshift({ label: t.label, command: t.command, group: t.group === "custom" ? "custom" : t.group });
+        all[Project.root] = list.slice(0, 6);
+        prefs.recentTasks = JSON.stringify(all);
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    // Ctrl+Shift+B: ostatnio uruchomione zadanie budowania od razu, inaczej lista
+    function buildTask() {
+        if (!hasProject) return;
+        const r = recentTasksFor().find(t => t.group === "build");
+        const found = Tasks.detect(Project.root).filter(t => t.group === "build");
+        if (r) runTask(r);
+        else if (found.length === 1) runTask(found[0]);
+        else showTasks();
+    }
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (win.terminalShown && terminalPanel.tab === 3 && win.active) return;
+            win.toast(code === 0 ? "„" + title + "” — gotowe" : code === -2 ? "„" + title + "” — przerwano"
+                     : "„" + title + "” — błąd" + (Tasks.errorCount ? " (" + Tasks.errorCount + ")" : ""));
+        }
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -731,6 +772,10 @@ Window {
         { label: "Duplikuj wiersz", shortcut: "Shift+Alt+↓", action: "duplicate", icon: "copy" },
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
+        { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Zbuduj", shortcut: "Ctrl+Shift+B", action: "build", icon: "bolt" },
+        { label: "Uruchom ponownie ostatnie zadanie", shortcut: "", action: "rerun", icon: "reload" },
+        { label: "Zatrzymaj zadanie", shortcut: "", action: "stopTask", icon: "stop" },
         { label: "Zwiń blok", shortcut: "Ctrl+Shift+[", action: "fold", icon: "chevronRight" },
         { label: "Rozwiń blok", shortcut: "Ctrl+Shift+]", action: "unfold", icon: "chevronDown" },
         { label: "Zwiń wszystko", shortcut: "Ctrl+K Ctrl+0", action: "foldAll", icon: "chevronRight" },
@@ -855,6 +900,10 @@ Window {
         else if (a === "tab:move") moveToOtherGroup(menu.tab);
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
+        else if (a === "tasks") showTasks();
+        else if (a === "build") buildTask();
+        else if (a === "rerun") { saveAll(); Tasks.rerun(); terminalShown = true; terminalPanel.tab = 3; }
+        else if (a === "stopTask") Tasks.stop();
     }
     function runTree(a, path) {
         if (a === "newFile") newFile(path);
@@ -963,6 +1012,8 @@ Window {
         else if (what === "save") save(current);
         else if (what === "split") splitEditor();
         else if (what === "settings") settingsView.open();
+        else if (what === "tasks") showTasks();
+        else if (what.startsWith("runcmd:")) runTask({ label: arg, command: arg, group: "custom" });
         else if (what.startsWith("settingsSearch:")) { settingsView.open(); Qt.callLater(() => settingsView.searchFor(arg)); }
         else if (what.startsWith("pref:")) { const kv = arg.split("="); prefs[kv[0]] = kv[1] === "true" ? true : kv[1] === "false" ? false : kv[1]; }
         else if (what.startsWith("focus:")) focusGroupN(Number(arg));
@@ -1004,6 +1055,7 @@ Window {
     Shortcut { sequence: "Ctrl+Alt+S"; onActivated: win.saveAll() }
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
+    Shortcut { sequence: "Ctrl+Shift+B"; enabled: win.hasProject; onActivated: win.buildTask() }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsView.shown ? settingsView.close() : settingsView.open() }
     Shortcut { sequence: "Ctrl+1"; enabled: win.split; onActivated: win.focusGroupN(0) }
     Shortcut { sequence: "Ctrl+2"; enabled: win.split; onActivated: win.focusGroupN(1) }
@@ -1408,6 +1460,7 @@ Window {
                 onMaximizeRequested: win.terminalMax = !win.terminalMax
                 onOpenProblem: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
+                onOpenLocation: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5
@@ -1442,8 +1495,14 @@ Window {
                         onClicked: win.showView(2)
                     }
                     StatusBtn {
+                        visible: Tasks.running || (!!Tasks.title && Tasks.exitCode !== 0 && Tasks.exitCode !== -1)
+                        icon: Tasks.running ? "reload" : "close"
+                        text: Tasks.title + (Tasks.running ? "…" : "")
+                        onClicked: { win.terminalShown = true; terminalPanel.tab = 3; }
+                    }
+                    StatusBtn {
                         icon: "alertCircle"
-                        text: Lsp.errorCount + "   ⚠ " + Lsp.warningCount
+                        text: (Lsp.errorCount + Tasks.errorCount) + "   ⚠ " + (Lsp.warningCount + Tasks.warningCount)
                         onClicked: win.showProblems()
                     }
                     StatusBtn {
@@ -1507,6 +1566,7 @@ Window {
                 onCommandChosen: (action) => win.run(action)
                 onLineChosen: (line) => { if (win.cur) win.cur.goToLine(line); }
                 onBranchChosen: (mode, name, remote, isNew) => win.branchAction(mode, name, remote, isNew)
+                onTaskChosen: (task) => win.runTask(task)
                 onSymbolQuery: (mode, q) => win.symbolQuery(mode, q)
                 onSymbolChosen: (path, line, col) => win.openFile(path || win.curPath, { line: line, col: col, length: 0 })
                 onClosed: if (win.cur) win.cur.focusEditor()

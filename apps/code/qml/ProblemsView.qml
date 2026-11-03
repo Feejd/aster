@@ -13,7 +13,7 @@ Item {
 
     readonly property var rows: {
         const out = [];
-        const res = Lsp.problems;
+        const res = Lsp.problems.concat(Tasks.problems);
         for (let i = 0; i < res.length; ++i) {
             const f = res[i];
             const closed = !!collapsed[f.path];

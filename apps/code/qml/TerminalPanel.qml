@@ -4,7 +4,7 @@ import Aster.Ui
 import Aster.Code
 
 // Panel na dole okna: terminal (Ctrl+`) — powłoka w folderze projektu, ten sam silnik co Terminal Aster —
-// i problemy z serwerów języków (Ctrl+Shift+M).
+// problemy z serwerów języków i kompilatora (Ctrl+Shift+M), odwołania i wyjście zadania (Ctrl+Shift+B).
 // Po wyjściu z powłoki (exit) panel się chowa; „+” uruchamia nową powłokę.
 Item {
     id: tp
@@ -12,11 +12,12 @@ Item {
     property bool maximized: false
     property bool started: false          // powłoka startuje dopiero przy pierwszym pokazaniu panelu
     property bool reloading: false
-    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania
+    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania, 3 zadanie
     property var refGroups: []
     property string refTitle
     signal openProblem(string path, int line, int col)
     signal openReference(string path, int line, int col, int length)
+    signal openLocation(string path, int line, int col)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -47,8 +48,13 @@ Item {
             PanelTab { label: "TERMINAL"; icon: "prompt"; on: tp.tab === 0; onClicked: { tp.tab = 0; Qt.callLater(tp.focusTerminal); } }
             PanelTab {
                 label: "PROBLEMY"; icon: "alertCircle"; on: tp.tab === 1
-                badge: Lsp.errorCount + Lsp.warningCount
+                badge: Lsp.errorCount + Lsp.warningCount + Tasks.errorCount + Tasks.warningCount
                 onClicked: tp.tab = 1
+            }
+            PanelTab {
+                visible: Tasks.lines.length > 0 || Tasks.running
+                label: "ZADANIE"; icon: Tasks.running ? "reload" : "play"; on: tp.tab === 3
+                onClicked: tp.tab = 3
             }
             PanelTab {
                 visible: tp.refGroups.length > 0
@@ -67,11 +73,28 @@ Item {
             anchors.right: parent.right; anchors.rightMargin: 10
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
+            Text {
+                visible: tp.tab === 3 && !!Tasks.title
+                anchors.verticalCenter: parent.verticalCenter
+                rightPadding: 6
+                text: Tasks.title
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+            PanelBtn { visible: tp.tab === 3 && Tasks.running; icon: "stop"; onClicked: Tasks.stop() }
+            PanelBtn { visible: tp.tab === 3 && !Tasks.running && !!Tasks.title; icon: "reload"; onClicked: Tasks.rerun() }
+            PanelBtn { visible: tp.tab === 3 && !Tasks.running; icon: "trash"; onClicked: Tasks.clear() }
             PanelBtn { visible: tp.tab === 0; icon: "plus"; onClicked: tp.restart() }
             PanelBtn { visible: tp.tab === 0; icon: "trash"; onClicked: if (tp.term) tp.term.clear() }
             PanelBtn { icon: tp.maximized ? "exitFullscreen" : "fullscreen"; onClicked: tp.maximizeRequested() }
             PanelBtn { icon: "close"; onClicked: tp.hideRequested() }
         }
+    }
+
+    TaskOutput {
+        visible: tp.tab === 3
+        anchors.fill: parent
+        anchors.topMargin: header.height + 1
+        onOpenLocation: (path, line, col) => tp.openLocation(path, line, col)
     }
 
     ReferencesView {

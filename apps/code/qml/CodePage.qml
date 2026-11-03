@@ -31,7 +31,8 @@ Item {
     property var bracket: []
     property var serverInfo: ({})
     readonly property bool lspOn: !!serverInfo.id && !serverInfo.failed && (serverInfo.running || serverInfo.available)
-    readonly property var diagnostics: { Lsp.revision; return path ? Lsp.diagnostics(path) : []; }
+    // Z serwera języka i z ostatniego zadania (błędy kompilatora)
+    readonly property var diagnostics: { Lsp.revision; Tasks.errorCount; Tasks.warningCount; return path ? Lsp.diagnostics(path).concat(Tasks.diagnostics(path)) : []; }
     property string lspPath: ""
     property int compSeq: -1
     property int hoverSeq: -1
