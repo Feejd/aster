@@ -185,8 +185,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         presety w grupach (Wokal pop, Wokal trap, Rap, Chórki; Gitara, Bas, Perkusja, 808; Radio, Lo-fi, Daleko)
   - [x] mastering sumy: korektor, kompresor „sklejający”, szerokość stereo, dociśnięcie do ogranicznika z wyprzedzeniem;
         presety Trap / hip-hop, Pop, Ciepły, Głośny, Lo-fi
-  - [ ] Dalej: korekcja wysokości głosu (autotune: wykrywanie YIN + przesunięcie PSOLA, tonacja z 808), de-esser,
-        bramka szumów, wtyczki LV2 (lilv)
+  - [x] autotune (`src/tune.h`): wykrywanie wysokości YIN (sygnał zmniejszony do 12 kHz, co ~5 ms, 70–1000 Hz),
+        dociąganie do najbliższej nuty tonacji projektu (moll/dur, „Jak w 808”), szybkość od naturalnej do „efektu
+        trap”, przesuwanie wysokości linią opóźniającą z dwoma odczytami co okres głosu; w presetach Wokal trap (90%),
+        Wokal pop, Chórki. Test: A4 −40 c → ±3 c, 302 Hz → D4, ześlizg przyciągnięty do nut a-moll; na żywo nadąża
+  - [ ] Dalej: autotune dokładniejszy przy dużych przesunięciach (PSOLA z zachowaniem formantów), wybór nut ręcznie
+        (edytor wysokości jak w programach do korekcji), de-esser, bramka szumów, wtyczki LV2 (lilv)
   - [ ] Dalej: więcej instrumentów (klawisze/pad/lead z tym samym syntezatorem, wzory akordów), piano roll dla dłuższych
         fraz, biblioteka pętli generowanych w programie, „mastering” porównujący z/bez (przełącznik A/B)
   - [ ] Dalej (społecznościowo, jak BandLab): udostępnianie kawałka linkiem, wspólne projekty, remiks cudzego projektu —

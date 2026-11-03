@@ -39,6 +39,10 @@ class Studio : public QObject
     Q_PROPERTY(QVariantList masteringPresets READ masteringPresets CONSTANT)
     Q_PROPERTY(QString echoTime READ echoTime WRITE setEchoTime NOTIFY settingsChanged)   // 1/4 | 1/8 | 3/16
     Q_PROPERTY(QVariantList kits READ kits CONSTANT)
+    // Tonacja piosenki (dla autotune): tonika 0 = C … 11 = H, molowa albo durowa
+    Q_PROPERTY(int keyRoot READ keyRoot WRITE setKeyRoot NOTIFY settingsChanged)
+    Q_PROPERTY(bool keyMinor READ keyMinor WRITE setKeyMinor NOTIFY settingsChanged)
+    Q_PROPERTY(QString keyName READ keyName NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList genres READ genres CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
@@ -104,6 +108,11 @@ public:
     QString echoTime() const { return m_echoTime; }
     void setEchoTime(const QString &t);
     QVariantList kits() const;
+    int keyRoot() const { return m_keyRoot; }
+    void setKeyRoot(int r);
+    bool keyMinor() const { return m_keyMinor; }
+    void setKeyMinor(bool m);
+    QString keyName() const;
     QVariantList genres() const;
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
@@ -170,7 +179,8 @@ public:
     Q_INVOKABLE QVariantMap genrePattern(const QString &kind, const QString &genre) const;
     Q_INVOKABLE QString noteName(int root, int degree) const;     // „Fis1”
     Q_INVOKABLE void setMastering(const QString &key, double value);
-    Q_INVOKABLE void applyMastering(const QString &preset);               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
+    Q_INVOKABLE void applyMastering(const QString &preset);
+    Q_INVOKABLE bool keyFrom808();                              // tonacja jak w pierwszej ścieżce 808               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
 
     // Klipy (id)
     Q_INVOKABLE void moveClip(int id, int track, double start);
@@ -250,7 +260,7 @@ private:
         bool mute = false, solo = false, armed = false;
         int input = 0;
         // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
-        double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0;
+        double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0, tune = 0;
         bool lowCut = false;
         QString preset;
         // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
@@ -300,6 +310,8 @@ private:
     double m_reverbSize = 0.5, m_clickVolume = 0.7;
     Mastering m_mastering;
     QString m_echoTime = QStringLiteral("3/16");
+    int m_keyRoot = 9;               // a-moll — dobra domyślna dla głosu
+    bool m_keyMinor = true;
     bool m_cycle = false;
     double m_cycleStart = 0, m_cycleEnd = 0;
     double m_latencyMs = 0;

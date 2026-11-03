@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "dsp.h"
+#include "tune.h"
 
 #include <QList>
 #include <QMutex>
@@ -46,6 +47,7 @@ struct TrackRT
     float send = 0;                       // ile do pogłosu (po suwaku głośności)
     float echo = 0;                       // ile do echa
     float drive = 0;                      // przester / ciepło (0 = brak)
+    TuneParams tune;                      // autotune
 };
 
 struct Snapshot
@@ -70,6 +72,7 @@ public:
     static constexpr int MaxTracks = 64;
     using Meters = std::atomic<float>[MaxTracks + 1][2];     // [ścieżka][kanał], ostatnia — suma
 
+    Renderer() : m_tune(MaxTracks) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate);
     // Pułap ogranicznika sumy (liniowo). Dla MP3/OGG niżej — koder dokłada własne szczyty.
@@ -81,6 +84,7 @@ private:
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];
+    std::vector<PitchCorrector> m_tune;   // osobny stan autotune dla każdej ścieżki
     Reverb m_reverb;
     int m_reverbRate = 0;
     float m_rl[MaxBlock], m_rr[MaxBlock], m_el[MaxBlock], m_er[MaxBlock];

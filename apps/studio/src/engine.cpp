@@ -78,8 +78,10 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             if (!any)
                 continue;
 
-            // Efekty ścieżki: korektor → kompresor → głośność i panorama → wysyłka do pogłosu
+            // Efekty ścieżki: autotune → korektor → kompresor → głośność i panorama → wysyłka do pogłosu
             if (ti < size_t(MaxTracks)) {
+                if (t.tune.on)
+                    m_tune[ti].process(m_tl, m_tr, n, t.tune, rate);
                 for (int k = 0; k < 4; ++k) {
                     if (t.eq[k].flat())
                         continue;

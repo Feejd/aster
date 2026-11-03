@@ -98,6 +98,8 @@ Window {
         const clips = (i) => Studio.tracks[i] ? Studio.tracks[i].clips : [];
         if (what === "new") Studio.newProject("Pierwsza piosenka", 96, 4);
         else if (what.startsWith("newp:")) Studio.newProject(what.substring(5), 96, 4);
+        else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
+        else if (what.startsWith("import:")) { const a = what.split(":"); Studio.importFiles([a[2]], Number(a[1]), 0); }
         else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
         else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));
         else if (what === "demo") {

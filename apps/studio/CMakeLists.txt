@@ -35,6 +35,7 @@ qt_add_qml_module(aster-studio
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
+        src/tune.h
         src/beatsynth.cpp
         src/beatsynth.h
         src/engine.cpp

@@ -104,6 +104,16 @@ Item {
                     onToggled: { Studio.remember(); Studio.setTrackFx(insp.ti, "lowCut", insp.mx.lowCut ? 0 : 1); }
                 }
 
+                Caption { text: "AUTOTUNE"; topPadding: 6 }
+                FxSlider {
+                    label: "Korekcja wysokości"
+                    hint: "Dociąga głos do tonacji " + Studio.keyName
+                    from: 0; to: 1
+                    value: insp.mx.tune || 0
+                    shown: value < 0.01 ? "wył." : value < 0.4 ? "naturalnie" : value < 0.75 ? "wyraźnie" : "efekt trap"
+                    onMoved: (v) => Studio.setTrackFx(insp.ti, "tune", v)
+                }
+
                 Caption { text: "DYNAMIKA I PRZESTRZEŃ"; topPadding: 6 }
                 FxSlider { label: "Kompresja"; hint: "Wyrównuje ciche i głośne fragmenty"; from: 0; to: 1; value: insp.mx.comp || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "comp", v) }
                 FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "reverb", v) }
@@ -191,6 +201,33 @@ Item {
 
             // ——— Projekt ———
             Caption { text: "PROJEKT" }
+            Item {
+                width: col.width; height: 34
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "Tonacja"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                Row {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    spacing: 4
+                    Pill { height: 28; icon: "minus"; onClicked: { Studio.remember(); Studio.keyRoot = (Studio.keyRoot + 11) % 12; } }
+                    Text { anchors.verticalCenter: parent.verticalCenter; width: 70; horizontalAlignment: Text.AlignHCenter; text: Studio.keyName; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Pill { height: 28; icon: "plus"; onClicked: { Studio.remember(); Studio.keyRoot = (Studio.keyRoot + 1) % 12; } }
+                }
+            }
+            Item {
+                width: col.width; height: 34
+                Segmented {
+                    anchors.verticalCenter: parent.verticalCenter
+                    model: [{ label: "moll", value: true }, { label: "dur", value: false }]
+                    value: Studio.keyMinor
+                    onPicked: (v) => { Studio.remember(); Studio.keyMinor = v; }
+                }
+                Pill {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    height: 30; text: "Jak w 808"; icon: "music"
+                    visible: Studio.tracks.some(t => t.kind === "bass")
+                    tip: "Tonacja autotune taka jak basu 808"
+                    onClicked: { Studio.remember(); Studio.keyFrom808(); }
+                }
+            }
             Item {
                 width: col.width; height: 34
                 Text { anchors.verticalCenter: parent.verticalCenter; text: "Echo co"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
