@@ -30,6 +30,8 @@ qreal textHeight(const QVariantMap &el);
 // Szerokość najdłuższego wiersza bez łamania (do wstawiania nowego tekstu)
 qreal textNaturalWidth(const QVariantMap &el);
 
+// Ile element wystaje poza swoje pole (miękki cień) — tyle zapasu potrzebuje podgląd
+qreal bleed(const QVariantMap &el);
 // Element w jego własnym układzie: prostokąt (0, 0, w, h), bez obrotu i przezroczystości
 void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images);
 // Tło strony: { type: "color" | "gradient" | "radial" | "image", color, color2, angle, src }

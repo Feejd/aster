@@ -15,11 +15,14 @@ class ArtView : public QQuickPaintedItem
     QML_ELEMENT
     Q_PROPERTY(QVariantMap element READ element WRITE setElement NOTIFY elementChanged)
     Q_PROPERTY(Project *project READ project WRITE setProject NOTIFY projectChanged)
+    // Zapas wokół elementu (w jednostkach strony) na cień — QML powiększa widok o tyle z każdej strony
+    Q_PROPERTY(qreal bleed READ bleed NOTIFY elementChanged)
 
 public:
     explicit ArtView(QQuickItem *parent = nullptr);
 
     QVariantMap element() const { return m_element; }
+    qreal bleed() const;
     void setElement(const QVariantMap &element);
     Project *project() const { return m_project; }
     void setProject(Project *project);

@@ -2,6 +2,7 @@
 
 #include <QCache>
 #include <QGlyphRun>
+#include <QJsonDocument>
 #include <QLinearGradient>
 #include <QMutex>
 #include <QPainter>
@@ -59,6 +60,12 @@ Qt::Alignment textAlign(const QVariantMap &el)
     return Qt::AlignLeft;
 }
 
+// Tekst po łuku ma jeden wiersz
+QString curvedText(const QVariantMap &el)
+{
+    return el.value(QStringLiteral("text")).toString().simplified();
+}
+
 QString layoutText(const QVariantMap &el)
 {
     QString t = el.value(QStringLiteral("text")).toString();
@@ -90,28 +97,107 @@ qreal layout(QTextLayout &tl, const QVariantMap &el, qreal width)
     return qMax(y, lineH);
 }
 
+QPainterPath glyphPath(const QTextLayout &tl)
+{
+    QPainterPath path;
+    for (const QGlyphRun &run : tl.glyphRuns()) {
+        const QRawFont font = run.rawFont();
+        const QList<quint32> glyphs = run.glyphIndexes();
+        const QList<QPointF> pos = run.positions();
+        for (int i = 0; i < glyphs.size(); ++i)
+            path.addPath(font.pathForGlyph(glyphs.at(i)).translated(pos.at(i)));
+    }
+    return path;
+}
+
+// Tekst po łuku: każda litera obrócona wzdłuż okręgu. curve > 0 — łuk w górę, < 0 — w dół (−1..1 = do pół okręgu)
+void paintCurvedText(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const qreal curve = qBound(-1.0, num(el, "curve", 0), 1.0);
+    const qreal size = qMax(1.0, num(el, "size", 48));
+    QTextLayout tl(curvedText(el), textFont(el));
+    const qreal lineH = layout(tl, el, 0);
+    if (tl.lineCount() == 0)
+        return;
+    const QTextLine line = tl.lineAt(0);
+    const qreal len = line.naturalTextWidth();
+    const qreal angle = qAbs(curve) * M_PI;
+    const qreal r = len / angle;
+    const qreal ascent = line.ascent() + (lineH - line.height()) / 2;
+    const bool up = curve > 0;
+    // Środek okręgu: pod tekstem (łuk w górę) albo nad nim (w dół); środkowa litera na osi elementu
+    const qreal baseMid = up ? ascent : h - (lineH - ascent);
+    const QPointF c(w / 2, up ? baseMid + r : baseMid - r);
+    QPainterPath out;
+    for (const QGlyphRun &run : tl.glyphRuns()) {
+        const QRawFont font = run.rawFont();
+        const QList<quint32> glyphs = run.glyphIndexes();
+        const QList<QPointF> pos = run.positions();
+        const QList<QPointF> adv = font.advancesForGlyphIndexes(glyphs);
+        for (int i = 0; i < glyphs.size(); ++i) {
+            const qreal gw = adv.at(i).x();
+            const qreal s = pos.at(i).x() + gw / 2 - len / 2;          // odległość środka litery od środka napisu
+            const qreal t = s / r;
+            QTransform tr;
+            if (up) {
+                tr.translate(c.x() + r * qSin(t), c.y() - r * qCos(t));
+                tr.rotateRadians(t);
+            } else {
+                tr.translate(c.x() + r * qSin(t), c.y() + r * qCos(t));
+                tr.rotateRadians(-t);
+            }
+            out.addPath(tr.map(font.pathForGlyph(glyphs.at(i)).translated(-gw / 2, 0)));
+        }
+    }
+    p->setRenderHint(QPainter::Antialiasing);
+    const qreal outline = num(el, "outline", 0) * size;
+    if (outline > 0) {
+        QPen pen(color(el, "outlineColor", Qt::black), outline * 2);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p->strokePath(out, pen);
+    }
+    p->fillPath(out, color(el, "color", Qt::black));
+}
+
 void paintText(QPainter *p, const QVariantMap &el)
 {
+    if (num(el, "curve", 0) != 0) {
+        paintCurvedText(p, el);
+        return;
+    }
     const qreal w = num(el, "w", 100);
     QTextLayout tl(layoutText(el), textFont(el));
     layout(tl, el, w);
     const qreal size = qMax(1.0, num(el, "size", 48));
 
-    if (el.value(QStringLiteral("shadow")).toBool()) {
+    // Tło pod każdym wierszem (jak zakreślenie w postach) — `bgPadding` i `bgRadius` w wielkościach czcionki
+    const QColor bg = color(el, "bg");
+    if (bg.alpha() > 0) {
+        const qreal pad = num(el, "bgPadding", 0.25) * size, radius = num(el, "bgRadius", 0.2) * size;
+        QPainterPath boxes;
+        boxes.setFillRule(Qt::WindingFill);
+        for (int i = 0; i < tl.lineCount(); ++i) {
+            const QTextLine line = tl.lineAt(i);
+            if (line.naturalTextWidth() <= 0)
+                continue;
+            const QRectF r = line.naturalTextRect().adjusted(-pad, -pad * 0.5, pad, pad * 0.5);
+            boxes.addRoundedRect(r, radius, radius);
+        }
+        p->setPen(Qt::NoPen);
+        p->setBrush(bg);
+        p->drawPath(boxes.simplified());
+    }
+
+    // Stary twardy cień tekstu (bez rozmycia); miękki cień rysuje paintElement
+    if (el.value(QStringLiteral("shadow")).toBool() && !el.contains(QStringLiteral("shadowBlur"))) {
         p->setPen(color(el, "shadowColor", QColor(0, 0, 0, 90)));
         tl.draw(p, QPointF(size * 0.04, size * 0.06));
     }
     const qreal outline = num(el, "outline", 0) * size;
     if (outline > 0) {
         // Obrys z kształtów liter, pod wypełnieniem — gruby obrys nie zjada liter od środka
-        QPainterPath path;
-        for (const QGlyphRun &run : tl.glyphRuns()) {
-            const QRawFont font = run.rawFont();
-            const QList<quint32> glyphs = run.glyphIndexes();
-            const QList<QPointF> pos = run.positions();
-            for (int i = 0; i < glyphs.size(); ++i)
-                path.addPath(font.pathForGlyph(glyphs.at(i)).translated(pos.at(i)));
-        }
+        const QPainterPath path = glyphPath(tl);
         QPen pen(color(el, "outlineColor", Qt::black), outline * 2);
         pen.setJoinStyle(Qt::RoundJoin);
         pen.setCapStyle(Qt::RoundCap);
@@ -208,6 +294,62 @@ QPainterPath heartPath(const QRectF &r)
     path.cubicTo(x + w * 0.65, y + h * 0.78, x + w * 1.04, y + h * 0.6, x + w * 0.98, y + h * 0.3);
     path.cubicTo(x + w * 0.92, y - h * 0.02, x + w * 0.5, y + h * 0.05, x + w / 2, y + h * 0.28);
     path.closeSubpath();
+    return path;
+}
+
+// Kształty zdjęć (i kształtów): sześciokąt, łuk (okno), kropla, liść, „plama”
+QPainterPath maskPath(const QString &mask, const QRectF &r)
+{
+    QPainterPath path;
+    const qreal x = r.x(), y = r.y(), w = r.width(), h = r.height();
+    if (mask == QLatin1String("star")) {
+        path = starPath(r, 5, 0.45);
+    } else if (mask == QLatin1String("heart")) {
+        path = heartPath(r);
+    } else if (mask == QLatin1String("triangle")) {
+        path.moveTo(x + w / 2, y);
+        path.lineTo(x + w, y + h);
+        path.lineTo(x, y + h);
+        path.closeSubpath();
+    } else if (mask == QLatin1String("hexagon")) {
+        for (int i = 0; i < 6; ++i) {
+            const qreal a = M_PI / 6 + i * M_PI / 3;
+            const QPointF pt(x + w / 2 + qCos(a) * w / 2, y + h / 2 + qSin(a) * h / 2);
+            if (i == 0)
+                path.moveTo(pt);
+            else
+                path.lineTo(pt);
+        }
+        path.closeSubpath();
+    } else if (mask == QLatin1String("arch")) {
+        const qreal k = qMin(w / 2, h);
+        path.moveTo(x, y + h);
+        path.lineTo(x, y + k);
+        path.arcTo(QRectF(x, y, w, 2 * k), 180, -180);
+        path.lineTo(x + w, y + h);
+        path.closeSubpath();
+    } else if (mask == QLatin1String("leaf")) {
+        const qreal k = qMin(w, h) * 0.5;
+        path.moveTo(x + k, y);
+        path.lineTo(x + w, y);
+        path.lineTo(x + w, y + h - k);
+        path.quadTo(x + w, y + h, x + w - k, y + h);
+        path.lineTo(x, y + h);
+        path.lineTo(x, y + k);
+        path.quadTo(x, y, x + k, y);
+        path.closeSubpath();
+    } else if (mask == QLatin1String("blob")) {
+        // Miękka, nieregularna plama — stałe punkty, żeby kształt był zawsze ten sam
+        const qreal pts[][2] = {{0.50, 0.02}, {0.86, 0.12}, {0.98, 0.50}, {0.84, 0.88}, {0.46, 0.98}, {0.10, 0.82}, {0.03, 0.40}, {0.20, 0.10}};
+        const int n = 8;
+        auto at = [&](int i) { return QPointF(x + pts[(i + n) % n][0] * w, y + pts[(i + n) % n][1] * h); };
+        path.moveTo((at(0) + at(1)) / 2);
+        for (int i = 1; i <= n; ++i)
+            path.quadTo(at(i), (at(i) + at(i + 1)) / 2);
+        path.closeSubpath();
+    } else {
+        path.addRect(r);
+    }
     return path;
 }
 
@@ -359,8 +501,11 @@ void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
     const qreal w = num(el, "w", 100), h = num(el, "h", 100);
     const QRectF r(0, 0, w, h);
     QPainterPath clip;
-    if (el.value(QStringLiteral("mask")).toString() == QLatin1String("ellipse")) {
+    const QString mask = el.value(QStringLiteral("mask")).toString();
+    if (mask == QLatin1String("ellipse")) {
         clip.addEllipse(r);
+    } else if (!mask.isEmpty()) {
+        clip = maskPath(mask, r);
     } else {
         const qreal radius = qMin(num(el, "radius", 0), qMin(w, h) / 2);
         if (radius > 0)
@@ -408,12 +553,32 @@ namespace Art {
 
 qreal textHeight(const QVariantMap &el)
 {
+    const qreal curve = qBound(-1.0, num(el, "curve", 0), 1.0);
+    if (curve != 0) {
+        // Tekst po łuku: jeden wiersz, wysokość rośnie o strzałkę łuku
+        QTextLayout tl(curvedText(el), textFont(el));
+        const qreal lineH = layout(tl, el, 0);
+        const qreal len = tl.lineCount() ? tl.lineAt(0).naturalTextWidth() : 0;
+        const qreal angle = qAbs(curve) * M_PI;
+        const qreal r = len / angle;
+        return lineH + r * (1 - qCos(angle / 2)) + lineH * 0.2 * qAbs(curve);
+    }
     QTextLayout tl(layoutText(el), textFont(el));
     return layout(tl, el, num(el, "w", 100));
 }
 
 qreal textNaturalWidth(const QVariantMap &el)
 {
+    const qreal curve = qBound(-1.0, num(el, "curve", 0), 1.0);
+    if (curve != 0) {
+        // Cięciwa łuku i zapas na wysokość liter po bokach
+        QTextLayout tl(curvedText(el), textFont(el));
+        const qreal lineH = layout(tl, el, 0);
+        const qreal len = tl.lineCount() ? tl.lineAt(0).naturalTextWidth() : 0;
+        const qreal angle = qAbs(curve) * M_PI;
+        const qreal r = len / angle;
+        return std::ceil(2 * r * qSin(qMin(angle / 2, M_PI / 2)) + lineH * qSin(angle / 2)) + 4;
+    }
     QTextLayout tl(layoutText(el), textFont(el));
     layout(tl, el, 0);
     qreal w = 0;
@@ -422,8 +587,98 @@ qreal textNaturalWidth(const QVariantMap &el)
     return std::ceil(w) + 2;
 }
 
+// ——— Miękki cień ———
+
+// Rozmycie kanału alfa: trzy przejścia rozmycia pudełkowego ≈ rozmycie Gaussa
+static void blurAlpha(QImage &img, int radius)
+{
+    if (radius < 1)
+        return;
+    const int w = img.width(), h = img.height();
+    QList<int> line(qMax(w, h));
+    for (int pass = 0; pass < 3; ++pass) {
+        for (int dir = 0; dir < 2; ++dir) {
+            const int len = dir == 0 ? w : h, count = dir == 0 ? h : w;
+            for (int j = 0; j < count; ++j) {
+                auto px = [&](int i) -> QRgb & {
+                    return dir == 0 ? reinterpret_cast<QRgb *>(img.scanLine(j))[i] : reinterpret_cast<QRgb *>(img.scanLine(i))[j];
+                };
+                for (int i = 0; i < len; ++i)
+                    line[i] = qAlpha(px(i));
+                int sum = 0;
+                const int win = radius * 2 + 1;
+                for (int i = -radius; i <= radius; ++i)
+                    sum += line[qBound(0, i, len - 1)];
+                for (int i = 0; i < len; ++i) {
+                    px(i) = qRgba(0, 0, 0, sum / win);
+                    sum += line[qMin(len - 1, i + radius + 1)] - line[qMax(0, i - radius)];
+                }
+            }
+        }
+    }
+}
+
+void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images);
+
+// Cień elementu: element narysowany na boku, rozmyty i przesunięty. Wynik w pamięci podręcznej (płótno rysuje często)
+static void paintSoftShadow(QPainter *p, const QVariantMap &el, const ImageSource *images)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const qreal blur = qMax(0.0, num(el, "shadowBlur", 20));
+    const qreal dist = num(el, "shadowDist", 12), angle = qDegreesToRadians(num(el, "shadowAngle", 135));
+    QColor c = color(el, "shadowColor", Qt::black);
+    c.setAlphaF(c.alphaF() * qBound(0.0, num(el, "shadowOpacity", 0.35), 1.0));
+    const qreal scale = qBound(0.05, deviceScale(p), 8.0);
+    const qreal m = blur * 1.5 + 2;
+    const QSize size(qCeil((w + 2 * m) * scale), qCeil((h + 2 * m) * scale));
+    if (size.width() * size.height() > 40'000'000 || size.isEmpty())
+        return;
+
+    QVariantMap plain = el;
+    for (const char *k : {"shadow", "x", "y", "rotation", "opacity"})
+        plain.remove(QLatin1String(k));
+    static QMutex lock;
+    static QCache<QString, QImage> cache(120);
+    const QString key = QString::fromUtf8(QJsonDocument::fromVariant(plain).toJson(QJsonDocument::Compact))
+                        + QStringLiteral("|%1|%2x%3").arg(c.name(QColor::HexArgb)).arg(size.width()).arg(size.height());
+    QImage img;
+    {
+        QMutexLocker l(&lock);
+        if (const QImage *hit = cache.object(key))
+            img = *hit;
+    }
+    if (img.isNull()) {
+        img = QImage(size, QImage::Format_ARGB32);
+        img.fill(Qt::transparent);
+        {
+            QPainter q(&img);
+            q.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+            q.scale(scale, scale);
+            q.translate(m, m);
+            plain.remove(QStringLiteral("shadowBlur"));
+            paintElement(&q, plain, images);
+        }
+        blurAlpha(img, qRound(blur * scale / 2));
+        // Kolor cienia z zachowaniem rozmytej alfy
+        for (int y = 0; y < img.height(); ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+            for (int x = 0; x < img.width(); ++x)
+                line[x] = qRgba(c.red(), c.green(), c.blue(), qAlpha(line[x]) * c.alpha() / 255);
+        }
+        QMutexLocker l(&lock);
+        cache.insert(key, new QImage(img), int(img.sizeInBytes() / (1024 * 1024)) + 1);
+    }
+    p->save();
+    p->setRenderHint(QPainter::SmoothPixmapTransform);
+    p->drawImage(QRectF(-m + qSin(angle) * dist, -m - qCos(angle) * dist, w + 2 * m, h + 2 * m), img);
+    p->restore();
+}
+
 void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
+    const QString kind = el.value(QStringLiteral("type")).toString();
+    if (el.value(QStringLiteral("shadow")).toBool() && (kind != QLatin1String("text") || el.contains(QStringLiteral("shadowBlur"))))
+        paintSoftShadow(p, el, images);
     p->save();
     p->setRenderHint(QPainter::Antialiasing);
     p->setRenderHint(QPainter::TextAntialiasing);
@@ -479,6 +734,13 @@ void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images)
         p->restore();
     }
     p->restore();
+}
+
+qreal bleed(const QVariantMap &el)
+{
+    if (!el.value(QStringLiteral("shadow")).toBool() || (el.value(QStringLiteral("type")).toString() == QLatin1String("text") && !el.contains(QStringLiteral("shadowBlur"))))
+        return 0;
+    return num(el, "shadowBlur", 20) * 1.5 + qAbs(num(el, "shadowDist", 12)) + 2;
 }
 
 QImage renderPage(const QVariantMap &doc, const QSize &size, const ImageSource *images, const QColor &under)

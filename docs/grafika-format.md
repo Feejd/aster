@@ -34,17 +34,21 @@ Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zd
 
 Wspólne pola: `id`, `type`, `x`, `y`, `w`, `h` (lewy górny róg i rozmiar przed obrotem), `rotation` (stopnie, zgodnie
 z ruchem wskazówek, wokół środka), `opacity` (0–1), `hidden` (ukryty — nie ma go na stronie ani w eksporcie),
-`locked` (zablokowany — nie da się go przesunąć ani zmienić, dopóki się go nie odblokuje).
+`locked` (zablokowany — nie da się go przesunąć ani zmienić, dopóki się go nie odblokuje), `group` (elementy z tym samym
+napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień (każdy rodzaj): `shadow: true` i `shadowBlur`,
+`shadowDist` (px), `shadowAngle` (stopnie, 0 — w górę), `shadowOpacity` (0–1), `shadowColor`; tekst z samym `shadow`
+(bez `shadowBlur`) ma dawny twardy cień.
 
 - `text`: `text` (wiersze rozdzielone `\n`), `font` (rodzina), `size` (px), `weight` (100–900), `italic`, `underline`,
   `caps` (wielkie litery), `color`, `align` (`left` / `center` / `right`), `spacing` (odstęp liter w częściach wielkości
   czcionki), `lineHeight` (wysokość wiersza w wielkościach czcionki), `outline` (grubość obrysu w częściach wielkości) i
-  `outlineColor`, `shadow` i `shadowColor`. Tekst łamie się do szerokości `w`; `h` program liczy sam.
+  `outlineColor`, `bg` (kolor tła pod każdym wierszem) z `bgPadding` i `bgRadius` (w wielkościach czcionki), `curve`
+(−1–1, tekst po łuku w górę albo w dół, jeden wiersz). Tekst łamie się do szerokości `w`; `h` program liczy sam.
 - `shape`: `shape` = `rect` (`radius`), `ellipse`, `triangle`, `star`, `heart`, `line`, `arrow`; `fill` (pusty — bez
   wypełnienia), `fill2` i `gradientAngle` (przejście kolorów; `gradient: "radial"` — od środka), `stroke`, `strokeWidth`, `dash`. Linia i strzałka biegną
   poziomo przez środek pola, kolor z `stroke`.
 - `image`: `src` (plik z `images/`), wypełnia pole i jest przycinane („cover”) wokół punktu `focusX`, `focusY` (0–1),
-  `radius` albo `mask: "ellipse"` (zdjęcie w kółku), `zoom` (≥ 1 — powiększenie kadru), `flipX` (odbicie lustrzane),
+  `radius` albo `mask` (`ellipse`, `arch`, `leaf`, `blob`, `hexagon`, `heart`, `star`, `triangle`), `zoom` (≥ 1 — powiększenie kadru), `flipX` (odbicie lustrzane),
   `brightness`, `contrast`, `saturation` (−1–1) i `filter` (`gray`, `sepia`, `warm`, `cool`, `fade`, `vivid`).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.

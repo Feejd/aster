@@ -53,6 +53,17 @@ Item {
         refresh();
     }
     function isSelected(id) { return selection.indexOf(id) >= 0; }
+    // Kliknięcie w element grupy zaznacza całą grupę
+    function groupOf(id) {
+        const g = project.get(id).group;
+        if (!g) return [id];
+        return project.document().elements.filter(o => o.group === g && !o.hidden).map(o => o.id);
+    }
+    function selectWithGroup(id) {
+        if (editing !== "" && editing !== id) stopEditing();
+        if (cropping !== "" && cropping !== id) cropping = "";
+        setSelection(groupOf(id));
+    }
     function toggle(id) {
         const i = selection.indexOf(id);
         const list = selection.slice();
@@ -379,6 +390,7 @@ Item {
                         }
                         ArtView {
                             anchors.fill: parent
+                            anchors.margins: -bleed * stage.zoom       // miękki cień wystaje poza pole
                             project: stage.project
                             element: d.element
                             visible: stage.editing !== d.uid
@@ -415,7 +427,9 @@ Item {
                             property var startGroup
                             property var startEl
                             property bool moved: false
+                            property bool pickOne: false            // puszczenie bez ruchu — sam ten element z grupy
                             onPressed: (e) => {
+                                pickOne = false;
                                 stage.forceActiveFocus();
                                 moved = false;
                                 starts = [];
@@ -425,7 +439,9 @@ Item {
                                     stage.toggle(d.uid);
                                     return;
                                 }
-                                if (!stage.isSelected(d.uid)) stage.select(d.uid);
+                                const g = d.element.group;
+                                if (!stage.isSelected(d.uid)) stage.selectWithGroup(d.uid);
+                                else if (g && stage.selection.length > 1 && stage.selection.every(id => stage.project.get(id).group === g)) pickOne = true;
                                 if (e.button === Qt.RightButton) {
                                     const p = mapToItem(stage, e.x, e.y);
                                     stage.menuRequested(p.x, p.y);
@@ -465,6 +481,7 @@ Item {
                                 stage.guidesX = [];
                                 stage.guidesY = [];
                                 if (moved) stage.project.commit();
+                                else if (pickOne) stage.select(d.uid);
                             }
                             onDoubleClicked: {
                                 if (d.element.locked) return;
@@ -487,8 +504,9 @@ Item {
                 border.width: 1
                 border.color: Theme.accent
             }
-            // Prostokąt kilku zaznaczonych
+            // Prostokąt kilku zaznaczonych — narożniki zmieniają rozmiar wszystkich naraz (proporcjonalnie)
             Rectangle {
+                id: groupBox
                 visible: stage.selection.length > 1 && stage.group.w !== undefined
                 x: (stage.group.x || 0) * stage.zoom - 4
                 y: (stage.group.y || 0) * stage.zoom - 4
@@ -498,6 +516,42 @@ Item {
                 border.width: 1
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.6)
                 radius: 3
+                Repeater {
+                    model: [{ hx: -1, hy: -1 }, { hx: 1, hy: -1 }, { hx: -1, hy: 1 }, { hx: 1, hy: 1 }]
+                    delegate: Rectangle {
+                        id: gh
+                        required property var modelData
+                        width: 12; height: 12; radius: 6
+                        x: (modelData.hx + 1) / 2 * groupBox.width - 6
+                        y: (modelData.hy + 1) / 2 * groupBox.height - 6
+                        color: "white"
+                        border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.25)
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -8
+                            cursorShape: gh.modelData.hx === gh.modelData.hy ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+                            property var starts: []
+                            property point opp
+                            property point corner
+                            onPressed: (e) => {
+                                const g = stage.group;
+                                opp = Qt.point(gh.modelData.hx < 0 ? g.x + g.w : g.x, gh.modelData.hy < 0 ? g.y + g.h : g.y);
+                                corner = Qt.point(gh.modelData.hx < 0 ? g.x : g.x + g.w, gh.modelData.hy < 0 ? g.y : g.y + g.h);
+                                starts = stage.selection.map(id => stage.project.get(id)).filter(o => !o.locked);
+                            }
+                            onPositionChanged: (e) => {
+                                if (!pressed) return;
+                                const p = mapToItem(page, e.x, e.y);
+                                const px = p.x / stage.zoom, py = p.y / stage.zoom;
+                                const vx = corner.x - opp.x, vy = corner.y - opp.y;
+                                const k = Math.max(0.05, ((px - opp.x) * vx + (py - opp.y) * vy) / (vx * vx + vy * vy));
+                                for (const o of starts) stage.project.change(o.id, stage.project.scaled(o, k, opp.x, opp.y), false);
+                                stage.hint = Math.round(k * 100) + "%";
+                            }
+                            onReleased: { stage.hint = ""; stage.project.commit(); }
+                        }
+                    }
+                }
             }
 
             // Linie pomocnicze

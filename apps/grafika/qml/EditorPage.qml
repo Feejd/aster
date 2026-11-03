@@ -36,6 +36,12 @@ Item {
         const s = project.imageSize(key);
         if (s.width <= 0) return;
         if (key.endsWith(".svg")) { addVector(key, "#16181D"); return; }
+        // Zaznaczone puste miejsce na zdjęcie (szablon, kolaż) — zdjęcie trafia do niego
+        if (stage.current.type === "image" && !stage.current.src && !stage.current.locked) {
+            project.change(sel, { src: key, focusX: null, focusY: null, zoom: null, credit: null });
+            selectNextEmptyFrame();
+            return;
+        }
         const k = Math.min(1, project.pageWidth * 0.6 / s.width, project.pageHeight * 0.6 / s.height);
         addElement({ type: "image", src: key, w: Math.round(s.width * k), h: Math.round(s.height * k) });
     }
@@ -69,7 +75,7 @@ Item {
     }
     function addOnlinePhoto(photo) {
         // Zaznaczone puste miejsce na zdjęcie (np. w szablonie) — zdjęcie trafia do niego
-        const frame = stage.current.type === "image" && !stage.current.locked ? stage.current.id : "";
+        const frame = stage.current.type === "image" && !stage.current.src && !stage.current.locked ? stage.current.id : "";
         download(photo.url, { kind: "photo", frame: frame, fallback: photo.fallback, credit: photo.credit || "" });
     }
     Connections {
@@ -84,6 +90,7 @@ Item {
                 if (job.frame !== "" && ed.project.indexOf(job.frame) >= 0) {
                     ed.project.change(job.frame, { src: key, focusX: null, focusY: null, zoom: null, credit: job.credit || null });
                     stage.select(job.frame);
+                    ed.selectNextEmptyFrame();
                 } else {
                     ed.addImageKey(key);
                     if (job.credit) ed.project.change(ed.sel, { credit: job.credit });
@@ -211,6 +218,47 @@ Item {
         }
         project.commit();
     }
+    // Po wypełnieniu ramki — następna pusta (kolaż wypełnia się kliknięciami w zdjęcia po kolei)
+    function selectNextEmptyFrame() {
+        for (const o of project.document().elements)
+            if (o.type === "image" && !o.src && !o.hidden && !o.locked) { stage.select(o.id); return; }
+    }
+
+    // ——— Grupy ———
+    property int rev: 0                     // zmiany treści — odświeża wiązania, które pytają projekt o elementy
+    Connections {
+        target: ed.project
+        function onDataChanged() { ed.rev += 1; }
+        function onReset() { ed.rev += 1; }
+    }
+    readonly property bool grouped: rev >= 0 && many.length > 1 && many.every(id => { const g = project.get(id).group; return !!g && g === project.get(many[0]).group; })
+    function group() {
+        if (many.length < 2) return;
+        const g = "g" + Math.floor(Math.random() * 1e8);
+        for (const id of many) project.change(id, { group: g }, false);
+        project.commit();
+        app.toast("Zgrupowano — kliknięcie zaznacza całą grupę, drugie kliknięcie jeden element", "");
+    }
+    function ungroup() {
+        for (const id of many) project.change(id, { group: null }, false);
+        project.commit();
+    }
+
+    // Kolaż: puste ramki na zdjęcia z odstępami (r — prostokąty w częściach strony)
+    function addCollage(rects) {
+        stage.clearSelection();
+        const W = project.pageWidth, H = project.pageHeight;
+        const gap = Math.round(Math.min(W, H) * 0.02);
+        const ids = [];
+        for (const r of rects) {
+            const x = Math.round(r[0] * (W - gap) + gap), y = Math.round(r[1] * (H - gap) + gap);
+            const w = Math.round(r[2] * (W - gap) - gap), h = Math.round(r[3] * (H - gap) - gap);
+            ids.push(project.add({ type: "image", src: "", x: x, y: y, w: w, h: h, radius: Math.round(gap * 0.6) }));
+        }
+        stage.select(ids[0]);
+        app.toast("Kliknij zdjęcie z dysku albo z internetu — trafi do zaznaczonej ramki", "");
+    }
+
     function selectLayer(id, additive) {
         if (project.get(id).hidden) return;
         if (additive) stage.toggle(id); else stage.select(id);
@@ -243,7 +291,7 @@ Item {
 
     function runMenu(a) {
         if (a.startsWith("size:")) {
-            for (const p of app.presets) if (p.id === a.substring(5)) project.setPageSize(p.w, p.h);
+            for (const p of app.presets) if (p.id === a.substring(5)) project.setPageSize(p.w, p.h, true);
             stage.fit = true;
         } else if (a === "copy") copy();
         else if (a === "cut") { copy(); remove(); }
@@ -257,6 +305,8 @@ Item {
         else if (a === "layers") side.tab = "layers";
         else if (a === "selectAll") stage.selectAll();
         else if (a === "lock") setLocked(true);
+        else if (a === "group") group();
+        else if (a === "ungroup") ungroup();
         else if (a === "unlock") setLocked(false);
         else if (a === "remove") remove();
         else arrange(a);
@@ -267,6 +317,8 @@ Item {
             items.push({ label: "Kopiuj", icon: "copy", shortcut: "Ctrl+C", action: "copy" });
             items.push({ label: "Wytnij", icon: "scissors", shortcut: "Ctrl+X", action: "cut" });
             items.push({ label: "Duplikuj", icon: "copy", shortcut: "Ctrl+D", action: "duplicate" });
+            if (grouped) items.push({ label: "Rozgrupuj", icon: "layers", shortcut: "Ctrl+Shift+G", action: "ungroup" });
+            else items.push({ label: "Grupuj", icon: "layers", shortcut: "Ctrl+G", action: "group" });
             items.push({ label: "Zablokuj", icon: "lock", action: "lock" });
             items.push({ separator: true });
             items.push({ label: "Usuń zaznaczone (" + many.length + ")", icon: "trash", shortcut: "Delete", action: "remove", danger: true });
@@ -311,6 +363,9 @@ Item {
         else if (cmd === "set") project.change(sel, JSON.parse(arg));
         else if (cmd === "align") alignMany(arg);
         else if (cmd === "dup") duplicate();
+        else if (cmd === "group") group();
+        else if (cmd === "collage") addCollage(side.collages[Number(arg)].rects);
+        else if (cmd === "resize") { const [w, h] = arg.split("x"); project.setPageSize(Number(w), Number(h), true); stage.fit = true; }
         else if (cmd === "searchg") { side.tab = "shapes"; side.searchGraphics(arg); }
         else if (cmd === "searchp") { side.tab = "photos"; side.searchPhotos(arg); }
         else if (cmd === "addg") addGraphic(side.icons[Number(arg)].file);
@@ -343,6 +398,8 @@ Item {
     Shortcut { sequences: [StandardKey.Paste]; enabled: ed.active && !ed.typing; onActivated: ed.paste() }
     Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.duplicate() }
     Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: stage.selectAll() }
+    Shortcut { sequence: "Ctrl+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.group() }
+    Shortcut { sequence: "Ctrl+Shift+G"; enabled: ed.active && !ed.typing && ed.many.length > 1; onActivated: ed.ungroup() }
     Shortcut { sequence: "Ctrl+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("up") }
     Shortcut { sequence: "Ctrl+["; enabled: ed.active && !ed.typing; onActivated: ed.arrange("down") }
     Shortcut { sequence: "Ctrl+Shift+]"; enabled: ed.active && !ed.typing; onActivated: ed.arrange("front") }

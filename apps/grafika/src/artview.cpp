@@ -43,13 +43,20 @@ void ArtView::setProject(Project *project)
     update();
 }
 
+qreal ArtView::bleed() const
+{
+    return m_element.value(QStringLiteral("kind")).toString() == QLatin1String("background") ? 0 : Art::bleed(m_element);
+}
+
 void ArtView::paint(QPainter *painter)
 {
     const qreal w = m_element.value(QStringLiteral("w")).toDouble();
     const qreal h = m_element.value(QStringLiteral("h")).toDouble();
     if (w <= 0 || h <= 0)
         return;
-    painter->scale(width() / w, height() / h);
+    const qreal b = bleed();
+    painter->scale(width() / (w + 2 * b), height() / (h + 2 * b));
+    painter->translate(b, b);
     if (m_element.value(QStringLiteral("kind")).toString() == QLatin1String("background"))
         Art::paintBackground(painter, m_element, QSizeF(w, h), m_project);
     else

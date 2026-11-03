@@ -27,6 +27,20 @@ Item {
         if (tab === "layers") refreshLayers();
     }
 
+    // Kolaże: prostokąty [x, y, w, h] w częściach strony
+    readonly property var collages: [
+        { rects: [[0, 0, 0.5, 1], [0.5, 0, 0.5, 1]] },
+        { rects: [[0, 0, 1, 0.5], [0, 0.5, 1, 0.5]] },
+        { rects: [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]] },
+        { rects: [[0, 0, 0.62, 1], [0.62, 0, 0.38, 0.5], [0.62, 0.5, 0.38, 0.5]] },
+        { rects: [[0, 0, 1, 0.6], [0, 0.6, 0.5, 0.4], [0.5, 0.6, 0.5, 0.4]] },
+        { rects: [[0, 0, 0.333, 1], [0.333, 0, 0.334, 1], [0.667, 0, 0.333, 1]] },
+        { rects: [[0, 0, 0.5, 0.333], [0.5, 0, 0.5, 0.333], [0, 0.333, 0.5, 0.334], [0.5, 0.333, 0.5, 0.334], [0, 0.667, 0.5, 0.333], [0.5, 0.667, 0.5, 0.333]] },
+        { rects: [[0, 0, 0.333, 0.333], [0.333, 0, 0.334, 0.333], [0.667, 0, 0.333, 0.333], [0, 0.333, 0.333, 0.334], [0.333, 0.333, 0.334, 0.334],
+                  [0.667, 0.333, 0.333, 0.334], [0, 0.667, 0.333, 0.333], [0.333, 0.667, 0.334, 0.333], [0.667, 0.667, 0.333, 0.333]] },
+        { rects: [[0.08, 0.08, 0.84, 0.62]] }
+    ]
+
     // ——— Z internetu ———
     property string gQuery: ""
     property var icons: []
@@ -607,6 +621,39 @@ Item {
                         icon: "upload"
                         text: "Dodaj zdjęcie z dysku"
                         onClicked: sp.editor.chooseImage("element")
+                    }
+                    Text {
+                        text: "Kolaż — puste ramki na zdjęcia"
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                    }
+                    Flow {
+                        width: parent.width
+                        spacing: 6
+                        Repeater {
+                            model: sp.collages
+                            delegate: HoverButton {
+                                id: cl
+                                required property var modelData
+                                readonly property real ratio: sp.project.pageHeight / sp.project.pageWidth
+                                width: (photosCol.width - 12) / 3
+                                height: Math.min(width * 1.6, width * ratio)
+                                radius: 8
+                                baseColor: Theme.fill
+                                onClicked: sp.editor.addCollage(modelData.rects)
+                                Repeater {
+                                    model: cl.modelData.rects
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        x: 5 + modelData[0] * (cl.width - 10) + 1.5
+                                        y: 5 + modelData[1] * (cl.height - 10) + 1.5
+                                        width: modelData[2] * (cl.width - 10) - 3
+                                        height: modelData[3] * (cl.height - 10) - 3
+                                        radius: 3
+                                        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(0, 0, 0, 0.16)
+                                    }
+                                }
+                            }
+                        }
                     }
                     Text {
                         width: parent.width

@@ -16,6 +16,7 @@ Item {
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow")
     readonly property var bg: project.background
+    readonly property bool softShadow: !!el.shadow && el.shadowBlur !== undefined
     readonly property bool recolor: type === "vector" && project.recolorable(el.src || "")
     readonly property var filters: [
         { id: "", label: "Brak" }, { id: "gray", label: "Czarno-białe" }, { id: "sepia", label: "Sepia" }, { id: "warm", label: "Ciepłe" },
@@ -163,9 +164,15 @@ Item {
                 title: "Zaznaczone"
                 Row {
                     spacing: 8
+                    Btn {
+                        text: ins.editor.grouped ? "Rozgrupuj" : "Grupuj"
+                        icon: "layers"
+                        primary: !ins.editor.grouped
+                        onClicked: ins.editor.grouped ? ins.editor.ungroup() : ins.editor.group()
+                    }
                     Btn { text: "Duplikuj"; icon: "copy"; onClicked: ins.editor.duplicate() }
-                    Btn { text: "Zablokuj"; icon: "lock"; onClicked: ins.editor.setLocked(true) }
                 }
+                Btn { text: "Zablokuj"; icon: "lock"; onClicked: ins.editor.setLocked(true) }
                 Btn { text: "Usuń zaznaczone"; icon: "trash"; onClicked: ins.editor.remove() }
             }
             Text {
@@ -264,12 +271,41 @@ Item {
                 Row {
                     spacing: 8
                     Chip { text: "Obrys"; on: (ins.el.outline || 0) > 0; onClicked: ins.set({ outline: on ? 0 : 0.05, outlineColor: ins.el.outlineColor || "#111111" }) }
-                    Chip { text: "Cień"; on: !!ins.el.shadow; onClicked: ins.set({ shadow: !on }) }
+                    Chip { text: "Tło"; on: !!ins.el.bg; onClicked: ins.set({ bg: on ? null : "#FFE600" }) }
+                    ColorWell {
+                        id: textBgWell
+                        visible: !!ins.el.bg
+                        value: ins.el.bg || "#FFE600"
+                        onClicked: ins.editor.pickColor(textBgWell, value, false, (c, done) => ins.set({ bg: c }, done))
+                    }
                     ColorWell {
                         id: outlineWell
                         visible: (ins.el.outline || 0) > 0
                         value: ins.el.outlineColor || "#111111"
                         onClicked: ins.editor.pickColor(outlineWell, value, false, (c, done) => ins.set({ outlineColor: c }, done))
+                    }
+                }
+                ValueSlider {
+                    visible: !!ins.el.bg
+                    label: "Zaokrąglenie tła"
+                    from: 0; to: 0.6; step: 0.02
+                    value: ins.el.bgRadius === undefined ? 0.2 : ins.el.bgRadius
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => ins.set({ bgRadius: v }, done)
+                }
+                ValueSlider {
+                    label: "Łuk"
+                    from: -1; to: 1; step: 0.02
+                    value: ins.el.curve || 0
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => {
+                        // Szerokość pola idzie za łukiem, środek zostaje na miejscu
+                        const patch = { curve: Math.abs(v) < 0.02 ? null : v };
+                        const next = Object.assign({}, ins.el, { curve: patch.curve || 0 });
+                        const w = patch.curve ? ins.project.naturalWidth(next) : Math.max(ins.el.w, ins.project.naturalWidth(next));
+                        patch.w = Math.round(w);
+                        patch.x = Math.round((ins.el.x + ins.el.w / 2 - w / 2) * 10) / 10;
+                        ins.set(patch, done);
                     }
                 }
                 ValueSlider {
@@ -360,13 +396,31 @@ Item {
             Section {
                 visible: ins.type === "image"
                 title: "Kształt zdjęcia"
-                Row {
-                    spacing: 6
-                    Chip { text: "Prostokąt"; on: ins.el.mask !== "ellipse"; onClicked: ins.set({ mask: null }) }
-                    Chip { text: "Koło"; on: ins.el.mask === "ellipse"; onClicked: ins.set({ mask: "ellipse" }) }
+                Grid {
+                    columns: 5
+                    spacing: 4
+                    Repeater {
+                        model: [{ id: "", shape: "rect" }, { id: "ellipse", shape: "ellipse" }, { id: "arch", mask: "arch" }, { id: "leaf", mask: "leaf" },
+                                { id: "blob", mask: "blob" }, { id: "hexagon", mask: "hexagon" }, { id: "heart", shape: "heart" }, { id: "star", shape: "star" },
+                                { id: "triangle", shape: "triangle" }]
+                        delegate: IconToggle {
+                            id: mk
+                            required property var modelData
+                            width: (col.width - 16) / 5; height: width
+                            on: (ins.el.mask || "") === modelData.id
+                            onClicked: ins.set({ mask: modelData.id === "" ? null : modelData.id })
+                            ArtView {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.56; height: width
+                                element: mk.modelData.shape ? { type: "shape", shape: mk.modelData.shape, w: 100, h: 100, fill: Theme.dark ? "#C9CDD6" : "#5C6170", radius: 0 }
+                                                            : { type: "image", src: "", mask: mk.modelData.mask, w: 100, h: 100 }
+                                opacity: mk.on ? 1 : 0.75
+                            }
+                        }
+                    }
                 }
                 ValueSlider {
-                    visible: ins.el.mask !== "ellipse"
+                    visible: !ins.el.mask
                     label: "Zaokrąglenie rogów"
                     from: 0; to: Math.round(Math.min(ins.el.w || 0, ins.el.h || 0) / 2); step: 1
                     value: ins.el.radius || 0
@@ -506,6 +560,58 @@ Item {
             }
 
             // ——— Wspólne ———
+            Section {
+                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked" && !ins.line
+                title: "Cień"
+                Row {
+                    spacing: 8
+                    Chip {
+                        text: ins.softShadow ? "Włączony" : "Dodaj cień"
+                        on: ins.softShadow
+                        onClicked: ins.set(on ? { shadow: null, shadowBlur: null, shadowDist: null, shadowAngle: null, shadowOpacity: null }
+                                              : { shadow: true, shadowBlur: Math.round(Math.max(6, Math.min(ins.el.w, ins.el.h) * 0.06)),
+                                                  shadowDist: Math.round(Math.max(4, Math.min(ins.el.w, ins.el.h) * 0.04)), shadowAngle: 160, shadowOpacity: 0.35 })
+                    }
+                    ColorWell {
+                        id: shadowWell
+                        visible: ins.softShadow
+                        value: ins.el.shadowColor || "#000000"
+                        onClicked: ins.editor.pickColor(shadowWell, value, false, (c, done) => ins.set({ shadowColor: c }, done))
+                    }
+                }
+                ValueSlider {
+                    visible: ins.softShadow
+                    label: "Rozmycie"
+                    from: 0; to: Math.max(40, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.08)); step: 1
+                    value: ins.el.shadowBlur || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ shadowBlur: v }, done)
+                }
+                ValueSlider {
+                    visible: ins.softShadow
+                    label: "Odległość"
+                    from: 0; to: Math.max(30, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.05)); step: 1
+                    value: ins.el.shadowDist || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ shadowDist: v }, done)
+                }
+                ValueSlider {
+                    visible: ins.softShadow
+                    label: "Kierunek"
+                    from: 0; to: 360; step: 5
+                    value: ins.el.shadowAngle === undefined ? 135 : ins.el.shadowAngle
+                    suffix: "°"
+                    onMoved: (v, done) => ins.set({ shadowAngle: v }, done)
+                }
+                ValueSlider {
+                    visible: ins.softShadow
+                    label: "Siła"
+                    from: 0.05; to: 1; step: 0.01
+                    value: ins.el.shadowOpacity === undefined ? 0.35 : ins.el.shadowOpacity
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => ins.set({ shadowOpacity: v }, done)
+                }
+            }
             Section {
                 visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
                 title: "Wygląd"

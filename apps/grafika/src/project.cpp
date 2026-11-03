@@ -12,6 +12,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPdfWriter>
+#include <QRandomGenerator>
 #include <QSaveFile>
 #include <QFontDatabase>
 #include <QStandardPaths>
@@ -382,11 +383,36 @@ bool Project::save()
     return true;
 }
 
-void Project::setPageSize(qreal width, qreal height)
+QVariantMap Project::scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) const
+{
+    QVariantMap out = el;
+    out[QStringLiteral("x")] = std::round((ox + (num(el, "x") - ox) * k) * 10) / 10;
+    out[QStringLiteral("y")] = std::round((oy + (num(el, "y") - oy) * k) * 10) / 10;
+    for (const char *key : {"w", "h", "size", "strokeWidth", "radius", "shadowBlur", "shadowDist"})
+        if (el.contains(QLatin1String(key)))
+            out[QLatin1String(key)] = std::round(num(el, key) * k * 10) / 10;
+    return out;
+}
+
+void Project::setPageSize(qreal width, qreal height, bool fit)
 {
     commit();
-    m_width = qMax(16.0, width);
-    m_height = qMax(16.0, height);
+    width = qMax(16.0, width);
+    height = qMax(16.0, height);
+    // Dopasowanie: treść skalowana do mniejszego z boków i wyśrodkowana; tło wypełnia nową stronę samo
+    if (fit && !m_elements.isEmpty()) {
+        const qreal k = qMin(width / m_width, height / m_height);
+        const qreal dx = (width - m_width * k) / 2, dy = (height - m_height * k) / 2;
+        for (QVariant &v : m_elements) {
+            QVariantMap el = scaled(v.toMap(), k, 0, 0);
+            el[QStringLiteral("x")] = std::round((num(el, "x") + dx) * 10) / 10;
+            el[QStringLiteral("y")] = std::round((num(el, "y") + dy) * 10) / 10;
+            v = prepared(el);
+        }
+        Q_EMIT dataChanged(index(0), index(m_elements.size() - 1));
+    }
+    m_width = width;
+    m_height = height;
     m_print.clear();
     Q_EMIT pageChanged();
     commit();
@@ -469,13 +495,27 @@ void Project::remove(const QString &id)
     commit();
 }
 
+// Kopie zgrupowanych elementów tworzą nową grupę, a nie dołączają do starej
+static void regroup(QVariantMap &el, QHash<QString, QString> &groups)
+{
+    const QString g = el.value(QStringLiteral("group")).toString();
+    if (g.isEmpty())
+        return;
+    if (!groups.contains(g))
+        groups.insert(g, QStringLiteral("g%1").arg(QRandomGenerator::global()->generate() % 100000000));
+    el[QStringLiteral("group")] = groups.value(g);
+}
+
 QStringList Project::duplicateAll(const QStringList &ids)
 {
     QStringList out;
-    for (const QVariant &v : std::as_const(m_elements)) {       // w kolejności warstw, nie zaznaczania
+    QHash<QString, QString> groups;
+    const QVariantList all = m_elements;
+    for (const QVariant &v : all) {       // w kolejności warstw, nie zaznaczania
         QVariantMap el = v.toMap();
         if (!ids.contains(el.value(QStringLiteral("id")).toString()))
             continue;
+        regroup(el, groups);
         el[QStringLiteral("x")] = num(el, "x") + 24;
         el[QStringLiteral("y")] = num(el, "y") + 24;
         el.remove(QStringLiteral("id"));
@@ -743,8 +783,10 @@ QStringList Project::paste()
         for (auto it = images.cbegin(); it != images.cend(); ++it)
             keys[it.key()] = addAsset(QByteArray::fromBase64(it.value().toString().toLatin1()), QFileInfo(it.key()).suffix());
         QStringList out;
+        QHash<QString, QString> groups;
         for (const QVariant &v : clip.value(QStringLiteral("elements")).toList()) {
             QVariantMap el = v.toMap();
+            regroup(el, groups);
             const QString src = el.value(QStringLiteral("src")).toString();
             if (keys.contains(src))
                 el[QStringLiteral("src")] = keys.value(src);
