@@ -147,6 +147,10 @@ if command -v setfiles >/dev/null && [ -f "$contexts" ]; then
         "$etc/localtime" "$etc/aster" "$etc/plasma-setup-done" "$etc/NetworkManager/system-connections" 2>/dev/null || true
 fi
 
+# Następny start z nowego systemu, nie znowu z pendrive’a (gdy nośnik został w komputerze)
+num=$(efibootmgr 2>/dev/null | awk '/^Boot[0-9A-Fa-f]{4}\*? (Fedora|Aster)/ { print substr($1, 5, 4); exit }')
+[ -n "$num" ] && efibootmgr -q -n "$num" 2>/dev/null
+
 sync
 fstrim "$TARGET" 2>/dev/null || true
 umount -R "$TARGET"
