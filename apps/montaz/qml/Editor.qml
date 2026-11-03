@@ -74,6 +74,59 @@ GlassPane {
         inspector.focusText();
     }
     function addTextFocus() { inspector.focusText() }
+
+    // ——— Lektor ———
+    property bool voiceMode: false
+    property int countdown: 0
+    property int voiceStart: 0
+    function openVoice() {
+        voiceMode = true;
+        VoiceRecorder.listen(true);
+    }
+    function closeVoice() {
+        if (VoiceRecorder.recording || countdown > 0) stopVoice();
+        VoiceRecorder.listen(false);
+        voiceMode = false;
+    }
+    function startVoice() {
+        if (Project.duration === 0) { toast("Najpierw dodaj film — lektor nagrywa się do obrazu"); return; }
+        player.pause();
+        if (player.position >= Project.duration - 2) player.seek(0);
+        countdown = 3;
+        countdownTimer.restart();
+    }
+    function stopVoice() {
+        if (countdown > 0) { countdown = 0; countdownTimer.stop(); return; }
+        const path = VoiceRecorder.stop();
+        player.pause();
+        player.muted = false;
+        if (path) {
+            selected = Project.addVoice(path, voiceStart);
+            toast("Dodano nagranie lektora");
+        } else if (VoiceRecorder.error) {
+            toast(VoiceRecorder.error);
+        }
+    }
+    Timer {
+        id: countdownTimer
+        interval: 1000; repeat: true
+        onTriggered: {
+            if (--ed.countdown > 0) return;
+            stop();
+            ed.voiceStart = player.position;
+            if (VoiceRecorder.start(Project.recordingsDir())) {
+                player.muted = true;
+                player.play();
+            } else if (VoiceRecorder.error) {
+                ed.toast(VoiceRecorder.error);
+            }
+        }
+    }
+    Connections {
+        target: player
+        // Film się skończył (albo ktoś zatrzymał podgląd) — koniec nagrania
+        function onPlayingChanged() { if (!player.playing && VoiceRecorder.recording) ed.stopVoice(); }
+    }
     // Naklejka (PNG) jako nakładka w miejscu głowicy; scale — szerokość względem kadru
     function addSticker(path, name, scale) {
         if (Project.duration === 0) { toast("Najpierw dodaj film albo zdjęcie"); return; }
@@ -140,6 +193,9 @@ GlassPane {
         else if (what.startsWith("sticker:")) addSticker(Stickers.builtinFile(arg), Stickers.builtinName(arg), 0.5);
         else if (what.startsWith("emoji:")) addSticker(Stickers.emojiFile(arg), Stickers.emojiName(arg), 0.3);
         else if (what.startsWith("lefttab:")) mediaPanel.tab = arg;
+        else if (what === "voice") openVoice();
+        else if (what === "voicerec") startVoice();
+        else if (what === "voicestop") stopVoice();
         else if (what.startsWith("emojisearch:")) { mediaPanel.tab = "stickers"; stickerPanel.query = arg; }
         else if (what.startsWith("ov:")) { const kv = arg.split("="); Project.setValue(selected, kv[0], isNaN(Number(kv[1])) ? (kv[1] === "true" ? true : kv[1]) : Number(kv[1])); }
         else if (what.startsWith("ovpos:")) { const v = arg.split(","); Project.setValue(selected, "pos", { x: Number(v[0]), y: Number(v[1]) }); }
@@ -362,6 +418,27 @@ GlassPane {
                     player: player
                     visible: Project.duration > 0
                 }
+                // Odliczanie przed nagraniem lektora
+                Rectangle {
+                    anchors.fill: parent
+                    visible: ed.countdown > 0
+                    color: Qt.rgba(0, 0, 0, 0.45)
+                    z: 5
+                    Text {
+                        anchors.centerIn: parent
+                        text: ed.countdown
+                        color: "white"
+                        font.family: Theme.font; font.pixelSize: Math.min(parent.width, parent.height) / 3; font.weight: Font.Bold
+                    }
+                }
+                Rectangle {     // znacznik nagrywania
+                    visible: VoiceRecorder.recording
+                    x: 10; y: 10; z: 5
+                    width: recText.implicitWidth + 30; height: 26; radius: 13
+                    color: Qt.rgba(0, 0, 0, 0.55)
+                    Rectangle { x: 10; anchors.verticalCenter: parent.verticalCenter; width: 9; height: 9; radius: 4.5; color: "#FF3B30" }
+                    Text { id: recText; x: 24; anchors.verticalCenter: parent.verticalCenter; text: "Nagrywanie"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                }
                 TextHandle {
                     anchors.fill: parent
                     visible: ed.selectedKind === "text" || ed.selectedKind === "overlay"
@@ -389,8 +466,17 @@ GlassPane {
                 }
             }
 
+            VoiceBar {
+                visible: ed.voiceMode
+                z: 10
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 2
+                editor: ed
+            }
+
             // Sterowanie odtwarzaniem
             Item {
+                visible: !ed.voiceMode
                 anchors.top: screen.bottom; anchors.topMargin: 8
                 width: parent.width; height: 44
                 Text {
@@ -443,7 +529,7 @@ GlassPane {
     Timeline {
         id: timeline
         anchors.bottom: parent.bottom
-        width: parent.width; height: 276 + timeline.overlayH - 36
+        width: parent.width; height: 276 + timeline.overlayH - 36 + timeline.musicH - 42
         player: player
         editor: ed
     }

@@ -38,6 +38,7 @@ class Project : public QObject
     Q_PROPERTY(QVariantList motions READ motions CONSTANT)
     Q_PROPERTY(bool fadeIn READ fadeIn NOTIFY changed)
     Q_PROPERTY(bool fadeOut READ fadeOut NOTIFY changed)
+    Q_PROPERTY(bool duck READ duck NOTIFY changed)         // przyciszanie muzyki i filmu pod lektorem
 
 public:
     ~Project() override;
@@ -74,6 +75,7 @@ public:
     Q_INVOKABLE QVariantMap textBox(const QString &id) const;        // prostokąt napisu w ułamkach kadru {x, y, w, h}
     bool fadeIn() const { return m_fadeIn; }
     bool fadeOut() const { return m_fadeOut; }
+    bool duck() const { return m_duck; }
 
     // ——— Projekty ———
     Q_INVOKABLE void newProject(const QString &format);             // "9:16", "16:9", "1:1"
@@ -87,6 +89,8 @@ public:
     Q_INVOKABLE QString addFromMedia(const QString &path, int frame);                 // z biblioteki na oś czasu
     Q_INVOKABLE QString addText(int frame, const QString &text = QString());
     // Druga ścieżka obrazu: film albo zdjęcie (naklejka PNG) nad głównym obrazem; zwraca id albo ""
+    Q_INVOKABLE QString addVoice(const QString &path, int frame);   // nagranie lektora na ścieżkę dźwięku
+    Q_INVOKABLE QString recordingsDir() const;                       // nagrania tego projektu
     Q_INVOKABLE QString addOverlay(const QString &pathOrUrl, int frame, const QString &name = QString());
     Q_INVOKABLE void trim(const QString &id, int deltaStart, int deltaEnd);          // przesunięcie krawędzi w klatkach osi
     Q_INVOKABLE void moveClip(const QString &id, int index);                         // ścieżka wideo: nowa kolejność
@@ -162,7 +166,14 @@ private:
     };
     // Słowa napisu z czasami: zapamiętane z mowy, a gdy tekst zmieniono — rozłożone proporcjonalnie do długości
     QList<Text::Word> wordTimings(const Text &t) const;
-    struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
+    struct Music {
+        QString id, path, name;
+        int start = 0, in = 0, out = 0;
+        int srcFrames = 0;
+        double volume = 0.8;
+        bool fadeOut = true;
+        bool voice = false;             // nagranie lektora (pod nim muzyka i film się przyciszają)
+    };
     struct Overlay {
         QString id, path, kind, name;
         int start = 0, in = 0, out = 0, srcFrames = 0;   // srcFrames 0 — zdjęcie (bez limitu długości)
@@ -182,7 +193,8 @@ private:
     TextLayout layoutText(const Text &t, int width, int height) const;
 
     QString m_id, m_name, m_format = QStringLiteral("9:16");
-    bool m_fadeIn = false, m_fadeOut = false;   // rozjaśnienie z czerni na początku, ściemnienie na końcu
+    bool m_fadeIn = false, m_fadeOut = false;
+    bool m_duck = true;   // rozjaśnienie z czerni na początku, ściemnienie na końcu
     QList<Media> m_media;
     QList<Clip> m_clips;
     QList<Text> m_texts;

@@ -1,7 +1,8 @@
 # Montaż (aster-montaz) — budowane z głównego CMakeLists.txt repozytorium.
 # Silnik: MLT 7 (pakiet mlt-devel, API C++ mlt++) — ten sam, na którym stoją Kdenlive i Shotcut;
-# podgląd: klatki z MLT jako tekstura w scenie QML, eksport przez FFmpeg (konsument avformat MLT).
-find_package(Qt6 REQUIRED COMPONENTS DBus Network)
+# podgląd: klatki z MLT jako tekstura w scenie QML, eksport przez FFmpeg (konsument avformat MLT),
+# nagrywanie lektora z mikrofonu: Qt Multimedia (QAudioSource).
+find_package(Qt6 REQUIRED COMPONENTS DBus Network Multimedia)
 # Napisy z mowy: whisper.cpp (pakiet whisper-cpp-devel); bez niego program działa, tylko bez tej funkcji
 find_package(whisper CONFIG QUIET)
 find_package(PkgConfig REQUIRED)
@@ -19,6 +20,7 @@ set(MONTAZ_QML
     qml/ExportSheet.qml
     qml/CaptionsSheet.qml
     qml/StickerPanel.qml
+    qml/VoiceBar.qml
 )
 foreach(f ${MONTAZ_QML})
     get_filename_component(name ${f} NAME)
@@ -38,6 +40,8 @@ qt_add_qml_module(aster-montaz
         src/captions.h
         src/stickers.cpp
         src/stickers.h
+        src/voice.cpp
+        src/voice.h
 )
 
 target_link_libraries(aster-montaz PRIVATE
@@ -46,6 +50,7 @@ target_link_libraries(aster-montaz PRIVATE
     Qt6::Qml
     Qt6::DBus
     Qt6::Network
+    Qt6::Multimedia
     PkgConfig::MLT
     aster-uiplugin
 )

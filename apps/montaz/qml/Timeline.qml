@@ -19,9 +19,9 @@ Item {
     readonly property int videoH: 64
     readonly property int overlayY: videoY + videoH + 6
     // Nakładki nachodzące na siebie w czasie dostają osobne wiersze (najwyżej 4)
-    readonly property var overlayLanes: {
+    function lanesFor(items) {
         const lanes = [], ends = [];
-        const list = Project.overlays.slice().sort((a, b) => a.start - b.start);
+        const list = items.slice().sort((a, b) => a.start - b.start);
         for (const o of list) {
             let l = 0;
             while (l < ends.length && ends[l] > o.start) l++;
@@ -31,16 +31,21 @@ Item {
         }
         return { map: lanes, count: Math.max(1, ends.length) };
     }
+    readonly property var overlayLanes: lanesFor(Project.overlays)
+    // Muzyka i lektor nachodzące na siebie też dostają osobne wiersze
+    readonly property var musicLanes: lanesFor(Project.music)
+    readonly property int musicLaneH: musicLanes.count > 1 ? 30 : 42
     readonly property int laneH: overlayLanes.count > 1 ? 28 : 36
     readonly property int overlayH: laneH * overlayLanes.count
     readonly property int textY: overlayY + overlayH + 6
     readonly property int textH: 32
     readonly property int musicY: textY + textH + 6
-    readonly property int musicH: 42
+    readonly property int musicH: musicLaneH * musicLanes.count
     readonly property color videoColor: Theme.dark ? "#2A2E39" : "#C9CFDB"
     readonly property color textColor: "#8B6CF6"
     readonly property color musicColor: "#24A57E"
     readonly property color overlayColor: "#D9792B"
+    readonly property color voiceColor: "#D9467A"
     // Ścieżka pod punktem (y we współrzędnych osi czasu): "video", "overlay", "text", "music"
     function trackAtY(y) {
         const cy = y - bar.height;
@@ -119,6 +124,7 @@ Item {
             BarButton { icon: "textSize"; label: "Tekst"; hint: "T"; onClicked: tl.editor.addText() }
             BarButton { icon: "image"; label: "Nakładka"; enabled: Project.duration > 0; onClicked: tl.editor.overlayRequested() }
             BarButton { icon: "music"; label: "Muzyka"; onClicked: tl.editor.importRequested() }
+            BarButton { icon: "mic"; label: "Lektor"; enabled: Project.duration > 0; onClicked: tl.editor.openVoice() }
             BarButton { icon: "captions"; label: "Napisy z mowy"; visible: Captions.available; enabled: Project.clips.length > 0; onClicked: tl.editor.openCaptions() }
         }
         Row {
@@ -268,7 +274,12 @@ Item {
             }
             Repeater {
                 model: Project.music
-                delegate: Block { required property var modelData; info: modelData; kind: "music"; y: tl.musicY; height: tl.musicH }
+                delegate: Block {
+                    required property var modelData
+                    info: modelData; kind: "music"
+                    y: tl.musicY + (tl.musicLanes.map[modelData.id] || 0) * tl.musicLaneH
+                    height: tl.musicLaneH - (tl.musicLanes.count > 1 ? 2 : 0)
+                }
             }
 
             // Przyciski przejść na styku klipów
@@ -361,7 +372,8 @@ Item {
             id: body
             anchors.fill: parent
             radius: 7
-            color: b.kind === "clip" ? tl.videoColor : b.kind === "text" ? tl.textColor : b.kind === "overlay" ? tl.overlayColor : tl.musicColor
+            color: b.kind === "clip" ? tl.videoColor : b.kind === "text" ? tl.textColor : b.kind === "overlay" ? tl.overlayColor
+                   : b.info.voice ? tl.voiceColor : tl.musicColor
             clip: true
 
             // Taśma klatek
@@ -430,7 +442,7 @@ Item {
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: b.kind === "text" || b.kind === "music"
-                    d: b.kind === "text" ? Icons.textSize : Icons.music
+                    d: b.kind === "text" ? Icons.textSize : b.info.voice ? Icons.mic : Icons.music
                     size: 13; stroke: 2; color: "white"
                 }
                 Text {

@@ -73,6 +73,16 @@ void Player::setActive(bool active)
     }
 }
 
+void Player::setMuted(bool muted)
+{
+    if (m_muted == muted)
+        return;
+    m_muted = muted;
+    if (m_consumer)
+        m_consumer->set("volume", muted ? 0.0 : 1.0);
+    Q_EMIT mutedChanged();
+}
+
 void Player::stopConsumer()
 {
     if (m_consumer && !m_consumer->is_stopped())
@@ -100,6 +110,7 @@ bool Player::startConsumer()
             m_consumer = std::move(c);
         }
         m_consumer->connect(*m_producer);
+        m_consumer->set("volume", m_muted ? 0.0 : 1.0);
         if (m_consumer->start() == 0 && !m_consumer->is_stopped())
             return true;
         m_consumer.reset();

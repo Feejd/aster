@@ -22,6 +22,7 @@ class Player : public QObject
     Q_PROPERTY(int position READ position NOTIFY positionChanged)
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)      // np. podczas nagrywania lektora
 
 public:
     explicit Player(QObject *parent = nullptr);
@@ -32,6 +33,8 @@ public:
     bool playing() const { return m_playing; }
     bool active() const { return m_active; }
     void setActive(bool active);
+    bool muted() const { return m_muted; }
+    void setMuted(bool muted);
 
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
@@ -44,6 +47,7 @@ Q_SIGNALS:
     void positionChanged();
     void playingChanged();
     void activeChanged();
+    void mutedChanged();
 
 private:
     QImage m_image;
@@ -55,6 +59,7 @@ private:
     int m_length = 0;
     bool m_playing = false;
     bool m_active = true;
+    bool m_muted = false;
     QTimer m_rebuild;
 
     void rebuild();

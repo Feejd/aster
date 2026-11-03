@@ -248,7 +248,7 @@ QVariantList Project::music() const
         l << QVariantMap{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("name"), m.name},
                          {QStringLiteral("start"), m.start}, {QStringLiteral("in"), m.in}, {QStringLiteral("out"), m.out},
                          {QStringLiteral("length"), m.out - m.in + 1}, {QStringLiteral("srcFrames"), m.srcFrames},
-                         {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}};
+                         {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}, {QStringLiteral("voice"), m.voice}};
     return l;
 }
 
@@ -515,9 +515,10 @@ QJsonObject Project::toJson() const
     for (const Music &m : m_music)
         music << QJsonObject{{QStringLiteral("id"), m.id}, {QStringLiteral("path"), m.path}, {QStringLiteral("start"), m.start},
                              {QStringLiteral("in"), m.in}, {QStringLiteral("out"), m.out}, {QStringLiteral("srcFrames"), m.srcFrames},
-                             {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}};
+                             {QStringLiteral("volume"), m.volume}, {QStringLiteral("fadeOut"), m.fadeOut}, {QStringLiteral("voice"), m.voice},
+                             {QStringLiteral("name"), m.name}};
     return QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("name"), m_name}, {QStringLiteral("format"), m_format},
-                       {QStringLiteral("fps"), Fps}, {QStringLiteral("fadeIn"), m_fadeIn}, {QStringLiteral("fadeOut"), m_fadeOut},
+                       {QStringLiteral("fps"), Fps}, {QStringLiteral("fadeIn"), m_fadeIn}, {QStringLiteral("fadeOut"), m_fadeOut}, {QStringLiteral("duck"), m_duck},
                        {QStringLiteral("media"), media}, {QStringLiteral("clips"), clips},
                        {QStringLiteral("texts"), texts}, {QStringLiteral("music"), music}, {QStringLiteral("overlays"), overlays}};
 }
@@ -528,6 +529,7 @@ void Project::fromJson(const QJsonObject &o)
     m_format = o.value(QLatin1String("format")).toString(QStringLiteral("9:16"));
     m_fadeIn = o.value(QLatin1String("fadeIn")).toBool();
     m_fadeOut = o.value(QLatin1String("fadeOut")).toBool();
+    m_duck = o.value(QLatin1String("duck")).toBool(true);
     m_media.clear();
     m_clips.clear();
     m_texts.clear();
@@ -626,6 +628,9 @@ void Project::fromJson(const QJsonObject &o)
         x.srcFrames = m.value(QLatin1String("srcFrames")).toInt();
         x.volume = m.value(QLatin1String("volume")).toDouble(0.8);
         x.fadeOut = m.value(QLatin1String("fadeOut")).toBool(true);
+        x.voice = m.value(QLatin1String("voice")).toBool();
+        if (x.voice)
+            x.name = m.value(QLatin1String("name")).toString(x.name);
         m_music << x;
     }
 }
@@ -944,6 +949,38 @@ QString Project::addFromMedia(const QString &path, int frame)
         if (c.path == path && clipAt(qMax(0, frame)) == c.id)
             return c.id;
     return QString();
+}
+
+QString Project::recordingsDir() const
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/recordings/") + (m_id.isEmpty() ? QStringLiteral("inne") : m_id);
+}
+
+QString Project::addVoice(const QString &path, int frame)
+{
+    if (m_id.isEmpty() || path.isEmpty())
+        return QString();
+    const Media *m = probe(path);
+    if (!m || m->frames < 3)
+        return QString();
+    const int frames = m->frames;
+    snapshot();
+    int n = 1;
+    for (const Music &x : std::as_const(m_music))
+        n += x.voice;
+    Music v;
+    v.id = newId();
+    v.path = path;
+    v.name = QStringLiteral("Lektor %1").arg(n);
+    v.start = qMax(0, frame);
+    v.out = frames - 1;
+    v.srcFrames = frames;
+    v.volume = 1;
+    v.fadeOut = false;
+    v.voice = true;
+    m_music << v;
+    commit();
+    return v.id;
 }
 
 QString Project::addOverlay(const QString &pathOrUrl, int frame, const QString &name)
@@ -1327,6 +1364,8 @@ void Project::setOption(const QString &key, const QVariant &value)
         const QString f = value.toString();
         if (f == QLatin1String("9:16") || f == QLatin1String("16:9") || f == QLatin1String("1:1"))
             m_format = f;
+    } else if (key == QLatin1String("duck")) {
+        m_duck = value.toBool();
     } else if (key == QLatin1String("fadeIn"))
         m_fadeIn = value.toBool();
     else if (key == QLatin1String("fadeOut"))
@@ -1620,6 +1659,39 @@ QString Project::xml(int W, int H) const
             filter(fl.first, fl.second);
         x.writeEndElement();
     }
+    // Przyciszanie pod lektorem: −14 dB na czas nagrań głosu (z łagodnym przejściem 0,3 s),
+    // jako animowany poziom filtra głośności na ścieżce filmu i na muzyce
+    QString duckLevels;
+    if (m_duck) {
+        QList<QPair<int, int>> spans;
+        for (const Music &m : std::as_const(m_music))
+            if (m.voice)
+                spans << qMakePair(m.start, m.start + m.out - m.in);
+        std::sort(spans.begin(), spans.end());
+        const int ramp = 9;
+        QList<QPair<int, int>> merged;
+        for (const auto &sp : std::as_const(spans)) {
+            if (!merged.isEmpty() && sp.first - ramp <= merged.last().second + ramp)
+                merged.last().second = qMax(merged.last().second, sp.second);
+            else
+                merged << sp;
+        }
+        if (!merged.isEmpty()) {
+            QStringList keys{QStringLiteral("0=0")};
+            int last = 0;
+            for (const auto &sp : std::as_const(merged)) {
+                const int a = qMax(last + 1, sp.first - ramp), b = qMax(a + 1, sp.first), c = qMax(b + 1, sp.second), d = c + ramp;
+                keys << QStringLiteral("%1=0").arg(a) << QStringLiteral("%1=-14").arg(b) << QStringLiteral("%1=-14").arg(c) << QStringLiteral("%1=0").arg(d);
+                last = d;
+            }
+            duckLevels = keys.join(QLatin1Char(';'));
+        }
+    }
+    auto duckFilter = [&] {
+        if (!duckLevels.isEmpty())
+            filter(QStringLiteral("volume"), {{QStringLiteral("level"), duckLevels}});
+    };
+
     x.writeStartElement(QStringLiteral("playlist"));
     x.writeAttribute(QStringLiteral("id"), QStringLiteral("wideo"));
     for (int i = 0; i < m_clips.size(); ++i) {
@@ -1641,6 +1713,7 @@ QString Project::xml(int W, int H) const
             x.writeEndElement();
         }
     }
+    duckFilter();
     x.writeEndElement();
 
     // Muzyka: każdy utwór na własnej ścieżce (mogą na siebie zachodzić)
@@ -1670,6 +1743,8 @@ QString Project::xml(int W, int H) const
             filter(QStringLiteral("volume"), {{QStringLiteral("gain"), QStringLiteral("1")}, {QStringLiteral("end"), QStringLiteral("0")}},
                    len - Fps, len - 1);
         x.writeEndElement();
+        if (!m.voice)
+            duckFilter();
         x.writeEndElement();
     }
 

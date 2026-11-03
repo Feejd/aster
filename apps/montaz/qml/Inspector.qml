@@ -33,7 +33,7 @@ Item {
             Text {
                 width: parent.width
                 text: insp.kind === "clip" ? (insp.info.kind === "image" ? "Zdjęcie" : "Klip wideo")
-                      : insp.kind === "text" ? "Tekst" : insp.kind === "music" ? "Muzyka"
+                      : insp.kind === "text" ? "Tekst" : insp.kind === "music" ? (insp.info.voice ? "Lektor" : "Muzyka")
                       : insp.kind === "overlay" ? (insp.info.kind === "image" ? "Nakładka — zdjęcie" : "Nakładka — film") : "Projekt"
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold

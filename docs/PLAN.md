@@ -183,7 +183,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       w opisie, Nowość, Część 1, strzałka, kółko, dymek, Wow, serce, iskry) i wszystkie emoji z polskim wyszukiwaniem
       (dane panelu emoji Aster, rysowane z Noto Color Emoji do PNG); karta „Naklejki” obok multimediów, klik dodaje
       naklejkę jako nakładkę w miejscu głowicy (z wyskokiem, przeciąganiem, obrotem)
-- [ ] Montaż, dalej: naklejki animowane (GIF/WebP, Lottie), własne naklejki użytkownika z wycinaniem tła,
+- [x] Montaż 8: nagrywanie lektora — przycisk „Lektor”, pasek z poziomem mikrofonu, odliczanie 3‑2‑1, nagranie
+      od miejsca głowicy przy odtwarzanym (wyciszonym) filmie, zapis WAV (QAudioSource) do nagrań projektu, nagranie
+      na ścieżce dźwięku jako „Lektor N”; automatyczne przyciszanie muzyki i dźwięku filmu pod lektorem (−14 dB,
+      można wyłączyć); muzyka i lektor nachodzące na siebie w osobnych wierszach osi
+- [ ] Montaż, dalej: odszumianie lektora (rnnoise w MLT), efekty głosu, naklejki animowane (GIF/WebP, Lottie),
+      własne naklejki użytkownika z wycinaniem tła,
       klatki kluczowe położenia i skali, nagrywanie lektora, cofanie klipu i stop-klatka,
       płynna zmiana prędkości, cięcia do rytmu muzyki, wyciszanie początku/końca klipu, obrót o 90°, szablony,
       fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
