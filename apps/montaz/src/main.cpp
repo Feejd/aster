@@ -7,6 +7,7 @@
 
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QMouseEvent>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QTimer>
@@ -43,6 +44,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("mthumb"), new ThumbProvider);
+    engine.addImageProvider(QStringLiteral("mwave"), new WaveProvider);
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
@@ -53,10 +55,28 @@ int main(int argc, char *argv[])
     if (!files.isEmpty())
         QMetaObject::invokeMethod(window, "startWith", Q_ARG(QVariant, files));
 
-    // Do testów: ASTER_OPEN=kroki rozdzielone „;” (testOpen w Main.qml, co 1,2 s), ASTER_SHOT=plik.png (ASTER_SHOT_DELAY ms)
+    // Do testów: ASTER_OPEN=kroki rozdzielone „;” (testOpen w Main.qml, co 1,2 s), ASTER_SHOT=plik.png (ASTER_SHOT_DELAY ms).
+    // Krok drag:x1,y1,x2,y2 przeciąga myszą w oknie (współrzędne okna) — sprawdza przycinanie i przesuwanie.
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
-        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] { QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step)); });
+        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] {
+            if (step.startsWith(QLatin1String("drag:"))) {
+                const QStringList v = step.mid(5).split(QLatin1Char(','));
+                if (v.size() != 4)
+                    return;
+                const QPointF a(v[0].toDouble(), v[1].toDouble()), b(v[2].toDouble(), v[3].toDouble());
+                auto send = [window](QEvent::Type type, QPointF p, Qt::MouseButtons buttons) {
+                    QMouseEvent e(type, p, window->mapToGlobal(p), type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons, Qt::NoModifier);
+                    QCoreApplication::sendEvent(window, &e);
+                };
+                send(QEvent::MouseButtonPress, a, Qt::LeftButton);
+                for (int k = 1; k <= 10; ++k)
+                    send(QEvent::MouseMove, a + (b - a) * k / 10.0, Qt::LeftButton);
+                send(QEvent::MouseButtonRelease, b, Qt::NoButton);
+                return;
+            }
+            QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step));
+        });
     const QString shot = qEnvironmentVariable("ASTER_SHOT");
     if (!shot.isEmpty()) {
         const int delay = qEnvironmentVariableIntValue("ASTER_SHOT_DELAY");

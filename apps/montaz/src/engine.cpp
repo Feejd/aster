@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QMutex>
+#include <QPainter>
 #include <QRunnable>
 #include <QStandardPaths>
 #include <QThread>
@@ -526,11 +527,13 @@ public:
     void run() override
     {
         const int frame = m_id.section(QLatin1Char('/'), 0, 0).toInt();
-        const QString path = QString::fromUtf8(QByteArray::fromBase64(m_id.section(QLatin1Char('/'), 1).toLatin1(), QByteArray::Base64UrlEncoding));
+        const QString path = QString::fromUtf8(QByteArray::fromBase64(m_id.section(QLatin1Char('/'), 1, 1).toLatin1(), QByteArray::Base64UrlEncoding));
+        const QString look = m_id.section(QLatin1Char('/'), 2, 2);      // podgląd filtra kolorów (opcjonalnie)
         const int th = m_size.height() > 0 ? m_size.height() : 96;
         static const QStringList images = {QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("png"), QStringLiteral("webp"),
                                            QStringLiteral("bmp"), QStringLiteral("gif"), QStringLiteral("heic"), QStringLiteral("avif")};
-        if (images.contains(QFileInfo(path).suffix().toLower())) {
+        const bool image = images.contains(QFileInfo(path).suffix().toLower());
+        if (image && look.isEmpty()) {
             QImageReader r(path);
             r.setAutoTransform(true);
             const QSize s = r.size();
@@ -555,6 +558,12 @@ public:
                     const int rot = qAbs(producer->get_int(QStringLiteral("meta.media.%1.codec.rotate").arg(vi).toUtf8().constData())) % 360;
                     if (rot == 90 || rot == 270)
                         std::swap(w, h);
+                    if (image) {
+                        QImageReader r(path);
+                        r.setAutoTransform(true);
+                        w = r.size().width();
+                        h = r.size().height();
+                    }
                     if (w > 0 && h > 0) {
                         // Profil w proporcjach filmu — bez czarnych pasów na miniaturze
                         const int ph = qMax(2, th / 2 * 2);
@@ -565,6 +574,16 @@ public:
                 }
             }
             if (producer && producer->is_valid()) {
+                std::vector<std::unique_ptr<Mlt::Filter>> filters;
+                for (const auto &spec : Project::lookFilters(look)) {
+                    auto f = std::make_unique<Mlt::Filter>(*profile, spec.first.toUtf8().constData());
+                    if (!f->is_valid())
+                        continue;
+                    for (const auto &prop : spec.second)
+                        f->set(prop.first.toUtf8().constData(), prop.second.toUtf8().constData());
+                    producer->attach(*f);
+                    filters.push_back(std::move(f));
+                }
                 producer->seek(qBound(0, frame, qMax(0, producer->get_length() - 1)));
                 std::unique_ptr<Mlt::Frame> f(producer->get_frame());
                 if (f && f->is_valid()) {
@@ -576,6 +595,8 @@ public:
                     if (img && fmt == mlt_image_rgba)
                         m_image = QImage(img, w, h, QImage::Format_RGBA8888).copy();
                 }
+                for (const auto &f : filters)
+                    producer->detach(*f);
             }
         }
         if (!m_image.isNull()) {
@@ -592,7 +613,91 @@ private:
     friend class ::ThumbProvider;
 };
 
+// Kształt fali: szczyty głośności każdej klatki dźwięku, rysowane jako słupki
+class WaveResponse : public QQuickImageResponse, public QRunnable
+{
+public:
+    WaveResponse(const QString &id, const QSize &size)
+        : m_id(id), m_size(size)
+    {
+        setAutoDelete(false);
+    }
+    QQuickTextureFactory *textureFactory() const override { return QQuickTextureFactory::textureFactoryForImage(m_image); }
+
+    void run() override
+    {
+        const QString path = QString::fromUtf8(QByteArray::fromBase64(m_id.toLatin1(), QByteArray::Base64UrlEncoding));
+        QList<float> peaks;
+        {
+            Mlt::Profile profile;
+            setupProfile(profile, 64, 36);
+            Mlt::Producer p(profile, nullptr, path.toUtf8().constData());
+            if (p.is_valid()) {
+                p.set("video_index", -1);
+                const int length = p.get_length();
+                peaks.reserve(length);
+                for (int i = 0; i < length; ++i) {
+                    std::unique_ptr<Mlt::Frame> f(p.get_frame());
+                    if (!f || !f->is_valid())
+                        break;
+                    mlt_audio_format fmt = mlt_audio_s16;
+                    int freq = 48000, channels = 2;
+                    int samples = mlt_audio_calculate_frame_samples(Project::Fps, freq, i);
+                    const auto *data = static_cast<const int16_t *>(f->get_audio(fmt, freq, channels, samples));
+                    int peak = 0;
+                    for (int k = 0; data && k < samples * channels; ++k)
+                        peak = qMax(peak, qAbs(int(data[k])));
+                    peaks << peak / 32768.0f;
+                }
+            }
+        }
+        const int w = m_size.width() > 0 ? m_size.width() : 1600, h = m_size.height() > 0 ? m_size.height() : 64;
+        m_image = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
+        m_image.fill(Qt::transparent);
+        if (!peaks.isEmpty()) {
+            QPainter painter(&m_image);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(255, 255, 255, 150));
+            const int bars = w / 3;
+            for (int b = 0; b < bars; ++b) {
+                const int from = int(qint64(b) * peaks.size() / bars), to = qMax(from + 1, int(qint64(b + 1) * peaks.size() / bars));
+                float v = 0;
+                for (int i = from; i < to && i < peaks.size(); ++i)
+                    v = qMax(v, peaks.at(i));
+                const qreal bh = qMax(1.0, std::sqrt(double(v)) * (h - 2));      // pierwiastek — ciche fragmenty też widać
+                painter.drawRoundedRect(QRectF(b * 3, (h - bh) / 2, 2, bh), 1, 1);
+            }
+        }
+        {
+            QMutexLocker lock(&cacheLock);
+            thumbCache().insert(QStringLiteral("wave:") + m_id, new QImage(m_image));
+        }
+        Q_EMIT finished();
+    }
+
+private:
+    QString m_id;
+    QSize m_size;
+    QImage m_image;
+    friend class ::WaveProvider;
+};
+
 } // namespace
+
+QQuickImageResponse *WaveProvider::requestImageResponse(const QString &id, const QSize &requestedSize)
+{
+    auto *response = new WaveResponse(id, requestedSize);
+    {
+        QMutexLocker lock(&cacheLock);
+        if (QImage *img = thumbCache().object(QStringLiteral("wave:") + id)) {
+            response->m_image = *img;
+            QMetaObject::invokeMethod(response, [response] { Q_EMIT response->finished(); }, Qt::QueuedConnection);
+            return response;
+        }
+    }
+    thumbPool().start(response);
+    return response;
+}
 
 QQuickImageResponse *ThumbProvider::requestImageResponse(const QString &id, const QSize &requestedSize)
 {

@@ -158,9 +158,13 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       i klatka po klatce, 6 stylów napisów, przenikanie 0,5/1 s, głośność klipu i muzyki (wyciszanie na końcu),
       prędkość 0,25–3×, kadr „wypełnij”/„zmieść”, cofanie; projekty zapisują się same (JSON), zapis do MLT XML;
       eksport MP4 (H.264 przez x264 albo OpenH264 + AAC) w 720p/1080p, a bez kodera H.264 — WebM (VP9/Opus) z wyjaśnieniem
+- [x] Montaż 2: filtry kolorów (Żywy, Ciepły, Chłodny, Pogodny, Kino, Retro, Czarno-biały — z miniaturami klipu)
+      i korekta jasności, kontrastu, nasycenia; animacje napisów (pojawianie, wjazd od dołu i z boku, pisanie litera
+      po literze); rozjaśnienie z czerni i ściemnienie na końcu filmu (obraz i dźwięk); kształt fali muzyki na osi;
+      muzyka w tle przycinana przy dodaniu do długości filmu; test przeciągania myszą (krok drag: w ASTER_OPEN)
 - [ ] Montaż, dalej: automatyczne napisy z mowy (whisper.cpp offline, po polsku, model do pobrania przy pierwszym użyciu),
-      filtry i korekcja kolorów, animacje tekstu (pojawianie się, słowo po słowie), przejścia (przesunięcie, zoom),
-      kształt fali dźwięku na osi, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
+      animacje „słowo po słowie” pod napisy z mowy, przejścia (przesunięcie, zoom),
+      fala dźwięku także w klipach wideo, kilka ścieżek wideo (obraz w obrazie), wyciszanie muzyki pod mową, zatrzymanie klatki,
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
 - [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264
 - [ ] Aster Code — edytor kodu w stylu Aster

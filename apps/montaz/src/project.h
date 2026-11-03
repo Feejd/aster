@@ -31,6 +31,10 @@ class Project : public QObject
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY changed)
     Q_PROPERTY(QVariantList projects READ projects NOTIFY projectsChanged)
     Q_PROPERTY(QVariantList textStyles READ textStyles CONSTANT)
+    Q_PROPERTY(QVariantList looks READ looks CONSTANT)
+    Q_PROPERTY(QVariantList textAnimations READ textAnimations CONSTANT)
+    Q_PROPERTY(bool fadeIn READ fadeIn NOTIFY changed)
+    Q_PROPERTY(bool fadeOut READ fadeOut NOTIFY changed)
 
 public:
     ~Project() override;
@@ -58,6 +62,10 @@ public:
     bool canRedo() const { return !m_redo.isEmpty(); }
     QVariantList projects() const { return m_projects; }
     QVariantList textStyles() const;
+    QVariantList looks() const;
+    QVariantList textAnimations() const;
+    bool fadeIn() const { return m_fadeIn; }
+    bool fadeOut() const { return m_fadeOut; }
 
     // ——— Projekty ———
     Q_INVOKABLE void newProject(const QString &format);             // "9:16", "16:9", "1:1"
@@ -90,12 +98,17 @@ public:
     Q_INVOKABLE QString videosDir() const;
     Q_INVOKABLE QString when(qint64 msecs) const;
     Q_INVOKABLE void showInFolder(const QString &path) const;
-    Q_INVOKABLE QString thumb(const QString &path, int frame) const { return thumbUrl(path, frame); }
+    Q_INVOKABLE QString thumb(const QString &path, int frame, const QString &look = QString()) const { return thumbUrl(path, frame, look); }
+    Q_INVOKABLE QString wave(const QString &path) const;              // image://mwave/… — kształt fali dźwięku
+    Q_INVOKABLE void setOption(const QString &key, const QVariant &value);   // ustawienia całego filmu (fadeIn, fadeOut)
     Q_INVOKABLE bool saveMlt(const QString &pathOrUrl) const;        // projekt dla Kdenlive/Shotcut
 
     QString xml(int width, int height) const;                         // opis MLT dla danego rozmiaru
 
-    static QString thumbUrl(const QString &path, int frame);          // image://mthumb/…
+    static QString thumbUrl(const QString &path, int frame, const QString &look = QString());   // image://mthumb/…
+    // Filtry MLT „wyglądu” klipu: [(usługa, [(właściwość, wartość)])] — wspólne dla filmu i miniatur
+    using FilterList = QList<QPair<QString, QList<QPair<QString, QString>>>>;
+    static FilterList lookFilters(const QString &look, double brightness = 0, double contrast = 1, double saturation = 1);
 
 Q_SIGNALS:
     void changed();
@@ -113,15 +126,18 @@ private:
         double speed = 1.0;
         double volume = 1.0;
         bool fill = true;              // wypełnij kadr (przytnij) zamiast pasów
+        QString look;                  // filtr kolorów („zywy”, „cieply”…; puste — bez)
+        double brightness = 0, contrast = 1, saturation = 1;
         int fade = 0;                  // przenikanie z poprzedniego klipu (klatki osi)
         int srcFrames = 0;             // długość źródła (0 — zdjęcie, bez limitu)
         // wyliczane
         int start = 0, length = 0;
     };
-    struct Text { QString id, text, style; int start = 0, length = 0; };
+    struct Text { QString id, text, style, anim = QStringLiteral("wjazd"); int start = 0, length = 0; };
     struct Music { QString id, path, name; int start = 0, in = 0, out = 0; int srcFrames = 0; double volume = 0.8; bool fadeOut = true; };
 
     QString m_id, m_name, m_format = QStringLiteral("9:16");
+    bool m_fadeIn = false, m_fadeOut = false;   // rozjaśnienie z czerni na początku, ściemnienie na końcu
     QList<Media> m_media;
     QList<Clip> m_clips;
     QList<Text> m_texts;

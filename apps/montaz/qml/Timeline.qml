@@ -30,7 +30,7 @@ Item {
         return Math.max(0, Math.round((x - head - pad + flick.contentX) / ppf));
     }
     function fit() {
-        ppf = Math.max(0.05, Math.min(12, (flick.width - 2 * pad - 60) / Math.max(Project.duration, 20 * Project.fps)));
+        ppf = Math.max(0.05, Math.min(12, (flick.width - 2 * pad - 60) / Math.max(Project.duration * 1.08, 6 * Project.fps)));
         flick.contentX = 0;
     }
     function zoom(k) {
@@ -313,6 +313,17 @@ Item {
                     GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.55) }
                     GradientStop { position: 1; color: "transparent" }
                 }
+            }
+            // Kształt fali muzyki (cały utwór, przesunięty o przycięty początek)
+            Image {
+                visible: b.kind === "music"
+                x: -(b.info.in + b.dl) * tl.ppf
+                width: (b.info.srcFrames || 0) * tl.ppf; height: parent.height
+                fillMode: Image.Stretch
+                asynchronous: true
+                sourceSize: Qt.size(1600, 64)
+                source: b.kind === "music" ? Project.wave(b.info.path) : ""
+                opacity: 0.9
             }
             // Przenikanie z poprzedniego klipu
             Rectangle {

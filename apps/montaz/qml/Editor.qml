@@ -99,6 +99,11 @@ GlassPane {
         else if (what.startsWith("fade:")) Project.setValue(selected, "fade", Number(arg));
         else if (what.startsWith("speed:")) Project.setValue(selected, "speed", Number(arg));
         else if (what.startsWith("volume:")) Project.setValue(selected, "volume", Number(arg));
+        else if (what.startsWith("look:")) { Project.setValue(selected, "look", arg); inspector.clipTab = "look"; }
+        else if (what.startsWith("anim:")) Project.setValue(selected, "anim", arg);
+        else if (what.startsWith("option:")) Project.setOption(arg, true);
+        else if (what.startsWith("tab:")) inspector.clipTab = arg;
+        else if (what === "deselect") selected = "";
         else if (what === "export") exportSheet.open();
         else if (what.startsWith("exportstart:")) { exportSheet.open(); exportSheet.startWhenReady(arg); }
         else if (what === "menu") itemMenu(selected, timeline, 300, 120);

@@ -149,3 +149,10 @@ class ThumbProvider : public QQuickAsyncImageProvider
 public:
     QQuickImageResponse *requestImageResponse(const QString &id, const QSize &requestedSize) override;
 };
+
+// Kształt fali dźwięku: image://mwave/<ścieżka w base64>
+class WaveProvider : public QQuickAsyncImageProvider
+{
+public:
+    QQuickImageResponse *requestImageResponse(const QString &id, const QSize &requestedSize) override;
+};
