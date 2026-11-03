@@ -12,6 +12,7 @@ COPY shell /src/shell
 COPY apps /src/apps
 COPY session /src/session
 COPY data /src/data
+COPY tools/make-cursors.py /src/tools/make-cursors.py
 RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
  && cmake --build /build \
  && DESTDIR=/out cmake --install /build
