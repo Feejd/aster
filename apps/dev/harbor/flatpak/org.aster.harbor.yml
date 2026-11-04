@@ -1,0 +1,44 @@
+# Aster Harbor jako Flatpak — kontenery i środowiska programisty na każdym Linuksie z podmanem.
+# Budowa: flatpak-builder --user --install-deps-from=flathub build apps/dev/harbor/flatpak/org.aster.harbor.yml
+# (z katalogu głównego repozytorium). Paczkę buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh.
+# Podman, toolbox, podman compose i Terminal działają na komputerze — Harbor woła je przez `flatpak-spawn --host`.
+app-id: org.aster.harbor
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-harbor
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=home                     # foldery projektów i pliki compose
+  - --filesystem=xdg-config/aster:ro      # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.freedesktop.Flatpak   # flatpak-spawn --host: podman, toolbox, terminal
+  - --own-name=org.aster.Harbor           # D-Bus dla agenta asystenta Aster (gdy okno jest otwarte)
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: harbor
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=dev/harbor
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
+    post-install:
+      - install -Dm644 apps/dev/harbor/flatpak/org.aster.harbor.metainfo.xml /app/share/metainfo/org.aster.harbor.metainfo.xml
+      # Usługa D-Bus na żądanie działa tylko w systemie Aster (nazwa spoza app-id — Flatpak jej nie wystawi)
+      - rm -rf /app/share/dbus-1

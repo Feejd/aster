@@ -329,6 +329,22 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [ ] Aster Code: debugowanie (gdb/lldb przez DAP), zadania z pliku .aster/zadania.json, kilka zadań naraz, zadania w tle (serwer deweloperski) z wykrywaniem adresu
 - [ ] Aster Code: więcej grup i podział w pionie, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie), zwijanie z serwera języka (foldingRange), zwinięte bloki w minimapie, przeciąganie kart między grupami
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
+- [x] Aster Harbor (`apps/dev/harbor`, `aster-harbor`, Start → Narzędzia developera) — kontenery i środowiska
+      programisty: toolboxy i kontenery podmana (stan, obraz, porty jako odnośniki do localhost, CPU/RAM z `podman stats`,
+      odświeżanie co 3 s tylko przy widocznym oknie), start/stop/restart/usuń (z pytaniem), logi na żywo od dołu
+      (`podman logs -f`, filtr, zawijanie, kopiowanie, wyróżnione błędy i ostrzeżenia), terminal w środku (Terminal Aster:
+      `toolbox enter` albo `podman exec`), projekty compose (wykrywane po etykietach kontenerów albo dodany folder
+      z compose.yaml / docker-compose.yml; usługi ze stanem i portami, `podman compose up -d` z postępem i `down`),
+      obrazy (rozmiar, czy używane, usuwanie, „Usuń nieużywane” z podsumowaniem zwolnionego miejsca), kreator „Nowe
+      środowisko” (Node.js, Python, Go, Rust, C/C++, PHP, Java, Ruby, pusta Fedora → `toolbox create` + `dnf install`,
+      nazwa i folder projektu, kroki z wyjściem poleceń, potem terminal albo Aster Code). Podman przez CLI z `--format json`
+      (w Flatpaku `flatpak-spawn --host`); `podman-compose` dodany do obrazu. Dla agenta asystenta: `aster-harbor list|images|
+      logs|start|stop|restart` (`--json`) i D-Bus `org.aster.Harbor` (/org/aster/Harbor: List, Images, Logs, Start, Stop,
+      Restart; usługa na żądanie, kończy się po 5 min). Flatpak: `apps/dev/harbor/flatpak/org.aster.harbor.yml`.
+      Sprawdzone na prawdziwym podmanie 5.8 (osobny kontener z podmanem, toolboxem i podman-compose)
+- [ ] Aster Harbor dalej: wolumeny i sieci, budowanie obrazu z Containerfile, pobieranie obrazu z wyszukiwarką,
+      szczegóły kontenera (zmienne, montowania), eksport/import środowiska, devcontainer.json, podpięcie
+      narzędzi Harbora do asystenta (po scaleniu gałęzi asystenta), test na prawdziwym Asterze (VM)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
 
 ## Asystent Aster
