@@ -3,7 +3,7 @@ import QtQuick
 import Aster.Ui
 import Aster.Settings
 
-// Asystent: kto odpowiada (model lokalny albo chmura — z wyraźną informacją, gdzie są serwery),
+// Aster Intelligence: kto odpowiada (model lokalny albo chmura — z wyraźną informacją, gdzie są serwery),
 // model, klucz API w portfelu systemu, gdzie asystent jest dostępny, historia rozmów.
 Page {
     id: ap
@@ -46,7 +46,7 @@ Page {
         subtitle: ap.pendingInfo
                   ? "Pytania, odpowiedzi i to, co do nich dołączysz, będą wysyłane na serwery " + ap.pendingInfo.name + " (" + ap.pendingInfo.region + ")."
                     + (ap.pendingInfo.id === "deepseek" ? " Serwery DeepSeek są w Chinach, poza ochroną RODO." : "")
-                    + " Bez zgody asystent korzysta tylko z modelu na tym komputerze."
+                    + " Bez zgody Aster Intelligence korzysta tylko z modelu na tym komputerze."
                   : ""
         acceptText: "Zgadzam się"
         onAccepted: {
@@ -67,7 +67,7 @@ Page {
     Section {
         visible: !Assistant.available
         SettingRow {
-            title: "Usługa asystenta nie odpowiada"
+            title: "Aster Intelligence nie odpowiada"
             subtitle: "aster-assistant nie jest zainstalowany albo nie działa"
             icon: "warning"; colors: ["#FCA5A5", "#DC2626"]
             TextButton { anchors.verticalCenter: parent.verticalCenter; text: "Spróbuj ponownie"; onClicked: Assistant.refresh() }
@@ -145,6 +145,12 @@ Page {
             value: "Super + Spacja"
         }
         SettingRow {
+            title: "Narzędzia do pisania"
+            subtitle: "Zaznacz tekst w dowolnym programie — popraw błędy, przeredaguj, zmień ton, streść"
+            icon: "pencil"; colors: ["#F5B9EA", "#C026D3"]
+            value: "Super + Spacja"
+        }
+        SettingRow {
             title: "Terminal"
             subtitle: "aster \"pytanie\" · aster — rozmowa · polecenie | aster \"co tu nie tak?\""
             icon: "terminal"; colors: ["#52525B", "#18181B"]
@@ -155,7 +161,7 @@ Page {
     Section {
         visible: Assistant.available
         title: "Historia"
-        footer: "Rozmowy są zapisywane tylko na tym komputerze (~/.local/share/aster/asystent). Asystent nie wysyła żadnej telemetrii."
+        footer: "Rozmowy są zapisywane tylko na tym komputerze (~/.local/share/aster/asystent). Aster Intelligence nie wysyła żadnej telemetrii."
         SettingRow {
             title: "Zapamiętuj rozmowy"
             subtitle: "Do powrotu w panelu asystenta"

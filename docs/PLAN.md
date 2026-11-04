@@ -159,7 +159,8 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
 - [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
-- [ ] Asystent Aster — rozpisany niżej („Asystent Aster”); gotowe A1 (usługa, `aster` w terminalu, Ustawienia) i A2 (wyspa, panel).
+- [ ] Aster Intelligence (dawniej Asystent Aster) — rozpisany niżej; gotowe A1 (usługa, `aster` w terminalu, Ustawienia),
+      A2 (wyspa, panel), A2.5 (wygląd jak Apple Intelligence, narzędzia do pisania) i A3 (agent, który sam działa).
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
 - [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
@@ -331,8 +332,8 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
 
-## Asystent Aster
-Jeden asystent dla całego systemu: na górnym pasku, w osobnym panelu i w terminalu. Odpowiada model w chmurze
+## Aster Intelligence (dawniej Asystent Aster)
+Jeden agent dla całego systemu — nie czat z radami, tylko ktoś, kto sam sprawdza i naprawia (za zgodą): na górnym pasku, w osobnym panelu i w terminalu. Odpowiada model w chmurze
 albo lokalny — zawsze widać który, a nic nie wychodzi z komputera bez zgody.
 
 **Gdzie mieszka**
@@ -392,6 +393,24 @@ historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
       `ASTER_OPEN_ASSISTANT=1`. Do sprawdzenia na prawdziwym KWin: fokus klawiatury wyspy i Super+Spacja.
 - [ ] A2+. Panel: przypięcie na stałe, wklejanie plików i zrzutów (razem z A5); wybór przy pierwszym uruchomieniu
       (tylko lokalnie / chmura / najpierw lokalnie — razem z A4)
-- [ ] A3. Narzędzia systemowe z potwierdzeniem; propozycje komend w terminalu [T/n]; Ctrl+Shift+A w Terminalu Aster
+- [x] A2.5. Nazwa Aster Intelligence i wygląd jak Apple Intelligence: tęczowa poświata krążąca wokół wyspy (i od środka
+      jej krawędzi), poświata na krawędziach ekranu, gdy model myśli (`EdgeGlowWindow.qml`, warstwa overlay
+      przezroczysta dla myszy, schowana, gdy nie świeci), kula z krążącymi kolorami zamiast iskry, migoczące „Myślę…”,
+      sprężyste wejście wyspy, odpowiedź wyłaniająca się z dołu, „Kopiuj” w wyspie, obwódka pola w panelu.
+      Narzędzia do pisania: zaznaczony tekst (podstawowe zaznaczenie Waylanda, inaczej schowek; hasła z menedżerów
+      haseł pomijane) → Popraw błędy, Przeredaguj, Przyjaźniej, Profesjonalnie, Zwięźlej, Streść, Najważniejsze punkty
+      (źródło „pisanie”: sam wynik, bez komentarzy) albo własne polecenie do tego tekstu. Test: `ASTER_SHOT_SELECTION`,
+      `ASTER_SHOT_ASK=-` (samo otwarcie), `ASTER_SHOT_GLOW=1`.
+- [x] A3. Agent: model pisze jedno polecenie w ```bash ze zdaniem po ludzku („Zainstalować Google Chrome?”); usługa
+      urywa odpowiedź po bloku (bez zgadywania wyniku) i wysyła `ActionRequested`; powłoka (karta w panelu: zdanie,
+      „Tak, zrób to” / „Nie”, szczegóły z poleceniem i wynikiem, „Otwórz w Terminalu”) albo `aster` (w bieżącym
+      folderze, [T/n]) uruchamia je i odsyła wynik `ActionResult`, a model działa dalej (do 10 poleceń na pytanie).
+      Polecenia tylko do odczytu (lista w `Service::isSafeCommand`: df, journalctl, systemctl status, flatpak list…)
+      — od razu i bez klawiatury; wszystko inne, w tym instalacja, po zgodzie; odmowa kończy działanie. W powłoce sudo
+      → pkexec (okno hasła), programy Aster (aster-files…) startują osobno. Prompt: najpierw programy Aster (lista
+      z poleceniami), Flatpak z Flathub, nigdy dnf, nie wymyślać programów. `aster-terminal --wpisz POLECENIE`
+      wpisuje bez Entera.
+- [ ] A3+. Narzędzia systemowe bez powłoki (tryb ciemny, jasność, Wi‑Fi przez D-Bus); Ctrl+Shift+A w Terminalu Aster;
+      zgoda „zawsze pozwalaj na to polecenie”
 - [ ] A4. Model lokalny (llama.cpp, pobieranie modelu, tryb offline i „Najpierw lokalnie”)
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie

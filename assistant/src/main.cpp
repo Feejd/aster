@@ -1,4 +1,4 @@
-// aster-assistant — usługa Asystenta Aster w sesji użytkownika (D-Bus org.aster.Assistant).
+// aster-assistant — usługa Aster Intelligence w sesji użytkownika (D-Bus org.aster.Assistant).
 // Uruchamiana na żądanie przez D-Bus; po kwadransie bezczynności sama się kończy.
 
 #include "service.h"

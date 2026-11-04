@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 KEY = os.environ.get("ATRAPA_KLUCZ", "")
 DELAY = float(os.environ.get("ATRAPA_OPOZNIENIE", "0.02"))
+START = float(os.environ.get("ATRAPA_START", "0"))     # namysł przed pierwszym kawałkiem odpowiedzi
 
 
 def answer(messages):
@@ -28,7 +29,26 @@ def answer(messages):
         content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
     question, _, data = content.partition("\n\nDane wejściowe:\n")
     q = question.lower()
+    # Agent: wynik polecenia albo odmowa wracają jako wiadomość „[System] …”
+    if content.startswith("[System] Użytkownik nie zgodził"):
+        return "Dobrze, niczego nie zmieniam. Jeśli zmienisz zdanie, napisz."
+    if content.startswith("[System] Wynik polecenia `df"):
+        return "Na dysku jest jeszcze sporo miejsca — szczegóły widać w wyniku powyżej. Nic nie trzeba sprzątać."
+    if content.startswith("[System] Wynik polecenia `flatpak install"):
+        return "Gotowe — Google Chrome jest zainstalowany. Znajdziesz go w Starcie."
+    if content.startswith("[System]"):
+        return "Zrobione."
+    if "miejsc" in q or "dysk" in q:
+        return "Sprawdzam, ile jest wolnego miejsca.\n\n```bash\ndf -h ~\n```"
+    if "chrome" in q:
+        return ("Chrome jest na Flathub, zainstaluję go dla ciebie.\n\nZainstalować Google Chrome?\n\n"
+                "```bash\nflatpak install -y --user flathub com.google.Chrome\n```")
     turns = sum(1 for m in messages if m.get("role") == "user")
+    if data and ("popraw" in q or "przeredaguj" in q or "przepisz" in q):
+        text = data.strip("`\n")
+        return text.replace("wogóle", "w ogóle").replace("napewno", "na pewno").replace("pozdrawiam", "Pozdrawiam")
+    if data and ("streść" in q or "punkty" in q):
+        return "Autor przeprasza za spóźnienie i proponuje spotkanie w czwartek o 10."
     if data:
         lines = [l for l in data.strip("`\n").splitlines() if l.strip()]
         first = next((l for l in lines if "error" in l.lower() or "błąd" in l.lower() or "fail" in l.lower()), lines[0] if lines else "")
@@ -114,6 +134,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         model = req.get("model", "atrapa")
+        time.sleep(START)
         if anthropic:
             send({"type": "message_start", "message": {"id": "msg_atrapa", "model": model, "role": "assistant", "content": []}}, "message_start")
             send({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}, "content_block_start")

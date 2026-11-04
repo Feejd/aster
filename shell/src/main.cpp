@@ -58,7 +58,8 @@ int main(int argc, char *argv[])
             // kolejność: pulpit (zegar) → wyspa → dok → Start
             std::sort(windows.begin(), windows.end(), [](QQuickWindow *a, QQuickWindow *b) {
                 static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start"),
-                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Asystent")};
+                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Aster Intelligence"),
+                                                QStringLiteral("Poświata")};
                 return order.indexOf(a->title()) < order.indexOf(b->title());
             });
             for (QQuickWindow *w : windows) {
@@ -114,7 +115,7 @@ int main(int argc, char *argv[])
     if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_ASSISTANT"))
         QTimer::singleShot(1000, &app, [] {
             for (QWindow *w : QGuiApplication::topLevelWindows())
-                if (w->title() == QLatin1String("Asystent"))
+                if (w->title() == QLatin1String("Aster Intelligence"))
                     QMetaObject::invokeMethod(w, "show");
         });
 

@@ -4,7 +4,7 @@ import QtQuick.Window
 import Aster.Shell
 import Aster.Ui
 
-// Panel asystenta z prawej (warstwa jak centrum sterowania): rozmowa z historią, kopiowanie odpowiedzi,
+// Panel Aster Intelligence z prawej (warstwa jak centrum sterowania): rozmowa z historią, kopiowanie odpowiedzi,
 // „Nowa rozmowa” i lista zapisanych rozmów. Otwiera się sam, gdy rozmowa w wyspie robi się dłuższa,
 // albo Super+Spacja / klik w wyspę, gdy już coś w nim jest. Klik obok panelu albo Esc zamyka.
 // Każda odpowiedź ma znaczek: „Na tym komputerze” albo „Chmura: <dostawca>”.
@@ -15,7 +15,7 @@ Window {
     width: Screen.width
     height: Screen.height - 46 - 84
     readonly property int shotY: 46
-    title: "Asystent"
+    title: "Aster Intelligence"
 
     property bool open: false
     property bool showHistory: false
@@ -41,7 +41,10 @@ Window {
     }
     function send() {
         const t = input.text.trim();
-        if (t === "" || Assistant.busy) return;
+        if (t === "") return;
+        // Nowa wiadomość zamiast odpowiedzi na pytanie o zgodę — to „nie” i dalsza rozmowa
+        if (Assistant.waiting) Assistant.cancel();
+        else if (Assistant.busy) return;
         input.text = "";
         showHistory = false;
         Assistant.ask(t, "panel");
@@ -106,6 +109,17 @@ Window {
 
         MouseArea { anchors.fill: parent }
 
+        // Tęczowa poświata wokół panelu, gdy model myśli
+        IntelligenceGlow {
+            anchors.fill: parent
+            radius: 30
+            thickness: 2
+            haloWidth: 10
+            haloBlur: 44
+            speed: 150
+            intensity: Assistant.busy && !Assistant.waiting && aw.open ? 1 : 0
+            Behavior on intensity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
+        }
         Island { anchors.fill: parent; radius: 30 }
         Rectangle {
             anchors.fill: parent
@@ -119,18 +133,11 @@ Window {
             x: 16; y: 12
             width: parent.width - 32
             height: 44
-            Rectangle {
+            IntelligenceOrb {
                 id: hSpark
-                width: 32; height: 32; radius: 16
+                size: 32
+                busy: Assistant.busy
                 anchors.verticalCenter: parent.verticalCenter
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.45) }
-                    GradientStop { position: 1; color: "#7C3AED" }
-                }
-                Icon {
-                    anchors.centerIn: parent; d: Icons.sparkle; size: 17; stroke: 2; color: "white"
-                    RotationAnimation on rotation { running: Assistant.busy; loops: Animation.Infinite; from: 0; to: 360; duration: 1600 }
-                }
             }
             Column {
                 anchors.left: hSpark.right; anchors.leftMargin: 10
@@ -138,14 +145,14 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 1
                 Text {
-                    text: aw.showHistory ? "Historia rozmów" : "Asystent"
+                    text: aw.showHistory ? "Historia rozmów" : "Aster Intelligence"
                     color: Theme.text
                     font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
                     elide: Text.ElideRight
-                    text: Assistant.available ? (Assistant.status.badge + " · " + Assistant.status.model) : "Usługa asystenta nie odpowiada"
+                    text: Assistant.available ? (Assistant.status.badge + " · " + Assistant.status.model) : "Usługa nie odpowiada"
                     color: Theme.text2
                     font.family: Theme.font; font.pixelSize: 11
                 }
@@ -175,6 +182,13 @@ Window {
             topMargin: 14; bottomMargin: 10
             boundsBehavior: Flickable.StopAtBounds
             model: Assistant.messages
+            // Nowa wiadomość wjeżdża od dołu i przenika
+            add: Transition {
+                ParallelAnimation {
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutCubic }
+                    NumberAnimation { property: "scale"; from: 0.94; to: 1; duration: 380; easing.type: Easing.OutBack }
+                }
+            }
             // Odpowiedź rośnie — trzymaj koniec w widoku
             onCountChanged: Qt.callLater(list.positionViewAtEnd)
             onContentHeightChanged: if (atYEnd || Assistant.busy) Qt.callLater(list.positionViewAtEnd)
@@ -186,9 +200,24 @@ Window {
                 required property string badge
                 required property bool error
                 required property bool pending
+                required property string command
+                required property string phase
+                required property string output
                 readonly property bool mine: role === "user"
+                readonly property bool act: role === "action"
                 width: ListView.view.width
-                height: mine ? bubble.height : answer.height
+                height: mine ? bubble.height : act ? card.height : answer.height
+
+                // Działanie agenta: zdanie po ludzku, zgoda, a polecenie i wynik w szczegółach
+                ActionCard {
+                    id: card
+                    visible: msg.act
+                    width: parent.width
+                    description: msg.text
+                    command: msg.command
+                    phase: msg.phase
+                    output: msg.output
+                }
 
                 // Pytanie: dymek w kolorze akcentu po prawej
                 Rectangle {
@@ -213,30 +242,15 @@ Window {
                 // Odpowiedź: tekst (Markdown), znaczek i kopiowanie
                 Column {
                     id: answer
-                    visible: !msg.mine
+                    visible: msg.role === "assistant"
                     width: parent.width
                     spacing: 8
                     HoverHandler { id: answerHover }
-                    Row {
+                    ShimmerText {
                         visible: msg.pending && msg.text === ""
-                        spacing: 5; height: 20
-                        Repeater {
-                            model: 3
-                            delegate: Rectangle {
-                                id: dot
-                                required property int index
-                                y: 6
-                                width: 6; height: 6; radius: 3
-                                color: Theme.text2
-                                SequentialAnimation on opacity {
-                                    running: msg.pending; loops: Animation.Infinite
-                                    PauseAnimation { duration: dot.index * 160 }
-                                    NumberAnimation { from: 0.25; to: 1; duration: 320 }
-                                    NumberAnimation { from: 1; to: 0.25; duration: 320 }
-                                    PauseAnimation { duration: (2 - dot.index) * 160 }
-                                }
-                            }
-                        }
+                        text: Assistant.status.local ? "Myślę na tym komputerze…" : "Myślę…"
+                        base: Theme.text2
+                        pixelSize: 14
                     }
                     TextEdit {
                         visible: msg.text !== ""
@@ -252,7 +266,7 @@ Window {
                         onLinkActivated: link => Qt.openUrlExternally(link)
                     }
                     Row {
-                        visible: !msg.pending
+                        visible: !msg.pending && (msg.badge !== "" || msg.error)
                         spacing: 6
                         height: 24
                         AssistantBadge { anchors.verticalCenter: parent.verticalCenter; onDark: false; text: msg.error ? "" : msg.badge }
@@ -261,7 +275,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             width: setText.implicitWidth + 18; height: 22; radius: 11
                             color: setArea.containsMouse ? Theme.hover : Theme.fill
-                            Text { id: setText; anchors.centerIn: parent; text: "Ustawienia asystenta"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { id: setText; anchors.centerIn: parent; text: "Ustawienia Aster Intelligence"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
                             MouseArea { id: setArea; anchors.fill: parent; hoverEnabled: true; onClicked: { aw.close(); Assistant.openSettings(); } }
                         }
                         PanelButton {
@@ -282,12 +296,18 @@ Window {
         Column {
             visible: !aw.showHistory && Assistant.count === 0
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 150
+            y: 110
             width: parent.width - 64
             spacing: 10
+            IntelligenceOrb {
+                anchors.horizontalCenter: parent.horizontalCenter
+                size: 56
+                busy: false
+            }
             Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
+                topPadding: 4
                 text: "O co chcesz zapytać?"
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
@@ -389,9 +409,22 @@ Window {
             height: Math.min(input.contentHeight, 120) + 24
             y: parent.height - height - 34
             radius: 20
-            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(1, 1, 1, 0.85)
+            color: Theme.dark ? Qt.rgba(0.1, 0.1, 0.12, 0.9) : Qt.rgba(1, 1, 1, 0.92)
             border.width: 1
-            border.color: input.activeFocus ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.6) : Theme.line
+            border.color: input.activeFocus ? "transparent" : Theme.line
+            // Pole w fokusie obwiedzione kolorami Aster Intelligence
+            IntelligenceGlow {
+                z: -1
+                anchors.fill: parent
+                radius: parent.radius
+                thickness: 1.5
+                haloWidth: 5
+                haloBlur: 20
+                haloStrength: 0.55
+                speed: Assistant.busy ? 160 : 35
+                intensity: input.activeFocus ? 1 : 0
+                Behavior on intensity { NumberAnimation { duration: 300 } }
+            }
             Flickable {
                 id: inputFlick
                 x: 14; y: 12
@@ -414,7 +447,7 @@ Window {
                                                   inputFlick.contentY = cursorRectangle.y + cursorRectangle.height - inputFlick.height
                     Text {
                         visible: !input.text
-                        text: Assistant.count > 0 ? "Dopytaj…" : "Zapytaj o cokolwiek…"
+                        text: Assistant.count > 0 ? "Dopytaj…" : "Zapytaj Aster Intelligence…"
                         color: Theme.text2
                         font: input.font
                     }
@@ -455,6 +488,146 @@ Window {
                 color: chArea.containsMouse ? Theme.accentText : Theme.text2
                 font.family: Theme.font; font.pixelSize: 11; font.underline: chArea.containsMouse
                 MouseArea { id: chArea; anchors.fill: parent; hoverEnabled: true; onClicked: { aw.close(); Assistant.openSettings(); } }
+            }
+        }
+    }
+
+    // Karta działania: „Zainstalować Google Chrome?” [Uruchom] [Nie] · Szczegóły (polecenie, wynik, terminal)
+    component ActionCard: Rectangle {
+        id: ac
+        property string description
+        property string command
+        property string phase
+        property string output
+        property bool details: false
+        readonly property bool waiting: phase === "czeka"
+        readonly property bool running: phase === "dziala"
+        readonly property color tint: phase === "gotowe" ? "#34C759" : phase === "blad" ? "#FF453A"
+                                    : phase === "odmowa" ? Theme.text2 : "#AA6EEE"
+        height: col.implicitHeight + 24
+        radius: 16
+        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.7)
+        border.width: 1
+        border.color: waiting ? Qt.rgba(0.67, 0.43, 0.93, 0.55) : Theme.line
+        Behavior on border.color { ColorAnimation { duration: 200 } }
+
+        // Czekające na zgodę — obwiedzione kolorami Aster Intelligence
+        IntelligenceGlow {
+            z: -1
+            anchors.fill: parent
+            radius: parent.radius
+            thickness: 1.5; haloWidth: 5; haloBlur: 18; haloStrength: 0.5
+            speed: 50
+            intensity: ac.waiting && aw.open ? 1 : 0
+            Behavior on intensity { NumberAnimation { duration: 300 } }
+        }
+
+        Column {
+            id: col
+            x: 12; y: 12
+            width: parent.width - 24
+            spacing: 10
+            Row {
+                width: parent.width
+                spacing: 10
+                // Stan: kula przy pytaniu i pracy, ptaszek / wykrzyknik / kreska po wszystkim
+                Item {
+                    width: 26; height: 26
+                    IntelligenceOrb { anchors.fill: parent; size: 26; visible: ac.waiting || ac.running; busy: ac.running }
+                    Rectangle {
+                        anchors.fill: parent; radius: 13
+                        visible: !ac.waiting && !ac.running
+                        color: Qt.rgba(ac.tint.r, ac.tint.g, ac.tint.b, 0.16)
+                        Icon {
+                            anchors.centerIn: parent
+                            d: ac.phase === "gotowe" ? Icons.check : ac.phase === "blad" ? Icons.alertCircle : Icons.minus
+                            size: 13; stroke: 2.4
+                            color: ac.tint
+                        }
+                    }
+                }
+                Column {
+                    width: parent.width - 36
+                    spacing: 2
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        width: parent.width
+                        text: ac.description
+                        wrapMode: Text.Wrap
+                        color: Theme.text
+                        font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        text: ac.running ? "W toku…" : ac.phase === "gotowe" ? "Zrobione" : ac.phase === "blad" ? "Nie wyszło — Aster Intelligence szuka innej drogi"
+                            : ac.phase === "odmowa" ? "Pominięte" : "Potrzebna twoja zgoda"
+                        color: Theme.text2
+                        font.family: Theme.font; font.pixelSize: 11
+                    }
+                }
+            }
+            Row {
+                visible: ac.waiting
+                spacing: 8
+                Rectangle {
+                    width: runText.implicitWidth + 30; height: 32; radius: 16
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: runArea.containsMouse ? "#9B7BFF" : "#8D79F6" }
+                        GradientStop { position: 1; color: runArea.containsMouse ? "#F07BB8" : "#E46FAE" }
+                    }
+                    scale: runArea.pressed ? 0.95 : 1
+                    Behavior on scale { NumberAnimation { duration: 90 } }
+                    Text { id: runText; anchors.centerIn: parent; text: "Tak, zrób to"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    MouseArea { id: runArea; anchors.fill: parent; hoverEnabled: true; onClicked: Assistant.approve(true) }
+                }
+                Rectangle {
+                    width: noText.implicitWidth + 28; height: 32; radius: 16
+                    color: noArea.containsMouse ? Theme.hover : Theme.fill
+                    Text { id: noText; anchors.centerIn: parent; text: "Nie"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                    MouseArea { id: noArea; anchors.fill: parent; hoverEnabled: true; onClicked: Assistant.approve(false) }
+                }
+            }
+            Text {
+                text: ac.details ? "Ukryj szczegóły" : "Pokaż szczegóły"
+                color: detArea.containsMouse ? Theme.accentText : Theme.text2
+                font.family: Theme.font; font.pixelSize: 11; font.underline: detArea.containsMouse
+                MouseArea { id: detArea; anchors.fill: parent; hoverEnabled: true; onClicked: ac.details = !ac.details }
+            }
+            Rectangle {
+                visible: ac.details
+                width: parent.width
+                height: det.implicitHeight + 16
+                radius: 10
+                color: Theme.dark ? Qt.rgba(0, 0, 0, 0.35) : Qt.rgba(0, 0, 0, 0.05)
+                Column {
+                    id: det
+                    x: 10; y: 8
+                    width: parent.width - 20
+                    spacing: 6
+                    TextEdit {
+                        width: parent.width
+                        readOnly: true; selectByMouse: true
+                        text: "$ " + ac.command
+                        wrapMode: TextEdit.WrapAnywhere
+                        color: Theme.text
+                        font.family: "monospace"; font.pixelSize: 12
+                    }
+                    TextEdit {
+                        visible: ac.output !== ""
+                        width: parent.width
+                        readOnly: true; selectByMouse: true
+                        text: ac.output.split("\n").slice(-14).join("\n")
+                        wrapMode: TextEdit.WrapAnywhere
+                        color: Theme.text2
+                        font.family: "monospace"; font.pixelSize: 11
+                    }
+                    Text {
+                        text: "Otwórz w Terminalu"
+                        color: termArea.containsMouse ? Theme.accentText : Theme.text2
+                        font.family: Theme.font; font.pixelSize: 11; font.underline: termArea.containsMouse
+                        MouseArea { id: termArea; anchors.fill: parent; hoverEnabled: true; onClicked: Assistant.openInTerminal(ac.command) }
+                    }
+                }
             }
         }
     }

@@ -1,15 +1,17 @@
-// aster (skrót: ai) — Asystent Aster w terminalu.
+// aster (skrót: ai) — Aster Intelligence w terminalu.
 //   aster "jak spakować folder do zip"         odpowiedź od razu, strumieniowo
 //   aster                                      rozmowa (/nowa, /model, /wyjdz)
 //   journalctl -b -p err | aster "co nie tak?" dane z potoku jako kontekst pytania
-// Komendy zaproponowane przez asystenta (bloki ```bash) są tylko pokazywane: uruchamia je
-// użytkownik odpowiedzią [T/n] — nigdy same. Odpowiedzi daje usługa aster-assistant (D-Bus).
+// Aster Intelligence jest agentem: sam uruchamia polecenia potrzebne do rozwiązania sprawy (tutaj, w tym
+// terminalu), czyta ich wynik i działa dalej. Polecenia tylko do odczytu — od razu; zmieniające system —
+// po odpowiedzi [T/n] na pytanie po ludzku. Odpowiedzi daje usługa aster-assistant (D-Bus).
 
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusArgument>
 #include <QDBusMessage>
 #include <QEventLoop>
+#include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -100,6 +102,7 @@ static bool readTty(QString *line, bool echo = true)
 // Wiersz zaczynający się od „`” czeka na koniec (może być znacznikiem bloku).
 struct Printer {
     bool inCode = false;
+    bool hidden = false;    // blok ```bash — polecenie pokaże karta działania, nie tekst
     QString line;
     int printed = 0;
     bool midLine = false;   // coś już wypisano w bieżącym wierszu ekranu
@@ -121,6 +124,10 @@ struct Printer {
             if (ch == QLatin1Char('\n')) {
                 if (line.trimmed().startsWith(QLatin1String("```"))) {
                     inCode = !inCode;
+                    static const QRegularExpression shell(QStringLiteral("^```(bash|sh|shell|zsh|console)\\s*$"));
+                    hidden = inCode && shell.match(line.trimmed()).hasMatch();
+                } else if (hidden) {
+                    // pomijane
                 } else {
                     emitPart(line.mid(printed), printed == 0);
                     out(QStringLiteral("\n"));
@@ -132,15 +139,16 @@ struct Printer {
                 line += ch;
             }
         }
-        if (!line.isEmpty() && !line.trimmed().startsWith(QLatin1Char('`')) && !line.trimmed().isEmpty()) {
+        if (!hidden && !line.isEmpty() && !line.trimmed().startsWith(QLatin1Char('`')) && !line.trimmed().isEmpty()) {
             emitPart(line.mid(printed), printed == 0);
             printed = line.size();
         }
     }
     void finish()
     {
-        if (!line.isEmpty() && !line.trimmed().startsWith(QLatin1String("```")))
+        if (!hidden && !line.isEmpty() && !line.trimmed().startsWith(QLatin1String("```")))
             emitPart(line.mid(printed), printed == 0);
+        hidden = false;
         if (midLine)
             out(QStringLiteral("\n"));
         midLine = false;
@@ -168,6 +176,8 @@ public:
         bus.connect(kService, kPath, kIface, QStringLiteral("Chunk"), this, SLOT(chunk(QString, QString)));
         bus.connect(kService, kPath, kIface, QStringLiteral("Finished"), this, SLOT(finished(QString, QString, QString)));
         bus.connect(kService, kPath, kIface, QStringLiteral("Failed"), this, SLOT(failed(QString, QString)));
+        bus.connect(kService, kPath, kIface, QStringLiteral("ActionRequested"), this,
+                    SLOT(action(QString, QString, QString, QString, bool)));
     }
 
     // Jedno pytanie: wypisuje odpowiedź strumieniowo; false — błąd albo przerwanie
@@ -245,6 +255,83 @@ public Q_SLOTS:
         error = m;
         loop->quit();
     }
+
+    // Agent chce uruchomić polecenie: sprawdzające — od razu, zmieniające — po [T/n].
+    // Polecenie działa w tym terminalu i bieżącym folderze (sudo zapyta o hasło jak zwykle);
+    // wyjście widać na bieżąco i wraca do modelu, który działa dalej.
+    void action(const QString &c, const QString &id, const QString &command, const QString &description, bool safe)
+    {
+        if (c != conv || !loop)
+            return;
+        clearWaiting();
+        printer.finish();
+        const bool tty = isatty(STDIN_FILENO) || isatty(STDERR_FILENO);
+        // Zdanie-opis zwykle już widać (było przed blokiem z poleceniem); polecenie — przygaszone, pod nim
+        const bool said = text.contains(description);
+        err(dim(QStringLiteral("  $ ") + command.section(QLatin1Char('\n'), 0, 0)
+                    + (command.contains(QLatin1Char('\n')) ? QStringLiteral(" …") : QString()), g_errColor) + QStringLiteral("\n"));
+        int code = -2;
+        QString output;
+        if (!safe) {
+            err((said ? QString() : bold(description, g_errColor) + QStringLiteral(" ")) + (tty ? QStringLiteral("[T/n] ") : QString()));
+            QString answer;
+            const bool asked = tty && readTty(&answer);
+            const QString a = answer.toLower();
+            const bool yes = asked && (a.isEmpty() || a == QLatin1String("t") || a == QLatin1String("tak") || a == QLatin1String("y")
+                                       || a == QLatin1String("yes"));
+            if (!asked)
+                err(QStringLiteral("\n") + dim(QStringLiteral("(bez terminala nie mogę zapytać — pomijam)"), g_errColor) + QStringLiteral("\n"));
+            if (!yes) {
+                call(QStringLiteral("ActionResult"), {conv, id, -2, QString()});
+                text.clear();
+                printer = Printer();
+                return;
+            }
+        } else {
+            if (!said)
+                err(dim(QStringLiteral("→ ") + description, g_errColor) + QStringLiteral("\n"));
+        }
+        QProcess p;
+        p.setProcessChannelMode(QProcess::MergedChannels);
+        // Zmieniające system dostają klawiaturę (np. hasło do sudo); sprawdzające — nie, żeby o nic nie pytały
+        if (safe)
+            p.setStandardInputFile(QProcess::nullDevice());
+        else
+            p.setInputChannelMode(QProcess::ForwardedInputChannel);
+        std::signal(SIGINT, SIG_IGN);   // Ctrl+C trafia do polecenia, nie do nas
+        p.start(QStringLiteral("bash"), {QStringLiteral("-c"), command});
+        if (!p.waitForStarted(5000)) {
+            output = QStringLiteral("Nie udało się uruchomić bash.");
+            code = 127;
+        } else {
+            while (p.state() != QProcess::NotRunning) {
+                p.waitForReadyRead(100);
+                const QString chunk = QString::fromUtf8(p.readAll());
+                if (!chunk.isEmpty()) {
+                    output += chunk;
+                    out(dim(chunk, g_color));
+                }
+            }
+            const QString rest = QString::fromUtf8(p.readAll());
+            output += rest;
+            out(dim(rest, g_color));
+            if (!output.isEmpty() && !output.endsWith(QLatin1Char('\n')))
+                out(QStringLiteral("\n"));
+            code = p.exitStatus() == QProcess::NormalExit ? p.exitCode() : 130;
+        }
+        struct sigaction sa{};
+        sa.sa_handler = onSigint;
+        sigaction(SIGINT, &sa, nullptr);
+        if (code != 0)
+            err(dim(QStringLiteral("(kod wyjścia %1)\n").arg(code), g_errColor));
+        out(QStringLiteral("\n"));
+        call(QStringLiteral("ActionResult"), {conv, id, code, output});
+        text.clear();
+        printer = Printer();
+        waitingFirst = g_errColor;
+        if (waitingFirst)
+            err(dim(QStringLiteral("⋯"), true));
+    }
 };
 
 static QVariantMap status()
@@ -260,66 +347,10 @@ static QString who(const QVariantMap &s)
     return QStringLiteral("%1 · %2").arg(s.value(QStringLiteral("badge")).toString(), s.value(QStringLiteral("model")).toString());
 }
 
-// Komendy z bloków ```bash / ```sh / ```console w odpowiedzi
-static QStringList commands(const QString &text)
-{
-    QStringList out;
-    static const QRegularExpression re(QStringLiteral("```(?:bash|sh|shell|zsh|console)[ \\t]*\\n(.*?)```"),
-                                       QRegularExpression::DotMatchesEverythingOption);
-    auto it = re.globalMatch(text);
-    while (it.hasNext()) {
-        QStringList lines = it.next().captured(1).split(QLatin1Char('\n'));
-        for (QString &l : lines)
-            if (l.startsWith(QLatin1String("$ ")))
-                l = l.mid(2);
-        const QString cmd = lines.join(QLatin1Char('\n')).trimmed();
-        if (!cmd.isEmpty() && !out.contains(cmd))
-            out << cmd;
-    }
-    return out;
-}
-
-// Pokazuje każdą zaproponowaną komendę i pyta [T/n]; ryzykowne (sudo, rm -r, dd…) domyślnie „nie”
-static void offerCommands(const QString &text)
-{
-    if (!isatty(STDOUT_FILENO))
-        return;
-    const QStringList cmds = commands(text);
-    static const QRegularExpression risky(QStringLiteral("(^|[\\s;&|(])(sudo|pkexec|rm\\s+-\\w*[rf]|dd\\s|mkfs|shred|chmod\\s+-R|chown\\s+-R|rpm-ostree|bootc|systemctl|reboot|poweroff)|>\\s*/dev/"));
-    int shown = 0;
-    for (const QString &cmd : cmds) {
-        if (++shown > 3)
-            break;
-        const bool danger = risky.match(cmd).hasMatch();
-        err(QStringLiteral("\n") + bold(QStringLiteral("Uruchomić?"), g_errColor) + QStringLiteral("\n"));
-        for (const QString &l : cmd.split(QLatin1Char('\n')))
-            err((g_errColor ? QStringLiteral("\x1b[36m") : QString()) + QStringLiteral("  ") + l + (g_errColor ? QStringLiteral("\x1b[0m") : QString()) + QStringLiteral("\n"));
-        if (danger)
-            err(dim(QStringLiteral("  Ta komenda zmienia system albo usuwa dane — sprawdź ją dokładnie.\n"), g_errColor));
-        err(danger ? QStringLiteral("[t/N] ") : QStringLiteral("[T/n] "));
-        QString answer;
-        if (!readTty(&answer)) {
-            err(QStringLiteral("\n"));
-            return;
-        }
-        const QString a = answer.toLower();
-        const bool yes = a.isEmpty() ? !danger : (a == QLatin1String("t") || a == QLatin1String("tak") || a == QLatin1String("y") || a == QLatin1String("yes"));
-        if (!yes)
-            continue;
-        std::signal(SIGINT, SIG_IGN);   // Ctrl+C trafia do komendy, nie do nas
-        const int code = std::system(cmd.toUtf8().constData());
-        struct sigaction sa{};
-        sa.sa_handler = onSigint;
-        sigaction(SIGINT, &sa, nullptr);
-        if (code != 0)
-            err(dim(QStringLiteral("(kod wyjścia %1)\n").arg(WIFEXITED(code) ? WEXITSTATUS(code) : code), g_errColor));
-    }
-}
-
 static void printHelp()
 {
     out(QStringLiteral(
-        "Asystent Aster w terminalu\n\n"
+        "Aster Intelligence w terminalu\n\n"
         "  aster \"pytanie\"            odpowiedź od razu\n"
         "  aster                      rozmowa (wiele pytań)\n"
         "  polecenie | aster \"pytanie\" wynik polecenia jako kontekst, np.\n"
@@ -327,8 +358,9 @@ static void printHelp()
         "                             git diff | aster \"napisz opis commita\"\n"
         "  aster --stan               kto odpowiada (model lokalny czy chmura)\n\n"
         "W rozmowie: /nowa — nowa rozmowa, /model — dostawca i model, /wyjdz — koniec.\n"
-        "Zaproponowane komendy uruchamiasz sam, odpowiadając [T/n].\n"
-        "Dostawcę, model i klucz API ustawisz też w Ustawieniach → Asystent. `ai` to skrót od `aster`.\n"));
+        "Aster Intelligence sam sprawdza i naprawia: polecenia, które tylko coś odczytują, uruchamia od razu,\n"
+        "a te, które coś zmieniają (np. instalacja), dopiero gdy odpowiesz [T/n].\n"
+        "Dostawcę, model i klucz API ustawisz też w Ustawieniach → Aster Intelligence. `ai` to skrót od `aster`.\n"));
 }
 
 // /model: wybór dostawcy (z ostrzeżeniem, gdzie trafią pytania), modelu i klucza API
@@ -408,7 +440,7 @@ static int chat(Client &client)
         failedCall(call(QStringLiteral("Status")));
         return 1;
     }
-    err(bold(QStringLiteral("Asystent Aster"), g_errColor) + dim(QStringLiteral(" · ") + who(s), g_errColor) + QStringLiteral("\n"));
+    err(bold(QStringLiteral("Aster Intelligence"), g_errColor) + dim(QStringLiteral(" · ") + who(s), g_errColor) + QStringLiteral("\n"));
     if (!s.value(QStringLiteral("ready")).toBool())
         err(s.value(QStringLiteral("problem")).toString() + QStringLiteral(" (albo wpisz /model)\n"));
     err(dim(QStringLiteral("/nowa — nowa rozmowa · /model — zmień model · /wyjdz — koniec\n"), g_errColor));
@@ -448,7 +480,6 @@ static int chat(Client &client)
         out(QStringLiteral("\n"));
         if (client.ask(line, QString())) {
             err(dim(QStringLiteral("— %1\n").arg(client.badge), g_errColor));
-            offerCommands(client.text);
         }
     }
 }
@@ -512,7 +543,6 @@ int main(int argc, char *argv[])
         return client.error == QLatin1String("przerwano") ? 130 : 1;
     if (g_errColor)
         err(dim(QStringLiteral("— %1\n").arg(client.badge), true));
-    offerCommands(client.text);
     return 0;
 }
 

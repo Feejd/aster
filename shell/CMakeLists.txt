@@ -27,6 +27,10 @@ set(ASTER_QML
     qml/AuthWindow.qml
     qml/AssistantWindow.qml
     qml/AssistantBadge.qml
+    qml/IntelligenceGlow.qml
+    qml/IntelligenceOrb.qml
+    qml/ShimmerText.qml
+    qml/EdgeGlowWindow.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform

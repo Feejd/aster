@@ -11,8 +11,9 @@ import Aster.Ui
 //  środek  — dynamiczna wyspa: godzina; gdy gra muzyka — okładka i korektor; po najechaniu — data.
 //            Powiadomienie (od każdego programu, także aplikacji webowych) rozlewa wyspę w kartę:
 //            klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
-//            Asystent (Super+Spacja albo klik w wyspę): wyspa rozlewa się w pole pytania, krótka odpowiedź
-//            zostaje w wyspie i znika jak powiadomienie; dłuższa rozmowa przechodzi do panelu z prawej.
+//            Aster Intelligence (Super+Spacja albo klik w wyspę): wyspa rozlewa się w pole pytania otoczone
+//            tęczową poświatą; krótka odpowiedź zostaje w wyspie i znika jak powiadomienie, dłuższa rozmowa
+//            przechodzi do panelu z prawej. Zaznaczony tekst (albo tekst ze schowka) — narzędzia do pisania.
 //  prawa   — wyszukiwanie, stan sieci, dźwięku i baterii: otwiera centrum sterowania
 Window {
     id: hz
@@ -33,6 +34,7 @@ Window {
     signal startRequested()
     signal controlRequested()
     signal assistantPanelRequested(bool show)
+    signal askOpened()
 
     Component.onCompleted: {
         Platform.makeLayer(hz, "top", 1 | 4 | 8, hz.reserved, "none", "aster-horizon");
@@ -89,8 +91,21 @@ Window {
         onTriggered: if (islandHover.hovered) restart(); else hz.next()
     }
 
-    // ——— Asystent w wyspie ———
+    // ——— Aster Intelligence w wyspie ———
     property bool asking: false
+    property bool useSelection: true           // zaznaczony tekst idzie z pytaniem (krzyżyk go odpina)
+    readonly property bool hasSelection: useSelection && Assistant.selection !== ""
+    readonly property bool toolsShown: asking && !answerShown && hasSelection
+    // Narzędzia do pisania (jak w Apple Intelligence): działają na zaznaczonym tekście
+    readonly property var tools: [
+        { label: "Popraw błędy", icon: Icons.check, prompt: "Popraw błędy w tym tekście: pisownię, interpunkcję i gramatykę." },
+        { label: "Przeredaguj", icon: Icons.pencil, prompt: "Przeredaguj ten tekst, żeby czytał się płynniej." },
+        { label: "Przyjaźniej", icon: Icons.thumb, prompt: "Przepisz ten tekst w cieplejszym, przyjaznym tonie." },
+        { label: "Profesjonalnie", icon: Icons.doc, prompt: "Przepisz ten tekst w uprzejmym, profesjonalnym tonie." },
+        { label: "Zwięźlej", icon: Icons.minus, prompt: "Skróć ten tekst, zachowując cały sens." },
+        { label: "Streść", icon: Icons.list, prompt: "Streść ten tekst w dwóch–trzech zdaniach." },
+        { label: "Najważniejsze punkty", icon: Icons.sort, prompt: "Wypisz najważniejsze punkty tego tekstu jako krótką listę." }
+    ]
     readonly property bool answerShown: asking && Assistant.count > 0
     readonly property int askW: Math.max(360, Math.min(580, hz.width - 2 * Math.max(left.width, right.width) - 40))
     // Odpowiedź za długa na wyspę: lista kroków, kod, tabela albo po prostu dużo tekstu
@@ -104,9 +119,12 @@ Window {
             Assistant.newConversation();
             Assistant.refreshStatus();
             askField.text = "";
+            useSelection = true;
             asking = true;
             Platform.setKeyboard(hz, "exclusive");
             hz.requestActivate();
+            hz.askOpened();
+            selectionTimer.restart();
         }
         askField.forceActiveFocus();
     }
@@ -127,15 +145,23 @@ Window {
         if (t === "") return;
         askField.text = "";
         dismissTimer.stop();
-        Assistant.ask(t, Assistant.exchanges > 0 ? "panel" : "wyspa");
+        const first = Assistant.exchanges === 0;
+        Assistant.ask(t, first ? "wyspa" : "panel", first && hz.hasSelection ? Assistant.selection : "");
     }
+    function runTool(tool) {
+        dismissTimer.stop();
+        askField.text = "";
+        Assistant.ask(tool.prompt, "pisanie", Assistant.selection);
+    }
+    // Wayland podaje zaznaczenie dopiero oknu z klawiaturą — chwilę po otwarciu pola
+    Timer { id: selectionTimer; interval: 140; onTriggered: Assistant.refreshSelection() }
     // Do testów (ASTER_SHOT_ASK): wpisuje pytanie i wysyła je jak użytkownik
     function askNow(text) { openAsk(); askField.text = text; submitAsk(); }
     Connections {
         target: Assistant
         enabled: hz.asking
         function onChanged() {
-            if (Assistant.exchanges > 1 || hz.longAnswer) {
+            if (Assistant.exchanges > 1 || hz.longAnswer || Assistant.acting) {
                 hz.closeAsk();
                 hz.assistantPanelRequested(true);
             }
@@ -199,12 +225,30 @@ Window {
     }
 
     // ——— Dynamiczna wyspa ———
+    // Poświata Aster Intelligence wokół wyspy: spokojna, gdy czeka na pytanie, żywa, gdy model myśli
+    IntelligenceGlow {
+        id: islandGlow
+        x: island.x; y: island.y
+        width: island.width; height: island.height
+        radius: island.radius
+        thickness: 2
+        haloWidth: Assistant.busy ? 14 : 10
+        haloBlur: Assistant.busy ? 48 : 36
+        haloStrength: 1
+        speed: Assistant.busy ? 170 : 40
+        intensity: hz.asking ? 1 : 0
+        Behavior on intensity { NumberAnimation { duration: hz.asking ? 450 : 260; easing.type: Easing.OutCubic } }
+        Behavior on haloWidth { NumberAnimation { duration: 500 } }
+    }
     readonly property bool playing: ControlCenter.playerAvailable && ControlCenter.playing
     readonly property bool noting: current !== null
     readonly property bool peek: islandHover.hovered && !noting
     Island {
         id: island
         solid: true
+        // Przy pytaniu cień ustępuje poświacie
+        shadowStrength: hz.asking ? 0.35 : 1
+        Behavior on shadowStrength { NumberAnimation { duration: 300 } }
         readonly property var n: hz.current
         readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
         width: hz.asking ? hz.askW : hz.noting ? 440 : idleW
@@ -215,8 +259,9 @@ Window {
         onWidthChanged: hz.updateRegion()
         onHeightChanged: hz.updateRegion()
         // Sprężyna — wyspa „rozlewa się” jak kropla, a nie przesuwa
-        Behavior on width { SpringAnimation { spring: 3.4; damping: 0.3; epsilon: 0.3 } }
-        Behavior on height { SpringAnimation { spring: 3.4; damping: 0.32; epsilon: 0.3 } }
+        Behavior on width { SpringAnimation { spring: 3.6; damping: 0.26; epsilon: 0.3 } }
+        Behavior on height { SpringAnimation { spring: 3.6; damping: 0.3; epsilon: 0.3 } }
+        Behavior on radius { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
 
         HoverHandler { id: islandHover }
         TapHandler {
@@ -397,6 +442,20 @@ Window {
         }
     }
 
+    // Ta sama poświata od środka: kolory lekko wpływają na brzegi czarnej wyspy
+    IntelligenceGlow {
+        x: island.x; y: island.y
+        width: island.width; height: island.height
+        radius: island.radius
+        animate: false
+        angle: islandGlow.angle
+        showRing: false
+        haloWidth: 3
+        haloBlur: 12
+        haloStrength: Assistant.busy ? 0.8 : 0.5
+        intensity: islandGlow.intensity
+    }
+
     // ——— Pole pytania i krótka odpowiedź (w środku dynamicznej wyspy) ———
     Item {
         parent: island
@@ -414,19 +473,14 @@ Window {
             Item {
                 width: parent.width
                 height: 46
-                // Iskra asystenta; kręci się, gdy model pisze
-                Rectangle {
+                // Kula Aster Intelligence: kolory krążą szybciej, gdy model myśli
+                IntelligenceOrb {
                     id: spark
-                    width: 30; height: 30; radius: 15
+                    size: 30
+                    busy: Assistant.busy
                     anchors.verticalCenter: parent.verticalCenter
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.45) }
-                        GradientStop { position: 1; color: "#7C3AED" }
-                    }
-                    Icon {
-                        anchors.centerIn: parent; d: Icons.sparkle; size: 16; stroke: 2; color: "white"
-                        RotationAnimation on rotation { running: Assistant.busy; loops: Animation.Infinite; from: 0; to: 360; duration: 1600 }
-                    }
+                    scale: hz.asking ? 1 : 0.4
+                    Behavior on scale { SpringAnimation { spring: 4; damping: 0.28 } }
                 }
                 TextInput {
                     id: askField
@@ -444,7 +498,8 @@ Window {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !askField.text
-                        text: hz.answerShown ? "Dopytaj…" : "Zapytaj o cokolwiek…"
+                        text: hz.answerShown ? "Dopytaj…"
+                            : hz.hasSelection ? "Opisz zmianę albo zapytaj o ten tekst…" : "Zapytaj Aster Intelligence…"
                         color: Qt.rgba(1, 1, 1, 0.38)
                         font: askField.font
                     }
@@ -467,6 +522,106 @@ Window {
                 }
             }
 
+            // Narzędzia do pisania: zaznaczony tekst i co z nim zrobić
+            Item {
+                id: toolsBox
+                visible: hz.toolsShown
+                width: parent.width
+                height: visible ? toolsCol.implicitHeight + 14 : 0
+                opacity: visible ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 220 } }
+                Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+                Column {
+                    id: toolsCol
+                    x: 4; y: 10
+                    width: parent.width - 8
+                    spacing: 10
+                    // Podgląd tekstu, na którym narzędzia będą działać
+                    Rectangle {
+                        width: parent.width
+                        height: 34
+                        radius: 10
+                        color: Qt.rgba(1, 1, 1, 0.06)
+                        border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.07)
+                        Icon {
+                            id: selIcon
+                            x: 10; anchors.verticalCenter: parent.verticalCenter
+                            d: Assistant.selectionSource === "schowek" ? Icons.paste : Icons.cursor
+                            size: 13; stroke: 2; color: Qt.rgba(1, 1, 1, 0.5)
+                        }
+                        Text {
+                            anchors.left: selIcon.right; anchors.leftMargin: 8
+                            anchors.right: unpin.left; anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: (Assistant.selectionSource === "schowek" ? "Ze schowka: " : "Zaznaczone: ")
+                                  + "„" + Assistant.selection.replace(/\s+/g, " ") + "”"
+                            elide: Text.ElideRight
+                            color: Qt.rgba(1, 1, 1, 0.6)
+                            font.family: Theme.font; font.pixelSize: 12
+                        }
+                        Rectangle {
+                            id: unpin
+                            anchors.right: parent.right; anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 22; height: 22; radius: 11
+                            color: unpinArea.containsMouse ? Qt.rgba(1, 1, 1, 0.16) : "transparent"
+                            Icon { anchors.centerIn: parent; d: Icons.close; size: 9; stroke: 2.2; color: Qt.rgba(1, 1, 1, 0.6) }
+                            MouseArea { id: unpinArea; anchors.fill: parent; hoverEnabled: true; onClicked: hz.useSelection = false }
+                        }
+                    }
+                    Flow {
+                        width: parent.width
+                        spacing: 6
+                        Repeater {
+                            model: hz.tools
+                            delegate: Rectangle {
+                                id: chip
+                                required property var modelData
+                                required property int index
+                                width: chipRow.implicitWidth + 22
+                                height: 28
+                                radius: 14
+                                color: chipArea.containsMouse ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(1, 1, 1, 0.08)
+                                border.width: 1
+                                border.color: chipArea.containsMouse ? Qt.rgba(0.78, 0.53, 1, 0.6) : Qt.rgba(1, 1, 1, 0.08)
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Behavior on border.color { ColorAnimation { duration: 120 } }
+                                scale: chipArea.pressed ? 0.94 : 1
+                                Behavior on scale { SpringAnimation { spring: 5; damping: 0.35 } }
+                                // Wejście kaskadą: każdy kolejny przycisk chwilę później
+                                opacity: 0
+                                property real lift: 6
+                                transform: Translate { y: chip.lift }
+                                Component.onCompleted: appear.start()
+                                ParallelAnimation {
+                                    id: appear
+                                    SequentialAnimation {
+                                        PauseAnimation { duration: 40 + chip.index * 35 }
+                                        ParallelAnimation {
+                                            NumberAnimation { target: chip; property: "opacity"; to: 1; duration: 220 }
+                                            NumberAnimation { target: chip; property: "lift"; to: 0; duration: 320; easing.type: Easing.OutBack }
+                                        }
+                                    }
+                                }
+                                Row {
+                                    id: chipRow
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; d: chip.modelData.icon; size: 12; stroke: 2; color: Qt.rgba(1, 1, 1, 0.75) }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: chip.modelData.label
+                                        color: "white"
+                                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                                    }
+                                }
+                                MouseArea { id: chipArea; anchors.fill: parent; hoverEnabled: true; onClicked: hz.runTool(chip.modelData) }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Odpowiedź
             Item {
                 visible: hz.answerShown
@@ -478,32 +633,26 @@ Window {
                     x: 4; y: 10
                     width: parent.width - 8
                     spacing: 8
-                    // Kropki, zanim przyjdzie pierwszy kawałek odpowiedzi
-                    Row {
+                    // Zanim przyjdzie pierwszy kawałek odpowiedzi: połysk przebiega po napisie
+                    ShimmerText {
                         visible: Assistant.busy && Assistant.lastAnswer === ""
-                        spacing: 5
-                        height: 18
-                        Repeater {
-                            model: 3
-                            delegate: Rectangle {
-                                id: dot
-                                required property int index
-                                y: 6
-                                width: 6; height: 6; radius: 3
-                                color: Qt.rgba(1, 1, 1, 0.7)
-                                SequentialAnimation on opacity {
-                                    running: Assistant.busy; loops: Animation.Infinite
-                                    PauseAnimation { duration: dot.index * 160 }
-                                    NumberAnimation { from: 0.25; to: 1; duration: 320 }
-                                    NumberAnimation { from: 1; to: 0.25; duration: 320 }
-                                    PauseAnimation { duration: (2 - dot.index) * 160 }
-                                }
-                            }
-                        }
+                        text: Assistant.status.local ? "Myślę na tym komputerze…" : "Myślę…"
+                        pixelSize: 14
                     }
                     Text {
+                        id: answerText
                         visible: text !== ""
                         width: parent.width
+                        // Odpowiedź wyłania się: przenika i lekko unosi
+                        opacity: 0
+                        property real lift: 8
+                        transform: Translate { y: answerText.lift }
+                        onVisibleChanged: if (visible) reveal.restart(); else { opacity = 0; lift = 8; }
+                        ParallelAnimation {
+                            id: reveal
+                            NumberAnimation { target: answerText; property: "opacity"; to: 1; duration: 320; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: answerText; property: "lift"; to: 0; duration: 420; easing.type: Easing.OutBack }
+                        }
                         text: Assistant.lastError ? Assistant.lastAnswer : Assistant.lastAnswer.replace(/\*\*/g, "")
                         wrapMode: Text.Wrap
                         maximumLineCount: 5
@@ -518,10 +667,29 @@ Window {
                         spacing: 10
                         AssistantBadge { visible: !Assistant.lastError; text: Assistant.lastBadge }
                         Rectangle {
+                            id: copyChip
+                            visible: !Assistant.lastError && Assistant.lastAnswer !== ""
+                            property bool done: false
+                            width: copyRow.implicitWidth + 16; height: 22; radius: 11
+                            color: copyArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.1)
+                            Row {
+                                id: copyRow
+                                anchors.centerIn: parent
+                                spacing: 5
+                                Icon { anchors.verticalCenter: parent.verticalCenter; d: copyChip.done ? Icons.check : Icons.copy; size: 11; stroke: 2; color: "white" }
+                                Text { anchors.verticalCenter: parent.verticalCenter; text: copyChip.done ? "Skopiowano" : "Kopiuj"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+                            }
+                            Timer { id: copiedTimer; interval: 1600; onTriggered: copyChip.done = false }
+                            MouseArea {
+                                id: copyArea; anchors.fill: parent; hoverEnabled: true
+                                onClicked: { Assistant.copy(Assistant.lastAnswer); copyChip.done = true; copiedTimer.restart(); }
+                            }
+                        }
+                        Rectangle {
                             visible: Assistant.lastError
                             width: setText.implicitWidth + 18; height: 22; radius: 11
                             color: setArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.1)
-                            Text { id: setText; anchors.centerIn: parent; text: "Ustawienia asystenta"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { id: setText; anchors.centerIn: parent; text: "Ustawienia Aster Intelligence"; color: "white"; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
                             MouseArea { id: setArea; anchors.fill: parent; hoverEnabled: true; onClicked: { hz.closeAsk(); Assistant.openSettings(); } }
                         }
                         Text {

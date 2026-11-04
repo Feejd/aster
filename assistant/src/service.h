@@ -17,6 +17,12 @@ class QNetworkReply;
 //
 // Ask(rozmowa, pytanie, kontekst, źródło) → id rozmowy; odpowiedź przychodzi kawałkami w sygnale Chunk,
 // na końcu Finished(rozmowa, cały tekst, znaczek) albo Failed(rozmowa, komunikat).
+//
+// Aster Intelligence to agent: gdy model chce coś sprawdzić albo zrobić, pisze jedno polecenie w bloku ```bash.
+// Usługa wysyła wtedy ActionRequested(rozmowa, id, polecenie, opis po ludzku, bezpieczne) zamiast Finished. Klient (powłoka albo
+// `aster` w terminalu) uruchamia polecenie — bezpieczne (tylko odczyt) od razu, resztę po zgodzie użytkownika —
+// i odsyła ActionResult(rozmowa, id, kod wyjścia, wynik); kod -2 znaczy „użytkownik odmówił”. Model dostaje wynik
+// i działa dalej, aż skończy (Finished) — najwyżej kMaxSteps poleceń na jedno pytanie.
 // Znaczek mówi, kto odpowiedział: „Na tym komputerze” albo „Chmura: <dostawca>”.
 // Historia rozmów — tylko lokalnie, w ~/.local/share/aster/asystent (do wyłączenia).
 class Service : public QObject, protected QDBusContext
@@ -31,6 +37,7 @@ public Q_SLOTS:
     // source: terminal | wyspa | panel (dobiera styl odpowiedzi); context: dane z potoku albo zaznaczony tekst
     Q_SCRIPTABLE QString Ask(const QString &conversation, const QString &prompt, const QString &context, const QString &source);
     Q_SCRIPTABLE void Cancel(const QString &conversation);
+    Q_SCRIPTABLE void ActionResult(const QString &conversation, const QString &action, int exitCode, const QString &output);
 
     // {provider, providerName, model, baseUrl, local, badge, region, ready, problem, history, hasKey}
     Q_SCRIPTABLE QVariantMap Status();
@@ -43,7 +50,7 @@ public Q_SLOTS:
 
     // JSON: [{id, title, updated, count}] — od najnowszej
     Q_SCRIPTABLE QString Conversations();
-    // JSON: {id, title, updated, messages: [{role, text, badge, time}]}
+    // JSON: {id, title, updated, messages: [{role, text, badge, time, command?, exit?}]} — role: user | assistant | action
     Q_SCRIPTABLE QString Conversation(const QString &id);
     Q_SCRIPTABLE void DeleteConversation(const QString &id);
     Q_SCRIPTABLE void ClearHistory();
@@ -52,22 +59,32 @@ Q_SIGNALS:
     Q_SCRIPTABLE void Chunk(const QString &conversation, const QString &text);
     Q_SCRIPTABLE void Finished(const QString &conversation, const QString &text, const QString &badge);
     Q_SCRIPTABLE void Failed(const QString &conversation, const QString &message);
+    // description: jedno zdanie po ludzku („Zainstalować Google Chrome?”) — to widzi użytkownik, polecenie jest w szczegółach
+    Q_SCRIPTABLE void ActionRequested(const QString &conversation, const QString &action, const QString &command,
+                                      const QString &description, bool safe);
     Q_SCRIPTABLE void StatusChanged();
     Q_SCRIPTABLE void HistoryChanged();
 
 private:
     struct Message {
-        QString role;       // user | assistant
-        QString text;
-        QString context;    // dane dołączone do pytania (np. z potoku) — idą do modelu, w historii są osobno
+        QString role;       // user | assistant | action (polecenie wykonane przez agenta i jego wynik)
+        QString text;       // przy action: wynik polecenia
+        QString context;    // dane dołączone do pytania (np. z potoku); przy action — opis polecenia po ludzku
         QString badge;
         qint64 time = 0;
+        QString command;    // action: polecenie
+        int exitCode = 0;   // action: kod wyjścia (-2: użytkownik odmówił)
     };
     struct Conv {
         QString id;
         QString title;
         qint64 updated = 0;
         QList<Message> messages;
+        QString source;          // skąd ostatnie pytanie (styl odpowiedzi agenta w kolejnych krokach)
+        int steps = 0;           // polecenia wykonane dla bieżącego pytania
+        QString pendingAction;   // id polecenia czekającego na wynik od klienta
+        QString pendingCommand;
+        QString pendingDescription;
     };
     struct Request {
         QString conversation;
@@ -77,6 +94,8 @@ private:
         QString url;
         bool anthropic = false;
         bool local = false;
+        bool agent = false;    // odpowiedź może zawierać polecenie (wszędzie poza narzędziami do pisania)
+        bool stopped = false;  // urwana po bloku z poleceniem — reszta byłaby zgadywaniem wyniku
         QByteArray pending;    // niedokończony wiersz strumienia SSE
         QByteArray errorBody;
     };
@@ -97,6 +116,11 @@ private:
     void onFinished(QNetworkReply *reply);
     void fail(const QString &conversation, const QString &message);
     QString systemPrompt(const QString &source) const;
+public:
+    static QString commandIn(const QString &text);     // pierwsze polecenie z bloku ```bash w odpowiedzi
+    static bool isSafeCommand(const QString &command); // tylko odczyt — można uruchomić bez pytania
+    static QString describe(const QString &text, const QString &command);
+private:
     void touch();
 
     QNetworkAccessManager m_net;

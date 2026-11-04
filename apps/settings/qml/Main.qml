@@ -54,7 +54,7 @@ Window {
             { id: "language", name: "Język i region", icon: "translate", colors: ["#7DD3FC", "#0284C7"], keys: "język formaty waluta data liczby" },
             { id: "apps", name: "Aplikacje", icon: "apps", colors: ["#C4B5FD", "#7C3AED"], keys: "domyślne przeglądarka poczta autostart uruchamiane po zalogowaniu" },
             { id: "accessibility", name: "Dostępność", icon: "access", colors: ["#60A5FA", "#1E40AF"], keys: "lupa czytnik ekranu kursor animacje lepkie klawisze" },
-            { id: "assistant", name: "Asystent", icon: "sparkle", colors: ["#C4B5FD", "#6D28D9"], keys: "ai sztuczna inteligencja czat model chmura lokalny deepseek openai claude gemini mistral ollama klucz api terminal" },
+            { id: "assistant", name: "Aster Intelligence", icon: "sparkle", colors: ["#F5B9EA", "#8D5CF6"], keys: "asystent intelligence ai sztuczna inteligencja czat model chmura lokalny deepseek openai claude gemini mistral ollama klucz api terminal" },
             { id: "privacy", name: "Prywatność i bezpieczeństwo", icon: "shield", colors: ["#94A3B8", "#334155"], keys: "blokada ekranu hasło zapora historia" }
         ]
     ]

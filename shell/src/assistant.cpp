@@ -11,7 +11,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
+#include <QMimeData>
+#include <QDir>
+#include <QPointer>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QTimer>
 
 static const QString kService = QStringLiteral("org.aster.Assistant");
 static const QString kPath = QStringLiteral("/org/aster/Assistant");
@@ -30,13 +35,17 @@ QVariant AssistantMessages::data(const QModelIndex &index, int role) const
     case BadgeRole: return m.badge;
     case ErrorRole: return m.error;
     case PendingRole: return m.pending;
+    case CommandRole: return m.command;
+    case StateRole: return m.state;
+    case OutputRole: return m.output;
     }
     return {};
 }
 
 QHash<int, QByteArray> AssistantMessages::roleNames() const
 {
-    return {{RoleRole, "role"}, {TextRole, "text"}, {BadgeRole, "badge"}, {ErrorRole, "error"}, {PendingRole, "pending"}};
+    return {{RoleRole, "role"}, {TextRole, "text"}, {BadgeRole, "badge"}, {ErrorRole, "error"}, {PendingRole, "pending"},
+            {CommandRole, "command"}, {StateRole, "phase"}, {OutputRole, "output"}};
 }
 
 void AssistantMessages::reset(const QList<Message> &items)
@@ -59,6 +68,12 @@ void AssistantMessages::lastChanged()
         return;
     const QModelIndex i = index(int(m_items.size()) - 1);
     Q_EMIT dataChanged(i, i);
+}
+
+void AssistantMessages::changedAt(int i)
+{
+    const QModelIndex x = index(i);
+    Q_EMIT dataChanged(x, x);
 }
 
 void AssistantMessages::removeLast()
@@ -96,7 +111,7 @@ static const QDBusArgument &operator>>(const QDBusArgument &a, KeySeq &s)
 
 static const QString kAccel = QStringLiteral("org.kde.kglobalaccel");
 static const QStringList kShortcutId{QStringLiteral("aster-shell"), QStringLiteral("assistant"), QStringLiteral("Powłoka Aster"),
-                                     QStringLiteral("Asystent Aster")};
+                                     QStringLiteral("Aster Intelligence")};
 
 void Assistant::registerShortcut()
 {
@@ -141,8 +156,47 @@ Assistant::Assistant(QObject *parent)
     bus.connect(kService, kPath, kIface, QStringLiteral("Finished"), this, SLOT(onFinished(QString, QString, QString)));
     bus.connect(kService, kPath, kIface, QStringLiteral("Failed"), this, SLOT(onFailed(QString, QString)));
     bus.connect(kService, kPath, kIface, QStringLiteral("StatusChanged"), this, SLOT(refreshStatus()));
+    bus.connect(kService, kPath, kIface, QStringLiteral("ActionRequested"), this,
+                SLOT(onActionRequested(QString, QString, QString, QString, bool)));
     if (!qEnvironmentVariableIsSet("ASTER_PREVIEW"))
         registerShortcut();
+    QClipboard *cb = QGuiApplication::clipboard();
+    connect(cb, &QClipboard::selectionChanged, this, &Assistant::refreshSelection);
+    connect(cb, &QClipboard::dataChanged, this, &Assistant::refreshSelection);
+}
+
+// Zaznaczony tekst (podstawowe zaznaczenie Waylanda) albo — gdy nic nie zaznaczono — tekst ze schowka.
+// Wayland podaje zaznaczenie tylko oknu z klawiaturą, więc wyspa czyta je po otwarciu pola pytania.
+void Assistant::refreshSelection()
+{
+    QString text, source;
+    if (const QString fake = qEnvironmentVariable("ASTER_SHOT_SELECTION"); !fake.isEmpty()) {
+        text = fake;
+        source = QStringLiteral("zaznaczenie");
+    } else {
+        QClipboard *cb = QGuiApplication::clipboard();
+        // Hasła skopiowane z menedżera haseł (KeePassXC, Bitwarden…) nie trafiają do podpowiedzi
+        auto secret = [](const QMimeData *d) {
+            return d && d->data(QStringLiteral("x-kde-passwordManagerHint")) == "secret";
+        };
+        if (cb->supportsSelection() && !secret(cb->mimeData(QClipboard::Selection)))
+            text = cb->text(QClipboard::Selection).trimmed();
+        source = QStringLiteral("zaznaczenie");
+        if (text.isEmpty() && !secret(cb->mimeData(QClipboard::Clipboard))) {
+            text = cb->text(QClipboard::Clipboard).trimmed();
+            source = QStringLiteral("schowek");
+        }
+    }
+    // Pojedyncze słowo albo adres to nie tekst do przeredagowania
+    if (text.size() < 12 || !text.contains(QLatin1Char(' ')))
+        text.clear();
+    if (text.isEmpty())
+        source.clear();
+    if (text == m_selection && source == m_selectionSource)
+        return;
+    m_selection = text;
+    m_selectionSource = source;
+    Q_EMIT selectionChanged();
 }
 
 int Assistant::exchanges() const
@@ -165,6 +219,14 @@ QString Assistant::lastBadge() const
     return !items.isEmpty() ? items.last().badge : QString();
 }
 
+bool Assistant::acting() const
+{
+    for (const auto &m : m_messages.items())
+        if (m.role == QLatin1String("action"))
+            return true;
+    return false;
+}
+
 bool Assistant::lastError() const
 {
     const auto &items = m_messages.items();
@@ -184,7 +246,7 @@ void Assistant::refreshStatus()
     });
 }
 
-void Assistant::ask(const QString &text, const QString &source)
+void Assistant::ask(const QString &text, const QString &source, const QString &context)
 {
     const QString q = text.trimmed();
     if (q.isEmpty())
@@ -195,7 +257,7 @@ void Assistant::ask(const QString &text, const QString &source)
     m_busy = true;
     Q_EMIT changed();
     auto *w = new QDBusPendingCallWatcher(
-        QDBusConnection::sessionBus().asyncCall(method(QStringLiteral("Ask"), {m_conversation, q, QString(), source}), 25000), this);
+        QDBusConnection::sessionBus().asyncCall(method(QStringLiteral("Ask"), {m_conversation, q, context, source}), 25000), this);
     connect(w, &QDBusPendingCallWatcher::finished, this, [this, w] {
         const QDBusMessage r = w->reply();
         w->deleteLater();
@@ -215,6 +277,10 @@ void Assistant::cancel()
     if (!m_busy)
         return;
     QDBusConnection::sessionBus().asyncCall(method(QStringLiteral("Cancel"), {m_conversation}));
+    if (const int w = waitingAction(); w >= 0) {
+        m_messages.at(w).state = QStringLiteral("odmowa");
+        m_messages.changedAt(w);
+    }
     if (!m_messages.isEmpty() && m_messages.last().pending) {
         m_messages.last().pending = false;
         if (m_messages.last().text.isEmpty())
@@ -243,8 +309,17 @@ void Assistant::openConversation(const QString &id)
     QList<AssistantMessages::Message> items;
     for (const QJsonValue &v : o.value(QStringLiteral("messages")).toArray()) {
         const QJsonObject m = v.toObject();
-        items.append({m.value(QStringLiteral("role")).toString(), m.value(QStringLiteral("text")).toString(),
-                      m.value(QStringLiteral("badge")).toString(), false, false});
+        const QString role = m.value(QStringLiteral("role")).toString();
+        if (role == QLatin1String("action")) {
+            const int code = m.value(QStringLiteral("exit")).toInt();
+            items.append({role, m.value(QStringLiteral("description")).toString(), QString(), false, false,
+                          m.value(QStringLiteral("command")).toString(),
+                          code == -2 ? QStringLiteral("odmowa") : code == 0 ? QStringLiteral("gotowe") : QStringLiteral("blad"),
+                          m.value(QStringLiteral("text")).toString(), QString()});
+            continue;
+        }
+        QString text = m.value(QStringLiteral("text")).toString();
+        items.append({role, text, m.value(QStringLiteral("badge")).toString(), false, false});
     }
     m_conversation = id;
     m_messages.reset(items);
@@ -278,8 +353,10 @@ void Assistant::openSettings() const
 
 void Assistant::onChunk(const QString &conversation, const QString &text)
 {
-    if (conversation != m_conversation || m_messages.isEmpty() || !m_messages.last().pending)
+    if (conversation != m_conversation || m_messages.isEmpty() || !m_busy)
         return;
+    if (!m_messages.last().pending)
+        m_messages.append({QStringLiteral("assistant"), QString(), m_status.value(QStringLiteral("badge")).toString(), false, true});
     m_messages.last().text += text;
     m_messages.lastChanged();
     Q_EMIT changed();
@@ -287,8 +364,10 @@ void Assistant::onChunk(const QString &conversation, const QString &text)
 
 void Assistant::onFinished(const QString &conversation, const QString &text, const QString &badge)
 {
-    if (conversation != m_conversation || m_messages.isEmpty() || !m_messages.last().pending)
+    if (conversation != m_conversation || m_messages.isEmpty() || !m_busy)
         return;
+    if (!m_messages.last().pending)
+        m_messages.append({QStringLiteral("assistant"), QString(), badge, false, true});
     auto &m = m_messages.last();
     m.text = text;
     m.badge = badge;
@@ -301,8 +380,10 @@ void Assistant::onFinished(const QString &conversation, const QString &text, con
 
 void Assistant::onFailed(const QString &conversation, const QString &message)
 {
-    if (conversation != m_conversation || m_messages.isEmpty() || !m_messages.last().pending)
+    if (conversation != m_conversation || m_messages.isEmpty() || !m_busy)
         return;
+    if (!m_messages.last().pending)
+        m_messages.append({QStringLiteral("assistant"), QString(), QString(), false, true});
     auto &m = m_messages.last();
     m.text = message;
     m.error = true;
@@ -312,4 +393,139 @@ void Assistant::onFailed(const QString &conversation, const QString &message)
     m_busy = false;
     Q_EMIT changed();
     Q_EMIT answered();
+}
+
+// ——— Agent: polecenia ———
+
+int Assistant::waitingAction() const
+{
+    const auto &items = m_messages.items();
+    for (int i = int(items.size()) - 1; i >= 0; --i)
+        if (items.at(i).role == QLatin1String("action") && items.at(i).state == QLatin1String("czeka"))
+            return i;
+    return -1;
+}
+
+void Assistant::onActionRequested(const QString &conversation, const QString &action, const QString &command,
+                                  const QString &description, bool safe)
+{
+    if (conversation != m_conversation || m_messages.isEmpty())
+        return;
+    // Tekst odpowiedzi bez bloku z poleceniem i bez zdania-opisu (oba są na karcie działania)
+    if (m_messages.last().pending) {
+        QString t = m_messages.last().text;
+        static const QRegularExpression block(QStringLiteral("```(?:bash|sh|shell|zsh|console)[ \\t]*\\n[\\s\\S]*?(```|$)"));
+        t.remove(block);
+        t = t.trimmed();
+        // ostatni wiersz to zwykle zdanie-opis — jest już na karcie
+        const int nl = t.lastIndexOf(QLatin1Char('\n'));
+        const QString lastLine = t.mid(nl + 1).remove(QRegularExpression(QStringLiteral("[*_`#>]"))).trimmed();
+        if (!description.isEmpty() && (lastLine == description || lastLine.startsWith(description.left(24))))
+            t = nl < 0 ? QString() : t.left(nl).trimmed();
+        if (t.endsWith(QLatin1Char(':')))
+            t.chop(1);
+        if (t.isEmpty()) {
+            m_messages.removeLast();
+        } else {
+            m_messages.last().text = t;
+            m_messages.last().badge.clear();     // znaczek dostaje dopiero końcowa odpowiedź
+            m_messages.last().pending = false;
+            m_messages.lastChanged();
+        }
+    }
+    AssistantMessages::Message m{QStringLiteral("action"), description, QString(), false, false, command,
+                                 safe ? QStringLiteral("dziala") : QStringLiteral("czeka"), QString(), action};
+    m_messages.append(m);
+    Q_EMIT changed();
+    if (safe)
+        runAction(int(m_messages.rowCount()) - 1);
+}
+
+void Assistant::approve(bool yes)
+{
+    const int i = waitingAction();
+    if (i < 0)
+        return;
+    if (yes) {
+        runAction(i);
+    } else {
+        m_messages.at(i).state = QStringLiteral("odmowa");
+        m_messages.changedAt(i);
+        sendResult(i, -2, QString());
+    }
+}
+
+// Programy z oknem (aster-files, aster-settings…) startują osobno — agent dostaje tylko „uruchomiono”.
+// sudo nie ma tu terminala na hasło: zamieniane na pkexec (okno hasła powłoki).
+void Assistant::runAction(int index)
+{
+    auto &m = m_messages.at(index);
+    m.state = QStringLiteral("dziala");
+    m_messages.changedAt(index);
+    Q_EMIT changed();
+    QString cmd = m.command;
+    cmd.replace(QRegularExpression(QStringLiteral("(^|[;&|]\\s*)sudo\\s+")), QStringLiteral("\\1pkexec "));
+    const QString first = cmd.section(QLatin1Char(' '), 0, 0);
+    static const QStringList cli{QStringLiteral("aster-assistant"), QStringLiteral("aster-firstboot")};
+    if (first.startsWith(QLatin1String("aster-")) && !cli.contains(first) && !cmd.contains(QLatin1Char('|'))) {
+        const bool ok = QProcess::startDetached(QStringLiteral("sh"), {QStringLiteral("-c"), cmd}, QDir::homePath());
+        sendResult(index, ok ? 0 : 127, ok ? QStringLiteral("Program uruchomiony (okno otwiera się na ekranie).")
+                                           : QStringLiteral("Nie udało się uruchomić programu."));
+        return;
+    }
+    auto *p = new QProcess(this);
+    p->setProcessChannelMode(QProcess::MergedChannels);
+    p->setWorkingDirectory(QDir::homePath());
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C.UTF-8"));   // przewidywalne komunikaty dla modelu
+    env.insert(QStringLiteral("PAGER"), QStringLiteral("cat"));
+    env.insert(QStringLiteral("SYSTEMD_PAGER"), QString());
+    p->setProcessEnvironment(env);
+    const QString id = m.actionId;
+    auto *timeout = new QTimer(p);
+    timeout->setSingleShot(true);
+    connect(timeout, &QTimer::timeout, p, [p] { p->kill(); });
+    connect(p, &QProcess::finished, this, [this, p, id](int code, QProcess::ExitStatus st) {
+        p->deleteLater();
+        const auto &items = m_messages.items();
+        for (int i = 0; i < items.size(); ++i)
+            if (items.at(i).actionId == id) {
+                QString out = QString::fromUtf8(p->readAll());
+                if (st != QProcess::NormalExit)
+                    out += QStringLiteral("\n(polecenie przerwane po 3 minutach)");
+                sendResult(i, st == QProcess::NormalExit ? code : 124, out);
+                return;
+            }
+    });
+    connect(p, &QProcess::errorOccurred, this, [this, p, id](QProcess::ProcessError e) {
+        if (e != QProcess::FailedToStart)
+            return;
+        p->deleteLater();
+        const auto &items = m_messages.items();
+        for (int i = 0; i < items.size(); ++i)
+            if (items.at(i).actionId == id)
+                sendResult(i, 127, QStringLiteral("Nie udało się uruchomić powłoki bash."));
+    });
+    p->start(QStringLiteral("bash"), {QStringLiteral("-lc"), cmd}, QIODevice::ReadOnly);
+    p->closeWriteChannel();
+    timeout->start(180000);
+}
+
+void Assistant::sendResult(int index, int exitCode, const QString &output)
+{
+    auto &m = m_messages.at(index);
+    if (exitCode != -2) {
+        m.state = exitCode == 0 ? QStringLiteral("gotowe") : QStringLiteral("blad");
+        m.output = output.trimmed();
+    }
+    m_messages.changedAt(index);
+    QDBusConnection::sessionBus().asyncCall(method(QStringLiteral("ActionResult"), {m_conversation, m.actionId, exitCode, output}));
+    // Model myśli nad wynikiem — miejsce na jego następną odpowiedź
+    m_messages.append({QStringLiteral("assistant"), QString(), m_status.value(QStringLiteral("badge")).toString(), false, true});
+    Q_EMIT changed();
+}
+
+void Assistant::openInTerminal(const QString &command) const
+{
+    QProcess::startDetached(QStringLiteral("aster-terminal"), {QStringLiteral("--wpisz"), command});
 }

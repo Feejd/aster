@@ -1,4 +1,4 @@
-# Asystent Aster: usługa sesji (aster-assistant, D-Bus org.aster.Assistant) i polecenie `aster` (skrót `ai`).
+# Aster Intelligence: usługa sesji (aster-assistant, D-Bus org.aster.Assistant) i polecenie `aster` (skrót `ai`).
 # Bez QML i bez GUI — sama sieć i D-Bus, żeby usługa była lekka (startuje na żądanie, kończy się po bezczynności).
 find_package(Qt6 REQUIRED COMPONENTS Core Network DBus)
 

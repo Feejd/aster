@@ -204,7 +204,7 @@ bool Secrets::write(const QString &provider, const QString &label, const QString
     const QDBusObjectPath session = openSession(error);
     if (session.path().isEmpty())
         return false;
-    QVariantMap props{{QStringLiteral("org.freedesktop.Secret.Item.Label"), QStringLiteral("Asystent Aster — klucz API %1").arg(label)},
+    QVariantMap props{{QStringLiteral("org.freedesktop.Secret.Item.Label"), QStringLiteral("Aster Intelligence — klucz API %1").arg(label)},
                       {QStringLiteral("org.freedesktop.Secret.Item.Attributes"), QVariant::fromValue(attributes(provider))}};
     const Secret secret{session, {}, key.toUtf8(), QStringLiteral("text/plain")};
     const QDBusMessage r = call(collection.path(), kIfCollection, QStringLiteral("CreateItem"),
