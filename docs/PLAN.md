@@ -125,7 +125,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       Konto i wygląd zakłada `aster-firstboot` przy pierwszym starcie. ISO: `sudo tools/build-iso.sh [skąd aktualizacje]`
 - [ ] Zbudować i przetestować ISO (Linux z ~30 GB miejsca albo GitHub Actions): rozruch, instalacja, pierwszy start
 - [ ] Instalator, dalej: szyfrowanie dysku, instalacja obok Windows, „Przesiadasz się z Windowsa?” (przeniesienie plików)
-- [ ] Aktualizacje w tle z możliwością cofnięcia (atomowa Fedora), sklep aplikacji z Flathub.
+- [ ] Aktualizacje w tle z możliwością cofnięcia (atomowa Fedora).
 - [ ] Test na prawdziwym laptopie (x86_64).
 
 ## Etap 5 — własne aplikacje
@@ -159,7 +159,16 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje z Androida (APK) przez Waydroid jako zwykłe programy w Starcie i doku
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
-- [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
+- [x] Sklep Aster od nowa: własny katalog zamiast nakładki na Flathub (86 sprawdzonych programów, polskie opisy, werdykty „co dobre, co słabe”; reszta świata tylko w wyszukiwaniu, wyraźnie jako „spoza katalogu”, bez porzuconych)
+- [x] Sklep: pierwszy ekran „Chcę…” i wyszukiwanie po tym, co chcesz zrobić (po polsku, z odmianą, po rozszerzeniu pliku i po nazwie programu z Windowsa), Aster Intelligence jako dodatek
+- [x] Sklep: przewodniki po 16 zadaniach z instalacją całego zestawu i prawdziwym rachunkiem za dysk
+- [x] Sklep: przesiadka z Windowsa (zaznaczasz programy, dostajesz zestaw i prawdę o swoich plikach, albo zostajesz przy oryginale w wersji webowej)
+- [x] Sklep: jedna lista dla programów, aplikacji Aster (wbudowane albo paczki z wydania „aplikacje”) i aplikacji webowych; lżejsza wersja webowa podpowiadana przy ciężkich programach
+- [x] Sklep: karta programu liczona z prawdziwych uprawnień (pliki, sieć, urządzenia, izolacja, data aktualizacji, wydawca, kod, ten komputer), „nie sprawdziliśmy” zamiast zgadywania, porównanie obok siebie
+- [x] Sklep: opinie użytkowników z ODRS jako „X% poleca”
+- [x] Sklep: Twój komputer: aktualizacje, cofanie do poprzedniej wersji, usuwanie z informacją, ile miejsca wróci, porządki (biblioteki bez programów, programy nieużywane od 3 miesięcy)
+- [x] Sklep: dane katalogu i obrazki w pamięci na dysku, otwiera się od razu i działa bez internetu
+- [ ] Sklep: pisanie własnych opinii (ODRS), aplikacje z Androida (po Waydroidzie), programy systemowe (RPM), aktualizacja systemu z jednego miejsca, fakty o telemetrii i wysyłaniu danych dla całego katalogu, werdykty dla wszystkich programów
 - [ ] Aster Intelligence (dawniej Asystent Aster) — rozpisany niżej; gotowe A1 (usługa, `aster` w terminalu, Ustawienia),
       A2 (wyspa, panel), A2.5 (wygląd jak Apple Intelligence, narzędzia do pisania) i A3 (agent, który sam działa).
 

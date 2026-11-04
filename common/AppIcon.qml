@@ -47,6 +47,7 @@ Item {
         "org.kde.skanlite": ["#A5F3FC", "#0E7490", "scanner"],
         "org.kde.skanpage": ["#A5F3FC", "#0E7490", "scanner"],
         "org.aster.grafika": ["#7DF0E8", "#6A3DF0", "palette"],
+        "org.aster.studio": ["#D3B8FF", "#6D28D9", "mic"],
         "org.aster.phone": ["#86EFAC", "#15803D", "phone"],
         "org.kde.kdeconnect.app": ["#86EFAC", "#15803D", "phone"],
         "org.aster.tasks": ["#7EE8A8", "#0E8F5A", "activity"],

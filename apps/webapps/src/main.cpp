@@ -5,6 +5,7 @@
 //   aster-webapps aster-webapp:install?url=…   to samo z przeglądarki (własny schemat adresów)
 //   aster-webapps --add <adres> [--name N] [--category K] [--color #RRGGBB]
 //                                      instalacja bez okna (skrypty, obraz systemu)
+//   aster-webapps --remove <id>        usunięcie bez okna (Sklep)
 
 #include "runtime.h"
 #include "webapps.h"
@@ -67,6 +68,14 @@ int main(int argc, char *argv[])
         });
         apps->inspect(args.at(add + 1));
         return app.exec();
+    }
+
+    // ——— Usunięcie bez okna ———
+    const int remove = args.indexOf(QStringLiteral("--remove"));
+    if (remove > 0 && remove + 1 < args.size()) {
+        WebApps apps;
+        apps.uninstall(args.at(remove + 1));
+        return 0;
     }
 
     std::unique_ptr<Runtime> runtime;

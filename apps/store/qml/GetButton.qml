@@ -1,75 +1,61 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Shapes
 import Aster.Ui
 import Aster.Store
 
-// Przycisk jak w sklepie: POBIERZ → kółko postępu → OTWÓRZ.
-// onDark: wersja na kolorowym tle (biała pigułka).
+// Główne działanie na programie, wspólne dla każdego źródła: Zainstaluj / Dodaj → pasek postępu w przycisku → Otwórz
 Item {
     id: gb
-    property string appId
+    property string ref
     property bool big: false
-    property bool onDark: false
+    property bool onTint: false
 
-    readonly property bool installed: Flatpak.installed.indexOf(appId) >= 0
-    readonly property var prog: Flatpak.progress[appId]
+    readonly property var state_: { Store.version; Flatpak.installed; Flatpak.webApps; return Store.state(ref); }
+    readonly property bool installed: state_ === "installed" || state_ === "builtin"
+    readonly property string key: Store.jobKey(ref)
+    readonly property var prog: Flatpak.progress[key]
     readonly property bool busy: prog !== undefined
     readonly property real fraction: busy && prog >= 0 ? prog : 0
+    readonly property bool usable: { Store.version; return Store.canInstall(ref); }
 
-    implicitWidth: busy ? height : label.implicitWidth + (big ? 40 : 30)
-    implicitHeight: big ? 36 : 30
+    implicitWidth: Math.max(label.implicitWidth + (big ? 44 : 26), big ? 148 : 84)
+    implicitHeight: big ? 44 : 32
     width: implicitWidth
     height: implicitHeight
-    Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
 
     Rectangle {
         anchors.fill: parent
-        radius: height / 2
-        visible: !gb.busy
-        color: gb.onDark ? Qt.rgba(1, 1, 1, area.containsMouse ? 1 : 0.92)
-             : gb.installed ? (area.containsMouse ? Qt.darker(Theme.fill, 1.4) : Theme.fill)
-             : (area.containsMouse ? Theme.accentAlpha(0.2) : Theme.accentSoft)
-        scale: area.pressed ? 0.94 : 1
-        Behavior on scale { NumberAnimation { duration: 90 } }
-        Text {
+        radius: gb.big ? 12 : 9
+        color: gb.busy ? Theme.fill
+             : gb.installed ? (area.containsMouse ? Theme.hover : Theme.fill)
+             : gb.big ? Theme.accent
+             : (area.containsMouse ? Theme.accentAlpha(0.24) : Theme.accentSoft)
+        scale: area.pressed ? 0.97 : 1
+        Behavior on scale { NumberAnimation { duration: 80 } }
+        opacity: gb.installed || gb.busy || gb.usable ? 1 : 0.5
+        clip: true
+
+        // Postęp wypełnia przycisk od lewej
+        Rectangle {
+            visible: gb.busy
+            height: parent.height
+            width: parent.width * gb.fraction
+            radius: parent.radius
+            color: Theme.accentSoft
+            Behavior on width { NumberAnimation { duration: 200 } }
+        }
+        Txt {
             id: label
             anchors.centerIn: parent
-            text: gb.installed ? "OTWÓRZ" : "POBIERZ"
-            color: gb.onDark ? "#16181D" : (gb.installed ? Theme.text : Theme.accentText)
-            font.family: Theme.font
-            font.pixelSize: gb.big ? 14 : 12
-            font.weight: Font.Bold
-            font.letterSpacing: 0.3
-        }
-    }
-
-    // Kółko: w kolejce kręci się, przy instalacji wypełnia według postępu
-    Item {
-        anchors.fill: parent
-        visible: gb.busy
-        Shape {
-            anchors.fill: parent
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeColor: gb.onDark ? Qt.rgba(1, 1, 1, 0.3) : Theme.line
-                strokeWidth: 3; fillColor: "transparent"
-                PathAngleArc { centerX: gb.height / 2; centerY: gb.height / 2; radiusX: gb.height / 2 - 2; radiusY: radiusX; startAngle: 0; sweepAngle: 360 }
-            }
-            ShapePath {
-                strokeColor: gb.onDark ? "white" : Theme.accent
-                strokeWidth: 3; fillColor: "transparent"; capStyle: ShapePath.RoundCap
-                PathAngleArc {
-                    centerX: gb.height / 2; centerY: gb.height / 2; radiusX: gb.height / 2 - 2; radiusY: radiusX
-                    startAngle: -90
-                    sweepAngle: gb.prog >= 0 ? Math.max(8, 360 * gb.fraction) : 80
-                }
-            }
-            RotationAnimation on rotation { running: gb.busy && gb.prog < 0; from: 0; to: 360; duration: 900; loops: Animation.Infinite }
-        }
-        Rectangle {
-            anchors.centerIn: parent
-            width: gb.height * 0.28; height: width; radius: 2
-            color: gb.onDark ? "white" : Theme.accent
+            text: gb.busy ? (gb.prog < 0 ? "W kolejce" : Math.round(gb.fraction * 100) + "%")
+                : gb.installed ? "Otwórz"
+                : !gb.usable ? "Niedostępny"
+                : Store.kindOf(gb.ref) === "web" ? "Dodaj" : "Zainstaluj"
+            color: gb.busy ? Theme.text
+                 : gb.installed ? Theme.text
+                 : gb.big ? "white" : Theme.accentText
+            font.pixelSize: gb.big ? 15 : 13
+            font.weight: Font.DemiBold
         }
     }
 
@@ -77,7 +63,8 @@ Item {
         id: area
         anchors.fill: parent
         hoverEnabled: true
-        enabled: !gb.busy && Flatpak.available
-        onClicked: gb.installed ? Flatpak.launch(gb.appId) : Flatpak.install(gb.appId)
+        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        enabled: !gb.busy && (gb.installed || gb.usable)
+        onClicked: Store.act(gb.ref)
     }
 }

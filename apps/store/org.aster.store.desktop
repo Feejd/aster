@@ -2,11 +2,11 @@
 Type=Application
 Name=Sklep
 GenericName=Sklep z aplikacjami
-Comment=Znajdź i zainstaluj programy
+Comment=Powiedz, co chcesz zrobić, a dobierzemy programy
 Exec=aster-store %u
 Icon=system-software-install
 Terminal=false
 Categories=System;PackageManager;
 MimeType=x-scheme-handler/appstream;
-Keywords=sklep;aplikacje;programy;instaluj;app store;flathub;
+Keywords=sklep;aplikacje;programy;instaluj;zainstaluj;odpowiedniki;windows;
 StartupWMClass=aster-store

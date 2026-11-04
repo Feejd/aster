@@ -2,67 +2,75 @@ import QtQuick
 import Aster.Ui
 import Aster.Store
 
-// Wiersz aplikacji (listy, ranking, wyniki): ikona, nazwa, opis, przycisk
+// Wiersz katalogu: ikona, nazwa, nasz opis (albo podana notatka), przycisk
 Item {
     id: row
-    property var app                    // {id, name, summary, icon}
-    property string rank: ""
-    property string note: ""            // np. „zamiast Photoshopa”
+    property string ref
+    property var hit: null              // program spoza katalogu: dane z wyszukiwania
+    property string note: ""
+    property string tag: ""             // np. rola w zestawie
     property bool separator: true
-    signal opened(string appId)
-    height: 76
+    height: 72
+
+    readonly property var info: { Store.version; return hit || (ref ? Store.item(ref) : null); }
+    readonly property string kind: Store.kindOf(ref)
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: -4
-        radius: 14
+        anchors.margins: -2; anchors.leftMargin: -8; anchors.rightMargin: -8
+        radius: 12
         color: hover.containsMouse ? Theme.hover : "transparent"
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on color { ColorAnimation { duration: 100 } }
     }
-    MouseArea { id: hover; anchors.fill: parent; hoverEnabled: true; onClicked: row.opened(row.app.id) }
+    MouseArea { id: hover; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Store.openApp(row.ref) }
 
-    Text {
-        id: rankText
-        visible: row.rank !== ""
-        width: visible ? 26 : 0
-        anchors.verticalCenter: parent.verticalCenter
-        text: row.rank
-        color: Theme.text
-        font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.Bold
-    }
-    Image {
+    AppGlyph {
         id: icon
-        anchors.left: rankText.right; anchors.leftMargin: row.rank ? 6 : 0
         anchors.verticalCenter: parent.verticalCenter
-        width: 56; height: 56
-        source: row.app ? row.app.icon : ""
-        sourceSize: Qt.size(112, 112)
-        asynchronous: true
-        smooth: true; mipmap: true
-        Rectangle {
-            anchors.fill: parent; radius: 14
-            visible: parent.status !== Image.Ready
-            color: Theme.fill
-        }
+        ref: row.ref
+        size: 48
     }
     Column {
         anchors.left: icon.right; anchors.leftMargin: 14
         anchors.right: get.left; anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
-        Text { width: parent.width; text: row.app ? row.app.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
-        Text { width: parent.width; text: row.note ? row.note : (row.app ? row.app.summary : ""); elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+        Row {
+            width: parent.width
+            spacing: 8
+            Txt {
+                width: Math.min(implicitWidth, parent.width - (badge.visible ? badge.width + 8 : 0))
+                text: row.info ? row.info.name : ""
+                elide: Text.ElideRight
+                font.pixelSize: 15; font.weight: Font.DemiBold
+            }
+            Txt {
+                id: badge
+                visible: text !== ""
+                anchors.verticalCenter: parent.verticalCenter
+                text: row.tag || (row.kind === "web" ? "W przeglądarce" : row.kind === "aster" ? "Aster" : "")
+                color: Theme.accentText
+                font.pixelSize: 11; font.weight: Font.DemiBold
+            }
+        }
+        Txt {
+            width: parent.width
+            text: row.note || (row.info ? row.info.summary : "")
+            elide: Text.ElideRight
+            color: Theme.text2
+            font.pixelSize: 13
+        }
     }
     GetButton {
         id: get
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        appId: row.app ? row.app.id : ""
+        ref: row.ref
     }
     Rectangle {
         visible: row.separator
         anchors.bottom: parent.bottom
-        anchors.left: icon.left; anchors.leftMargin: 70
+        anchors.left: parent.left; anchors.leftMargin: 62
         anchors.right: parent.right
         height: 1
         color: Theme.line
