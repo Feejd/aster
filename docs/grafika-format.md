@@ -1,4 +1,4 @@
-# Format projektu Grafiki (`.grafika`)
+# Format projektu Aster Pixel (`.grafika`)
 
 Plik projektu to zwykłe archiwum ZIP (można je otworzyć dowolnym programem do archiwów):
 

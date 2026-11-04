@@ -677,7 +677,7 @@ Item {
     function setTool(t) {
         if (t === "magic") {
             if (stage.current.type === "image" && stage.current.src && Magic.available) { side.tab = "select"; startMagic(); }
-            else { side.tab = "select"; app.toast(Magic.available ? "Zaznacz zdjęcie — narzędzia AI działają na zdjęciach" : "Ta wersja Grafiki nie ma narzędzi AI", ""); }
+            else { side.tab = "select"; app.toast(Magic.available ? "Zaznacz zdjęcie — narzędzia AI działają na zdjęciach" : "Ta wersja Aster Pixel nie ma narzędzi AI", ""); }
             return;
         }
         side.tab = t;

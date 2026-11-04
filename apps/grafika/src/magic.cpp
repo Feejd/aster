@@ -479,7 +479,7 @@ void Magic::ensureModels(const QStringList &models, std::function<void()> then)
     m_progress = 0;
     Q_EMIT progressChanged();
     QNetworkRequest req{QUrl(QLatin1String(m->url))};
-    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AsterGrafika/1.0"));
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("AsterPixel/1.0"));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     QNetworkReply *reply = m_net->get(req);
     auto file = std::make_shared<QSaveFile>(modelPath(QLatin1String(m->id)));
@@ -511,7 +511,7 @@ void Magic::run(const QString &status, const QStringList &models, std::function<
     if (busy())
         return;
     if (!available()) {
-        Q_EMIT failed(QStringLiteral("Ta wersja Grafiki nie ma narzędzi AI."));
+        Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
         return;
     }
     ensureModels(models, [this, status, work] {
@@ -531,7 +531,7 @@ void Magic::run(const QString &status, const QStringList &models, std::function<
             QMetaObject::invokeMethod(this, [this, done, error] {
                 setStatus(QString());
                 if (!error.isEmpty()) {
-                    qWarning("Grafika AI: %s", qPrintable(error));
+                    qWarning("Aster Pixel AI: %s", qPrintable(error));
                     Q_EMIT failed(QStringLiteral("Nie udało się — za mało pamięci albo uszkodzony model. Spróbuj jeszcze raz."));
                 } else if (done) {
                     done();
@@ -570,7 +570,7 @@ void Magic::removeBackground(Project *project, const QString &id)
 #else
     Q_UNUSED(project);
     Q_UNUSED(id);
-    Q_EMIT failed(QStringLiteral("Ta wersja Grafiki nie ma narzędzi AI."));
+    Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
 #endif
 }
 
@@ -615,7 +615,7 @@ void Magic::blurBackground(Project *project, const QString &id, qreal strength)
     Q_UNUSED(project);
     Q_UNUSED(id);
     Q_UNUSED(strength);
-    Q_EMIT failed(QStringLiteral("Ta wersja Grafiki nie ma narzędzi AI."));
+    Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
 #endif
 }
 

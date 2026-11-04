@@ -3,20 +3,20 @@
 Prosty i ładny system dla osób przesiadających się z Windowsa.
 Baza: Fedora z KDE (KWin, Wayland). Na wierzchu własna powłoka **aster-shell**.
 
-## Grafika na dowolnym Linuksie
+## Aster Pixel na dowolnym Linuksie
 
-Program Grafika (posty, plakaty, zaproszenia, CV) działa też poza Astrem — na Fedorze, Ubuntu, Mincie,
+Program Aster Pixel (dawniej Grafika: posty, plakaty, zaproszenia, CV) działa też poza Astrem — na Fedorze, Ubuntu, Mincie,
 Debianie, Archu i innych. Instalacja jedną komendą w terminalu:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Feejd/aster/main/tools/install-grafika.sh | sh
 ```
 
-Skrypt w razie potrzeby instaluje Flatpak, a potem Grafikę (paczka z wydania „grafika”, budowana przez
-`.github/workflows/grafika-flatpak.yml`). Ponowne uruchomienie aktualizuje program.
+Skrypt w razie potrzeby instaluje Flatpak, a potem Aster Pixel (paczka z wydania „aplikacje”, budowana przez
+`.github/workflows/flatpak.yml`). Ponowne uruchomienie aktualizuje program.
 Odinstalowanie: `flatpak uninstall --user org.aster.grafika`.
 
-Narzędzia AI w Grafice (usuwanie tła, magiczna gumka, wyodrębnianie obiektu kliknięciem, pędzlem albo lassem)
+Narzędzia AI w Aster Pixel (usuwanie tła, magiczna gumka, wyodrębnianie obiektu kliknięciem, pędzlem albo lassem)
 działają na komputerze, przez ONNX Runtime, na małych modelach o wolnych licencjach: ISNet (Apache 2.0, 179 MB),
 MobileSAM (Apache 2.0, 45 MB) i MI-GAN (MIT, 28 MB). Modele pobierają się przy pierwszym użyciu do
 `~/.local/share/aster-grafika/models`; zdjęcia nigdzie nie są wysyłane.
@@ -44,7 +44,7 @@ MobileSAM (Apache 2.0, 45 MB) i MI-GAN (MIT, 28 MB). Modele pobierają się przy
 | `apps/montaz/` | Montaż (nazwa robocza) — prosty edytor filmów na MLT: formaty 9:16 / 16:9 / 1:1, oś czasu z wideo, napisami i muzyką, przycinanie i dzielenie, przenikanie, prędkość, głośność; eksport MP4 (H.264/AAC), a bez kodera H.264 — WebM. |
 | `apps/studio/` | Studio (nazwa robocza) — studio nagrań w duchu BandLaba: szablony gatunków (Trap, Drill, Boom bap, Lo-fi, House, Pop), Beat Maker i 808 syntezowane w programie, nagrywanie z odliczaniem, pętle, efekty z presetami (wokal trap, echo, ciepło), mastering, mikser, eksport do MP3/WAV/OGG/FLAC. Silnik: PipeWire w wątku czasu rzeczywistego + libsndfile. |
 | `apps/scanner/` | Skaner — SANE (USB i sieciowe przez sane-airscan): podgląd z kadrem, szyba lub podajnik, strony do PDF albo JPG/PNG (zamiast Skanlite). |
-| `apps/grafika/` | Grafika (nazwa robocza) — posty, relacje, plakaty, zaproszenia, CV, miniaturki YouTube i slajdy bez internetu: gotowe rozmiary, 16 własnych szablonów, tekst, kształty, zdjęcia, tło; zapis sam w Dokumenty/Grafiki (plik `.grafika` = ZIP z JSON, opis w `docs/grafika-format.md`), eksport PNG/JPG/PDF. |
+| `apps/grafika/` | Aster Pixel (dawniej Grafika) — posty, relacje, plakaty, zaproszenia, CV, miniaturki YouTube i slajdy bez internetu: gotowe rozmiary, 16 własnych szablonów, tekst, kształty, zdjęcia, tło; zapis sam w Dokumenty/Grafiki (plik `.grafika` = ZIP z JSON, opis w `docs/grafika-format.md`), eksport PNG/JPG/PDF. |
 | `apps/phone/` | Telefon — KDE Connect przez D-Bus: bateria i zasięg, parowanie z kodem, znajdź telefon, pliki i schowek, pliki telefonu, powiadomienia. |
 | `apps/installer/` | Instalator — na cały ekran z pendrive’a: język, klawiatura, Wi‑Fi, strefa, dysk, konto, wygląd; `bootc install to-disk` (ISO: `tools/build-iso.sh`). |
 | `apps/emoji/` | Panel emoji i znaków (Win+.) — szukanie po polsku, odcienie skóry, kaomoji, symbole; wstawia do aktywnego programu. Dane: `tools/make-emoji-data.py` (Unicode + CLDR). |

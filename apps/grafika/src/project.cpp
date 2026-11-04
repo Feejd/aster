@@ -1280,7 +1280,7 @@ QString Project::exportFile(const QString &format, qreal scale, const QString &t
 
     if (pdfOut) {
         QPdfWriter pdf(path);
-        pdf.setCreator(QStringLiteral("Aster Grafika"));
+        pdf.setCreator(QStringLiteral("Aster Pixel"));
         pdf.setTitle(m_name);
         // Rozmiar do druku (A4, plakat) albo piksele jak na ekranie (96 na cal)
         const QSizeF mm = !m_print.isEmpty() ? QSizeF(num(m_print, "width"), num(m_print, "height"))

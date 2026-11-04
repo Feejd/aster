@@ -4,7 +4,7 @@ import QtQuick.Window
 import Aster.Ui
 import Aster.Grafika
 
-// Grafika Aster: szybkie grafiki bez internetu — posty, relacje, plakaty, zaproszenia, CV, miniaturki, slajdy.
+// Aster Pixel: szybkie grafiki bez internetu — posty, relacje, plakaty, zaproszenia, CV, miniaturki, slajdy.
 // Ekran startowy (rozmiary, szablony, własne projekty) i edytor (płótno z warstwami, panel po lewej, właściwości po prawej).
 // Projekty zapisują się same w Dokumenty/Grafiki; eksport do PNG, JPG i PDF.
 Window {
@@ -16,7 +16,7 @@ Window {
     visible: true
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
-    title: editing ? project.name + " — Grafika" : "Grafika"
+    title: editing ? project.name + " — Aster Pixel" : "Aster Pixel"
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26

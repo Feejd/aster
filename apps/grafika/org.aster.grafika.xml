@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Plik projektu Grafiki Aster: ZIP z project.json, zdjęciami (images/) i miniaturą (thumbnail.png) -->
+<!-- Plik projektu Aster Pixel: ZIP z project.json, zdjęciami (images/) i miniaturą (thumbnail.png) -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-aster-grafika">
-    <comment>Projekt graficzny</comment>
-    <comment xml:lang="pl">Projekt graficzny</comment>
+    <comment>Aster Pixel project</comment>
+    <comment xml:lang="pl">Projekt Aster Pixel</comment>
     <sub-class-of type="application/zip"/>
     <glob pattern="*.grafika"/>
     <icon name="image-x-generic"/>

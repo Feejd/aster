@@ -1,4 +1,4 @@
-// aster-grafika — Grafika Aster: posty, plakaty, zaproszenia, CV i miniaturki bez internetu, z gotowych szablonów.
+// aster-grafika — Aster Pixel: posty, plakaty, zaproszenia, CV i miniaturki bez internetu, z gotowych szablonów.
 
 #include "library.h"
 #include "online.h"
@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     asterTypography();
     app.setApplicationName(QStringLiteral("aster-grafika"));
-    app.setApplicationDisplayName(QStringLiteral("Grafika"));
+    app.setApplicationDisplayName(QStringLiteral("Aster Pixel"));
     app.setApplicationVersion(QStringLiteral("1.0"));
     app.setOrganizationName(QStringLiteral("Aster"));
     app.setOrganizationDomain(QStringLiteral("aster.local"));

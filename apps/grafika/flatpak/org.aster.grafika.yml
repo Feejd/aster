@@ -1,4 +1,4 @@
-# Grafika jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
+# Aster Pixel jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
 # Budowa: flatpak-builder --user --install-deps-from=flathub build apps/grafika/flatpak/org.aster.grafika.yml
 # (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
 # instaluje ją tools/install-apps.sh (albo tools/install-grafika.sh).

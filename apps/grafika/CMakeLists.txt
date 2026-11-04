@@ -1,4 +1,4 @@
-# Grafika (aster-grafika) — budowana z głównego CMakeLists.txt repozytorium.
+# Aster Pixel (aster-grafika, dawniej Grafika) — budowana z głównego CMakeLists.txt repozytorium.
 # Rysowanie przez QPainter (to samo na ekranie i w eksporcie), PDF przez QPdfWriter, plik projektu — ZIP (QZipWriter z Qt).
 find_package(Qt6 REQUIRED COMPONENTS CorePrivate Svg Network)
 find_package(KF6Prison REQUIRED)            # kody QR i kreskowe
@@ -57,9 +57,9 @@ if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
     target_include_directories(aster-grafika PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
     target_link_libraries(aster-grafika PRIVATE ${ONNXRUNTIME_LIBRARY})
     target_compile_definitions(aster-grafika PRIVATE GRAFIKA_ONNX)
-    message(STATUS "Grafika: narzędzia AI z ONNX Runtime (${ONNXRUNTIME_LIBRARY})")
+    message(STATUS "Aster Pixel: narzędzia AI z ONNX Runtime (${ONNXRUNTIME_LIBRARY})")
 else()
-    message(STATUS "Grafika: bez ONNX Runtime — bez narzędzi AI")
+    message(STATUS "Aster Pixel: bez ONNX Runtime — bez narzędzi AI")
 endif()
 
 # Szablony — zwykłe pliki projektu (project.json), wbudowane w program pod :/szablony
