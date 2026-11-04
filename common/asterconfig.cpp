@@ -28,6 +28,10 @@ AsterConfig::AsterConfig(QObject *parent)
 
 QString AsterConfig::path() const
 {
+    // W Flatpaku ~/.config to osobny folder aplikacji — motyw i akcent bierzemy z ustawień systemu
+    // (manifest daje dostęp do xdg-config/aster)
+    if (qEnvironmentVariableIsSet("FLATPAK_ID"))
+        return QDir::homePath() + QStringLiteral("/.config/aster/aster.conf");
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/aster/aster.conf");
 }
 

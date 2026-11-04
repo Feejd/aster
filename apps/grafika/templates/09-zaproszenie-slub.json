@@ -1,0 +1,143 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Ślub",
+ "category": "Zaproszenie",
+ "width": 1748,
+ "height": 2480,
+ "print": {
+  "width": 148,
+  "height": 210
+ },
+ "background": {
+  "type": "color",
+  "color": "#FBF8F3"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 90,
+   "y": 90,
+   "w": 1568,
+   "h": 2300,
+   "fill": "",
+   "radius": 0,
+   "stroke": "#C8A97E",
+   "strokeWidth": 6,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 130,
+   "y": 130,
+   "w": 1488,
+   "h": 2220,
+   "fill": "",
+   "radius": 0,
+   "stroke": "#C8A97E",
+   "strokeWidth": 2,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Z radością zapraszamy na nasz ślub",
+   "x": 220,
+   "y": 420,
+   "w": 1308,
+   "size": 70,
+   "font": "Noto Serif",
+   "weight": 400,
+   "color": "#7A6A55",
+   "align": "center",
+   "lineHeight": 1.15,
+   "italic": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Anna",
+   "x": 200,
+   "y": 640,
+   "w": 1348,
+   "size": 300,
+   "font": "Z003",
+   "weight": 400,
+   "color": "#3B3226",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "&",
+   "x": 200,
+   "y": 930,
+   "w": 1348,
+   "size": 160,
+   "font": "Noto Serif",
+   "weight": 400,
+   "color": "#C8A97E",
+   "align": "center",
+   "lineHeight": 1.15,
+   "italic": true,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Piotr",
+   "x": 200,
+   "y": 1080,
+   "w": 1348,
+   "size": 300,
+   "font": "Z003",
+   "weight": 400,
+   "color": "#3B3226",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e6"
+  },
+  {
+   "type": "shape",
+   "shape": "line",
+   "x": 724,
+   "y": 1488.0,
+   "w": 300,
+   "h": 24,
+   "fill": "",
+   "stroke": "#C8A97E",
+   "strokeWidth": 4,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "12 WRZEŚNIA 2026 · GODZ. 16:00",
+   "x": 220,
+   "y": 1620,
+   "w": 1308,
+   "size": 54,
+   "font": "Geist",
+   "weight": 600,
+   "color": "#3B3226",
+   "align": "center",
+   "lineHeight": 1.15,
+   "spacing": 0.1,
+   "id": "e8"
+  },
+  {
+   "type": "text",
+   "text": "Kościół św. Anny w Wilanowie\nprzyjęcie w Dworku pod Lipami",
+   "x": 220,
+   "y": 1760,
+   "w": 1308,
+   "size": 66,
+   "font": "Noto Serif",
+   "weight": 400,
+   "color": "#7A6A55",
+   "align": "center",
+   "lineHeight": 1.5,
+   "id": "e9"
+  }
+ ]
+}

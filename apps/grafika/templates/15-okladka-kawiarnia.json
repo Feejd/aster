@@ -1,0 +1,81 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Okładka kawiarni",
+ "category": "Facebook",
+ "width": 1640,
+ "height": 624,
+ "background": {
+  "type": "color",
+  "color": "#2B1D16"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 1180,
+   "y": -200,
+   "w": 700,
+   "h": 700,
+   "fill": "#C8865A",
+   "opacity": 0.35,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 1320,
+   "y": 300,
+   "w": 500,
+   "h": 500,
+   "fill": "#E8B48A",
+   "opacity": 0.25,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Kawiarnia",
+   "x": 120,
+   "y": 120,
+   "w": 1000,
+   "size": 90,
+   "font": "Geist",
+   "weight": 300,
+   "color": "#E8B48A",
+   "align": "left",
+   "lineHeight": 1.15,
+   "spacing": 0.3,
+   "caps": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Pod Lipami",
+   "x": 110,
+   "y": 210,
+   "w": 1300,
+   "size": 170,
+   "font": "Noto Serif",
+   "weight": 700,
+   "color": "#FFF4E0",
+   "align": "left",
+   "lineHeight": 1.15,
+   "italic": true,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "codziennie 8:00–20:00 · ciasta z własnej piekarni",
+   "x": 120,
+   "y": 470,
+   "w": 1100,
+   "size": 42,
+   "font": "Geist",
+   "weight": 400,
+   "color": "#E8D2BF",
+   "align": "left",
+   "lineHeight": 1.15,
+   "id": "e5"
+  }
+ ]
+}

@@ -22,7 +22,7 @@ if [ "$1" = "--undo" ]; then
 fi
 
 # Budowanie (te same pakiety i katalog co dev-run.sh)
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel mlt-devel whisper-cpp-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr >/dev/null
 cmake --build "$BUILD"
 
@@ -30,7 +30,7 @@ echo "==> Instaluję Aster w systemie…"
 sudo cmake --install "$BUILD" >/dev/null
 # Wersje z dev-run.sh w katalogu domowym przesłaniałyby zainstalowane
 rm -f "$HOME/.local/bin/aster-terminal"
-for app in files browser webapps store settings terminal tasks photos pdf editor code calculator video music camera scanner phone emoji; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
+for app in files browser webapps store settings terminal tasks photos pdf editor code calculator video music camera studio montaz scanner grafika phone emoji; do rm -f "$HOME/.local/share/applications/org.aster.$app.desktop"; done
 rm -f "$HOME/.local/share/kglobalaccel/org.aster.tasks.desktop" "$HOME/.local/share/kglobalaccel/org.aster.emoji.desktop" \
       "$HOME/.local/share/kglobalaccel/org.kde.plasma.emojier.desktop" "$HOME/.local/share/applications/org.aster.emoji.desktop"
 # Win+. — panel emoji Aster zamiast wybieraka KDE (zapamiętany skrót użytkownika też)

@@ -1,0 +1,93 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Slajd tytułowy",
+ "category": "Slajd",
+ "width": 1920,
+ "height": 1080,
+ "background": {
+  "type": "color",
+  "color": "#FFFFFF"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 0,
+   "y": 0,
+   "w": 760,
+   "h": 1080,
+   "fill": "#5B7CFA",
+   "radius": 0,
+   "fill2": "#7F5AF0",
+   "gradientAngle": 160,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 460,
+   "y": 640,
+   "w": 600,
+   "h": 600,
+   "fill": "#FFFFFF",
+   "opacity": 0.12,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Q3 2026",
+   "x": 120,
+   "y": 140,
+   "w": 560,
+   "size": 54,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "left",
+   "lineHeight": 1.15,
+   "spacing": 0.15,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Plan działań na nowy sezon",
+   "x": 900,
+   "y": 330,
+   "w": 900,
+   "size": 120,
+   "font": "Inter Display",
+   "weight": 800,
+   "color": "#16181D",
+   "align": "left",
+   "lineHeight": 1.05,
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "line",
+   "x": 905,
+   "y": 620.0,
+   "w": 160,
+   "h": 40,
+   "fill": "",
+   "stroke": "#5B7CFA",
+   "strokeWidth": 10,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Zespół sprzedaży · spotkanie 15 września",
+   "x": 905,
+   "y": 700,
+   "w": 900,
+   "size": 44,
+   "font": "Geist",
+   "weight": 400,
+   "color": "#5B6270",
+   "align": "left",
+   "lineHeight": 1.15,
+   "id": "e6"
+  }
+ ]
+}

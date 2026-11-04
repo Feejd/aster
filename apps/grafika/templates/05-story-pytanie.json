@@ -1,0 +1,121 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Pytanie do Was",
+ "category": "Relacja",
+ "width": 1080,
+ "height": 1920,
+ "background": {
+  "type": "gradient",
+  "color": "#7F5AF0",
+  "color2": "#2CB1BC",
+  "angle": 160
+ },
+ "elements": [
+  {
+   "type": "text",
+   "text": "PYTANIE DO WAS",
+   "x": 90,
+   "y": 380,
+   "w": 900,
+   "size": 52,
+   "font": "Geist",
+   "weight": 800,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "spacing": 0.25,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 110,
+   "y": 540,
+   "w": 860,
+   "h": 720,
+   "fill": "#FFFFFF",
+   "radius": 56,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Kawa czy herbata na dobry początek dnia?",
+   "x": 170,
+   "y": 630,
+   "w": 740,
+   "size": 76,
+   "font": "Inter Display",
+   "weight": 800,
+   "color": "#1F1B3A",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e3"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 190,
+   "y": 1040,
+   "w": 320,
+   "h": 110,
+   "fill": "#7F5AF0",
+   "radius": 55,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "Kawa",
+   "x": 190,
+   "y": 1065,
+   "w": 320,
+   "size": 52,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e5"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 570,
+   "y": 1040,
+   "w": 320,
+   "h": 110,
+   "fill": "#2CB1BC",
+   "radius": 55,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Herbata",
+   "x": 570,
+   "y": 1065,
+   "w": 320,
+   "size": 52,
+   "font": "Geist",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "odpowiedz w wiadomości ↓",
+   "x": 90,
+   "y": 1360,
+   "w": 900,
+   "size": 42,
+   "font": "Geist",
+   "weight": 500,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "opacity": 0.9,
+   "id": "e8"
+  }
+ ]
+}

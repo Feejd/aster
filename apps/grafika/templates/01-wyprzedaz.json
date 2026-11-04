@@ -1,0 +1,111 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Wyprzedaż",
+ "category": "Instagram",
+ "width": 1080,
+ "height": 1080,
+ "background": {
+  "type": "gradient",
+  "color": "#FF9A8B",
+  "color2": "#FF4F81",
+  "angle": 135
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": -160,
+   "y": -180,
+   "w": 560,
+   "h": 560,
+   "fill": "#FFFFFF",
+   "opacity": 0.14,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 760,
+   "y": 720,
+   "w": 480,
+   "h": 480,
+   "fill": "#FFFFFF",
+   "opacity": 0.12,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "WIELKA",
+   "x": 90,
+   "y": 250,
+   "w": 900,
+   "size": 92,
+   "font": "Inter Display",
+   "weight": 800,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "spacing": 0.12,
+   "caps": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "WYPRZEDAŻ",
+   "x": 40,
+   "y": 350,
+   "w": 1000,
+   "size": 140,
+   "font": "Inter Display",
+   "weight": 900,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "caps": true,
+   "shadow": true,
+   "shadowColor": "#40B0003A",
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 390,
+   "y": 560,
+   "w": 300,
+   "h": 300,
+   "fill": "#FFE600",
+   "rotation": -8,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "-50%",
+   "x": 390,
+   "y": 660,
+   "w": 300,
+   "size": 84,
+   "font": "Inter Display",
+   "weight": 900,
+   "color": "#E0234E",
+   "align": "center",
+   "lineHeight": 1.15,
+   "rotation": -8,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "tylko w ten weekend · sklep.pl",
+   "x": 90,
+   "y": 930,
+   "w": 900,
+   "size": 38,
+   "font": "Geist",
+   "weight": 500,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e7"
+  }
+ ]
+}
