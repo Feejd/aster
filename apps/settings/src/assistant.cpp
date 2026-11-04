@@ -5,6 +5,7 @@
 #include <QDBusArgument>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 
 static const QString kService = QStringLiteral("org.aster.Assistant");
 static const QString kPath = QStringLiteral("/org/aster/Assistant");
@@ -21,7 +22,83 @@ Assistant::Assistant(QObject *parent)
     QDBusConnection bus = QDBusConnection::sessionBus();
     bus.connect(kService, kPath, kIface, QStringLiteral("StatusChanged"), this, SLOT(refresh()));
     bus.connect(kService, kPath, kIface, QStringLiteral("HistoryChanged"), this, SLOT(refresh()));
+    bus.connect(kService, kPath, kIface, QStringLiteral("LocalModelsChanged"), this, SLOT(refreshLocal()));
+    bus.connect(kService, kPath, kIface, QStringLiteral("DownloadProgress"), this, SLOT(onProgress(QString, qlonglong, qlonglong)));
+    bus.connect(kService, kPath, kIface, QStringLiteral("DownloadFinished"), this, SLOT(onDownloadFinished(QString, bool, QString)));
     refresh();
+    refreshLocal();
+}
+
+void Assistant::refreshLocal()
+{
+    dbusCall(this, method(QStringLiteral("LocalModels")), false, false, [this](const QDBusMessage &r) {
+        if (r.type() != QDBusMessage::ReplyMessage)
+            return;
+        m_local = QJsonDocument::fromJson(r.arguments().value(0).toString().toUtf8()).object().toVariantMap();
+        // Pobieranie trwało, zanim otwarto Ustawienia — pasek postępu od razu
+        const QString d = m_local.value(QStringLiteral("downloading")).toString();
+        if (d != m_downloadId) {
+            m_downloadId = d;
+            if (d.isEmpty())
+                m_received = m_total = 0;
+            Q_EMIT progressChanged();
+        }
+        Q_EMIT localChanged();
+    });
+}
+
+void Assistant::onProgress(const QString &id, qlonglong received, qlonglong total)
+{
+    m_downloadId = id;
+    m_received = received;
+    m_total = total;
+    Q_EMIT progressChanged();
+}
+
+void Assistant::onDownloadFinished(const QString &id, bool ok, const QString &text)
+{
+    m_downloadId.clear();
+    m_received = m_total = 0;
+    Q_EMIT progressChanged();
+    QString name = id;
+    for (const QVariant &v : m_local.value(QStringLiteral("models")).toList())
+        if (v.toMap().value(QStringLiteral("id")).toString() == id)
+            name = v.toMap().value(QStringLiteral("name")).toString();
+    Q_EMIT message(ok ? QStringLiteral("%1 pobrany — gotowy do pracy").arg(name) : text);
+    refreshLocal();
+    refresh();
+}
+
+void Assistant::downloadModel(const QString &id)
+{
+    dbusCall(this, method(QStringLiteral("DownloadModel"), {id}), false, false, [this](const QDBusMessage &r) {
+        const QString error = r.type() == QDBusMessage::ReplyMessage ? r.arguments().value(0).toString() : r.errorMessage();
+        if (!error.isEmpty())
+            Q_EMIT message(error);
+        refreshLocal();
+    });
+}
+
+void Assistant::cancelDownload()
+{
+    dbusCall(this, method(QStringLiteral("CancelDownload")), false, false, [](const QDBusMessage &) {});
+}
+
+void Assistant::useModel(const QString &id)
+{
+    dbusCall(this, method(QStringLiteral("UseModel"), {id}), false, false, [this](const QDBusMessage &) {
+        refreshLocal();
+        refresh();
+    });
+}
+
+void Assistant::deleteModel(const QString &id)
+{
+    dbusCall(this, method(QStringLiteral("DeleteModel"), {id}), false, false, [this](const QDBusMessage &) {
+        Q_EMIT message(QStringLiteral("Model usunięty z dysku"));
+        refreshLocal();
+        refresh();
+    });
 }
 
 void Assistant::refresh()

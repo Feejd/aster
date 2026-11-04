@@ -1,5 +1,6 @@
 #pragma once
 
+#include "localmodels.h"
 #include "providers.h"
 
 #include <QDBusContext>
@@ -55,6 +56,16 @@ public Q_SLOTS:
     Q_SCRIPTABLE void DeleteConversation(const QString &id);
     Q_SCRIPTABLE void ClearHistory();
 
+    // Modele na tym komputerze. JSON: {hardware: {ramGb, cores, cpu, freeDisk}, recommended, active, downloading,
+    //   models: [{id, name, description, size, minRam, installed, active, recommended, fits, partial}]}
+    Q_SCRIPTABLE QString LocalModels();
+    // Pobiera model („auto” — polecany dla tego komputera); postęp w DownloadProgress, koniec w DownloadFinished.
+    // Pierwszy pobrany model od razu jest w użyciu. Pusty wynik — pobieranie ruszyło; inaczej powód, czemu nie.
+    Q_SCRIPTABLE QString DownloadModel(const QString &id);
+    Q_SCRIPTABLE void CancelDownload();
+    Q_SCRIPTABLE bool UseModel(const QString &id);
+    Q_SCRIPTABLE bool DeleteModel(const QString &id);
+
 Q_SIGNALS:
     Q_SCRIPTABLE void Chunk(const QString &conversation, const QString &text);
     Q_SCRIPTABLE void Finished(const QString &conversation, const QString &text, const QString &badge);
@@ -64,6 +75,9 @@ Q_SIGNALS:
                                       const QString &description, bool safe);
     Q_SCRIPTABLE void StatusChanged();
     Q_SCRIPTABLE void HistoryChanged();
+    Q_SCRIPTABLE void LocalModelsChanged();
+    Q_SCRIPTABLE void DownloadProgress(const QString &id, qlonglong received, qlonglong total);
+    Q_SCRIPTABLE void DownloadFinished(const QString &id, bool ok, const QString &message);
 
 private:
     struct Message {
@@ -112,6 +126,8 @@ private:
     void save(const Conv &c);
 
     void start(Conv &c, const QString &source);
+    void send(Conv &c, const QString &source);
+    bool managedLocal(const Provider &p) const;   // model lokalny, którym zarządza Aster (llama-server na 8080)
     void onData(QNetworkReply *reply);
     void onFinished(QNetworkReply *reply);
     void fail(const QString &conversation, const QString &message);
@@ -128,4 +144,5 @@ private:
     QHash<QNetworkReply *, Request> m_requests;
     QHash<QString, QString> m_keys;        // klucze odczytane z portfela (w pamięci, do końca działania)
     QTimer m_idle;
+    ::LocalModels m_local;
 };

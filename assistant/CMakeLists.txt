@@ -7,6 +7,7 @@ qt_add_executable(aster-assistant
     src/service.cpp src/service.h
     src/providers.cpp src/providers.h
     src/secrets.cpp src/secrets.h
+    src/localmodels.cpp src/localmodels.h
 )
 target_link_libraries(aster-assistant PRIVATE Qt6::Core Qt6::Network Qt6::DBus)
 
@@ -24,3 +25,5 @@ configure_file(org.aster.Assistant.service.in ${CMAKE_CURRENT_BINARY_DIR}/org.as
 configure_file(aster-assistant.service.in ${CMAKE_CURRENT_BINARY_DIR}/aster-assistant.service @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org.aster.Assistant.service DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/aster-assistant.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
+# Model lokalny (llama-server z pakietu llama-cpp) — włączany przez usługę dopiero przy pytaniu, bez [Install]
+install(FILES aster-llama.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)

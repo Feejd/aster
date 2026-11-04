@@ -334,6 +334,27 @@ public Q_SLOTS:
     }
 };
 
+// Pasek postępu pobierania modelu w terminalu
+class Progress : public QObject
+{
+    Q_OBJECT
+public Q_SLOTS:
+    void update(const QString &, qlonglong got, qlonglong total)
+    {
+        if (total <= 0)
+            return;
+        const int width = 30;
+        const int fill = int(double(got) / double(total) * width);
+        err(QStringLiteral("\r  [%1%2] %3% · %4 z %5 MB")
+                .arg(QString(fill, QChar(0x2588)), QString(width - fill, QChar(0x2591)))
+                .arg(int(double(got) * 100 / double(total)))
+                .arg(got / 1000000).arg(total / 1000000));
+    }
+    void finish(const QString &, bool ok, const QString &message) { Q_EMIT done(ok, message); }
+Q_SIGNALS:
+    void done(bool ok, const QString &message);
+};
+
 static QVariantMap status()
 {
     const QDBusMessage r = call(QStringLiteral("Status"));
@@ -345,6 +366,97 @@ static QVariantMap status()
 static QString who(const QVariantMap &s)
 {
     return QStringLiteral("%1 · %2").arg(s.value(QStringLiteral("badge")).toString(), s.value(QStringLiteral("model")).toString());
+}
+
+// aster --model-lokalny [lista|auto|<id>] — modele na tym komputerze; „auto” pobiera polecany dla tego sprzętu
+// (do użycia np. przez instalator albo pierwsze uruchomienie) i ustawia go jako używany
+static QString cores(int n)
+{
+    const int d = n % 10, t = n % 100;
+    return QString::number(n) + (n == 1 ? QStringLiteral(" rdzeń") : d >= 2 && d <= 4 && (t < 12 || t > 14) ? QStringLiteral(" rdzenie") : QStringLiteral(" rdzeni"));
+}
+
+static int localModel(const QString &arg)
+{
+    const QDBusMessage r = call(QStringLiteral("LocalModels"));
+    if (failedCall(r))
+        return 1;
+    const QJsonObject o = QJsonDocument::fromJson(r.arguments().value(0).toString().toUtf8()).object();
+    const QJsonObject hw = o.value(QStringLiteral("hardware")).toObject();
+    const QJsonArray models = o.value(QStringLiteral("models")).toArray();
+    auto gb = [](double b) { return QString::number(b / 1e9, 'f', 1).replace(QLatin1Char('.'), QLatin1Char(',')) + QStringLiteral(" GB"); };
+    if (arg.isEmpty() || arg == QLatin1String("lista")) {
+        out(QStringLiteral("Ten komputer: %1 GB pamięci, %2, wolne %3\n\n")
+                .arg(hw.value(QStringLiteral("ramGb")).toInt()).arg(cores(hw.value(QStringLiteral("cores")).toInt()))
+                .arg(gb(hw.value(QStringLiteral("freeDisk")).toDouble())));
+        for (const QJsonValue &v : models) {
+            const QJsonObject m = v.toObject();
+            QStringList tags;
+            if (m.value(QStringLiteral("active")).toBool()) tags << QStringLiteral("w użyciu");
+            else if (m.value(QStringLiteral("installed")).toBool()) tags << QStringLiteral("pobrany");
+            if (m.value(QStringLiteral("recommended")).toBool()) tags << QStringLiteral("polecany");
+            if (!m.value(QStringLiteral("fits")).toBool()) tags << QStringLiteral("za mało pamięci");
+            out(QStringLiteral("  %1  %2  %3%4\n    %5\n")
+                    .arg(m.value(QStringLiteral("id")).toString(), -12).arg(bold(m.value(QStringLiteral("name")).toString(), g_color))
+                    .arg(gb(m.value(QStringLiteral("size")).toDouble()))
+                    .arg(tags.isEmpty() ? QString() : QStringLiteral("  [") + tags.join(QStringLiteral(", ")) + QStringLiteral("]"))
+                    .arg(dim(m.value(QStringLiteral("description")).toString(), g_color)));
+        }
+        out(QStringLiteral("\nPobranie: aster --model-lokalny auto  (albo nazwa z lewej kolumny)\n"));
+        return 0;
+    }
+    const QString id = arg == QLatin1String("auto") ? o.value(QStringLiteral("recommended")).toString() : arg;
+    QString name = id;
+    bool have = false;
+    for (const QJsonValue &v : models)
+        if (v.toObject().value(QStringLiteral("id")).toString() == id) {
+            name = v.toObject().value(QStringLiteral("name")).toString();
+            have = v.toObject().value(QStringLiteral("installed")).toBool();
+        }
+    if (!have) {
+        if (arg == QLatin1String("auto"))
+            err(QStringLiteral("Pobieram %1 — dobrany do tego komputera (%2 GB pamięci, %3)…\n").arg(name)
+                    .arg(hw.value(QStringLiteral("ramGb")).toInt()).arg(cores(hw.value(QStringLiteral("cores")).toInt())));
+        else
+            err(QStringLiteral("Pobieram %1…\n").arg(name));
+        QEventLoop loop;
+        bool ok = false;
+        QString message;
+        QDBusConnection bus = QDBusConnection::sessionBus();
+        Progress progress;
+        bus.connect(kService, kPath, kIface, QStringLiteral("DownloadProgress"), &progress, SLOT(update(QString, qlonglong, qlonglong)));
+        QObject::connect(&progress, &Progress::done, &loop, [&](bool success, const QString &m) {
+            ok = success;
+            message = m;
+            loop.quit();
+        });
+        bus.connect(kService, kPath, kIface, QStringLiteral("DownloadFinished"), &progress, SLOT(finish(QString, bool, QString)));
+        const QDBusMessage d = call(QStringLiteral("DownloadModel"), {id});
+        if (failedCall(d))
+            return 1;
+        if (!d.arguments().value(0).toString().isEmpty()) {
+            err(QStringLiteral("aster: ") + d.arguments().value(0).toString() + QStringLiteral("\n"));
+            return 1;
+        }
+        QTimer poll;
+        poll.setInterval(150);
+        QObject::connect(&poll, &QTimer::timeout, &loop, [&] {
+            if (g_interrupted) {
+                g_interrupted = false;
+                call(QStringLiteral("CancelDownload"));
+            }
+        });
+        poll.start();
+        loop.exec();
+        err(QStringLiteral("\n"));
+        if (!ok) {
+            err(QStringLiteral("aster: ") + message + QStringLiteral("\n"));
+            return 1;
+        }
+    }
+    call(QStringLiteral("UseModel"), {id});
+    out(QStringLiteral("Gotowe — Aster Intelligence używa modelu %1 na tym komputerze.\n").arg(name));
+    return 0;
 }
 
 static void printHelp()
@@ -360,6 +472,7 @@ static void printHelp()
         "W rozmowie: /nowa — nowa rozmowa, /model — dostawca i model, /wyjdz — koniec.\n"
         "Aster Intelligence sam sprawdza i naprawia: polecenia, które tylko coś odczytują, uruchamia od razu,\n"
         "a te, które coś zmieniają (np. instalacja), dopiero gdy odpowiesz [T/n].\n"
+        "Model na tym komputerze: aster --model-lokalny (lista), aster --model-lokalny auto (pobiera polecany).\n"
         "Dostawcę, model i klucz API ustawisz też w Ustawieniach → Aster Intelligence. `ai` to skrót od `aster`.\n"));
 }
 
@@ -503,6 +616,8 @@ int main(int argc, char *argv[])
         err(QStringLiteral("aster: brak szyny sesji D-Bus\n"));
         return 1;
     }
+    if (!args.isEmpty() && (args.first() == QLatin1String("--model-lokalny") || args.first() == QLatin1String("--local-model")))
+        return localModel(args.value(1));
     if (!args.isEmpty() && args.first() == QLatin1String("--stan")) {
         const QVariantMap s = status();
         if (s.isEmpty())

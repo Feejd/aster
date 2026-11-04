@@ -39,12 +39,63 @@ Service::Service(QObject *parent)
     m_idle.setInterval(qEnvironmentVariableIntValue("ASTER_ASSISTANT_IDLE") > 0 ? qEnvironmentVariableIntValue("ASTER_ASSISTANT_IDLE") * 1000
                                                                                  : 15 * 60 * 1000);
     connect(&m_idle, &QTimer::timeout, this, [this] {
-        if (m_requests.isEmpty())
+        if (m_requests.isEmpty() && !m_local.busy()) {
+            m_local.stop();     // model lokalny nie zajmuje pamięci, gdy nikt nie pyta
             QCoreApplication::quit();
-        else
+        } else {
             m_idle.start();
+        }
     });
     m_idle.start();
+    connect(&m_local, &LocalModels::changed, this, [this] {
+        Q_EMIT LocalModelsChanged();
+        Q_EMIT StatusChanged();
+    });
+    connect(&m_local, &LocalModels::progress, this, [this](const QString &id, qint64 got, qint64 total) {
+        touch();
+        Q_EMIT DownloadProgress(id, got, total);
+    });
+    connect(&m_local, &LocalModels::finished, this, &Service::DownloadFinished);
+}
+
+// ——— Modele na tym komputerze ———
+
+QString Service::LocalModels()
+{
+    touch();
+    return QString::fromUtf8(QJsonDocument(m_local.toJson()).toJson(QJsonDocument::Compact));
+}
+
+QString Service::DownloadModel(const QString &id)
+{
+    touch();
+    const QString which = id == QLatin1String("auto") ? LocalModels::recommended(LocalModels::hardware()) : id;
+    QString error;
+    m_local.download(which, &error);
+    return error;
+}
+
+void Service::CancelDownload()
+{
+    m_local.cancelDownload();
+}
+
+bool Service::UseModel(const QString &id)
+{
+    touch();
+    return m_local.use(id);
+}
+
+bool Service::DeleteModel(const QString &id)
+{
+    touch();
+    return m_local.remove(id);
+}
+
+bool Service::managedLocal(const Provider &p) const
+{
+    return p.id == QLatin1String("lokalny") && qEnvironmentVariableIsEmpty("ASTER_ASSISTANT_URL")
+        && urlFor(p) == QLatin1String("http://127.0.0.1:8080/v1");
 }
 
 void Service::touch()
@@ -125,9 +176,16 @@ QVariantMap Service::Status()
         if (!hasKey)
             problem = QStringLiteral("Brak klucza API dla %1 — dodaj go w Ustawieniach → Aster Intelligence").arg(p.name);
     }
+    QString model = modelFor(p);
+    if (managedLocal(p)) {
+        const QString act = m_local.active();
+        model = act.isEmpty() ? QStringLiteral("brak modelu") : LocalModels::find(act).name;
+        if (act.isEmpty())
+            problem = QStringLiteral("Nie ma jeszcze modelu na tym komputerze — pobierz go w Ustawieniach → Aster Intelligence");
+    }
     return {{QStringLiteral("provider"), p.id},
             {QStringLiteral("providerName"), p.name},
-            {QStringLiteral("model"), modelFor(p)},
+            {QStringLiteral("model"), model},
             {QStringLiteral("baseUrl"), url},
             {QStringLiteral("local"), !p.needsKey && Catalog::isLoopback(url)},
             {QStringLiteral("badge"), badgeFor(p)},
@@ -594,7 +652,27 @@ void Service::fail(const QString &conversation, const QString &message)
     Q_EMIT Failed(conversation, message);
 }
 
+// Model lokalny Astera najpierw trzeba włączyć (llama-server startuje dopiero przy pytaniu)
 void Service::start(Conv &c, const QString &source)
+{
+    const Provider p = Catalog::find(providerId());
+    if (!managedLocal(p))
+        return send(c, source);
+    const QString id = c.id;
+    m_local.ensureRunning([this, id, source](bool ok, const QString &problem) {
+        Conv *conv = conversation(id, false);
+        if (!conv)
+            return;
+        if (!ok) {
+            if (!conv->messages.isEmpty() && conv->messages.last().role == QLatin1String("user"))
+                conv->messages.removeLast();
+            return fail(id, problem);
+        }
+        send(*conv, source);
+    });
+}
+
+void Service::send(Conv &c, const QString &source)
 {
     const Provider p = Catalog::find(providerId());
     QString error;

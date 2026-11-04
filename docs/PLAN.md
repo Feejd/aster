@@ -412,5 +412,14 @@ historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
       wpisuje bez Entera.
 - [ ] A3+. Narzędzia systemowe bez powłoki (tryb ciemny, jasność, Wi‑Fi przez D-Bus); Ctrl+Shift+A w Terminalu Aster;
       zgoda „zawsze pozwalaj na to polecenie”
-- [ ] A4. Model lokalny (llama.cpp, pobieranie modelu, tryb offline i „Najpierw lokalnie”)
+- [x] A4. Model lokalny dobrany do sprzętu: katalog Gemma 3 1B / 4B / 12B (GGUF Q4_K_M z ggml-org na Hugging Face),
+      polecany według pamięci i rdzeni (1B do 8 GB / 4 rdzeni, 4B od 12 GB i 6 rdzeni, 12B od 32 GB i 8 rdzeni; poniżej
+      minimum nie da się pobrać). Ustawienia → Aster Intelligence → „Model na tym komputerze”: sprzęt, Pobierz z paskiem
+      postępu i Przerwij (wznawianie z pliku .part, samo ponawia po zerwaniu połączenia), Używaj, Usuń. llama-server
+      (pakiet llama-cpp w obrazie) jako `aster-llama.service` bez autostartu: usługa asystenta włącza go przy pytaniu
+      i czeka na /health, a wyłącza, gdy sama kończy pracę po kwadransie bezczynności — model nie zajmuje pamięci, gdy
+      nikt nie pyta. Parametry z ~/.config/aster/llama.env (wątki i kontekst według sprzętu), nadpisania w
+      llama-local.env. Dla instalatora: `aster --model-lokalny auto` (lista: `aster --model-lokalny`).
+- [ ] A4+. Pierwsze uruchomienie / instalator: „Czy chcesz korzystać z Aster Intelligence?” → tak: `aster --model-lokalny auto`
+      w tle (albo wybór chmury), nie: wyspa bez asystenta; tryb offline i „Najpierw lokalnie”
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie
