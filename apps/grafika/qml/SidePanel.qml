@@ -147,6 +147,7 @@ Item {
         if (o.type === "vector") return "Grafika";
         if (o.type === "code") return o.kind === "qr" ? "Kod QR" : "Kod kreskowy";
         if (o.type === "chart") return "Wykres";
+        if (o.type === "table") return "Tabela";
         return shapeNames[o.shape] || "Kształt";
     }
 
@@ -326,7 +327,16 @@ Item {
         { label: "Koło", preview: { type: "chart", chart: "donut", data: sp.sampleData.slice(0, 3), values: false, size: 0.1 },
           el: { type: "chart", chart: "donut", data: [{ label: "Tak", value: 62 }, { label: "Nie", value: 25 }, { label: "Nie wiem", value: 13 }], side: 0.6, ratio: 0.55 } },
         { label: "Linia", preview: { type: "chart", chart: "line", data: sp.sampleData, values: false },
-          el: { type: "chart", chart: "line", data: sp.sampleData, side: 0.6, ratio: 0.55 } }
+          el: { type: "chart", chart: "line", data: sp.sampleData, side: 0.6, ratio: 0.55 } },
+        { label: "Tabela", preview: { type: "table", cells: [["", "", ""], ["", "", ""], ["", "", ""], ["", "", ""]], headerFill: "#3D4048", fill: "#FFFFFF", stroke: "#C9CDD6", strokeWidth: 1.5 },
+          el: { type: "table", cells: [["Nazwa", "Ilość", "Uwagi"], ["", "", ""], ["", "", ""], ["", "", ""]], headerFill: "#16181D", headerColor: "#FFFFFF",
+                fill: "#FFFFFF", stroke: "#D9DCE3", color: "#3D4048", lines: "rows", side: 0.7, ratio: 0.42 } },
+        { label: "Cennik", preview: { type: "table", cells: [["", ""], ["", ""], ["", ""], ["", ""]], headerFill: "#5B7CFA", fill: "#FFFFFF", stripe: "#E4EAFF", lines: "none", radius: 8 },
+          el: { type: "table", cells: [["Usługa", "Cena"], ["Strzyżenie", "60 zł"], ["Koloryzacja", "180 zł"], ["Modelowanie", "50 zł"]],
+                headerFill: "#5B7CFA", headerColor: "#FFFFFF", fill: "#FFFFFF", stripe: "#EEF2FF", color: "#16181D", lines: "none", radius: 0.02, side: 0.6, ratio: 0.5 } },
+        { label: "Plan", preview: { type: "table", cells: [["", "", "", ""], ["", "", "", ""], ["", "", "", ""], ["", "", "", ""]], headerFill: "#22B07D", fill: "#FFFFFF", stroke: "#B9DDCB", strokeWidth: 1.5, lines: "grid" },
+          el: { type: "table", cells: [["Godzina", "Poniedziałek", "Wtorek", "Środa"], ["8:00", "", "", ""], ["9:00", "", "", ""], ["10:00", "", "", ""], ["11:00", "", "", ""]],
+                headerFill: "#22B07D", headerColor: "#FFFFFF", fill: "#FFFFFF", stroke: "#B9DDCB", color: "#16181D", lines: "grid", align: "center", side: 0.8, ratio: 0.5 } }
     ]
     function addExtra(x) {
         const el = Object.assign({}, x.el);
@@ -334,6 +344,12 @@ Item {
         el.w = side;
         el.h = Math.round(side * (el.ratio || 1));
         if (el.type === "chart") { el.size = Math.round(base * 0.026); el.color = "#3D4048"; }
+        if (el.type === "table") {
+            el.size = Math.round(base * 0.024);
+            el.strokeWidth = Math.max(1, Math.round(base * 0.002));
+            el.radius = Math.round(base * (el.radius || 0));
+            el.cells = el.cells.map(r => r.slice());
+        }
         delete el.side; delete el.ratio;
         editor.addElement(el);
     }
@@ -771,7 +787,7 @@ Item {
                     }
                     Text {
                         topPadding: 4
-                        text: "Kody i wykresy"
+                        text: "Kody, wykresy i tabele"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
                     }
                     Grid {

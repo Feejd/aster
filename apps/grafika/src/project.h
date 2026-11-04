@@ -121,6 +121,7 @@ public:
     Q_INVOKABLE QString importImage(const QString &fileOrUrl);   // zwraca klucz zdjęcia albo ""
     Q_INVOKABLE QSize imageSize(const QString &key) const;
     Q_INVOKABLE void copy(const QStringList &ids) const;
+    Q_INVOKABLE QString clipboardText() const;                    // np. komórki skopiowane z arkusza (tabulatory)
     Q_INVOKABLE QStringList paste();                              // elementy ze schowka, zdjęcie albo tekst
     Q_INVOKABLE bool copyImage();                                 // cała strona jako obraz (do wklejenia w komunikatorze)
     // allPages — PNG/JPG: każda strona do osobnego pliku (nazwa-1, nazwa-2…); PDF ma zawsze wszystkie strony

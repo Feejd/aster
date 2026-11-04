@@ -72,6 +72,10 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `bg` (tło, puste — przezroczyste). Rysowany jako kształt (ostry w PDF), biblioteka KDE Prison.
 - `chart`: `chart` (`column`, `bar`, `line`, `pie`, `donut`), `data` — lista `{ label, value, color }`, `values` (false —
   bez liczb), `size` (wielkość napisów), `color` (napisy), `font`.
+- `table`: `cells` — wiersze tabeli, każdy to lista tekstów komórek (wiersze i kolumny dzielą pole po równo);
+  `header` (domyślnie true — pierwszy wiersz to pogrubiony nagłówek) z `headerFill` i `headerColor`, `fill` (tło komórek),
+  `stripe` (kolor co drugiego wiersza), `lines` = `rows` (linie między wierszami) / `grid` (siatka z obramowaniem) / `none`,
+  `stroke` i `strokeWidth` (linie), `color`, `size`, `font`, `align` (`left` / `center` / `right`), `radius`.
 - `draw`: rysunek odręczny (jedna kreska) — `points` (płaska lista `x, y, x, y…` w częściach pola elementu, 0–1;
   linia biegnie gładko przez środki kolejnych odcinków), `stroke` (kolor), `strokeWidth` (px), `pen` = `pen` (pisak),
   `marker`, `highlighter` (zakreślacz — półprzezroczysty, płaskie końce) albo `neon` (świecąca poświata z jasnym rdzeniem).

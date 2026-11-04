@@ -25,6 +25,7 @@ Item {
     property color drawColor: "#16181D"
     property real drawWidth: 8
     readonly property bool drawOn: drawTool !== ""
+    property var cellEdit: null                 // pisanie w komórce tabeli: { id, r, c }
     signal drawFinished()
     onDrawOnChanged: if (drawOn) { if (Magic.element !== "") Magic.end(); clearSelection(); }
     property rect marquee: Qt.rect(0, 0, 0, 0)  // ramka zaznaczania (piksele strony)
@@ -65,6 +66,7 @@ Item {
         group = selection.length > 1 ? bounds(selection) : ({});
     }
     onSelectedChanged: {
+        if (cellEdit && cellEdit.id !== selected) cellEdit = null;
         if (Magic.element !== "" && selected !== Magic.element) Magic.end();
         if (!syncing) selection = selected !== "" ? [selected] : [];
         refresh();
@@ -106,10 +108,36 @@ Item {
     }
     // Esc: najpierw kończy kadrowanie, potem zdejmuje zaznaczenie
     function cancel() {
-        if (drawOn) drawFinished();
+        if (cellEdit) cellEdit = null;
+        else if (drawOn) drawFinished();
         else if (magicOn) Magic.end();
         else if (cropping !== "") cropping = "";
         else clearSelection();
+    }
+    // ——— Tabela: pisanie w komórce ———
+    function editCell(id, r, c) {
+        const o = project.get(id);
+        const cells = o.cells || [];
+        if (r < 0 || r >= cells.length) return;
+        if (selected !== id) select(id);
+        cellEdit = { id: id, r: r, c: c };
+    }
+    // Tab / Enter: następna komórka; za ostatnią — nowy wiersz
+    function nextCell(down, back) {
+        if (!cellEdit) return;
+        const o = project.get(cellEdit.id);
+        const g = (o.cells || []).map(r => r.slice());
+        const C = Math.max(...g.map(r => r.length));
+        let r = cellEdit.r, c = cellEdit.c;
+        if (down) r += 1;
+        else if (back) { c -= 1; if (c < 0) { c = C - 1; r -= 1; } }
+        else { c += 1; if (c >= C) { c = 0; r += 1; } }
+        if (r < 0) return;
+        if (r >= g.length) {
+            g.push(new Array(C).fill(""));
+            project.change(o.id, { cells: g, h: Math.round(o.h / (g.length - 1) * g.length) });
+        }
+        cellEdit = { id: o.id, r: r, c: c };
     }
     // ——— Rysowanie ———
     // Kreska z punktów strony → element „draw” (punkty w częściach pola)
@@ -598,6 +626,13 @@ Item {
                                 starts = [];
                                 start = mapToItem(page, e.x, e.y);
                                 startEl = d.element;
+                                // Pisanie w tabeli: kliknięcie w inną komórkę przenosi pisanie tam
+                                if (stage.cellEdit && stage.cellEdit.id === d.uid && e.button === Qt.LeftButton) {
+                                    const cells = d.element.cells || [];
+                                    const C = Math.max(1, ...cells.map(r => r.length));
+                                    stage.editCell(d.uid, Math.floor(e.y / height * cells.length), Math.min(C - 1, Math.floor(e.x / width * C)));
+                                    return;
+                                }
                                 if (e.button === Qt.LeftButton && (e.modifiers & Qt.ShiftModifier)) {
                                     stage.toggle(d.uid);
                                     return;
@@ -647,9 +682,14 @@ Item {
                                 if (moved) stage.project.commit();
                                 else if (pickOne) stage.select(d.uid);
                             }
-                            onDoubleClicked: {
+                            onDoubleClicked: (mouse) => {
                                 if (d.element.locked) return;
                                 if (d.element.type === "text") stage.startEditing(d.uid);
+                                else if (d.element.type === "table") {
+                                    const cells = d.element.cells || [];
+                                    const C = Math.max(1, ...cells.map(r => r.length));
+                                    stage.editCell(d.uid, Math.floor(mouse.y / height * cells.length), Math.min(C - 1, Math.floor(mouse.x / width * C)));
+                                }
                                 else if (d.element.type === "image") stage.cropping = d.cropping ? "" : d.uid;
                             }
                         }
@@ -974,7 +1014,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -991,6 +1031,7 @@ Item {
                     anchors.centerIn: parent
                     spacing: 2
                     ToolBtn { visible: quickBar.single && quickBar.el.type === "text"; icon: "pencil"; tip: "Edytuj tekst (Enter)"; onClicked: stage.quickAction("edit") }
+                    ToolBtn { visible: quickBar.single && quickBar.el.type === "table"; icon: "pencil"; tip: "Pisz w komórkach (dwuklik w komórkę)"; onClicked: stage.editCell(stage.selected, 0, 0) }
                     ToolBtn {
                         visible: quickBar.single && quickBar.el.type === "image" && !!quickBar.el.src && Magic.available
                         icon: "sparkles"; tip: "Usuń tło (AI)"; enabled: !Magic.busy
@@ -1139,6 +1180,70 @@ Item {
                         strokeCanvas.pts = [];
                         strokeCanvas.requestPaint();
                     }
+                }
+            }
+
+            // ——— Pisanie w komórce tabeli ———
+            Item {
+                id: cellBox
+                readonly property var el: stage.cellEdit ? stage.project.get(stage.cellEdit.id) : ({})
+                readonly property var cells: el.cells || []
+                readonly property int cols: { let n = 1; for (const r of cells) n = Math.max(n, r.length); return n; }
+                visible: !!stage.cellEdit && el.id !== undefined
+                x: (el.x || 0) * stage.zoom
+                y: (el.y || 0) * stage.zoom
+                width: (el.w || 0) * stage.zoom
+                height: (el.h || 0) * stage.zoom
+                rotation: el.rotation || 0
+                z: 21
+                Rectangle {
+                    id: cellRect
+                    readonly property real cw: cellBox.width / cellBox.cols
+                    readonly property real rh: cellBox.height / Math.max(1, cellBox.cells.length)
+                    readonly property bool head: cellBox.el.header !== false && stage.cellEdit && stage.cellEdit.r === 0
+                    x: stage.cellEdit ? stage.cellEdit.c * cw : 0
+                    y: stage.cellEdit ? stage.cellEdit.r * rh : 0
+                    width: cw; height: rh
+                    color: head ? (cellBox.el.headerFill || "#16181D") : (cellBox.el.fill || "white")
+                    border.width: 2; border.color: Theme.accent
+                    TextInput {
+                        id: cellInput
+                        readonly property real pad: Math.min((cellBox.el.size || 24) * 0.7, cellBox.el.w / cellBox.cols * 0.15) * stage.zoom
+                        x: pad; width: parent.width - 2 * pad
+                        anchors.verticalCenter: parent.verticalCenter
+                        clip: true
+                        horizontalAlignment: cellBox.el.align === "center" ? TextInput.AlignHCenter : cellBox.el.align === "right" ? TextInput.AlignRight : TextInput.AlignLeft
+                        color: cellRect.head ? (cellBox.el.headerColor || "white") : (cellBox.el.color || "#3D4048")
+                        selectionColor: Theme.accent
+                        selectByMouse: true
+                        font.family: cellBox.el.font || "Geist"
+                        font.pixelSize: Math.max(6, (cellBox.el.size || 24) * stage.zoom)
+                        font.weight: cellRect.head ? Font.Bold : Font.Normal
+                        property bool loading: false
+                        function load() {
+                            if (!stage.cellEdit) return;
+                            loading = true;
+                            text = (cellBox.cells[stage.cellEdit.r] || [])[stage.cellEdit.c] || "";
+                            loading = false;
+                            selectAll();
+                            forceActiveFocus();
+                        }
+                        onTextEdited: {
+                            const g = cellBox.cells.map(r => { const o = r.slice(); while (o.length < cellBox.cols) o.push(""); return o; });
+                            g[stage.cellEdit.r][stage.cellEdit.c] = text;
+                            stage.project.change(stage.cellEdit.id, { cells: g }, false);
+                        }
+                        Keys.onTabPressed: { stage.project.commit(); stage.nextCell(false, false); }
+                        Keys.onBacktabPressed: { stage.project.commit(); stage.nextCell(false, true); }
+                        Keys.onReturnPressed: { stage.project.commit(); stage.nextCell(true, false); }
+                        Keys.onEnterPressed: { stage.project.commit(); stage.nextCell(true, false); }
+                        Keys.onEscapePressed: { stage.project.commit(); stage.cellEdit = null; stage.forceActiveFocus(); }
+                        onActiveFocusChanged: if (!activeFocus) stage.project.commit()
+                    }
+                }
+                Connections {
+                    target: stage
+                    function onCellEditChanged() { if (stage.cellEdit) Qt.callLater(cellInput.load); else stage.project.commit(); }
                 }
             }
 

@@ -26,6 +26,38 @@ Item {
         { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }, { id: "duotone", label: "Dwa kolory" }
     ]
 
+    // ——— Tabela ———
+    readonly property var cells: type === "table" ? (el.cells || []) : []
+    readonly property int rows: cells.length
+    readonly property int cols: { let n = 0; for (const r of cells) n = Math.max(n, r.length); return n; }
+    function grid() { return cells.map(r => { const o = r.slice(); while (o.length < cols) o.push(""); return o; }); }
+    // Zmiana liczby wierszy/kolumn — wysokość rośnie razem z wierszami, żeby nie ścisnąć tekstu
+    function resizeTable(dr, dc) {
+        const g = grid();
+        const R = Math.max(1, rows + dr), C = Math.max(1, cols + dc);
+        while (g.length < R) g.push(new Array(C).fill(""));
+        g.length = R;
+        for (const r of g) { while (r.length < C) r.push(""); r.length = C; }
+        const p = { cells: g };
+        if (dr !== 0) p.h = Math.round(el.h / rows * R);
+        if (dc !== 0) p.w = Math.round(el.w / cols * C);
+        set(p);
+    }
+    function putCell(r, c, t, done) {
+        const g = grid();
+        g[r][c] = t;
+        set({ cells: g }, done);
+    }
+    // Komórki z arkusza (Calc, Excel, Arkusze Google): tabulatory między kolumnami, nowe wiersze — wiersze tabeli
+    function pasteSheet() {
+        const t = project.clipboardText().replace(/\r/g, "").replace(/\n+$/, "");
+        if (t === "") { editor.app.toast("Schowek jest pusty — skopiuj komórki z arkusza", ""); return; }
+        const g = t.split("\n").map(l => l.split("\t").map(c => c.trim()));
+        const C = Math.max(...g.map(r => r.length));
+        for (const r of g) while (r.length < C) r.push("");
+        set({ cells: g, h: Math.round(el.h / Math.max(1, rows) * g.length) });
+    }
+
     function set(patch, done) { project.change(id_, patch, done === undefined ? true : done); }
     function setBg(patch, done) { project.setBackground(Object.assign({}, bg, patch), done === undefined ? true : done); }
     function alignTo(how) {
@@ -48,7 +80,7 @@ Item {
         x: 18; y: 16
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
-            : ins.type === "draw" ? "Rysunek" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+            : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
     }
@@ -458,6 +490,153 @@ Item {
                     text: "Przerywana"
                     on: !!ins.el.dash
                     onClicked: ins.set({ dash: !on })
+                }
+            }
+
+            // ——— Tabela ———
+            Section {
+                visible: ins.type === "table"
+                title: "Treść"
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Dwuklik w komórkę na stronie — pisanie (Tab przechodzi dalej). Można też wkleić komórki skopiowane z arkusza."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                }
+                Grid {
+                    id: cellGrid
+                    columns: Math.max(1, ins.cols)
+                    spacing: 4
+                    Repeater {
+                        model: ins.type === "table" && ins.cols <= 5 && ins.rows <= 12 ? ins.rows * ins.cols : 0
+                        delegate: TextBox {
+                            required property int index
+                            readonly property int r: Math.floor(index / ins.cols)
+                            readonly property int c: index % ins.cols
+                            width: (col.width - (ins.cols - 1) * 4) / ins.cols
+                            text: (ins.cells[r] || [])[c] || ""
+                            onEdited: (t, done) => ins.putCell(r, c, t, done)
+                        }
+                    }
+                }
+                Btn { text: "Wklej z arkusza"; icon: "copy"; onClicked: ins.pasteSheet() }
+                Row {
+                    spacing: 6
+                    Text { width: 70; anchors.verticalCenter: parent.verticalCenter; text: "Wiersze"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                    IconToggle { icon: "minus"; enabled: ins.rows > 1; tip: "Usuń ostatni wiersz"; onClicked: ins.resizeTable(-1, 0) }
+                    Text { width: 24; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; text: ins.rows; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    IconToggle { icon: "plus"; tip: "Dodaj wiersz"; onClicked: ins.resizeTable(1, 0) }
+                }
+                Row {
+                    spacing: 6
+                    Text { width: 70; anchors.verticalCenter: parent.verticalCenter; text: "Kolumny"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                    IconToggle { icon: "minus"; enabled: ins.cols > 1; tip: "Usuń ostatnią kolumnę"; onClicked: ins.resizeTable(0, -1) }
+                    Text { width: 24; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; text: ins.cols; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    IconToggle { icon: "plus"; tip: "Dodaj kolumnę"; onClicked: ins.resizeTable(0, 1) }
+                }
+            }
+            Section {
+                visible: ins.type === "table"
+                title: "Wygląd tabeli"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Chip { text: "Nagłówek"; on: ins.el.header !== false; onClicked: ins.set({ header: on ? false : null }) }
+                    Chip {
+                        text: "Paski"; on: !!ins.el.stripe
+                        onClicked: ins.set({ stripe: on ? null : "#F2F4F7" })
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "rows", label: "Linie" }, { id: "grid", label: "Siatka" }, { id: "none", label: "Bez linii" }]
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.label
+                            on: (ins.el.lines || "rows") === modelData.id
+                            onClicked: ins.set({ lines: modelData.id })
+                        }
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 8
+                    ColorWell {
+                        id: thFill
+                        visible: ins.el.header !== false
+                        label: "Nagłówek"
+                        value: ins.el.headerFill || "#16181D"
+                        onClicked: ins.editor.pickColor(thFill, value, true, (c, done) => ins.set({ headerFill: c }, done))
+                    }
+                    ColorWell {
+                        id: thInk
+                        visible: ins.el.header !== false
+                        label: "Napis nagłówka"
+                        value: ins.el.headerColor || "#FFFFFF"
+                        onClicked: ins.editor.pickColor(thInk, value, false, (c, done) => ins.set({ headerColor: c }, done))
+                    }
+                    ColorWell {
+                        id: tdFill
+                        label: "Tło"
+                        value: ins.el.fill || ""
+                        onClicked: ins.editor.pickColor(tdFill, value, true, (c, done) => ins.set({ fill: c }, done))
+                    }
+                    ColorWell {
+                        id: tdStripe
+                        visible: !!ins.el.stripe
+                        label: "Paski"
+                        value: ins.el.stripe || ""
+                        onClicked: ins.editor.pickColor(tdStripe, value, true, (c, done) => ins.set({ stripe: c === "" ? null : c }, done))
+                    }
+                    ColorWell {
+                        id: tdInk
+                        label: "Tekst"
+                        value: ins.el.color || "#3D4048"
+                        onClicked: ins.editor.pickColor(tdInk, value, false, (c, done) => ins.set({ color: c }, done))
+                    }
+                    ColorWell {
+                        id: tdLine
+                        visible: (ins.el.lines || "rows") !== "none"
+                        label: "Linie"
+                        value: ins.el.stroke || "#D9DCE3"
+                        onClicked: ins.editor.pickColor(tdLine, value, false, (c, done) => ins.set({ stroke: c }, done))
+                    }
+                }
+                Btn {
+                    id: tblFont
+                    text: ins.el.font || "Geist"
+                    icon: "textT"
+                    onClicked: ins.editor.pickFont(tblFont, ins.el.font || "Geist", (f) => ins.set({ font: f }))
+                }
+                Row {
+                    spacing: 2
+                    IconToggle { icon: "alignLeft"; on: (ins.el.align || "left") === "left"; tip: "Do lewej"; onClicked: ins.set({ align: null }) }
+                    IconToggle { icon: "alignCenter"; on: ins.el.align === "center"; tip: "Do środka"; onClicked: ins.set({ align: "center" }) }
+                    IconToggle { icon: "alignRight"; on: ins.el.align === "right"; tip: "Do prawej"; onClicked: ins.set({ align: "right" }) }
+                }
+                ValueSlider {
+                    label: "Wielkość tekstu"
+                    from: 6; to: Math.max(40, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.06)); step: 1
+                    value: ins.el.size || 24
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ size: v }, done)
+                }
+                ValueSlider {
+                    visible: (ins.el.lines || "rows") !== "none"
+                    label: "Grubość linii"
+                    from: 0; to: 12; step: 0.5; decimals: 1
+                    value: ins.el.strokeWidth === undefined ? 2 : ins.el.strokeWidth
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
+                }
+                ValueSlider {
+                    label: "Zaokrąglenie rogów"
+                    from: 0; to: Math.round(Math.min(ins.el.w || 0, ins.el.h || 0) / 4); step: 1
+                    value: ins.el.radius || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ radius: v }, done)
                 }
             }
 

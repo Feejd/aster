@@ -525,6 +525,78 @@ void paintShape(QPainter *p, const QVariantMap &el)
     p->drawPath(path);
 }
 
+// Tabela: `cells` — wiersze z tekstami komórek; równe wiersze i kolumny w polu elementu.
+// Pierwszy wiersz to nagłówek (`header`), `lines`: rows (linie między wierszami) | grid (siatka) | none
+void paintTable(QPainter *p, const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QVariantList rows = el.value(QStringLiteral("cells")).toList();
+    const int R = int(rows.size());
+    int C = 0;
+    for (const QVariant &r : rows)
+        C = qMax(C, int(r.toList().size()));
+    if (R == 0 || C == 0)
+        return;
+    const qreal rh = h / R, cw = w / C;
+    const bool header = el.value(QStringLiteral("header"), true).toBool();
+    const QString lines = el.value(QStringLiteral("lines"), QStringLiteral("rows")).toString();
+    const qreal sw = num(el, "strokeWidth", 2);
+    const QColor stroke = color(el, "stroke", QColor(0xD9, 0xDC, 0xE3));
+    const qreal radius = qMin(num(el, "radius", 0), qMin(w, h) / 2);
+    const QRectF all(0, 0, w, h);
+    QPainterPath outline;
+    outline.addRoundedRect(all, radius, radius);
+
+    p->save();
+    p->setClipPath(outline, Qt::IntersectClip);
+    p->setPen(Qt::NoPen);
+    const QColor fill = color(el, "fill"), stripe = color(el, "stripe"), headFill = color(el, "headerFill", QColor(0x16, 0x18, 0x1D));
+    for (int r = 0; r < R; ++r) {
+        QColor c = header && r == 0 ? headFill : (stripe.alpha() > 0 && (r - (header ? 1 : 0)) % 2 == 1) ? stripe : fill;
+        if (c.alpha() > 0)
+            p->fillRect(QRectF(0, r * rh, w, rh + 0.5), c);
+    }
+    p->restore();
+
+    // Linie
+    if (lines != QLatin1String("none") && sw > 0 && stroke.alpha() > 0) {
+        QPen pen(stroke, sw);
+        pen.setCapStyle(Qt::FlatCap);
+        p->setPen(pen);
+        for (int r = 1; r < R; ++r)
+            p->drawLine(QPointF(0, r * rh), QPointF(w, r * rh));
+        if (lines == QLatin1String("grid")) {
+            for (int c = 1; c < C; ++c)
+                p->drawLine(QPointF(c * cw, 0), QPointF(c * cw, h));
+            p->setBrush(Qt::NoBrush);
+            p->drawRoundedRect(all.adjusted(sw / 2, sw / 2, -sw / 2, -sw / 2), qMax(0.0, radius - sw / 2), qMax(0.0, radius - sw / 2));
+        }
+    }
+
+    // Teksty
+    const qreal fs = qMax(4.0, num(el, "size", rh * 0.36));
+    QFont font(el.value(QStringLiteral("font"), QStringLiteral("Geist")).toString());
+    font.setPixelSize(qMax(1, qRound(fs)));
+    font.setHintingPreference(QFont::PreferNoHinting);
+    QFont bold = font;
+    bold.setWeight(QFont::Bold);
+    const QColor ink = color(el, "color", QColor(0x3D, 0x40, 0x48));
+    const QColor headInk = color(el, "headerColor", Qt::white);
+    const QString align = el.value(QStringLiteral("align"), QStringLiteral("left")).toString();
+    const Qt::Alignment ha = align == QLatin1String("center") ? Qt::AlignHCenter : align == QLatin1String("right") ? Qt::AlignRight : Qt::AlignLeft;
+    const qreal pad = qMin(fs * 0.7, cw * 0.15);
+    for (int r = 0; r < R; ++r) {
+        const QVariantList row = rows.at(r).toList();
+        const bool head = header && r == 0;
+        p->setFont(head ? bold : font);
+        p->setPen(head ? headInk : ink);
+        for (int c = 0; c < C && c < row.size(); ++c) {
+            const QRectF cell(c * cw + pad, r * rh, cw - 2 * pad, rh);
+            p->drawText(cell, int(ha | Qt::AlignVCenter | Qt::TextWordWrap), row.at(c).toString());
+        }
+    }
+}
+
 // Rysunek odręczny: punkty (x, y) w częściach pola elementu, gładka linia przez środki odcinków.
 // pen: pen (pisak), marker, highlighter (zakreślacz — półprzezroczysty, płaskie końce), neon (świecąca poświata)
 QPainterPath drawPath(const QVariantMap &el)
@@ -1228,6 +1300,8 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
         paintChart(p, el);
     else if (type == QLatin1String("draw"))
         paintDraw(p, el);
+    else if (type == QLatin1String("table"))
+        paintTable(p, el);
     p->restore();
 }
 

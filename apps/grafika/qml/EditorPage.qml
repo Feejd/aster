@@ -392,7 +392,7 @@ Item {
         else if (a === "cut") { copy(); remove(); }
         else if (a === "paste") paste();
         else if (a === "duplicate") duplicate();
-        else if (a === "edit") stage.startEditing(sel);
+        else if (a === "edit") { if (stage.current.type === "table") stage.editCell(sel, 0, 0); else stage.startEditing(sel); }
         else if (a === "crop") stage.cropping = sel;
         else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
@@ -442,6 +442,7 @@ Item {
         } else if (sel !== "") {
             const el = stage.current;
             if (el.type === "text") items.push({ label: "Edytuj tekst", icon: "pencil", shortcut: "Enter", action: "edit" });
+            if (el.type === "table") items.push({ label: "Pisz w komórkach", icon: "pencil", shortcut: "Enter", action: "edit" });
             if (el.type === "image" && el.src) items.push({ label: "Kadruj", icon: "crop", shortcut: "dwuklik", action: "crop" });
             if (el.type === "image") items.push({ label: "Odbij w poziomie", icon: "mirror", action: "flip" });
             if (el.type === "image" && el.src && Magic.available) {
@@ -532,6 +533,8 @@ Item {
         else if (cmd === "shortcuts") shortcutsSheet.open = true;
         else if (cmd === "drawtool") { side.tab = "draw"; side.drawTool = arg; }
         else if (cmd === "drawcolor") side.drawColor = arg;
+        else if (cmd === "cell") { const q = arg.split(","); stage.editCell(sel, Number(q[0]), Number(q[1])); }
+        else if (cmd === "nextcell") stage.nextCell(arg === "down", arg === "back");
         else if (cmd === "drawwave") {
             // Fala przez stronę na wysokości arg (część strony)
             const W = project.pageWidth, H = project.pageHeight, pts = [];
@@ -588,6 +591,7 @@ Item {
         onActivated: {
             if (stage.cropping !== "") stage.cropping = "";
             else if (stage.current.type === "image" && stage.current.src && !stage.current.locked) stage.cropping = ed.sel;
+            else if (stage.current.type === "table" && !stage.current.locked) stage.editCell(ed.sel, 0, 0);
             else stage.startEditing(ed.sel);
         }
     }

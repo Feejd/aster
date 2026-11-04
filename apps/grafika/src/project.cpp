@@ -798,7 +798,7 @@ QStringList Project::colors() const
     return out;
 }
 
-static const char *const ColorKeys[] = {"color", "color2", "fill", "fill2", "stroke", "outlineColor", "bg", "shadowColor", "duo1", "duo2"};
+static const char *const ColorKeys[] = {"color", "color2", "fill", "fill2", "stroke", "outlineColor", "bg", "shadowColor", "duo1", "duo2", "headerFill", "headerColor", "stripe"};
 
 // Wywołuje fn dla każdego koloru w projekcie (tła stron, pola elementów, kolory słupków wykresów)
 static void eachColor(QVariantList &pages, const std::function<void(QVariant &)> &fn)
@@ -1164,6 +1164,11 @@ void Project::copy(const QStringList &ids) const
     else if (list.size() == 1 && m_assets.contains(src))
         mime->setImageData(m_assets.value(src).full);
     QGuiApplication::clipboard()->setMimeData(mime);
+}
+
+QString Project::clipboardText() const
+{
+    return QGuiApplication::clipboard()->text();
 }
 
 QStringList Project::paste()
