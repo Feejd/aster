@@ -1166,6 +1166,49 @@ void Project::copy(const QStringList &ids) const
     QGuiApplication::clipboard()->setMimeData(mime);
 }
 
+QVariantMap Project::autoEnhance(const QString &key) const
+{
+    QImage img = fullImage(key);
+    if (img.isNull())
+        return {};
+    img = img.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_ARGB32);
+    int hist[256] = {};
+    qint64 n = 0;
+    qreal chroma = 0, sum = 0;
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb *row = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            if (qAlpha(row[x]) < 128)
+                continue;
+            const int r = qRed(row[x]), g = qGreen(row[x]), b = qBlue(row[x]);
+            const int l = (299 * r + 587 * g + 114 * b) / 1000;
+            ++hist[l];
+            sum += l;
+            chroma += qMax(r, qMax(g, b)) - qMin(r, qMin(g, b));
+            ++n;
+        }
+    }
+    if (n == 0)
+        return {};
+    // Ciemne i jasne 1,5% pikseli — zakres, który rozciągamy do pełnej skali
+    auto percentile = [&](qreal p) {
+        qint64 acc = 0;
+        for (int i = 0; i < 256; ++i)
+            if ((acc += hist[i]) >= n * p)
+                return i;
+        return 255;
+    };
+    const int lo = percentile(0.015), hi = percentile(0.985);
+    const qreal mean = sum / n;
+    const qreal k = qBound(1.0, 225.0 / qMax(30, hi - lo), 1.45);
+    const qreal mid = (mean - 128) * k + 128;
+    const qreal brightness = qBound(-0.25, (128 - mid) / 110 * 0.55, 0.3);
+    const qreal c = chroma / n;
+    const qreal saturation = c < 35 ? 0.25 : c < 60 ? 0.15 : c < 90 ? 0.08 : 0;
+    auto r2 = [](qreal v) { return std::round(v * 100) / 100; };
+    return {{QStringLiteral("brightness"), r2(brightness)}, {QStringLiteral("contrast"), r2(k - 1)}, {QStringLiteral("saturation"), r2(saturation)}};
+}
+
 QString Project::clipboardText() const
 {
     return QGuiApplication::clipboard()->text();

@@ -49,6 +49,8 @@ public:
     Q_INVOKABLE int downloadMB(const QString &feature) const;
 
     Q_INVOKABLE void removeBackground(Project *project, const QString &id);
+    // Rozmycie tła za osobą albo rzeczą (jak tryb portretowy), strength 0…1; 0 przywraca ostre zdjęcie
+    Q_INVOKABLE void blurBackground(Project *project, const QString &id, qreal strength);
 
     Q_INVOKABLE void begin(Project *project, const QString &id);
     Q_INVOKABLE void end();
@@ -90,4 +92,6 @@ private:
     bool m_hasMask = false;
     QString m_maskUrl;
     int m_maskSerial = 0;
+    QString m_fgKey;                // ostatnio policzona maska pierwszego planu (rozmycie tła) — szybka zmiana siły
+    QImage m_fgMask;
 };

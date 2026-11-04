@@ -191,6 +191,74 @@ Piece piece(const QImage &img, const QImage &mask, const QVariantMap &el, int th
              {QStringLiteral("h"), std::round(r.height() * 10) / 10}}};
 }
 
+// Rozmycie pudełkowe (trzy przebiegi ≈ Gauss) obrazu z premultiplikowaną alfą, sumy kroczące — czas nie zależy od promienia
+void boxBlurPremul(QImage &img, int r)
+{
+    if (r < 1)
+        return;
+    const int w = img.width(), h = img.height();
+    QList<QRgb> buf(qMax(w, h));
+    auto pass = [&](QRgb *data, int n, int stride) {
+        for (int i = 0; i < n; ++i)
+            buf[i] = data[i * stride];
+        int s[4] = {0, 0, 0, 0};
+        auto add = [&](QRgb c, int k) { s[0] += k * qRed(c); s[1] += k * qGreen(c); s[2] += k * qBlue(c); s[3] += k * qAlpha(c); };
+        const int win = 2 * r + 1;
+        for (int k = -r; k <= r; ++k)
+            add(buf[qBound(0, k, n - 1)], 1);
+        for (int i = 0; i < n; ++i) {
+            data[i * stride] = qRgba(s[0] / win, s[1] / win, s[2] / win, s[3] / win);
+            add(buf[qMin(n - 1, i + r + 1)], 1);
+            add(buf[qMax(0, i - r)], -1);
+        }
+    };
+    for (int round = 0; round < 3; ++round) {
+        for (int y = 0; y < h; ++y)
+            pass(reinterpret_cast<QRgb *>(img.scanLine(y)), w, 1);
+        QRgb *base = reinterpret_cast<QRgb *>(img.bits());
+        const int stride = int(img.bytesPerLine() / 4);
+        for (int x = 0; x < w; ++x)
+            pass(base + x, h, stride);
+    }
+}
+
+// Tło rozmyte bez „aureoli”: rozmywa się tylko tło (pierwszy plan ma wagę 0), potem ostry pierwszy plan na wierzch
+QImage portraitBlur(const QImage &src, const QImage &mask, int radius)
+{
+    const QImage img = src.convertToFormat(QImage::Format_ARGB32);
+    const QImage soft = filtered(mask, 2, false);
+    const QImage grown = filtered(mask, qMax(1, radius / 6), true);      // tło nie bierze kolorów z brzegu postaci
+    QImage bg(img.size(), QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb *in = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+        const uchar *g = grown.constScanLine(y);
+        QRgb *o = reinterpret_cast<QRgb *>(bg.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const int a = 255 - g[x];
+            o[x] = qRgba(qRed(in[x]) * a / 255, qGreen(in[x]) * a / 255, qBlue(in[x]) * a / 255, a);
+        }
+    }
+    boxBlurPremul(bg, radius);
+    QImage out(img.size(), QImage::Format_ARGB32);
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb *in = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+        const QRgb *b = reinterpret_cast<const QRgb *>(bg.constScanLine(y));
+        const uchar *m = soft.constScanLine(y);
+        QRgb *o = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const int a = qAlpha(b[x]);
+            // Pod samym środkiem postaci tło nie ma danych — wtedy zostaje zdjęcie
+            const int br = a > 0 ? qMin(255, qRed(b[x]) * 255 / a) : qRed(in[x]);
+            const int bgc = a > 0 ? qMin(255, qGreen(b[x]) * 255 / a) : qGreen(in[x]);
+            const int bb = a > 0 ? qMin(255, qBlue(b[x]) * 255 / a) : qBlue(in[x]);
+            const int k = m[x];
+            o[x] = qRgba((qRed(in[x]) * k + br * (255 - k)) / 255, (qGreen(in[x]) * k + bgc * (255 - k)) / 255,
+                         (qBlue(in[x]) * k + bb * (255 - k)) / 255, qAlpha(in[x]));
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 // ——— Modele ———
@@ -502,6 +570,51 @@ void Magic::removeBackground(Project *project, const QString &id)
 #else
     Q_UNUSED(project);
     Q_UNUSED(id);
+    Q_EMIT failed(QStringLiteral("Ta wersja Grafiki nie ma narzędzi AI."));
+#endif
+}
+
+void Magic::blurBackground(Project *project, const QString &id, qreal strength)
+{
+#ifdef GRAFIKA_ONNX
+    if (!project)
+        return;
+    const QVariantMap el = project->get(id);
+    // Zmiana siły liczy od oryginału, o ile zdjęcie nie zmieniło się od poprzedniego rozmycia
+    const QString src = el.value(QStringLiteral("src")).toString();
+    const bool again = !el.value(QStringLiteral("bgBlurSrc")).toString().isEmpty() && el.value(QStringLiteral("bgBlurOut")).toString() == src;
+    const QString orig = again ? el.value(QStringLiteral("bgBlurSrc")).toString() : src;
+    if (strength <= 0) {
+        if (again)
+            project->change(id, {{QStringLiteral("src"), orig}, {QStringLiteral("bgBlur"), QVariant()},
+                                 {QStringLiteral("bgBlurSrc"), QVariant()}, {QStringLiteral("bgBlurOut"), QVariant()}});
+        return;
+    }
+    const QImage img = project->fullImage(orig);
+    if (img.isNull())
+        return;
+    QPointer<Project> pr(project);
+    auto models = m_models;
+    const QImage cached = m_fgKey == orig ? m_fgMask : QImage();
+    run(QStringLiteral("Rozmywam tło…"), featureModels(QStringLiteral("background")), [=, this]() -> std::function<void()> {
+        const QImage mask = cached.isNull() ? models->foreground(img) : cached;
+        const int radius = qMax(2, qRound(qMax(img.width(), img.height()) * 0.025 * strength));
+        const QImage out = portraitBlur(img, mask, radius);
+        return [=, this] {
+            m_fgKey = orig;
+            m_fgMask = mask;
+            if (!pr || pr->indexOf(id) < 0)
+                return;
+            const QString key = pr->addImage(out);
+            pr->change(id, {{QStringLiteral("src"), key}, {QStringLiteral("bgBlur"), strength},
+                            {QStringLiteral("bgBlurSrc"), orig}, {QStringLiteral("bgBlurOut"), key}});
+            Q_EMIT finished(QStringLiteral("Tło rozmyte. Ctrl+Z przywraca ostre zdjęcie."), {id});
+        };
+    });
+#else
+    Q_UNUSED(project);
+    Q_UNUSED(id);
+    Q_UNUSED(strength);
     Q_EMIT failed(QStringLiteral("Ta wersja Grafiki nie ma narzędzi AI."));
 #endif
 }

@@ -60,7 +60,9 @@ public:
     QVariantMap print() const { return m_print; }
 
     QImage image(const QString &key, qreal pixels) const override;
-    QImage fullImage(const QString &key) const;                  // zdjęcie w pełnej rozdzielczości (do AI)
+    QImage fullImage(const QString &key) const;
+    // Automatyczna poprawa: jasność, kontrast i nasycenie dobrane do zdjęcia (pola elementu do zmiany)
+    Q_INVOKABLE QVariantMap autoEnhance(const QString &key) const;                  // zdjęcie w pełnej rozdzielczości (do AI)
     QString addImage(const QImage &img);                         // nowe zdjęcie w projekcie (PNG, z przezroczystością)
     QByteArray vector(const QString &key) const override;
     Q_INVOKABLE bool recolorable(const QString &key) const;     // SVG z currentColor (jednokolorowa ikona)

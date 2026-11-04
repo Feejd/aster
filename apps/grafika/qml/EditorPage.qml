@@ -526,6 +526,8 @@ Item {
         else if (cmd === "saveel") saveElements();
         else if (cmd === "magic") startMagic();
         else if (cmd === "magicbg") Magic.removeBackground(project, sel);
+        else if (cmd === "magicblur") Magic.blurBackground(project, sel, Number(arg));
+        else if (cmd === "autoenhance") project.change(sel, project.autoEnhance(stage.current.src));
         else if (cmd === "magicobj") { const [x, y] = arg.split(",").map(Number); Magic.addObject(x, y, false); }
         else if (cmd === "magicstroke") { const a = JSON.parse(arg); Magic.addStroke(a.points, a.width || 0, !!a.lasso, false); }
         else if (cmd === "magicapply") Magic.apply(arg);
