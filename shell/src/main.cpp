@@ -58,8 +58,7 @@ int main(int argc, char *argv[])
             // kolejność: pulpit (zegar) → wyspa → dok → Start
             std::sort(windows.begin(), windows.end(), [](QQuickWindow *a, QQuickWindow *b) {
                 static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start"),
-                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Aster Intelligence"),
-                                                QStringLiteral("Poświata")};
+                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Aster Intelligence")};
                 return order.indexOf(a->title()) < order.indexOf(b->title());
             });
             for (QQuickWindow *w : windows) {

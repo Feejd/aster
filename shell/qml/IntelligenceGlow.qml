@@ -28,7 +28,7 @@ Item {
     Behavior on speed { NumberAnimation { duration: 700; easing.type: Easing.InOutQuad } }
 
     FrameAnimation {
-        running: g.visible && g.animate
+        running: g.visible && g.animate && g.speed > 0
         onTriggered: g.angle = (g.angle + frameTime * g.speed) % 360
     }
 

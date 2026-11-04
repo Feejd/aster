@@ -24,7 +24,6 @@ QtObject {
             assistantOpen: assistWin.open
             onStartRequested: { controlWin.close(); assistWin.close(); startWin.toggle(); }
             onControlRequested: { startWin.close(); assistWin.close(); controlWin.toggle(); }
-            onAskOpened: edgeGlow.flash()
             onChatsRequested: {
                 if (assistWin.open) { assistWin.close(); return; }
                 startWin.close(); controlWin.close(); assistWin.show();
@@ -49,11 +48,6 @@ QtObject {
     property var start: StartWindow { id: startWin }
     property var control: ControlCenterWindow { id: controlWin }
     property var assistant: AssistantWindow { id: assistWin }   // panel Aster Intelligence z prawej
-    // Poświata na krawędziach ekranu, gdy Aster Intelligence myśli
-    property var glow: EdgeGlowWindow {
-        id: edgeGlow
-        active: (Assistant.busy && !Assistant.waiting) || Platform.env("ASTER_SHOT_GLOW") !== ""
-    }
     property var auth: AuthWindow {}            // hasło administratora (agent polkit)
     property var dock: DockWindow {
         startOpen: startWin.open
@@ -81,7 +75,6 @@ QtObject {
         }
     }
     // Do testów: ASTER_SHOT_ASK="pytanie|kolejne|…|^" — pierwsze w wyspie, kolejne jak dopytanie, „^” chowa rozmowę do kropli
-    // (ASTER_SHOT_GLOW=1 zapala poświatę ekranu bez pytania)
     property var shotAsk: Timer {
         readonly property var questions: Platform.env("ASTER_SHOT_ASK") === "" ? [] : Platform.env("ASTER_SHOT_ASK").split("|")
         property int next: 0

@@ -9,12 +9,12 @@ Item {
     property real size: 30
     property bool busy: false
     property real angle: 0
-    property real speed: busy ? 260 : 45
+    property real speed: busy ? 200 : 0
     Behavior on speed { NumberAnimation { duration: 600; easing.type: Easing.InOutQuad } }
     width: size; height: size
 
     FrameAnimation {
-        running: o.visible
+        running: o.visible && o.speed > 0
         onTriggered: o.angle = (o.angle + frameTime * o.speed) % 360
     }
 

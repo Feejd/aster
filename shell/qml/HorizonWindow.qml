@@ -226,20 +226,19 @@ Window {
     }
 
     // ——— Dynamiczna wyspa ———
-    // Poświata Aster Intelligence wokół wyspy: spokojna, gdy czeka na pytanie, żywa, gdy model myśli
+    // Jedyna poświata Aster Intelligence: wokół wyspy, gdy pytasz (nieruchoma; powoli krąży, gdy model myśli)
     IntelligenceGlow {
         id: islandGlow
         x: island.x; y: island.y
         width: island.width; height: island.height
         radius: island.radius
         thickness: 2
-        haloWidth: Assistant.busy ? 14 : 10
-        haloBlur: Assistant.busy ? 48 : 36
-        haloStrength: 1
-        speed: Assistant.busy ? 170 : 40
+        haloWidth: 8
+        haloBlur: 28
+        haloStrength: 0.7
+        speed: Assistant.busy ? 90 : 0
         intensity: hz.asking ? 1 : 0
         Behavior on intensity { NumberAnimation { duration: hz.asking ? 450 : 260; easing.type: Easing.OutCubic } }
-        Behavior on haloWidth { NumberAnimation { duration: 500 } }
     }
     readonly property bool playing: ControlCenter.playerAvailable && ControlCenter.playing
     readonly property bool noting: current !== null
@@ -443,19 +442,6 @@ Window {
         }
     }
 
-    // Ta sama poświata od środka: kolory lekko wpływają na brzegi czarnej wyspy
-    IntelligenceGlow {
-        x: island.x; y: island.y
-        width: island.width; height: island.height
-        radius: island.radius
-        animate: false
-        angle: islandGlow.angle
-        showRing: false
-        haloWidth: 3
-        haloBlur: 12
-        haloStrength: Assistant.busy ? 0.8 : 0.5
-        intensity: islandGlow.intensity
-    }
 
     // ——— Pole pytania i krótka odpowiedź (w środku dynamicznej wyspy) ———
     Item {
@@ -591,7 +577,7 @@ Window {
                                 Behavior on scale { SpringAnimation { spring: 5; damping: 0.35 } }
                                 // Wejście kaskadą: każdy kolejny przycisk chwilę później
                                 opacity: 0
-                                property real lift: 6
+                                property real lift: 2
                                 transform: Translate { y: chip.lift }
                                 Component.onCompleted: appear.start()
                                 ParallelAnimation {
@@ -600,7 +586,7 @@ Window {
                                         PauseAnimation { duration: 40 + chip.index * 35 }
                                         ParallelAnimation {
                                             NumberAnimation { target: chip; property: "opacity"; to: 1; duration: 220 }
-                                            NumberAnimation { target: chip; property: "lift"; to: 0; duration: 320; easing.type: Easing.OutBack }
+                                            NumberAnimation { target: chip; property: "lift"; to: 0; duration: 180; easing.type: Easing.OutCubic }
                                         }
                                     }
                                 }
@@ -646,13 +632,13 @@ Window {
                         width: parent.width
                         // Odpowiedź wyłania się: przenika i lekko unosi
                         opacity: 0
-                        property real lift: 8
+                        property real lift: 3
                         transform: Translate { y: answerText.lift }
-                        onVisibleChanged: if (visible) reveal.restart(); else { opacity = 0; lift = 8; }
+                        onVisibleChanged: if (visible) reveal.restart(); else { opacity = 0; lift = 3; }
                         ParallelAnimation {
                             id: reveal
                             NumberAnimation { target: answerText; property: "opacity"; to: 1; duration: 320; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: answerText; property: "lift"; to: 0; duration: 420; easing.type: Easing.OutBack }
+                            NumberAnimation { target: answerText; property: "lift"; to: 0; duration: 200; easing.type: Easing.OutCubic }
                         }
                         text: Assistant.lastError ? Assistant.lastAnswer : Assistant.lastAnswer.replace(/\*\*/g, "")
                         wrapMode: Text.Wrap
@@ -798,33 +784,10 @@ Window {
     // ——— Kropla rozmowy ———
     // Bieżąca rozmowa z Aster Intelligence chowa się w małą kroplę tuż pod prawą wyspą (jak druga wyspa).
     // Klik rozlewa ją z powrotem w panel; gdy rozmowy nie ma (nowa / usunięta), kropli też nie ma.
-    // Pojawia się jak kropla, która odrywa się od wyspy: rośnie od góry na sprężynie, a przez chwilę łączy ją
-    // z wyspą cienka „szyjka”. Gdy agent myśli — niebieska poświata; gdy czeka na zgodę — pulsuje.
+    // Spokojna: pojawia się i znika łagodnie; gdy agent myśli — kręci się kula i „Myślę…”.
     readonly property bool dropShown: hz.primary && Assistant.count > 0 && !hz.assistantOpen && !hz.asking
-    onDropShownChanged: {
-        if (dropShown) neckAnim.restart();
-        hz.updateRegion();
-    }
+    onDropShownChanged: hz.updateRegion()
 
-    Island {
-        id: neck
-        // Szyjka między wyspą a kroplą — znika, gdy kropla się oderwie
-        property real w: 0
-        visible: w > 0.5
-        x: drop.x + drop.width - 34 - w / 2
-        y: right.y + right.height - 6
-        width: w
-        height: drop.y - y + 8
-        radius: w / 2
-        shadowStrength: 0
-        onWChanged: hz.updateRegion()
-        SequentialAnimation {
-            id: neckAnim
-            NumberAnimation { target: neck; property: "w"; from: 16; to: 16; duration: 60 }
-            NumberAnimation { target: neck; property: "w"; to: 0; duration: 340; easing.type: Easing.InOutCubic }
-        }
-        onVisibleChanged: hz.updateRegion()
-    }
 
     Island {
         id: drop
@@ -837,44 +800,15 @@ Window {
         visible: opacity > 0.01
         opacity: hz.dropShown ? 1 : 0
         shadowStrength: 0.8
-        property real s: hz.dropShown ? 1 : 0.35
-        property real bump: 1
-        transform: Scale { origin.x: drop.width - 34; origin.y: 0; xScale: drop.s * drop.bump; yScale: drop.s * drop.bump }
+        property real s: hz.dropShown ? 1 : 0.8
+        transform: Scale { origin.x: drop.width - 34; origin.y: 0; xScale: drop.s; yScale: drop.s }
         Behavior on opacity { NumberAnimation { duration: hz.dropShown ? 160 : 120 } }
-        Behavior on s { SpringAnimation { spring: 4.2; damping: 0.3; epsilon: 0.002 } }
-        Behavior on width { SpringAnimation { spring: 3.6; damping: 0.32; epsilon: 0.25 } }
+        Behavior on s { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
         onWidthChanged: hz.updateRegion()
         onVisibleChanged: hz.updateRegion()
 
-        // Nowa odpowiedź, gdy rozmowa jest schowana — kropla lekko podskakuje
-        SequentialAnimation {
-            id: bumpAnim
-            NumberAnimation { target: drop; property: "bump"; to: 1.12; duration: 140; easing.type: Easing.OutQuad }
-            NumberAnimation { target: drop; property: "bump"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 3 }
-        }
-        Connections {
-            target: Assistant
-            function onAnswered() { if (hz.dropShown) bumpAnim.restart(); }
-        }
 
-        IntelligenceGlow {
-            anchors.fill: parent
-            radius: drop.radius
-            thickness: 1.6
-            haloWidth: 6
-            haloBlur: 22
-            speed: 170
-            intensity: drop.thinking || drop.waitPulse > 0 ? 1 : 0
-            Behavior on intensity { NumberAnimation { duration: 400 } }
-        }
-        property real waitPulse: 0
-        SequentialAnimation on waitPulse {
-            running: Assistant.waiting && hz.dropShown
-            loops: Animation.Infinite
-            NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 0.2; duration: 700; easing.type: Easing.InOutSine }
-            onRunningChanged: if (!running) drop.waitPulse = 0
-        }
 
         Row {
             id: dropRow
@@ -943,7 +877,6 @@ Window {
         onTriggered: {
             const items = [left, island, right];
             if (drop.visible) items.push(drop);
-            if (neck.visible) items.push(neck);
             const r = items.map(i => ({ x: i.x, y: i.y, w: i.width, h: i.height, r: i.radius }));
             Platform.setBlur(hz, r);
             Platform.setInputRegion(hz, r);

@@ -109,17 +109,6 @@ Window {
 
         MouseArea { anchors.fill: parent }
 
-        // Niebieska poświata wokół panelu, gdy model myśli
-        IntelligenceGlow {
-            anchors.fill: parent
-            radius: 30
-            thickness: 2
-            haloWidth: 10
-            haloBlur: 44
-            speed: 150
-            intensity: Assistant.busy && !Assistant.waiting && aw.open ? 1 : 0
-            Behavior on intensity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
-        }
         Island { anchors.fill: parent; radius: 30 }
         Rectangle {
             anchors.fill: parent
@@ -420,20 +409,7 @@ Window {
             radius: 20
             color: Theme.dark ? Qt.rgba(0.1, 0.1, 0.12, 0.9) : Qt.rgba(1, 1, 1, 0.92)
             border.width: 1
-            border.color: input.activeFocus ? "transparent" : Theme.line
-            // Pole w fokusie obwiedzione kolorami Aster Intelligence
-            IntelligenceGlow {
-                z: -1
-                anchors.fill: parent
-                radius: parent.radius
-                thickness: 1.5
-                haloWidth: 5
-                haloBlur: 20
-                haloStrength: 0.55
-                speed: Assistant.busy ? 160 : 35
-                intensity: input.activeFocus ? 1 : 0
-                Behavior on intensity { NumberAnimation { duration: 300 } }
-            }
+            border.color: input.activeFocus ? (Theme.dark ? "#60A5FA" : "#3B82F6") : Theme.line
             Flickable {
                 id: inputFlick
                 x: 14; y: 12
@@ -520,16 +496,6 @@ Window {
         border.color: waiting ? Qt.rgba(0.23, 0.51, 0.96, 0.6) : Theme.line
         Behavior on border.color { ColorAnimation { duration: 200 } }
 
-        // Czekające na zgodę — obwiedzione kolorami Aster Intelligence
-        IntelligenceGlow {
-            z: -1
-            anchors.fill: parent
-            radius: parent.radius
-            thickness: 1.5; haloWidth: 5; haloBlur: 18; haloStrength: 0.5
-            speed: 50
-            intensity: ac.waiting && aw.open ? 1 : 0
-            Behavior on intensity { NumberAnimation { duration: 300 } }
-        }
 
         Column {
             id: col
