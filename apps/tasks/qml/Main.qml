@@ -28,7 +28,8 @@ Window {
 
     readonly property var pages: [
         { id: "processes", name: "Procesy", icon: "list", colors: ["#7FA7FF", "#3E63DD"] },
-        { id: "performance", name: "Wydajność", icon: "activity", colors: ["#7EE8A8", "#0E8F5A"] }
+        { id: "performance", name: "Wydajność", icon: "activity", colors: ["#7EE8A8", "#0E8F5A"] },
+        { id: "ports", name: "Porty", icon: "globe", colors: ["#7DD3FC", "#0284C7"] }
     ]
     readonly property var current: pages.find(p => p.id === page) || pages[0]
     property alias selected: procPage.selected
@@ -336,6 +337,11 @@ Window {
                     anchors.fill: parent
                     active: win.page === "performance"
                     sourceComponent: PerformancePage {}
+                }
+                Loader {
+                    anchors.fill: parent
+                    active: win.page === "ports"
+                    sourceComponent: PortsPage {}
                 }
             }
             ParallelAnimation {

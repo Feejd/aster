@@ -525,7 +525,21 @@ QString Service::systemPrompt(const QString &source, const QString &memory) cons
         "(Node, Python z pip, bazy) instaluj w kontenerze deweloperskim: raz `toolbox create -y aster-dev`, potem "
         "`toolbox run -c aster-dev sudo dnf install -y nodejs` i uruchamiaj przez `toolbox run -c aster-dev …` (w tle: "
         "`aster --tlo start web --w FOLDER -- toolbox run -c aster-dev npm run dev`). Zależności projektu (npm install, "
-        "pip install w .venv) instaluj bez pytania. Prosty backend bez instalacji: Python (http.server, sqlite3).");
+        "pip install w .venv) instaluj bez pytania. Prosty backend bez instalacji: Python (http.server, sqlite3).\n"
+        "- PROGRAMY DLA PROGRAMISTÓW (korzystaj z nich, zamiast zgadywać; okno otwierasz `aster --otworz vault|pulse|harbor|launch`):\n"
+        "  Aster Vault — bazy danych (tylko odczyt): `aster-vault --list --json`, `aster-vault --schema POŁĄCZENIE [TABELA] --json`, "
+        "`aster-vault --query POŁĄCZENIE \"SELECT …\" --json`; plik SQLite otworzysz użytkownikowi: `aster-vault ścieżka.db`.\n"
+        "  Aster Pulse — testowanie API (wynik JSON): `aster-pulse send GET http://localhost:PORT/api/…`, "
+        "`aster-pulse send POST ADRES --json '{…}'`, `aster-pulse list`, `aster-pulse run KOLEKCJA/ZAPYTANIE`; zapisz zapytania "
+        "projektu, żeby użytkownik mógł je powtórzyć w oknie.\n"
+        "  Aster Harbor — kontenery i toolboxy: `aster-harbor list --json`, `aster-harbor images --json`, `aster-harbor logs NAZWA -n 80`, "
+        "`aster-harbor start|restart|stop NAZWA`.\n"
+        "  Aster Launch — wdrożenia: `aster-launch lista`, `aster-launch status PROJEKT`, `aster-launch logi PROJEKT -n 100`, "
+        "`aster-launch dodaj FOLDER`; wdrożenie `aster-launch wdroz PROJEKT` i cofnięcie `aster-launch przywroc PROJEKT` "
+        "użytkownik zatwierdza w oknie Launch (pokaże plan zmian).\n"
+        "  Porty (Menedżer zadań): `aster-tasks porty` — kto nasłuchuje na którym porcie i w jakim folderze; "
+        "„port zajęty” → `aster-tasks zakoncz-port PORT`; okno: `aster-tasks ports`.\n"
+        "  Gdy programu nie ma (`command -v aster-vault` pusty) — zaproponuj `aster --instaluj vault` (pulse, harbor, launch).");
     s += QStringLiteral("\nFolder roboczy: {FOLDER}.");
     s = s.arg(askAlways()
                   ? QStringLiteral("Polecenia, które tylko coś sprawdzają, uruchamiają się od razu; wszystko, co cokolwiek zmienia, użytkownik "

@@ -52,6 +52,10 @@ const QList<AsterApp> &asterApps()
         {"video", "Wideo", {QStringLiteral("video"), QStringLiteral("wideo"), QStringLiteral("odtwarzacz")}},
         {"pdf", "Podgląd PDF", {QStringLiteral("pdf"), QStringLiteral("podglad pdf")}},
         {"camera", "Kamera", {QStringLiteral("camera"), QStringLiteral("kamera")}},
+        {"vault", "Aster Vault", {QStringLiteral("vault"), QStringLiteral("aster vault"), QStringLiteral("bazy danych"), QStringLiteral("baza danych")}},
+        {"pulse", "Aster Pulse", {QStringLiteral("pulse"), QStringLiteral("aster pulse"), QStringLiteral("postman"), QStringLiteral("api")}},
+        {"harbor", "Aster Harbor", {QStringLiteral("harbor"), QStringLiteral("aster harbor"), QStringLiteral("kontenery"), QStringLiteral("docker")}},
+        {"launch", "Aster Launch", {QStringLiteral("launch"), QStringLiteral("aster launch"), QStringLiteral("wdrozenia"), QStringLiteral("wdrozenie")}},
     };
     return apps;
 }

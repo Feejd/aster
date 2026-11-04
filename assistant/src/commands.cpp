@@ -348,8 +348,7 @@ bool simple(QStringList w, QString *why, int depth)
         QStringLiteral("groupadd"), QStringLiteral("groupdel"), QStringLiteral("gpasswd"), QStringLiteral("chsh"), QStringLiteral("chown"),
         QStringLiteral("chgrp"), QStringLiteral("chattr"), QStringLiteral("setfacl"),
         // pakiety spoza Flatpaka, zmiany w plikach, cudzy kod
-        QStringLiteral("dnf"), QStringLiteral("yum"), QStringLiteral("dnf5"), QStringLiteral("pip"), QStringLiteral("pip3"),
-        QStringLiteral("npm"), QStringLiteral("tee"), QStringLiteral("eval"), QStringLiteral("source"), QStringLiteral("."),
+        QStringLiteral("dnf"), QStringLiteral("yum"), QStringLiteral("dnf5"), QStringLiteral("tee"), QStringLiteral("eval"), QStringLiteral("source"), QStringLiteral("."),
         QStringLiteral("ssh"), QStringLiteral("at"), QStringLiteral("busctl"), QStringLiteral("dbus-send"), QStringLiteral("gdbus"),
         QStringLiteral("qdbus"), QStringLiteral("qdbus6"), QStringLiteral("efibootmgr"), QStringLiteral("grub2-install"),
         QStringLiteral("dracut"), QStringLiteral("modprobe"), QStringLiteral("rmmod"), QStringLiteral("insmod"), QStringLiteral("sysctl"),
@@ -472,6 +471,16 @@ bool simple(QStringList w, QString *why, int depth)
         return no(QStringLiteral("usuwa albo przenosi pliki"));
     if (prog == QLatin1String("bluetoothctl") && has(w, {"remove", "untrust", "block", "power off"}))
         return no(QStringLiteral("zmienia Bluetooth"));
+    // Zależności projektu (npm install, pip install w .venv) — bez pytania; globalnie — ważne
+    if ((prog == QLatin1String("npm") || prog == QLatin1String("pnpm") || prog == QLatin1String("yarn")) && has(w, {"-g", "--global"}))
+        return no(QStringLiteral("instalacja globalna"));
+    // Programy dla programistów: ważne tylko wdrożenia, zatrzymywanie kontenerów i kończenie procesów na portach
+    if (prog == QLatin1String("aster-launch") && subIn({"wdroz", "przywroc", "usun"}))
+        return no(QStringLiteral("wdrożenie na produkcję"));
+    if (prog == QLatin1String("aster-harbor") && subIn({"stop", "rm", "remove", "usun", "prune"}))
+        return no(QStringLiteral("zatrzymuje kontener"));
+    if (prog == QLatin1String("aster-tasks") && sub == QLatin1String("zakoncz-port"))
+        return no(QStringLiteral("kończy program"));
     // Procesy w tle: liczy się to, co uruchamiają (po „--”)
     if ((prog == QLatin1String("aster") || prog == QLatin1String("ai")) && w.value(1) == QLatin1String("--tlo")) {
         const int dash = int(w.indexOf(QLatin1String("--"), 2));

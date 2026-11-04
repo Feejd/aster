@@ -561,7 +561,9 @@ static QString asterAppName(const QString &id)
         {QStringLiteral("editor"), QStringLiteral("Edytor tekstu")}, {QStringLiteral("calculator"), QStringLiteral("Kalkulator")},
         {QStringLiteral("photos"), QStringLiteral("Zdjęcia")}, {QStringLiteral("music"), QStringLiteral("Muzyka")},
         {QStringLiteral("video"), QStringLiteral("Wideo")}, {QStringLiteral("pdf"), QStringLiteral("Podgląd PDF")},
-        {QStringLiteral("camera"), QStringLiteral("Kamera")}};
+        {QStringLiteral("camera"), QStringLiteral("Kamera")}, {QStringLiteral("vault"), QStringLiteral("Aster Vault")},
+        {QStringLiteral("pulse"), QStringLiteral("Aster Pulse")}, {QStringLiteral("harbor"), QStringLiteral("Aster Harbor")},
+        {QStringLiteral("launch"), QStringLiteral("Aster Launch")}};
     return names.value(id);
 }
 
@@ -608,7 +610,7 @@ static int installApp(QString id)
         id = QStringLiteral("montaz");
     if (asterAppName(id).isEmpty()) {
         err(QStringLiteral("aster: nie znam programu Aster „%1”. Są: code, grafika, montaz, studio, editor, calculator, photos, "
-                           "music, video, pdf, camera. Inne programy: flatpak install --user flathub <id>\n").arg(id));
+                           "music, video, pdf, camera, vault, pulse, harbor, launch. Inne programy: flatpak install --user flathub <id>\n").arg(id));
         return 2;
     }
     const QString arch = QSysInfo::currentCpuArchitecture() == QLatin1String("arm64") ? QStringLiteral("aarch64") : QStringLiteral("x86_64");
