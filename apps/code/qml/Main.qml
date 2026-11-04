@@ -824,6 +824,55 @@ Window {
         save(i, null, true);
     }
     function askAgent(prompt) { agentPanel.ask(prompt); }
+    // ——— Wdrożenie ———
+    function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+    function deployCommand(c) {
+        const build = c.build ? "(cd " + shq(c.buildDir || ".") + " && " + c.build + ") && " : "";
+        const send = c.send || ".";
+        if (c.target === "ssh") {
+            // Ścieżka bez ~/ — rsync i tak liczy ją od katalogu domowego na serwerze
+            const remote = String(c.path || "aplikacja").replace(/^~\//, "").replace(/\/$/, "");
+            const src = send === "." ? "./" : send.replace(/\/?$/, "/");
+            return build + "rsync -az --delete --mkpath --exclude .git --exclude node_modules --exclude .venv --exclude .env --exclude '.env.*' --exclude .aster "
+                 + "-e 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' " + shq(src) + " " + shq(c.host + ":" + remote + "/")
+                 + (c.post ? " && ssh -o BatchMode=yes " + shq(c.host) + " " + shq("cd " + remote + " && " + c.post) : "")
+                 + " && echo " + shq("Wdrożono: " + c.host + ":" + remote);
+        }
+        if (c.target === "pages") return build + "npx --yes gh-pages -d " + shq(send) + " -t true && echo 'Wdrożono na gałąź gh-pages'";
+        if (c.target === "netlify") return build + "npx --yes netlify-cli deploy --prod --dir " + shq(send) + (c.project ? " --site " + shq(c.project) : "");
+        if (c.target === "vercel") return "cd " + shq(c.buildDir || ".") + " && npx --yes vercel deploy --prod --yes --token \"$VERCEL_TOKEN\"";
+        if (c.target === "cloudflare") return build + "npx --yes wrangler pages deploy " + shq(send) + " --project-name " + shq(c.project || "strona");
+        return "";
+    }
+    function runDeploy(c) {
+        const names = { ssh: "serwer", pages: "GitHub Pages", netlify: "Netlify", vercel: "Vercel", cloudflare: "Cloudflare Pages" };
+        saveAll();
+        Tasks.run("Wdrożenie: " + (names[c.target] || c.target), deployCommand(c), Project.root, { __secrets: Secrets.names.length > 0, __github: c.target === "pages" });
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    // ⇪ Wdróż: zapisane ustawienia — od razu, inaczej ekran wdrożenia
+    function quickDeploy() {
+        let c = null;
+        try { c = JSON.parse(Agent.readFile(Project.root + "/.aster/wdrozenie.json") || "null"); } catch (e) {}
+        if (c && c.target && (c.target !== "ssh" || c.host)) runDeploy(c);
+        else deployView.open();
+    }
+    property string lastDeployUrl: ""
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (!title.startsWith("Wdrożenie")) return;
+            const m = Tasks.lines.join("\n").match(/https:\/\/[^\s'"]+\.(?:netlify\.app|vercel\.app|pages\.dev|github\.io)[^\s'"]*/g);
+            win.lastDeployUrl = m ? m[m.length - 1] : "";
+            win.toast(code === 0 ? "Wdrożono" + (win.lastDeployUrl ? ": " + win.lastDeployUrl : "") : "Wdrożenie nie powiodło się — szczegóły w karcie Zadania");
+        }
+    }
+    Connections {
+        target: GitHub
+        function onMessage(text) { win.toast(text); }
+        function onRepoCreated(url) { win.toast("Repozytorium na GitHubie: " + url); Project.refreshGit(); }
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -1027,6 +1076,9 @@ Window {
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
         { label: "Nowa aplikacja…", shortcut: "", action: "newApp", icon: "sparkle" },
         { label: "Agent", shortcut: "Ctrl+Shift+I", action: "agent", icon: "sparkles" },
+        { label: "Wdróż", shortcut: "", action: "deploy", icon: "upload" },
+        { label: "Wdrożenie: ustawienia…", shortcut: "", action: "deploySettings", icon: "upload" },
+        { label: "GitHub: zaloguj / utwórz repozytorium…", shortcut: "", action: "deploySettings", icon: "gitBranch" },
         { label: "Agent: napraw problemy", shortcut: "", action: "agent:fix", icon: "sparkles" },
         { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
         { label: "Sekrety projektu (.env, klucze API)", shortcut: "", action: "secrets", icon: "key" },
@@ -1172,6 +1224,8 @@ Window {
         else if (a === "env:create") createContainer();
         else if (a === "secrets") secretsView.open();
         else if (a === "newApp") newAppView.open();
+        else if (a === "deploy") quickDeploy();
+        else if (a === "deploySettings") deployView.open();
         else if (a === "agent") agentPanel.shown ? agentPanel.close() : agentPanel.open();
         else if (a === "agent:fix") askAgent("Napraw błędy z panelu Problemy w tym pliku.");
         else if (a === "agent:selection") askAgent("Wyjaśnij zaznaczony kod i zaproponuj poprawki, jeśli są potrzebne.");
@@ -1311,6 +1365,10 @@ Window {
         else if (what.startsWith("ask:")) askAgent(arg);
         else if (what === "acceptall") agentPanel.acceptAll();
         else if (what === "sidebyside") prefs.diffSideBySide = true;
+        else if (what === "deployview") deployView.open();
+        else if (what.startsWith("deploycfg:")) { Project.save(Project.root + "/.aster/wdrozenie.json", arg, "UTF-8", "LF"); }
+        else if (what === "deploy") quickDeploy();
+        else if (what === "ghlogin") { deployView.open(); GitHub.loginBrowser(); }
         else if (what === "reviewfirst") { const e = agentPanel.edits.find(x => x.state === "pending"); if (e) agentPanel.review(e.path); }
         else if (what.startsWith("mkapp:")) { const o = JSON.parse(arg); const r = Templates.create(o); if (r.ok) startFromTemplate(r, !!o.container); else toast(r.error); }
         else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
@@ -1417,8 +1475,8 @@ Window {
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; enabled: tabs.count > 1; onActivated: win.activate((win.current + 1) % tabs.count) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; enabled: tabs.count > 1; onActivated: win.activate((win.current - 1 + tabs.count) % tabs.count) }
     Shortcut { sequence: "F11"; onActivated: { if (win.visibility === Window.FullScreen) win.showNormal(); else win.showFullScreen(); } }
-    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown || secretsView.shown
-        onActivated: { if (win.confirm) win.confirm = null; else if (secretsView.shown) secretsView.close(); else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
+    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown || secretsView.shown || deployView.shown
+        onActivated: { if (win.confirm) win.confirm = null; else if (deployView.shown) deployView.close(); else if (secretsView.shown) secretsView.close(); else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -1530,6 +1588,7 @@ Window {
                     }
                     ToolBtn { icon: "chevronDown"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
                     ToolBtn { icon: "globe"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
+                    ToolBtn { icon: "upload"; visible: win.hasProject; onClicked: win.quickDeploy() }
                     ToolBtn { icon: "sparkles"; visible: win.hasProject; opacity: agentPanel.shown ? 1 : 0.7; onClicked: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
                     ToolBtn { icon: "search"; onClicked: palette.open("") }
                     ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
@@ -1681,6 +1740,20 @@ Window {
                             color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
                         }
                     }
+                }
+
+                // Wdrożenie i GitHub
+                DeployView {
+                    id: deployView
+                    parent: pane
+                    x: 0; y: editorArea.y
+                    width: pane.width; height: status.y - y
+                    z: 50
+                    root: Project.root
+                    onDeploy: (c) => win.runDeploy(c)
+                    onOpenSecrets: { deployView.shown = false; secretsView.open(); }
+                    onInstallRequested: (pkg) => win.envTask("Kontener: pakiety", ProjectEnv.installCommand([pkg]))
+                    onClosed: if (win.cur) win.cur.focusEditor()
                 }
 
                 // Sekrety projektu

@@ -34,6 +34,7 @@ set(CODE_QML
     qml/SecretsView.qml
     qml/NewAppView.qml
     qml/AgentPanel.qml
+    qml/DeployView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -71,6 +72,8 @@ qt_add_qml_module(aster-code
         src/templates.h
         src/agent.cpp
         src/agent.h
+        src/github.cpp
+        src/github.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

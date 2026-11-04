@@ -39,8 +39,11 @@ public:
     static bool isSecretFile(const QString &path);
     Q_INVOKABLE bool secretFile(const QString &path) const { return isSecretFile(path); }
     static QVariantMap parseEnv(const QString &path);
+    // Wspólne dla wszystkich projektów (np. token GitHuba) — osobny wpis w portfelu
+    static QString globalGet(const QString &name);
+    static bool globalSet(const QString &name, const QString &value);
     // Plik „export NAZWA='wartość'” dla powłoki (pusty — brak sekretów)
-    QString writeEnvFile() const;
+    QString writeEnvFile(const QVariantMap &extra = QVariantMap()) const;
 
 Q_SIGNALS:
     void changed();

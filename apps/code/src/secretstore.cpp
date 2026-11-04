@@ -231,6 +231,23 @@ bool writeBlob(const QString &root, const QJsonObject &vars, QString *error)
 
 // ——— SecretStore ———
 
+QString SecretStore::globalGet(const QString &name)
+{
+    QString err;
+    return readBlob(QStringLiteral("aster-code:wspólne"), &err).value(name).toString();
+}
+
+bool SecretStore::globalSet(const QString &name, const QString &value)
+{
+    QString err;
+    QJsonObject o = readBlob(QStringLiteral("aster-code:wspólne"), &err);
+    if (value.isEmpty())
+        o.remove(name);
+    else
+        o.insert(name, value);
+    return writeBlob(QStringLiteral("aster-code:wspólne"), o, &err);
+}
+
 SecretStore *SecretStore::instance()
 {
     static SecretStore *s = new SecretStore;
@@ -408,11 +425,14 @@ int SecretStore::importEnv(const QString &path, bool clearFile)
     return int(vars.size());
 }
 
-QString SecretStore::writeEnvFile() const
+QString SecretStore::writeEnvFile(const QVariantMap &extra) const
 {
     // Plik dla powłoki w kontenerze / systemie: tylko dla właściciela, kasowany zaraz po wczytaniu
     load();
-    if (m_vars.isEmpty())
+    QHash<QString, QString> vars = m_vars;
+    for (auto it = extra.cbegin(); it != extra.cend(); ++it)
+        vars.insert(it.key(), it.value().toString());
+    if (vars.isEmpty())
         return {};
     QString dir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     if (dir.isEmpty())
@@ -433,7 +453,7 @@ QString SecretStore::writeEnvFile() const
         return {};
     f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     QString t;
-    for (auto it = m_vars.cbegin(); it != m_vars.cend(); ++it) {
+    for (auto it = vars.cbegin(); it != vars.cend(); ++it) {
         QString v = it.value();
         v.replace(QLatin1Char('\''), QLatin1String("'\\''"));
         t += QStringLiteral("export ") + it.key() + QStringLiteral("='") + v + QStringLiteral("'\n");

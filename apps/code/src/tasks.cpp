@@ -1,6 +1,7 @@
 #include "tasks.h"
 #include "projectenv.h"
 #include "secretstore.h"
+#include "github.h"
 
 #include <QDir>
 #include <QFile>
@@ -407,8 +408,19 @@ void Tasks::start(Proc *p)
     const bool onHost = p->env.value(QStringLiteral("__host")).toBool();
     // Sekrety projektu z portfela: plik „export …” w /run/user, wczytany i skasowany przez powłokę przed poleceniem
     QString command = p->command;
-    if (p->env.value(QStringLiteral("__secrets")).toBool())
-        if (const QString f = SecretStore::instance()->writeEnvFile(); !f.isEmpty())
+    // „__github” — także token GitHuba i pomocnik haseł gita (wdrożenie na GitHub Pages, gh-pages)
+    QVariantMap extra;
+    if (p->env.value(QStringLiteral("__github")).toBool())
+        if (const QString t = GitHub::token(); !t.isEmpty()) {
+            extra.insert(QStringLiteral("ASTER_GITHUB_TOKEN"), t);
+            extra.insert(QStringLiteral("GH_TOKEN"), t);
+            extra.insert(QStringLiteral("GIT_CONFIG_COUNT"), QStringLiteral("1"));
+            extra.insert(QStringLiteral("GIT_CONFIG_KEY_0"), QStringLiteral("credential.https://github.com.helper"));
+            extra.insert(QStringLiteral("GIT_CONFIG_VALUE_0"),
+                         QStringLiteral("!f() { test \"$1\" = get && echo username=x-access-token && echo \"password=$ASTER_GITHUB_TOKEN\"; }; f"));
+        }
+    if (p->env.value(QStringLiteral("__secrets")).toBool() || !extra.isEmpty())
+        if (const QString f = SecretStore::instance()->writeEnvFile(extra); !f.isEmpty())
             command = QStringLiteral(". '%1'; rm -f '%1'; %2").arg(f, command);
     QStringList argv = onHost ? ProjectEnv::instance()->hostShell(command, p->cwd) : ProjectEnv::instance()->shell(command, p->cwd);
     if (argv.isEmpty())

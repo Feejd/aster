@@ -1,4 +1,5 @@
 #include "project.h"
+#include "github.h"
 #include "searchregex.h"
 
 #include <QClipboard>
@@ -653,6 +654,17 @@ void Project::runGit(const QString &op, const QStringList &args, const QByteArra
     env.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
     env.insert(QStringLiteral("GIT_SSH_COMMAND"), QStringLiteral("ssh -o BatchMode=yes"));
     env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
+    // Wysyłanie i pobieranie z GitHuba tokenem z portfela (logowanie w Aster Code) — pomocnik haseł
+    // czyta go ze zmiennej środowiska, token nie trafia do argumentów ani do konfiguracji repozytorium
+    QStringList argv = args;
+    if (op == QLatin1String("push") || op == QLatin1String("pull") || op == QLatin1String("fetch")) {
+        if (const QString t = GitHub::token(); !t.isEmpty()) {
+            env.insert(QStringLiteral("ASTER_GITHUB_TOKEN"), t);
+            argv = QStringList{QStringLiteral("-c"), QStringLiteral("credential.https://github.com.helper="),
+                               QStringLiteral("-c"), QStringLiteral("credential.https://github.com.helper=!f() { test \"$1\" = get && echo username=x-access-token && echo \"password=$ASTER_GITHUB_TOKEN\"; }; f")}
+                   + args;
+        }
+    }
     p->setProcessEnvironment(env);
     p->setWorkingDirectory(m_gitTop);
     m_gitBusy = op;
@@ -676,7 +688,7 @@ void Project::runGit(const QString &op, const QStringList &args, const QByteArra
         Q_EMIT gitBusyChanged();
         Q_EMIT gitDone(op, false, QStringLiteral("Nie można uruchomić gita"));
     });
-    p->start(QStringLiteral("git"), args);
+    p->start(QStringLiteral("git"), argv);
     if (!input.isEmpty())
         p->write(input);
     p->closeWriteChannel();
@@ -768,7 +780,7 @@ static QString syncError(const QString &msg)
 {
     if (msg.contains(QLatin1String("terminal prompts disabled")) || msg.contains(QLatin1String("Authentication failed"))
         || msg.contains(QLatin1String("Permission denied")) || msg.contains(QLatin1String("could not read Username")))
-        return QStringLiteral("Serwer wymaga logowania — wyślij raz z terminala (git push), potem zadziała tutaj");
+        return QStringLiteral("Serwer wymaga logowania — zaloguj się do GitHuba w Aster Code (Ctrl+Shift+P → GitHub) albo wyślij raz z terminala");
     if (msg.contains(QLatin1String("Could not resolve host")) || msg.contains(QLatin1String("unable to access")))
         return QStringLiteral("Brak połączenia z serwerem repozytorium");
     if (msg.contains(QLatin1String("rejected")) || msg.contains(QLatin1String("non-fast-forward")))
