@@ -12,6 +12,7 @@ Item {
     required property Project project
     property var editor                      // EditorPage (dodawanie elementów, okna wyboru plików)
     property string tab: "templates"
+    property bool showRail: true             // pasek kart z lewej (w układzie z narzędziami po prawej — ukryty)
     property var photos: []
 
     readonly property real base: Math.min(project.pageWidth, project.pageHeight)
@@ -29,7 +30,7 @@ Item {
     property color drawColor: "#16181D"
     property var drawSizes: ({ pen: 0.006, marker: 0.016, highlighter: 0.03, neon: 0.01 })
     readonly property real drawWidth: Math.max(1, Math.round(base * (drawSizes[drawTool] || 0.01) * 10) / 10)
-    property string lastTab: "templates"       // karta sprzed rysowania (Gotowe / Esc wraca do niej)
+    property string lastTab: "select"       // karta sprzed rysowania (Gotowe / Esc wraca do niej)
     readonly property var pens: [
         { id: "pen", label: "Pisak" }, { id: "marker", label: "Marker" },
         { id: "highlighter", label: "Zakreślacz" }, { id: "neon", label: "Neon" }
@@ -42,7 +43,7 @@ Item {
         m[drawTool] = px / base;
         drawSizes = m;
     }
-    property string prevTab: "templates"
+    property string prevTab: "select"
     onTabChanged: {
         if (tab !== "draw") prevTab = tab; else lastTab = prevTab;
         if (tab === "photos") photos = Library.photos();
@@ -130,7 +131,7 @@ Item {
 
     // ——— Warstwy ———
     property var layers: []                  // od wierzchu
-    function refreshLayers() { layers = project.document().elements.slice().reverse(); }
+    function refreshLayers() { if (!project) return; layers = project.document().elements.slice().reverse(); }
     Timer { id: layersLater; interval: 0; onTriggered: sp.refreshLayers() }
     Connections {
         target: sp.project
@@ -263,7 +264,7 @@ Item {
     // Moje elementy — pliki w ~/.local/share/aster-grafika/elements
     property var saved: []
     Connections { target: sp.project; function onSavedElementsChanged() { sp.saved = sp.project.savedElements(); } }
-    Component.onCompleted: saved = project.savedElements()
+    Component.onCompleted: { saved = project.savedElements(); if (tab === "layers") refreshLayers(); }
 
     // Moje style tekstu — zapisane w ustawieniach programu, wspólne dla wszystkich projektów.
     // Wielkość pamiętana względem krótszego boku strony, żeby pasowała też do innego formatu.
@@ -368,7 +369,8 @@ Item {
     // ——— Pasek kart ———
     Column {
         id: rail
-        width: 72
+        visible: sp.showRail
+        width: sp.showRail ? 72 : 0
         y: 8
         spacing: 4
         Repeater {
@@ -407,7 +409,7 @@ Item {
             x: 12; y: 14
             text: { for (const t of sp.tabs) if (t.id === sp.tab) return t.label; return ""; }
             color: Theme.text
-            font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
+            font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
         }
 
         Flickable {
@@ -1055,7 +1057,7 @@ Item {
                     Text {
                         width: parent.width
                         wrapMode: Text.WordWrap
-                        text: sp.layers.length === 0 ? "Na stronie nie ma jeszcze elementów." : "Na górze listy jest to, co leży na wierzchu. Przeciągnij wiersz, żeby zmienić kolejność."
+                        text: sp.layers.length === 0 ? "Na stronie nie ma jeszcze elementów." : "Na górze to, co na wierzchu · przeciągnij, żeby zmienić kolejność"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
                     }
                     Item {
@@ -1165,6 +1167,32 @@ Item {
                                 }
                             }
                         }
+                    }
+                    // Tło strony — zawsze na samym spodzie; kliknięcie otwiera narzędzie Tło
+                    HoverButton {
+                        id: bgRow
+                        width: parent.width; height: layersCol.rowH - 4
+                        radius: 10
+                        baseColor: sp.editor && sp.editor.side && sp.editor.side.tab === "background" ? Theme.accentSoft : "transparent"
+                        onClicked: sp.editor.setTool("background")
+                        Rectangle {
+                            x: 6; anchors.verticalCenter: parent.verticalCenter
+                            width: 32; height: 32; radius: 7
+                            clip: true
+                            color: "transparent"
+                            border.width: 1; border.color: Theme.line
+                            ArtView {
+                                anchors.fill: parent; anchors.margins: 1
+                                project: sp.project
+                                element: Object.assign({ kind: "background", w: 100, h: 100 }, sp.project.background)
+                            }
+                        }
+                        Text {
+                            x: 50; anchors.verticalCenter: parent.verticalCenter
+                            text: "Tło"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+                        }
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.lock; size: 14; stroke: 1.8; color: Theme.text2; opacity: 0.5 }
                     }
                 }
 

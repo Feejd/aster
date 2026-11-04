@@ -6,14 +6,14 @@ import QtCore
 import Aster.Ui
 import Aster.Grafika
 
-// Edytor: panel po lewej (Szablony, Tekst, Kształty, Zdjęcia, Tło), płótno, właściwości po prawej,
-// pasek z nazwą projektu, cofaniem, powiększeniem i eksportem. Skróty jak w programach biurowych.
+// Edytor w układzie programów graficznych: pasek u góry (nazwa, cofanie, powiększenie, eksport), warstwy z lewej,
+// płótno na neutralnym tle, z prawej rząd narzędzi (zaznaczanie, tekst, kształty, zdjęcia, rysowanie, AI, tło,
+// szablony) i panel wybranego narzędzia — przy „Zaznacz” właściwości zaznaczonego.
 Item {
     id: ed
     required property Project project
     property var app                 // Main: toast, goHome, presets
     property real radius: 24
-    readonly property real sideWidth: 72 + 272
 
     // Pisanie w polu tekstowym — wtedy Delete, strzałki i Ctrl+Z należą do pola
     readonly property bool typing: {
@@ -24,7 +24,7 @@ Item {
     readonly property string sel: stage.selected
     readonly property var many: stage.selection           // zaznaczone (jeden albo kilka)
 
-    onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "templates"; stage.forceActiveFocus(); }
+    onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "select"; stage.forceActiveFocus(); }
 
     Settings { id: viewSettings; category: "Grafika"; property bool rulers: false }
 
@@ -397,7 +397,7 @@ Item {
         else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
         else if (a === "bgtab") side.tab = "background";
-        else if (a === "layers") side.tab = "layers";
+        else if (a === "layers") {}                         // warstwy są zawsze widoczne z lewej
         else if (a === "selectAll") stage.selectAll();
         else if (a === "rulers") stage.rulers = !stage.rulers;
         else if (a.startsWith("guides:")) {
@@ -621,6 +621,9 @@ Item {
     Shortcut { sequence: "Ctrl+0"; enabled: ed.visible; onActivated: stage.fit = true }
     Shortcut { sequence: "Ctrl+1"; enabled: ed.visible; onActivated: stage.zoomTo(1) }
     Shortcut { sequence: "T"; enabled: ed.active && !ed.typing; onActivated: side.addTextStyle(side.textStyles[2]) }
+    Shortcut { sequence: "V"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("select") }
+    Shortcut { sequence: "B"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("draw") }
+    Shortcut { sequence: "U"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("shapes") }
 
     FileDialog {
         id: imageDialog
@@ -655,265 +658,357 @@ Item {
         }
     }
 
-    // ——— Lewa strona: powrót i panel ———
+    // ——— Układ jak w programach graficznych: pasek u góry, warstwy z lewej, płótno, narzędzia i ich panel z prawej ———
+    readonly property real barH: 52
+    readonly property alias side: side
+    readonly property real layersWidth: 250
+    readonly property real toolsWidth: 304
+    // Narzędzia (kolejność w rzędzie po prawej); select — zaznaczanie i właściwości zaznaczonego
+    readonly property var tools: [
+        { id: "select", label: "Zaznacz i przesuń", icon: "cursor", key: "V" },
+        { id: "text", label: "Tekst", icon: "textT", key: "T" },
+        { id: "shapes", label: "Kształty i grafiki", icon: "shapes", key: "U" },
+        { id: "photos", label: "Zdjęcia", icon: "image", key: "" },
+        { id: "draw", label: "Rysowanie", icon: "squiggle", key: "B" },
+        { id: "magic", label: "Magia AI", icon: "sparkles", key: "" },
+        { id: "background", label: "Tło", icon: "palette", key: "" },
+        { id: "templates", label: "Szablony", icon: "layout", key: "" }
+    ]
+    function setTool(t) {
+        if (t === "magic") {
+            if (stage.current.type === "image" && stage.current.src && Magic.available) { side.tab = "select"; startMagic(); }
+            else { side.tab = "select"; app.toast(Magic.available ? "Zaznacz zdjęcie — narzędzia AI działają na zdjęciach" : "Ta wersja Grafiki nie ma narzędzi AI", ""); }
+            return;
+        }
+        side.tab = t;
+    }
+    // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
+    Connections {
+        target: stage
+        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw") side.tab = "select"; }
+    }
+
+    // ——— Pasek u góry ———
     Item {
-        id: sideTop
-        width: ed.sideWidth; height: 60
+        id: bar
+        width: parent.width; height: ed.barH
         DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
+        TapHandler { onDoubleTapped: { const w = ed.Window.window; if (w.visibility === Window.Maximized) w.showNormal(); else w.showMaximized(); } }
+
         HoverButton {
-            x: 14; anchors.verticalCenter: parent.verticalCenter
-            width: homeRow.implicitWidth + 22; height: 36; radius: 18
+            id: homeBtn
+            x: 12; anchors.verticalCenter: parent.verticalCenter
+            width: homeRow.implicitWidth + 18; height: 34; radius: 10
+            tip: "Wróć do projektów"
             onClicked: ed.app.goHome()
             Row {
                 id: homeRow
                 anchors.centerIn: parent
-                spacing: 8
-                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 16; stroke: 2.2; color: Theme.text }
-                AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 24 }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: "Projekty"; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                spacing: 7
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 15; stroke: 2.2; color: Theme.text }
+                AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 22 }
             }
         }
-    }
-    SidePanel {
-        id: side
-        y: sideTop.height
-        width: ed.sideWidth
-        height: parent.height - y
-        project: ed.project
-        editor: ed
-    }
-
-    // ——— Prawa strona: pasek, płótno, właściwości ———
-    GlassPane {
-        id: pane
-        x: ed.sideWidth
-        width: parent.width - x
-        height: parent.height
-        topRightRadius: ed.radius
-        bottomRightRadius: ed.radius
-
-        Item {
-            id: bar
-            width: parent.width; height: 60
-            DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
-            TapHandler { onDoubleTapped: { const w = ed.Window.window; if (w.visibility === Window.Maximized) w.showNormal(); else w.showMaximized(); } }
-
-            // Nazwa projektu (do zmiany w miejscu)
-            Rectangle {
-                id: nameBox
-                x: 18; anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(Math.max(140, nameInput.contentWidth + 24), parent.width - right.width - 220)
-                height: 36; radius: 10
-                color: nameInput.activeFocus ? Theme.fill : nameHover.hovered ? Theme.hover : "transparent"
-                HoverHandler { id: nameHover; cursorShape: Qt.IBeamCursor }
-                TextInput {
-                    id: nameInput
-                    x: 12; width: parent.width - 24
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: ed.project.name
-                    color: Theme.text
-                    clip: true
-                    selectByMouse: true
-                    selectionColor: Theme.accent
-                    font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
-                    onAccepted: focus = false
-                    onEditingFinished: ed.project.name = text
-                    Keys.onEscapePressed: { text = ed.project.name; focus = false; }
-                }
-            }
-            Text {
-                anchors.left: nameBox.right; anchors.leftMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: ed.project.modified ? "Zmiany zapiszą się same" : ed.project.path !== "" ? "Zapisano" : ""
-                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
-            }
-
-            Row {
-                id: right
-                anchors.right: parent.right; anchors.rightMargin: 16
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
-                Item { width: 8; height: 1 }
-                ToolBtn {
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon: "ruler"
-                    tip: "Linijki i prowadnice (Ctrl+R)"
-                    baseColor: stage.rulers ? Theme.accentSoft : "transparent"
-                    onClicked: stage.rulers = !stage.rulers
-                }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
-                HoverButton {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 58; height: 32
-                    onClicked: { if (stage.fit) stage.zoomTo(1); else stage.fit = true; }
-                    Text {
-                        anchors.centerIn: parent
-                        text: Math.round(stage.zoom * 100) + "%"
-                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.features: { "tnum": 1 }
-                    }
-                }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
-                Item { width: 8; height: 1 }
-                Btn {
-                    id: exportBtn
-                    anchors.verticalCenter: parent.verticalCenter
-                    primary: true
-                    icon: "download"
-                    text: "Eksportuj"
-                    onClicked: exportPop.openAt(exportBtn)
-                }
-                Item { width: 6; height: 1 }
-                WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: ed.app }
-            }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
-        }
-
-        Stage {
-            id: stage
-            y: bar.height
-            width: parent.width - inspector.width
-            height: parent.height - y - pageBar.height
-            project: ed.project
-            rulers: viewSettings.rulers
-            onRulersChanged: viewSettings.rulers = rulers
-            onMenuRequested: (x, y) => ed.showContextMenu(x, y)
-            drawTool: side.tab === "draw" ? side.drawTool : ""
-            drawColor: side.drawColor
-            drawWidth: side.drawWidth
-            onDrawFinished: side.tab = side.lastTab
-            onQuickAction: (a) => ed.runMenu(a)
-        }
-
-        // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
-        Item {
-            id: pageBar
-            y: stage.y + stage.height
-            width: stage.width
-            height: 92
-            readonly property real thumbH: 56
-            readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
-            property int dragFrom: -1           // przeciąganie strony na inne miejsce
-            property int dragTo: -1
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
-            Flickable {
-                id: pageFlick
-                anchors.fill: parent
-                anchors.leftMargin: 16; anchors.rightMargin: 16
-                contentWidth: pageRow.width
-                flickableDirection: Flickable.HorizontalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                clip: true
-                Row {
-                    id: pageRow
-                    height: pageFlick.height
-                    spacing: 10
-                    Repeater {
-                        model: ed.project.pageCount
-                        delegate: Item {
-                            id: pg
-                            required property int index
-                            readonly property bool current: index === ed.project.currentPage
-                            width: pageBar.thumbW + 8
-                            height: pageRow.height
-                            Rectangle {
-                                id: pgFrame
-                                x: 0; y: 10
-                                width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
-                                radius: 8
-                                color: "transparent"
-                                border.width: pg.current ? 2 : 1
-                                border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
-                                PageView {
-                                    x: 4; y: 4
-                                    width: pageBar.thumbW; height: pageBar.thumbH
-                                    project: ed.project
-                                    page: pg.index
-                                }
-                                MouseArea {
-                                    id: pgMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    cursorShape: pageBar.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
-                                    property real startX
-                                    property bool dragged: false
-                                    onPressed: (e) => { startX = mapToItem(pageRow, e.x, e.y).x; dragged = false; }
-                                    onPositionChanged: (e) => {
-                                        if (!pressed || !(pressedButtons & Qt.LeftButton)) return;
-                                        const x = mapToItem(pageRow, e.x, e.y).x;
-                                        if (pageBar.dragFrom < 0 && Math.abs(x - startX) < 8) return;
-                                        pageBar.dragFrom = pg.index;
-                                        dragged = true;
-                                        pageBar.dragTo = Math.max(0, Math.min(ed.project.pageCount - 1, Math.floor(x / (pageBar.thumbW + 18))));
-                                    }
-                                    onReleased: {
-                                        if (pageBar.dragFrom < 0) return;
-                                        const from = pageBar.dragFrom, to = pageBar.dragTo;
-                                        pageBar.dragFrom = -1;
-                                        if (from !== to) { stage.clearSelection(); ed.project.movePage(from, to); }
-                                    }
-                                    onClicked: (e) => {
-                                        if (dragged) return;
-                                        if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
-                                        else ed.goToPage(pg.index);
-                                    }
-                                }
-                                // Miejsce, w które trafi przeciągana strona
-                                Rectangle {
-                                    visible: pageBar.dragFrom >= 0 && pageBar.dragTo === pg.index && pageBar.dragFrom !== pg.index
-                                    x: pageBar.dragTo > pageBar.dragFrom ? parent.width + 3 : -7
-                                    y: -2; width: 3; height: parent.height + 4; radius: 1.5
-                                    color: Theme.accent
-                                }
-                            }
-                            Text {
-                                anchors.horizontalCenter: pgFrame.horizontalCenter
-                                y: pgFrame.y + pgFrame.height + 3
-                                text: pg.index + 1
-                                color: pg.current ? Theme.accentText : Theme.text2
-                                font.family: Theme.font; font.pixelSize: 11; font.weight: pg.current ? Font.DemiBold : Font.Normal
-                            }
-                        }
-                    }
-                    HoverButton {
-                        y: 10
-                        width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
-                        radius: 8
-                        baseColor: Theme.fill
-                        onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
-                        Column {
-                            id: addPageRow
-                            anchors.centerIn: parent
-                            spacing: 2
-                            Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.plus; size: 16; stroke: 2.2; color: Theme.text }
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: ed.project.pageCount > 1 ? "Strona" : "Dodaj stronę"
-                                color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        Rectangle { x: homeBtn.x + homeBtn.width + 8; anchors.verticalCenter: parent.verticalCenter; width: 1; height: 20; color: Theme.line }
+        // Nazwa projektu (do zmiany w miejscu)
         Rectangle {
-            x: inspector.x; y: bar.height
-            width: 1; height: inspector.height
-            color: Theme.line
+            id: nameBox
+            x: homeBtn.x + homeBtn.width + 17; anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(Math.max(120, nameInput.contentWidth + 20), parent.width - right.width - x - 160)
+            height: 32; radius: 8
+            color: nameInput.activeFocus ? Theme.fill : nameHover.hovered ? Theme.hover : "transparent"
+            HoverHandler { id: nameHover; cursorShape: Qt.IBeamCursor }
+            TextInput {
+                id: nameInput
+                x: 10; width: parent.width - 20
+                anchors.verticalCenter: parent.verticalCenter
+                text: ed.project.name
+                color: Theme.text
+                clip: true
+                selectByMouse: true
+                selectionColor: Theme.accent
+                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                onAccepted: focus = false
+                onEditingFinished: ed.project.name = text
+                Keys.onEscapePressed: { text = ed.project.name; focus = false; }
+            }
         }
-        Inspector {
-            id: inspector
-            x: parent.width - width
-            y: bar.height
-            width: 290
-            height: parent.height - y
+        Text {
+            anchors.left: nameBox.right; anchors.leftMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            text: (Math.round(ed.project.pageWidth) + " × " + Math.round(ed.project.pageHeight) + " px")
+                  + (ed.project.modified ? " · zapisuję…" : ed.project.path !== "" ? " · zapisano" : "")
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }
+        }
+
+        Row {
+            id: right
+            anchors.right: parent.right; anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
+            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 1; height: 20; color: Theme.line }
+            // Powiększenie w jednej grupie
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: zoomRow.implicitWidth + 4; height: 32; radius: 9
+                color: Theme.fill
+                Row {
+                    id: zoomRow
+                    anchors.centerIn: parent
+                    ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
+                    HoverButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 54; height: 28; radius: 7
+                        tip: stage.fit ? "Rzeczywisty rozmiar (100%)" : "Dopasuj do okna (Ctrl+0)"
+                        onClicked: { if (stage.fit) stage.zoomTo(1); else stage.fit = true; }
+                        Text {
+                            anchors.centerIn: parent
+                            text: Math.round(stage.zoom * 100) + "%"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; font.features: { "tnum": 1 }
+                        }
+                    }
+                    ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
+                }
+            }
+            ToolBtn {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "ruler"
+                tip: "Linijki i prowadnice (Ctrl+R)"
+                baseColor: stage.rulers ? Theme.accentSoft : "transparent"
+                onClicked: stage.rulers = !stage.rulers
+            }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
+            Item { width: 6; height: 1 }
+            Btn {
+                id: exportBtn
+                anchors.verticalCenter: parent.verticalCenter
+                primary: true
+                height: 34
+                icon: "download"
+                text: "Eksportuj"
+                onClicked: exportPop.openAt(exportBtn)
+            }
+            Item { width: 6; height: 1 }
+            WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: ed.app }
+        }
+    }
+
+    // ——— Lewa strona: warstwy ———
+    Item {
+        id: layersBox
+        y: bar.height
+        width: ed.layersWidth
+        height: parent.height - y
+        SidePanel {
+            id: layersPanel
+            anchors.fill: parent
             project: ed.project
-            stage: stage
             editor: ed
+            showRail: false
+            tab: "layers"
+        }
+    }
+
+    // ——— Środek: płótno i strony ———
+    Rectangle {
+        id: pane
+        x: ed.layersWidth
+        y: bar.height
+        width: parent.width - ed.layersWidth - ed.toolsWidth
+        height: parent.height - y
+        color: Theme.dark ? "#16171B" : "#E6E7EB"          // neutralne tło płótna, jak w programach do zdjęć
+        Rectangle { width: parent.width; height: 1; color: Theme.line; z: 2 }
+        Rectangle { width: 1; height: parent.height; color: Theme.line; z: 2 }
+        Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.line; z: 2 }
+
+    Stage {
+        id: stage
+        width: parent.width
+        height: parent.height - pageBar.height
+        project: ed.project
+        rulers: viewSettings.rulers
+        onRulersChanged: viewSettings.rulers = rulers
+        onMenuRequested: (x, y) => ed.showContextMenu(x, y)
+        drawTool: side.tab === "draw" ? side.drawTool : ""
+        drawColor: side.drawColor
+        drawWidth: side.drawWidth
+        onDrawFinished: side.tab = side.lastTab
+        onQuickAction: (a) => ed.runMenu(a)
+    }
+
+    // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
+    Item {
+        id: pageBar
+        z: 3
+        y: stage.y + stage.height
+        width: stage.width
+        height: 80
+        readonly property real thumbH: 48
+        readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
+        property int dragFrom: -1           // przeciąganie strony na inne miejsce
+        property int dragTo: -1
+        Rectangle { anchors.fill: parent; color: Theme.dark ? "#1C1D22" : "#F1F2F5" }
+        Rectangle { width: parent.width; height: 1; color: Theme.line }
+        Flickable {
+            id: pageFlick
+            anchors.fill: parent
+            anchors.leftMargin: 16; anchors.rightMargin: 16
+            contentWidth: pageRow.width
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            Row {
+                id: pageRow
+                height: pageFlick.height
+                spacing: 10
+                Repeater {
+                    model: ed.project.pageCount
+                    delegate: Item {
+                        id: pg
+                        required property int index
+                        readonly property bool current: index === ed.project.currentPage
+                        width: pageBar.thumbW + 8
+                        height: pageRow.height
+                        Rectangle {
+                            id: pgFrame
+                            x: 0; y: 10
+                            width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
+                            radius: 8
+                            color: "transparent"
+                            border.width: pg.current ? 2 : 1
+                            border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
+                            PageView {
+                                x: 4; y: 4
+                                width: pageBar.thumbW; height: pageBar.thumbH
+                                project: ed.project
+                                page: pg.index
+                            }
+                            MouseArea {
+                                id: pgMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                cursorShape: pageBar.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                property real startX
+                                property bool dragged: false
+                                onPressed: (e) => { startX = mapToItem(pageRow, e.x, e.y).x; dragged = false; }
+                                onPositionChanged: (e) => {
+                                    if (!pressed || !(pressedButtons & Qt.LeftButton)) return;
+                                    const x = mapToItem(pageRow, e.x, e.y).x;
+                                    if (pageBar.dragFrom < 0 && Math.abs(x - startX) < 8) return;
+                                    pageBar.dragFrom = pg.index;
+                                    dragged = true;
+                                    pageBar.dragTo = Math.max(0, Math.min(ed.project.pageCount - 1, Math.floor(x / (pageBar.thumbW + 18))));
+                                }
+                                onReleased: {
+                                    if (pageBar.dragFrom < 0) return;
+                                    const from = pageBar.dragFrom, to = pageBar.dragTo;
+                                    pageBar.dragFrom = -1;
+                                    if (from !== to) { stage.clearSelection(); ed.project.movePage(from, to); }
+                                }
+                                onClicked: (e) => {
+                                    if (dragged) return;
+                                    if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
+                                    else ed.goToPage(pg.index);
+                                }
+                            }
+                            // Miejsce, w które trafi przeciągana strona
+                            Rectangle {
+                                visible: pageBar.dragFrom >= 0 && pageBar.dragTo === pg.index && pageBar.dragFrom !== pg.index
+                                x: pageBar.dragTo > pageBar.dragFrom ? parent.width + 3 : -7
+                                y: -2; width: 3; height: parent.height + 4; radius: 1.5
+                                color: Theme.accent
+                            }
+                        }
+                        Text {
+                            anchors.horizontalCenter: pgFrame.horizontalCenter
+                            y: pgFrame.y + pgFrame.height + 3
+                            text: pg.index + 1
+                            color: pg.current ? Theme.accentText : Theme.text2
+                            font.family: Theme.font; font.pixelSize: 11; font.weight: pg.current ? Font.DemiBold : Font.Normal
+                        }
+                    }
+                }
+                HoverButton {
+                    y: 10
+                    width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
+                    radius: 8
+                    baseColor: Theme.fill
+                    onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
+                    Column {
+                        id: addPageRow
+                        anchors.centerIn: parent
+                        spacing: 2
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.plus; size: 16; stroke: 2.2; color: Theme.text }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: ed.project.pageCount > 1 ? "Strona" : "Dodaj stronę"
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    }
+
+    // ——— Prawa strona: narzędzia i panel narzędzia ———
+    Item {
+        id: toolsBox
+        x: parent.width - width
+        y: bar.height
+        width: ed.toolsWidth
+        height: parent.height - y
+        Rectangle {
+            id: toolStrip
+            x: 12; y: 10
+            width: parent.width - 24; height: 40
+            radius: 11
+            color: Theme.fill
+            Row {
+                anchors.centerIn: parent
+                spacing: 1
+                Repeater {
+                    model: ed.tools
+                    delegate: HoverButton {
+                        id: toolBtn
+                        required property var modelData
+                        readonly property bool on: Magic.element !== "" ? modelData.id === "magic" : side.tab === modelData.id
+                        width: (toolStrip.width - 8 - 7) / 8; height: 32; radius: 8
+                        baseColor: on ? Theme.accent : "transparent"
+                        color: on ? baseColor : hovered ? Theme.hover : baseColor
+                        tip: modelData.label + (modelData.key !== "" ? " (" + modelData.key + ")" : "")
+                        onClicked: ed.setTool(modelData.id)
+                        Icon { anchors.centerIn: parent; d: Icons[toolBtn.modelData.icon]; size: 17; stroke: 1.9; color: toolBtn.on ? "white" : Theme.text }
+                    }
+                }
+            }
+        }
+        Item {
+            id: toolBody
+            y: toolStrip.y + toolStrip.height + 2
+            width: parent.width
+            height: parent.height - y
+            Inspector {
+                id: inspector
+                anchors.fill: parent
+                visible: side.tab === "select"
+                project: ed.project
+                stage: stage
+                editor: ed
+            }
+            SidePanel {
+                id: side
+                anchors.fill: parent
+                visible: side.tab !== "select"
+                project: ed.project
+                editor: ed
+                showRail: false
+                tab: "select"
+            }
         }
     }
 
@@ -1042,7 +1137,7 @@ Item {
         readonly property var groups: [
             { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
                                          ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
-            { title: "Elementy", items: [["T", "Nowy tekst"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B", "Rysowanie"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
                                          ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],

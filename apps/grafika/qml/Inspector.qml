@@ -77,18 +77,18 @@ Item {
     }
 
     Text {
-        x: 18; y: 16
+        x: 16; y: 12
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
             : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
-        font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
+        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
     }
 
     Flickable {
         id: scroll
-        x: 18; y: 50
-        width: parent.width - 36
+        x: 16; y: 36
+        width: parent.width - 32
         height: parent.height - y
         contentHeight: col.height + 24
         clip: true
@@ -97,10 +97,11 @@ Item {
         Column {
             id: col
             width: scroll.width
-            spacing: 18
+            spacing: 6
 
             // ——— Strona ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page"
                 title: "Rozmiar"
                 Row {
@@ -114,6 +115,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page"
                 title: "Tło"
                 Flow {
@@ -163,6 +165,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page" && ins.projectColors.length > 1
                 title: "Kolory projektu"
                 Text {
@@ -202,6 +205,7 @@ Item {
 
             // ——— Kilka elementów ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "many"
                 title: "Wyrównaj do siebie"
                 Row {
@@ -226,6 +230,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "many"
                 title: "Zaznaczone"
                 Row {
@@ -267,6 +272,7 @@ Item {
 
             // ——— Tekst ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Czcionka"
                 HoverButton {
@@ -342,6 +348,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Odstępy"
                 ValueSlider {
@@ -360,6 +367,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Efekty"
                 Row {
@@ -421,6 +429,7 @@ Item {
 
             // ——— Kształt ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "shape"
                 title: ins.line ? "Linia" : "Kolory"
                 Flow {
@@ -495,6 +504,7 @@ Item {
 
             // ——— Tabela ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "table"
                 title: "Treść"
                 Text {
@@ -536,6 +546,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "table"
                 title: "Wygląd tabeli"
                 Flow {
@@ -642,6 +653,7 @@ Item {
 
             // ——— Rysunek ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "draw"
                 title: "Pisak"
                 Flow {
@@ -674,6 +686,7 @@ Item {
 
             // ——— Zdjęcie ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image"
                 title: "Kształt zdjęcia"
                 Grid {
@@ -748,6 +761,7 @@ Item {
             }
             // Narzędzia AI — małe modele na komputerze, pobierane przy pierwszym użyciu
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src && Magic.available
                 title: "Magia AI"
                 Btn {
@@ -796,6 +810,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Kadr"
                 Row {
@@ -817,6 +832,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Filtr"
                 Grid {
@@ -854,6 +870,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Poprawki"
                 Row {
@@ -925,6 +942,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: Magic.available ? "Jednolite tło (bez AI)" : "Tło zdjęcia"
                 Chip {
@@ -950,6 +968,7 @@ Item {
 
             // ——— Kod QR i kreskowy ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "code"
                 title: "Rodzaj"
                 Flow {
@@ -1012,6 +1031,7 @@ Item {
 
             // ——— Wykres ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "chart"
                 title: "Rodzaj wykresu"
                 Flow {
@@ -1029,6 +1049,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "chart"
                 title: "Dane"
                 Repeater {
@@ -1085,6 +1106,7 @@ Item {
 
             // ——— Ikona, naklejka ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "vector"
                 title: ins.recolor ? "Kolor" : "Naklejka"
                 Row {
@@ -1109,6 +1131,7 @@ Item {
 
             // ——— Wspólne ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked" && !ins.line
                 title: "Cień"
                 Row {
@@ -1161,6 +1184,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
                 title: "Wygląd"
                 ValueSlider {
@@ -1179,6 +1203,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
                 title: "Na stronie"
                 Row {
