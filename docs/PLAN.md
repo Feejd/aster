@@ -422,4 +422,11 @@ historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
       llama-local.env. Dla instalatora: `aster --model-lokalny auto` (lista: `aster --model-lokalny`).
 - [ ] A4+. Pierwsze uruchomienie / instalator: „Czy chcesz korzystać z Aster Intelligence?” → tak: `aster --model-lokalny auto`
       w tle (albo wybór chmury), nie: wyspa bez asystenta; tryb offline i „Najpierw lokalnie”
+- [x] A4.5. Zgoda tylko na ważne sprawy (assistant/src/commands.cpp): sam otwiera programy, tworzy foldery, kopiuje,
+      zmienia głośność; pyta przed instalacją/usuwaniem programów, usuwaniem i nadpisywaniem plików, pkexec, restartem,
+      zatrzymywaniem programów i usług, zmianami sieci, dysków i kont, skryptami (Ustawienia: „Pytaj o zgodę” — tylko przy
+      ważnych / przy każdej zmianie). Pamięć rozmów: streszczenia ostatnich 8 rozmów w prompcie (streszcza model w chmurze
+      w tle; rozmowy z modelem lokalnym — bez modelu i nigdy do chmury), `aster --historia [słowa]`, `aster --rozmowa ID`
+      — panel sam otwiera znalezioną rozmowę. Przycisk Aster Intelligence w prawej wyspie (za Centrum sterowania)
+      otwiera panel z rozmowami
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie

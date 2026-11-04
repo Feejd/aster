@@ -152,6 +152,16 @@ void Assistant::setHistory(bool on)
     configure({{QStringLiteral("history"), on}});
 }
 
+void Assistant::setMemory(bool on)
+{
+    configure({{QStringLiteral("memory"), on}});
+}
+
+void Assistant::setConfirm(const QString &mode)
+{
+    configure({{QStringLiteral("confirm"), mode}});
+}
+
 void Assistant::setApiKey(const QString &provider, const QString &key)
 {
     m_busy = true;

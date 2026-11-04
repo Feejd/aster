@@ -41,6 +41,9 @@ public:
     Q_INVOKABLE void setModel(const QString &provider, const QString &model);
     Q_INVOKABLE void setBaseUrl(const QString &provider, const QString &url);
     Q_INVOKABLE void setHistory(bool on);
+    Q_INVOKABLE void setMemory(bool on);
+    // wazne — pyta tylko przed ważnymi sprawami; zawsze — przed każdą zmianą
+    Q_INVOKABLE void setConfirm(const QString &mode);
     // Pusty klucz usuwa go z portfela
     Q_INVOKABLE void setApiKey(const QString &provider, const QString &key);
     Q_INVOKABLE void clearHistory();

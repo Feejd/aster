@@ -158,6 +158,7 @@ Assistant::Assistant(QObject *parent)
     bus.connect(kService, kPath, kIface, QStringLiteral("StatusChanged"), this, SLOT(refreshStatus()));
     bus.connect(kService, kPath, kIface, QStringLiteral("ActionRequested"), this,
                 SLOT(onActionRequested(QString, QString, QString, QString, bool)));
+    bus.connect(kService, kPath, kIface, QStringLiteral("ShowConversation"), this, SLOT(onShowConversation(QString, QString)));
     if (!qEnvironmentVariableIsSet("ASTER_PREVIEW"))
         registerShortcut();
     QClipboard *cb = QGuiApplication::clipboard();
@@ -326,6 +327,15 @@ void Assistant::openConversation(const QString &id)
     Q_EMIT changed();
 }
 
+// Agent znalazł wcześniejszą rozmowę: panel przechodzi do niej (bieżąca zostaje w historii)
+void Assistant::onShowConversation(const QString &conversation, const QString &target)
+{
+    if (conversation != m_conversation || target.isEmpty() || m_busy)
+        return;
+    openConversation(target);
+    Q_EMIT conversationShown();
+}
+
 void Assistant::deleteConversation(const QString &id)
 {
     QDBusConnection::sessionBus().asyncCall(method(QStringLiteral("DeleteConversation"), {id}));
@@ -480,6 +490,7 @@ void Assistant::runAction(int index)
     env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C.UTF-8"));   // przewidywalne komunikaty dla modelu
     env.insert(QStringLiteral("PAGER"), QStringLiteral("cat"));
     env.insert(QStringLiteral("SYSTEMD_PAGER"), QString());
+    env.insert(QStringLiteral("ASTER_AGENT"), QStringLiteral("1"));   // `aster --historia` wie, że czyta agent
     p->setProcessEnvironment(env);
     const QString id = m.actionId;
     auto *timeout = new QTimer(p);

@@ -223,10 +223,30 @@ Page {
 
     Section {
         visible: Assistant.available
+        title: "Działanie"
+        footer: ap.st.confirm === "zawsze"
+                ? "Bez pytania tylko sprawdza (np. wolne miejsce, stan sieci). Każdą zmianę najpierw zatwierdzasz."
+                : "Sam otwiera programy, tworzy foldery, kopiuje, zmienia głośność. Pyta przed instalacją i usuwaniem programów, usuwaniem plików, hasłem administratora, restartem i zmianami sieci."
+        SettingRow {
+            title: "Pytaj o zgodę"
+            subtitle: "Zanim Aster Intelligence coś zrobi na komputerze"
+            icon: "shield"; colors: ["#86EFAC", "#15803D"]
+            Dropdown {
+                anchors.verticalCenter: parent.verticalCenter
+                maxWidth: 260
+                model: [{ label: "Tylko przy ważnych sprawach", value: "wazne" }, { label: "Przy każdej zmianie", value: "zawsze" }]
+                value: ap.st.confirm || "wazne"
+                onPicked: v => Assistant.setConfirm(v)
+            }
+        }
+    }
+
+    Section {
+        visible: Assistant.available
         title: "Gdzie go znajdziesz"
         SettingRow {
             title: "Górny pasek"
-            subtitle: "Krótkie pytanie w wyspie; dłuższa rozmowa otwiera panel z prawej"
+            subtitle: "Krótkie pytanie w wyspie; dłuższa rozmowa otwiera panel z prawej. Przycisk obok Centrum sterowania otwiera rozmowy"
             icon: "aster"; colors: ["#7C9BFF", "#3456E8"]
             value: "Super + Spacja"
         }
@@ -252,6 +272,12 @@ Page {
             title: "Zapamiętuj rozmowy"
             subtitle: "Do powrotu w panelu asystenta"
             Toggle { anchors.verticalCenter: parent.verticalCenter; checked: ap.st.history !== false; onToggled: on => Assistant.setHistory(on) }
+        }
+        SettingRow {
+            visible: ap.st.history !== false
+            title: "Pamiętaj poprzednie rozmowy"
+            subtitle: "Rozumie nawiązania („jak ostatnio”) i sam otwiera wcześniejszą rozmowę. Rozmowy z modelem na tym komputerze nie trafiają do chmury."
+            Toggle { anchors.verticalCenter: parent.verticalCenter; checked: ap.st.memory !== false; onToggled: on => Assistant.setMemory(on) }
         }
         SettingRow {
             title: "Wyczyść historię rozmów"

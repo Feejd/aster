@@ -29,6 +29,29 @@ def answer(messages):
         content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
     question, _, data = content.partition("\n\nDane wejściowe:\n")
     q = question.lower()
+    system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+    if isinstance(system, str) and system.startswith("Streszczasz"):
+        first = next((l[len("Użytkownik: "):] for l in content.splitlines() if l.startswith("Użytkownik: ")), "coś")
+        return f"Streszczenie: użytkownik pytał „{first[:80]}”; asystent sprawdził to na komputerze i odpowiedział."
+    # Pamięć: znaleziona rozmowa → otwórz ją
+    if content.startswith("[System] Wynik polecenia `aster --historia"):
+        import re
+        m = re.search(r"ID (\S+)", content)
+        if not m:
+            return "Nie znalazłem takiej rozmowy."
+        return f"Znalazłem naszą rozmowę — otwieram ją.\n\n```bash\naster --rozmowa {m.group(1)}\n```"
+    if content.startswith("[System] Wynik polecenia `aster --rozmowa"):
+        return "Otworzyłem naszą wcześniejszą rozmowę — możesz w niej kontynuować."
+    if content.startswith("[System] Wynik polecenia `aster-files"):
+        return "Otworzyłem Pliki."
+    if "wróćmy" in q or "wrocmy" in q:
+        word = q.split()[-1].strip("?.!")
+        return f"Szukam w naszych wcześniejszych rozmowach.\n\n```bash\naster --historia {word}\n```"
+    if "ostatnio" in q:
+        mem = system.split("Ostatnie rozmowy (od najnowszej):\n", 1)
+        return ("Pamiętam: " + mem[1].splitlines()[0]) if len(mem) > 1 else "Nie pamiętam żadnej wcześniejszej rozmowy."
+    if "otwórz pliki" in q or "otworz pliki" in q:
+        return "Otwieram Pliki.\n\n```bash\naster-files ~\n```"
     # Agent: wynik polecenia albo odmowa wracają jako wiadomość „[System] …”
     if content.startswith("[System] Użytkownik nie zgodził"):
         return "Dobrze, niczego nie zmieniam. Jeśli zmienisz zdanie, napisz."

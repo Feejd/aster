@@ -7,6 +7,7 @@
 // po odpowiedzi [T/n] na pytanie po ludzku. Odpowiedzi daje usługa aster-assistant (D-Bus).
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDBusConnection>
 #include <QDBusArgument>
 #include <QDBusMessage>
@@ -256,7 +257,7 @@ public Q_SLOTS:
         loop->quit();
     }
 
-    // Agent chce uruchomić polecenie: sprawdzające — od razu, zmieniające — po [T/n].
+    // Agent chce uruchomić polecenie: zwykłe — od razu, ważne — po [T/n].
     // Polecenie działa w tym terminalu i bieżącym folderze (sudo zapyta o hasło jak zwykle);
     // wyjście widać na bieżąco i wraca do modelu, który działa dalej.
     void action(const QString &c, const QString &id, const QString &command, const QString &description, bool safe)
@@ -293,12 +294,15 @@ public Q_SLOTS:
         }
         QProcess p;
         p.setProcessChannelMode(QProcess::MergedChannels);
-        // Zmieniające system dostają klawiaturę (np. hasło do sudo); sprawdzające — nie, żeby o nic nie pytały
+        // Ważne dostają klawiaturę (np. hasło do sudo); pozostałe — nie, żeby o nic nie pytały
         if (safe)
             p.setStandardInputFile(QProcess::nullDevice());
         else
             p.setInputChannelMode(QProcess::ForwardedInputChannel);
         std::signal(SIGINT, SIG_IGN);   // Ctrl+C trafia do polecenia, nie do nas
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("ASTER_AGENT"), QStringLiteral("1"));
+        p.setProcessEnvironment(env);
         p.start(QStringLiteral("bash"), {QStringLiteral("-c"), command});
         if (!p.waitForStarted(5000)) {
             output = QStringLiteral("Nie udało się uruchomić bash.");
@@ -459,6 +463,64 @@ static int localModel(const QString &arg)
     return 0;
 }
 
+// Polecenie uruchomione przez agenta (ASTER_AGENT=1): przy chmurze bez rozmów prowadzonych tylko na tym komputerze
+static bool fromAgent() { return qEnvironmentVariableIsSet("ASTER_AGENT"); }
+
+static QString when(qint64 ms)
+{
+    const QDateTime t = QDateTime::fromMSecsSinceEpoch(ms);
+    const qint64 days = t.date().daysTo(QDate::currentDate());
+    if (days == 0)
+        return QStringLiteral("dziś ") + t.toString(QStringLiteral("HH:mm"));
+    if (days == 1)
+        return QStringLiteral("wczoraj ") + t.toString(QStringLiteral("HH:mm"));
+    return t.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
+}
+
+static int history(const QString &phrase)
+{
+    const QDBusMessage r = call(QStringLiteral("SearchConversations"), {phrase, fromAgent()});
+    if (failedCall(r))
+        return 1;
+    const QJsonArray list = QJsonDocument::fromJson(r.arguments().value(0).toString().toUtf8()).array();
+    if (list.isEmpty()) {
+        out(phrase.isEmpty() ? QStringLiteral("Brak zapisanych rozmów.\n") : QStringLiteral("Nie znalazłem rozmowy o „%1”.\n").arg(phrase));
+        return phrase.isEmpty() ? 0 : 1;
+    }
+    for (const QJsonValue &v : list) {
+        const QJsonObject o = v.toObject();
+        out(bold(o.value(QStringLiteral("title")).toString(), g_color) + QStringLiteral("  ")
+            + dim(QStringLiteral("%1 · ID %2").arg(when(o.value(QStringLiteral("updated")).toInteger()), o.value(QStringLiteral("id")).toString()), g_color)
+            + QStringLiteral("\n  ") + o.value(QStringLiteral("summary")).toString() + QStringLiteral("\n"));
+        const QString snip = o.value(QStringLiteral("snippet")).toString();
+        if (!snip.isEmpty())
+            out(dim(QStringLiteral("  …%1…\n").arg(snip), g_color));
+    }
+    return 0;
+}
+
+static int showConversation(const QString &id)
+{
+    const QDBusMessage r = call(QStringLiteral("ConversationText"), {id, fromAgent()});
+    if (failedCall(r))
+        return 1;
+    const QJsonObject o = QJsonDocument::fromJson(r.arguments().value(0).toString().toUtf8()).object();
+    if (o.isEmpty()) {
+        err(QStringLiteral("aster: nie ma rozmowy %1 (lista: aster --historia)\n").arg(id));
+        return 1;
+    }
+    out(bold(o.value(QStringLiteral("title")).toString(), g_color) + QStringLiteral("  ")
+        + dim(when(o.value(QStringLiteral("updated")).toInteger()), g_color) + QStringLiteral("\n\n"));
+    if (o.value(QStringLiteral("private")).toBool()) {
+        // Model w chmurze nie dostaje treści rozmowy, którą prowadził model na tym komputerze
+        out(QStringLiteral("Ta rozmowa była prowadzona na tym komputerze — jej treść nie trafia do chmury. "
+                           "Użytkownik zobaczy ją w panelu.\n"));
+        return 0;
+    }
+    out(o.value(QStringLiteral("text")).toString());
+    return 0;
+}
+
 static void printHelp()
 {
     out(QStringLiteral(
@@ -468,10 +530,12 @@ static void printHelp()
         "  polecenie | aster \"pytanie\" wynik polecenia jako kontekst, np.\n"
         "                             journalctl -b -p err | aster \"co tu jest nie tak?\"\n"
         "                             git diff | aster \"napisz opis commita\"\n"
-        "  aster --stan               kto odpowiada (model lokalny czy chmura)\n\n"
+        "  aster --stan               kto odpowiada (model lokalny czy chmura)\n"
+        "  aster --historia [słowa]   wcześniejsze rozmowy (szukanie po słowach)\n"
+        "  aster --rozmowa ID         cała wcześniejsza rozmowa\n\n"
         "W rozmowie: /nowa — nowa rozmowa, /model — dostawca i model, /wyjdz — koniec.\n"
-        "Aster Intelligence sam sprawdza i naprawia: polecenia, które tylko coś odczytują, uruchamia od razu,\n"
-        "a te, które coś zmieniają (np. instalacja), dopiero gdy odpowiesz [T/n].\n"
+        "Aster Intelligence sam sprawdza i naprawia: zwykłe polecenia uruchamia od razu, a przed ważnymi\n"
+        "(instalacja, usuwanie, hasło administratora, restart) pyta [T/n].\n"
         "Model na tym komputerze: aster --model-lokalny (lista), aster --model-lokalny auto (pobiera polecany).\n"
         "Dostawcę, model i klucz API ustawisz też w Ustawieniach → Aster Intelligence. `ai` to skrót od `aster`.\n"));
 }
@@ -618,6 +682,15 @@ int main(int argc, char *argv[])
     }
     if (!args.isEmpty() && (args.first() == QLatin1String("--model-lokalny") || args.first() == QLatin1String("--local-model")))
         return localModel(args.value(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--historia"))
+        return history(args.mid(1).join(QLatin1Char(' ')));
+    if (!args.isEmpty() && args.first() == QLatin1String("--rozmowa")) {
+        if (args.value(1).isEmpty()) {
+            err(QStringLiteral("aster: podaj ID rozmowy (lista: aster --historia)\n"));
+            return 2;
+        }
+        return showConversation(args.value(1));
+    }
     if (!args.isEmpty() && args.first() == QLatin1String("--stan")) {
         const QVariantMap s = status();
         if (s.isEmpty())

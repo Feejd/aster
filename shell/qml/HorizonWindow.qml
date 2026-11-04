@@ -34,6 +34,7 @@ Window {
     signal startRequested()
     signal controlRequested()
     signal assistantPanelRequested(bool show)
+    signal chatsRequested()                    // przycisk Aster Intelligence na pasku: panel z rozmowami
     signal askOpened()
 
     Component.onCompleted: {
@@ -778,6 +779,17 @@ Window {
                         }
                         Rectangle { x: 23; anchors.verticalCenter: parent.verticalCenter; width: 1.6; height: 4; radius: 0.8; color: Qt.rgba(status.ink.r, status.ink.g, status.ink.b, 0.45) }
                     }
+                }
+            }
+            // Aster Intelligence: otwiera panel z rozmowami (pusty — od razu z listą poprzednich)
+            BarButton {
+                id: aiButton
+                highlighted: hz.assistantOpen
+                onClicked: hz.chatsRequested()
+                IntelligenceOrb {
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: 17
+                    busy: Assistant.busy
                 }
             }
         }

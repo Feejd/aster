@@ -26,6 +26,8 @@ class QNetworkReply;
 // i działa dalej, aż skończy (Finished) — najwyżej kMaxSteps poleceń na jedno pytanie.
 // Znaczek mówi, kto odpowiedział: „Na tym komputerze” albo „Chmura: <dostawca>”.
 // Historia rozmów — tylko lokalnie, w ~/.local/share/aster/asystent (do wyłączenia).
+// Pamięć: krótkie streszczenia poprzednich rozmów idą w prompcie, żeby agent rozumiał nawiązania; streszczenia
+// rozmów prowadzonych na tym komputerze nigdy nie trafiają do chmury.
 class Service : public QObject, protected QDBusContext
 {
     Q_OBJECT
@@ -55,6 +57,12 @@ public Q_SLOTS:
     Q_SCRIPTABLE QString Conversation(const QString &id);
     Q_SCRIPTABLE void DeleteConversation(const QString &id);
     Q_SCRIPTABLE void ClearHistory();
+    // Szukanie w historii (tytuł, streszczenie, treść); pusta fraza — najnowsze.
+    // agent: true, gdy pyta polecenie uruchomione przez agenta — przy chmurze bez rozmów prowadzonych tylko na tym komputerze.
+    // JSON: [{id, title, updated, summary, snippet, local}]
+    Q_SCRIPTABLE QString SearchConversations(const QString &phrase, bool agent);
+    // Rozmowa jako tekst do odczytania (dla `aster --rozmowa`); pusty — nie ma albo prywatna (agent + chmura)
+    Q_SCRIPTABLE QString ConversationText(const QString &id, bool agent);
 
     // Modele na tym komputerze. JSON: {hardware: {ramGb, cores, cpu, freeDisk}, recommended, active, downloading,
     //   models: [{id, name, description, size, minRam, installed, active, recommended, fits, partial}]}
@@ -75,6 +83,8 @@ Q_SIGNALS:
                                       const QString &description, bool safe);
     Q_SCRIPTABLE void StatusChanged();
     Q_SCRIPTABLE void HistoryChanged();
+    // Agent znalazł wcześniejszą rozmowę (`aster --rozmowa ID`) — panel ma ją otworzyć, gdy skończy odpowiadać
+    Q_SCRIPTABLE void ShowConversation(const QString &conversation, const QString &target);
     Q_SCRIPTABLE void LocalModelsChanged();
     Q_SCRIPTABLE void DownloadProgress(const QString &id, qlonglong received, qlonglong total);
     Q_SCRIPTABLE void DownloadFinished(const QString &id, bool ok, const QString &message);
@@ -99,6 +109,9 @@ private:
         QString pendingAction;   // id polecenia czekającego na wynik od klienta
         QString pendingCommand;
         QString pendingDescription;
+        QString summary;         // krótkie streszczenie — pamięć dla kolejnych rozmów
+        int summaryCount = 0;    // przy ilu wiadomościach powstało
+        QString showAfter;       // rozmowa do otwarcia w panelu po odpowiedzi
     };
     struct Request {
         QString conversation;
@@ -110,6 +123,8 @@ private:
         bool local = false;
         bool agent = false;    // odpowiedź może zawierać polecenie (wszędzie poza narzędziami do pisania)
         bool stopped = false;  // urwana po bloku z poleceniem — reszta byłaby zgadywaniem wyniku
+        bool summary = false;  // streszczenie rozmowy w tle (nic nie idzie do klientów)
+        int summaryCount = 0;
         QByteArray pending;    // niedokończony wiersz strumienia SSE
         QByteArray errorBody;
     };
@@ -131,13 +146,23 @@ private:
     void onData(QNetworkReply *reply);
     void onFinished(QNetworkReply *reply);
     void fail(const QString &conversation, const QString &message);
-    QString systemPrompt(const QString &source) const;
+    QString systemPrompt(const QString &source, const QString &memory = QString()) const;
+    bool askAlways() const;                       // tryb ostrożny: pytaj przy każdej zmianie
+    bool runsWithoutAsking(const QString &command) const;
+    bool memoryEnabled() const;
+    QString memoryFor(const Conv &current, bool cloud) const;   // streszczenia poprzednich rozmów do promptu
+    void summarizeLater(const QString &id);
+    void summarizeNext();
+    QNetworkReply *post(const Provider &p, const QString &key, const QString &system, QJsonArray messages, bool stream);
 public:
     static QString commandIn(const QString &text);     // pierwsze polecenie z bloku ```bash w odpowiedzi
-    static bool isSafeCommand(const QString &command); // tylko odczyt — można uruchomić bez pytania
-    static QString describe(const QString &text, const QString &command);
+    static QString describe(const QString &text, const QString &command, bool asks);
+    static bool localOnly(const QJsonArray &messages); // rozmowa (choć częściowo) tylko na tym komputerze
+    static QString quickSummary(const QString &title, const QJsonArray &messages);
 private:
     void touch();
+    QTimer m_summarize;
+    QStringList m_toSummarize;
 
     QNetworkAccessManager m_net;
     QHash<QString, Conv> m_convs;

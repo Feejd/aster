@@ -1,4 +1,5 @@
 #include "service.h"
+#include "commands.h"
 #include "secrets.h"
 
 #include <QCoreApplication>
@@ -56,6 +57,10 @@ Service::Service(QObject *parent)
         Q_EMIT DownloadProgress(id, got, total);
     });
     connect(&m_local, &LocalModels::finished, this, &Service::DownloadFinished);
+    // Streszczenia rozmów w tle — chwilę po ostatniej odpowiedzi, jedno naraz
+    m_summarize.setSingleShot(true);
+    m_summarize.setInterval(qEnvironmentVariableIntValue("ASTER_SUMMARY_DELAY") > 0 ? qEnvironmentVariableIntValue("ASTER_SUMMARY_DELAY") * 1000 : 20000);
+    connect(&m_summarize, &QTimer::timeout, this, &Service::summarizeNext);
 }
 
 // ——— Modele na tym komputerze ———
@@ -137,6 +142,22 @@ bool Service::historyEnabled() const
     return config().value(QStringLiteral("history"), true).toBool();
 }
 
+bool Service::memoryEnabled() const
+{
+    return historyEnabled() && config().value(QStringLiteral("memory"), true).toBool();
+}
+
+bool Service::askAlways() const
+{
+    return config().value(QStringLiteral("confirm")).toString() == QLatin1String("zawsze");
+}
+
+// Domyślnie pytamy tylko przed ważnymi sprawami; w trybie ostrożnym — przed wszystkim, co nie jest odczytem
+bool Service::runsWithoutAsking(const QString &command) const
+{
+    return askAlways() ? Commands::readOnly(command) : !Commands::needsConsent(command);
+}
+
 QString Service::apiKey(const Provider &p, QString *error)
 {
     if (!p.needsKey)
@@ -193,7 +214,9 @@ QVariantMap Service::Status()
             {QStringLiteral("ready"), problem.isEmpty()},
             {QStringLiteral("problem"), problem},
             {QStringLiteral("hasKey"), hasKey},
-            {QStringLiteral("history"), historyEnabled()}};
+            {QStringLiteral("history"), historyEnabled()},
+            {QStringLiteral("memory"), memoryEnabled()},
+            {QStringLiteral("confirm"), askAlways() ? QStringLiteral("zawsze") : QStringLiteral("wazne")}};
 }
 
 QString Service::Providers()
@@ -234,6 +257,11 @@ void Service::Configure(const QVariantMap &s)
         if (!s.value(QStringLiteral("history")).toBool())
             ClearHistory();
     }
+    if (s.contains(QStringLiteral("memory")))
+        c.setValue(QStringLiteral("memory"), s.value(QStringLiteral("memory")).toBool());
+    if (s.contains(QStringLiteral("confirm")))
+        c.setValue(QStringLiteral("confirm"), s.value(QStringLiteral("confirm")).toString() == QLatin1String("zawsze")
+                                                  ? QStringLiteral("zawsze") : QStringLiteral("wazne"));
     c.sync();
     Q_EMIT StatusChanged();
 }
@@ -292,6 +320,8 @@ Service::Conv *Service::conversation(const QString &id, bool create)
             c.id = id;
             c.title = o.value(QStringLiteral("title")).toString();
             c.updated = o.value(QStringLiteral("updated")).toInteger();
+            c.summary = o.value(QStringLiteral("summary")).toString();
+            c.summaryCount = o.value(QStringLiteral("summaryCount")).toInt();
             for (const QJsonValue &v : o.value(QStringLiteral("messages")).toArray()) {
                 const QJsonObject m = v.toObject();
                 c.messages.append({m.value(QStringLiteral("role")).toString(), m.value(QStringLiteral("text")).toString(),
@@ -332,6 +362,10 @@ void Service::save(const Conv &c)
         msgs.append(j);
     }
     o.insert(QStringLiteral("messages"), msgs);
+    if (!c.summary.isEmpty()) {
+        o.insert(QStringLiteral("summary"), c.summary);
+        o.insert(QStringLiteral("summaryCount"), c.summaryCount);
+    }
     QSaveFile f(historyDir() + QLatin1Char('/') + c.id + QStringLiteral(".json"));
     if (f.open(QIODevice::WriteOnly)) {
         f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
@@ -425,7 +459,7 @@ void Service::ClearHistory()
 
 // ——— Pytania ———
 
-QString Service::systemPrompt(const QString &source) const
+QString Service::systemPrompt(const QString &source, const QString &memory) const
 {
     QString s = QStringLiteral(
         "Jesteś Aster Intelligence — agentem wbudowanym w system Aster (Linux oparty na Fedorze 44, atomowy obraz bootc/ostree, "
@@ -434,10 +468,9 @@ QString Service::systemPrompt(const QString &source) const
         "DZIAŁASZ, A NIE TYLKO RADZISZ. Gdy użytkownik ma problem albo chce coś zrobić na komputerze, rozwiąż to sam: "
         "napisz jedno polecenie w bloku ```bash i zakończ odpowiedź (jedno polecenie na odpowiedź). Tuż przed blokiem napisz "
         "jedno zdanie zrozumiałe dla laika, co to polecenie zrobi — użytkownik zobaczy tylko to zdanie, nie polecenie. "
-        "Gdy coś zmienia, zapytaj, np. „Zainstalować Google Chrome?”, „Usunąć pliki tymczasowe (1,2 GB)?”, „Włączyć ponownie Wi‑Fi?”; "
-        "gdy tylko sprawdza — opisz, np. „Sprawdzam, ile jest wolnego miejsca.”. System je uruchomi i odeśle ci wynik — dopiero wtedy decydujesz o kolejnym kroku. "
-        "Polecenia, które tylko coś sprawdzają, uruchamiają się od razu; wszystko, co zmienia system (instalacja, usuwanie, "
-        "zmiana ustawień, restart usług), użytkownik najpierw zatwierdza — więc najpierw diagnozuj, potem naprawiaj. "
+        "System je uruchomi i odeśle ci wynik — dopiero wtedy decydujesz o kolejnym kroku. "
+        "%1"
+        "Najpierw diagnozuj, potem naprawiaj. "
         "Nigdy nie wymyślaj wyniku polecenia. Gdy skończysz, napisz krótko, co zrobiłeś i jaki jest efekt — już bez bloku kodu. "
         "Na zwykłe pytania, obliczenia i tłumaczenia odpowiadaj wprost, bez poleceń.\n"
         "Zasady poleceń: bez programów interaktywnych (nano, vim, less, top — zamiast tego cat, head, top -b -n1); "
@@ -456,6 +489,26 @@ QString Service::systemPrompt(const QString &source) const
         "(aster-tasks), Telefon (aster-phone), Aplikacje webowe (aster-webapps), Emoji (aster-emoji). "
         "Program otwierasz jego poleceniem, np. ```bash\naster-files ~/Pobrane\n```. Programu spoza tej listy szukaj w Sklepie "
         "(Flathub) — nigdy nie polecaj programu, którego istnienia nie jesteś pewien.");
+    s = s.arg(askAlways()
+                  ? QStringLiteral("Polecenia, które tylko coś sprawdzają, uruchamiają się od razu; wszystko, co cokolwiek zmienia, użytkownik "
+                                   "najpierw zatwierdza — wtedy zdanie jest pytaniem, np. „Zainstalować Google Chrome?”. ")
+                  : QStringLiteral("Zwykłe rzeczy robisz od razu, bez pytania — otwieranie programów i plików, tworzenie folderów, kopiowanie, "
+                                   "zmiana głośności czy jasności, sprawdzanie — a zdanie jest wtedy oznajmujące, np. „Otwieram Pliki.”, "
+                                   "„Sprawdzam, ile jest wolnego miejsca.”. Pytasz tylko przed ważnymi sprawami: instalacja i odinstalowanie "
+                                   "programów, usuwanie albo nadpisywanie plików, uprawnienia administratora, aktualizacja i restart, zatrzymywanie "
+                                   "programów i usług, zmiany sieci, dysków i kont — wtedy zdanie jest pytaniem, np. „Zainstalować Google Chrome?”, "
+                                   "„Usunąć pliki tymczasowe (1,2 GB)?”. Pytanie zadaje system — ty tylko piszesz zdanie i polecenie. "));
+    if (source != QLatin1String("pisanie"))
+        s += QStringLiteral(
+            "\n\nPAMIĘĆ ROZMÓW: `aster --historia [słowa]` szuka we wcześniejszych rozmowach z użytkownikiem (bez słów — najnowsze), "
+            "`aster --rozmowa ID` pokazuje całą rozmowę%1. Gdy użytkownik nawiązuje do czegoś, o czym już rozmawialiście "
+            "(„jak ostatnio”, „ta drukarka”, „wróćmy do…”), skorzystaj z poniższych streszczeń, a gdy trzeba szczegółów albo "
+            "użytkownik chce wrócić do rozmowy — znajdź ją i otwórz. Nie wspominaj o pamięci, gdy nie ma związku z pytaniem. "
+            "Wszystkie rozmowy z tobą są w panelu Aster Intelligence: przycisk z kolorową kulą na górnym pasku, zaraz za Centrum "
+            "sterowania (albo Super+Spacja) — tam zegar pokazuje historię.")
+                 .arg(source == QLatin1String("terminal") ? QString() : QStringLiteral(" i otwiera ją użytkownikowi w panelu"));
+    if (!memory.isEmpty())
+        s += QStringLiteral("\nOstatnie rozmowy (od najnowszej):\n") + memory;
     if (source == QLatin1String("terminal"))
         s += QStringLiteral("\nRozmowa toczy się w terminalu: pisz zwykłym tekstem, bez tabel i nagłówków Markdown. "
                             "Polecenia uruchamiają się w bieżącym folderze użytkownika.");
@@ -471,7 +524,7 @@ QString Service::systemPrompt(const QString &source) const
 }
 
 // Zdanie dla człowieka: ostatni wiersz tekstu tuż przed blokiem z poleceniem (albo opis według polecenia)
-QString Service::describe(const QString &text, const QString &command)
+QString Service::describe(const QString &text, const QString &command, bool asks)
 {
     const int at = text.indexOf(QLatin1String("```"));
     QStringList before = text.left(at < 0 ? 0 : at).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
@@ -492,7 +545,11 @@ QString Service::describe(const QString &text, const QString &command)
         return QStringLiteral("Odinstalować program?");
     if (command.startsWith(QLatin1String("aster-")))
         return QStringLiteral("Otwieram program.");
-    return isSafeCommand(command) ? QStringLiteral("Sprawdzam to na komputerze.") : QStringLiteral("Wprowadzić tę zmianę w systemie?");
+    if (command.startsWith(QLatin1String("aster --historia")))
+        return QStringLiteral("Szukam w naszych wcześniejszych rozmowach.");
+    if (command.startsWith(QLatin1String("aster --rozmowa")))
+        return QStringLiteral("Otwieram wcześniejszą rozmowę.");
+    return asks ? QStringLiteral("Wprowadzić tę zmianę w systemie?") : QStringLiteral("Robię to na komputerze.");
 }
 
 // Pierwsze polecenie z bloku ```bash/sh/shell/console (wiersze zaczynające się od „$ ” bez znaku zachęty)
@@ -510,98 +567,6 @@ QString Service::commandIn(const QString &text)
             lines << l;
     }
     return lines.join(QLatin1Char('\n')).trimmed();
-}
-
-// Tylko odczyt: znane polecenia, które niczego nie zmieniają, bez przekierowań do plików, podstawień
-// i łańcuchów (dozwolony potok między bezpiecznymi). Wszystko inne — po zgodzie użytkownika.
-bool Service::isSafeCommand(const QString &command)
-{
-    const QString c = command.trimmed();
-    if (c.isEmpty() || c.contains(QLatin1Char('\n')) || c.contains(QLatin1Char('>')) || c.contains(QLatin1Char('`'))
-        || c.contains(QLatin1String("$(")) || c.contains(QLatin1Char(';')) || c.contains(QLatin1String("&&"))
-        || c.contains(QLatin1String("||")) || c.contains(QLatin1Char('&')))
-        return false;
-    static const QStringList plain{
-        QStringLiteral("ls"), QStringLiteral("cat"), QStringLiteral("head"), QStringLiteral("tail"), QStringLiteral("wc"),
-        QStringLiteral("grep"), QStringLiteral("sort"), QStringLiteral("cut"), QStringLiteral("tr"),
-        QStringLiteral("df"), QStringLiteral("du"), QStringLiteral("free"), QStringLiteral("uptime"), QStringLiteral("uname"),
-        QStringLiteral("whoami"), QStringLiteral("id"), QStringLiteral("hostname"), QStringLiteral("date"), QStringLiteral("pwd"),
-        QStringLiteral("lsblk"), QStringLiteral("lscpu"), QStringLiteral("lsusb"), QStringLiteral("lspci"), QStringLiteral("ps"),
-        QStringLiteral("pgrep"), QStringLiteral("stat"), QStringLiteral("file"), QStringLiteral("which"), QStringLiteral("whereis"),
-        QStringLiteral("type"), QStringLiteral("command"), QStringLiteral("journalctl"), QStringLiteral("dmesg"),
-        QStringLiteral("findmnt"), QStringLiteral("ping"), QStringLiteral("getent"), QStringLiteral("printenv"),
-        QStringLiteral("echo"), QStringLiteral("realpath"), QStringLiteral("basename"), QStringLiteral("dirname"),
-        QStringLiteral("sensors"), QStringLiteral("fc-list"), QStringLiteral("locale"), QStringLiteral("timedatectl"),
-        QStringLiteral("hostnamectl"), QStringLiteral("loginctl"), QStringLiteral("wpctl"), QStringLiteral("pactl"),
-        QStringLiteral("top"), QStringLiteral("find"), QStringLiteral("tree"), QStringLiteral("md5sum"), QStringLiteral("sha256sum"),
-        QStringLiteral("resolvectl"), QStringLiteral("upower"), QStringLiteral("inxi"), QStringLiteral("glxinfo"),
-        QStringLiteral("rpm-ostree"), QStringLiteral("bootc"), QStringLiteral("rpm"),
-    };
-    // Polecenia z podpoleceniami: dozwolone tylko te do odczytu
-    static const QHash<QString, QStringList> sub{
-        {QStringLiteral("systemctl"), {QStringLiteral("status"), QStringLiteral("is-active"), QStringLiteral("is-enabled"), QStringLiteral("is-failed"),
-                                       QStringLiteral("list-units"), QStringLiteral("list-unit-files"), QStringLiteral("list-timers"), QStringLiteral("show"),
-                                       QStringLiteral("cat"), QStringLiteral("--failed")}},
-        {QStringLiteral("flatpak"), {QStringLiteral("list"), QStringLiteral("info"), QStringLiteral("search"), QStringLiteral("remote-ls"),
-                                     QStringLiteral("remotes"), QStringLiteral("history"), QStringLiteral("ps")}},
-        {QStringLiteral("nmcli"), {QStringLiteral("general"), QStringLiteral("g")}},
-        {QStringLiteral("ip"), {QStringLiteral("a"), QStringLiteral("addr"), QStringLiteral("address"), QStringLiteral("link"), QStringLiteral("r"),
-                                QStringLiteral("route"), QStringLiteral("-br"), QStringLiteral("-4"), QStringLiteral("-6")}},
-        {QStringLiteral("git"), {QStringLiteral("status"), QStringLiteral("log"), QStringLiteral("diff"), QStringLiteral("show")}},
-        {QStringLiteral("toolbox"), {QStringLiteral("list")}},
-        {QStringLiteral("bluetoothctl"), {QStringLiteral("show"), QStringLiteral("devices"), QStringLiteral("info"), QStringLiteral("list")}},
-        {QStringLiteral("powerprofilesctl"), {QStringLiteral("get"), QStringLiteral("list")}},
-    };
-    // Słowa, które w odczytujących poleceniach jednak coś zmieniają
-    static const QRegularExpression risky(QStringLiteral(
-        "(^|\\s)(-delete|-exec|-execdir|-ok|--vacuum[-a-z]*|--rotate|--flush|-f\\b.*journalctl|upgrade|rollback|switch|install|"
-        "uninstall|update|remove|reset|enter|create|rm|-e|-i|--erase|--import|kargs|override|rebase|cleanup|apply-live|usroverlay|"
-        "initramfs|deploy|set-[a-z-]+|load-module|unload-module|terminate|kill|lock|poweroff|reboot|suspend|add|-fprint|-fprintf|-fls|"
-        "-C|--clear)(\\s|=|$)"));
-    // Te tylko czytają, a ich opcje (-e, -o…) przypadkiem pasują do słów wyżej
-    static const QStringList readers{QStringLiteral("grep"), QStringLiteral("echo"), QStringLiteral("ps"), QStringLiteral("lsblk"),
-                                     QStringLiteral("findmnt"), QStringLiteral("lscpu")};
-    for (const QString &segment : c.split(QLatin1Char('|'))) {
-        const QStringList w = QProcess::splitCommand(segment.trimmed());
-        if (w.isEmpty())
-            return false;
-        const QString prog = w.first();
-        if (risky.match(segment).hasMatch() && !readers.contains(prog))
-            return false;
-        if (prog == QLatin1String("sort") && (w.contains(QLatin1String("-o")) || segment.contains(QLatin1String("--output"))))
-            return false;    // zapisuje do pliku
-        if (prog == QLatin1String("top") && !w.contains(QLatin1String("-b")))
-            return false;    // bez -b czeka na klawisze
-        if (prog == QLatin1String("journalctl") && (w.contains(QLatin1String("-f")) || w.contains(QLatin1String("--follow"))))
-            return false;
-        if (prog == QLatin1String("ping") && !w.contains(QLatin1String("-c")))
-            return false;    // bez -c nie kończy się sam
-        if (prog == QLatin1String("dmesg") && w.contains(QLatin1String("-c")))
-            return false;    // czyści bufor jądra
-        if (plain.contains(prog))
-            continue;
-        auto it = sub.constFind(prog);
-        if (it == sub.constEnd())
-            return false;
-        // pierwsze słowo niebędące opcją (albo opcja z listy) musi być podpoleceniem do odczytu
-        bool ok = false;
-        for (int i = 1; i < w.size(); ++i) {
-            if (it.value().contains(w.at(i))) { ok = true; break; }
-            if (!w.at(i).startsWith(QLatin1Char('-')))
-                break;
-        }
-        if (prog == QLatin1String("nmcli"))
-            ok = ok || (w.size() >= 3 && (w.at(2) == QLatin1String("show") || w.at(2) == QLatin1String("status") || w.at(2) == QLatin1String("list")))
-                 || (w.size() == 2 && (w.at(1) == QLatin1String("device") || w.at(1) == QLatin1String("connection") || w.at(1) == QLatin1String("radio")));
-        if (prog == QLatin1String("systemctl") && w.size() == 2 && w.at(1) == QLatin1String("--user"))
-            ok = true;
-        if (prog == QLatin1String("systemctl") && w.contains(QLatin1String("--user")))
-            for (const QString &x : w)
-                ok = ok || it.value().contains(x);
-        if (!ok)
-            return false;
-    }
-    return true;
 }
 
 QString Service::Ask(const QString &conversationId, const QString &prompt, const QString &context, const QString &source)
@@ -707,9 +672,26 @@ void Service::send(Conv &c, const QString &source)
         messages.append(QJsonObject{{QStringLiteral("role"), role}, {QStringLiteral("content"), content}});
     }
 
+    const bool cloud = p.needsKey;
+    const QString memory = memoryEnabled() && source != QLatin1String("pisanie") ? memoryFor(c, cloud) : QString();
+    QNetworkReply *reply = post(p, key, systemPrompt(source, memory), messages, true);
+    Request r;
+    r.conversation = id;
+    r.badge = badgeFor(p);
+    r.providerName = p.name;
+    r.url = urlFor(p);
+    r.anthropic = p.kind == Provider::Anthropic;
+    r.local = !p.needsKey;
+    r.agent = source != QLatin1String("pisanie");
+    m_requests.insert(reply, r);
+    connect(reply, &QNetworkReply::readyRead, this, [this, reply] { onData(reply); });
+    connect(reply, &QNetworkReply::finished, this, [this, reply] { onFinished(reply); });
+}
+
+QNetworkReply *Service::post(const Provider &p, const QString &key, const QString &system, QJsonArray messages, bool stream)
+{
     const QString base = urlFor(p);
-    const QString model = modelFor(p);
-    QJsonObject body{{QStringLiteral("model"), model}, {QStringLiteral("stream"), true}};
+    QJsonObject body{{QStringLiteral("model"), modelFor(p)}, {QStringLiteral("stream"), stream}};
     QNetworkRequest req;
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     req.setRawHeader("Accept", "text/event-stream");
@@ -719,7 +701,7 @@ void Service::send(Conv &c, const QString &source)
         req.setUrl(QUrl(base + QStringLiteral("/messages")));
         req.setRawHeader("x-api-key", key.toUtf8());
         req.setRawHeader("anthropic-version", "2023-06-01");
-        body.insert(QStringLiteral("system"), systemPrompt(source));
+        body.insert(QStringLiteral("system"), system);
         body.insert(QStringLiteral("max_tokens"), 4096);
         body.insert(QStringLiteral("messages"), messages);
     } else {
@@ -730,22 +712,10 @@ void Service::send(Conv &c, const QString &source)
             req.setRawHeader("X-Title", "Aster");
             req.setRawHeader("HTTP-Referer", "https://github.com/Feejd/Aster");
         }
-        messages.prepend(QJsonObject{{QStringLiteral("role"), QStringLiteral("system")}, {QStringLiteral("content"), systemPrompt(source)}});
+        messages.prepend(QJsonObject{{QStringLiteral("role"), QStringLiteral("system")}, {QStringLiteral("content"), system}});
         body.insert(QStringLiteral("messages"), messages);
     }
-
-    QNetworkReply *reply = m_net.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
-    Request r;
-    r.conversation = id;
-    r.badge = badgeFor(p);
-    r.providerName = p.name;
-    r.url = base;
-    r.anthropic = p.kind == Provider::Anthropic;
-    r.local = !p.needsKey;
-    r.agent = source != QLatin1String("pisanie");
-    m_requests.insert(reply, r);
-    connect(reply, &QNetworkReply::readyRead, this, [this, reply] { onData(reply); });
-    connect(reply, &QNetworkReply::finished, this, [this, reply] { onFinished(reply); });
+    return m_net.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
 }
 
 // Strumień SSE: wiersze „data: {…}”; w OpenAI tekst w choices[0].delta.content, w Anthropic — w content_block_delta
@@ -804,7 +774,7 @@ void Service::onData(QNetworkReply *reply)
                 QMetaObject::invokeMethod(reply, &QNetworkReply::abort, Qt::QueuedConnection);
             }
         }
-        if (!delta.isEmpty())
+        if (!delta.isEmpty() && !r.summary)
             Q_EMIT Chunk(r.conversation, delta);
     }
 }
@@ -864,6 +834,19 @@ void Service::onFinished(QNetworkReply *reply)
     }
 
     Conv *c = conversation(r.conversation, false);
+    if (r.summary) {
+        // Streszczenie w tle: błąd nie przeszkadza (zostaje szybkie streszczenie z tytułu i odpowiedzi)
+        QString sum = r.text.simplified();
+        sum.remove(QRegularExpression(QStringLiteral("^(Streszczenie|Podsumowanie)\\s*:\\s*"), QRegularExpression::CaseInsensitiveOption));
+        if (c && problem.isEmpty() && !sum.isEmpty()) {
+            c->summary = sum.left(400);
+            c->summaryCount = r.summaryCount;
+            save(*c);
+        }
+        if (!m_toSummarize.isEmpty())
+            m_summarize.start(2000);
+        return;
+    }
     if (!problem.isEmpty()) {
         // Pytanie bez odpowiedzi nie zostaje w rozmowie — można zapytać jeszcze raz
         if (c && !c->messages.isEmpty() && c->messages.last().role == QLatin1String("user") && r.text.isEmpty())
@@ -880,12 +863,19 @@ void Service::onFinished(QNetworkReply *reply)
         if (!command.isEmpty() && c->steps < kMaxSteps) {
             c->pendingAction = QString::number(QDateTime::currentMSecsSinceEpoch(), 36) + QString::number(c->steps);
             c->pendingCommand = command;
-            c->pendingDescription = describe(r.text, command);
-            Q_EMIT ActionRequested(c->id, c->pendingAction, command, c->pendingDescription, isSafeCommand(command));
+            const bool now = runsWithoutAsking(command);
+            c->pendingDescription = describe(r.text, command, !now);
+            Q_EMIT ActionRequested(c->id, c->pendingAction, command, c->pendingDescription, now);
             return;
         }
     }
     Q_EMIT Finished(r.conversation, r.text, r.badge);
+    if (c && !c->showAfter.isEmpty()) {
+        Q_EMIT ShowConversation(c->id, c->showAfter);
+        c->showAfter.clear();
+    }
+    if (c)
+        summarizeLater(c->id);
 }
 
 void Service::ActionResult(const QString &conv, const QString &action, int exitCode, const QString &output)
@@ -899,6 +889,11 @@ void Service::ActionResult(const QString &conv, const QString &action, int exitC
     const int limit = Catalog::find(providerId()).needsKey ? kMaxOutput : kMaxOutput / 2;
     if (out.size() > limit)
         out = out.left(limit / 4) + QStringLiteral("\n[… pominięto %1 znaków …]\n").arg(out.size() - limit) + out.right(limit * 3 / 4);
+    // Agent otworzył wcześniejszą rozmowę — panel pokaże ją, gdy skończy odpowiadać
+    static const QRegularExpression show(QStringLiteral("^aster\\s+--rozmowa\\s+['\"]?([0-9A-Za-z-]+)"));
+    if (const auto m = show.match(c->pendingCommand); m.hasMatch() && exitCode != -2 && c->source != QLatin1String("terminal")
+        && QFile::exists(historyDir() + QLatin1Char('/') + m.captured(1) + QStringLiteral(".json")))
+        c->showAfter = m.captured(1);
     Message m{QStringLiteral("action"), out.trimmed(), c->pendingDescription, QString(), QDateTime::currentMSecsSinceEpoch(), c->pendingCommand, exitCode};
     c->messages.append(m);
     c->pendingAction.clear();
@@ -908,4 +903,248 @@ void Service::ActionResult(const QString &conv, const QString &action, int exitC
     c->updated = QDateTime::currentMSecsSinceEpoch();
     save(*c);
     start(*c, c->source);
+}
+
+// ——— Pamięć: streszczenia poprzednich rozmów ———
+
+// Rozmowa z udziałem modelu na tym komputerze (albo własnego serwera) — jej treść nie może trafić do chmury
+bool Service::localOnly(const QJsonArray &messages)
+{
+    for (const QJsonValue &v : messages) {
+        const QJsonObject m = v.toObject();
+        if (m.value(QStringLiteral("role")).toString() == QLatin1String("assistant")
+            && !m.value(QStringLiteral("badge")).toString().startsWith(QLatin1String("Chmura")))
+            return true;
+    }
+    return false;
+}
+
+static QString withoutCode(QString t)
+{
+    static const QRegularExpression code(QStringLiteral("```[\\s\\S]*?(```|$)"));
+    t.remove(code);
+    t.remove(QRegularExpression(QStringLiteral("[*_#>`]")));
+    return t.simplified();
+}
+
+// Bez modelu: tytuł i początek ostatniej odpowiedzi (dla rozmów, których nie streszczał model)
+QString Service::quickSummary(const QString &title, const QJsonArray &messages)
+{
+    QString last;
+    for (qsizetype i = messages.size() - 1; i >= 0 && last.isEmpty(); --i) {
+        const QJsonObject m = messages.at(i).toObject();
+        if (m.value(QStringLiteral("role")).toString() == QLatin1String("assistant"))
+            last = withoutCode(m.value(QStringLiteral("text")).toString());
+    }
+    if (last.size() > 180)
+        last = last.left(180).section(QLatin1Char(' '), 0, -2) + QStringLiteral("…");
+    return last.isEmpty() ? title : QStringLiteral("Pytanie: „%1”. Odpowiedź: %2").arg(title, last);
+}
+
+static QJsonObject readConversation(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    return QJsonDocument::fromJson(f.readAll()).object();
+}
+
+// Najnowsze rozmowy (bez bieżącej): „- [ID] data „tytuł”: streszczenie”. Przy chmurze — bez rozmów tylko z tego komputera.
+QString Service::memoryFor(const Conv &current, bool cloud) const
+{
+    const QDir dir(historyDir());
+    QStringList lines;
+    int read = 0;
+    for (const QFileInfo &fi : dir.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Time)) {
+        if (fi.completeBaseName() == current.id)
+            continue;
+        if (++read > 30 || lines.size() >= 8)
+            break;
+        const QJsonObject o = readConversation(fi.filePath());
+        const QJsonArray msgs = o.value(QStringLiteral("messages")).toArray();
+        if (msgs.isEmpty() || (cloud && localOnly(msgs)))
+            continue;
+        const QString title = o.value(QStringLiteral("title")).toString();
+        QString sum = o.value(QStringLiteral("summary")).toString();
+        if (sum.isEmpty())
+            sum = quickSummary(title, msgs);
+        lines << QStringLiteral("- [%1] %2 „%3”: %4")
+                     .arg(fi.completeBaseName(),
+                          QDateTime::fromMSecsSinceEpoch(o.value(QStringLiteral("updated")).toInteger()).toString(QStringLiteral("yyyy-MM-dd HH:mm")),
+                          title, sum);
+    }
+    return lines.join(QLatin1Char('\n'));
+}
+
+// Streszcza tylko model w chmurze (i tylko rozmowy, które już i tak tam były) — model na słabym komputerze
+// nie liczy niczego w tle; jego rozmowy mają szybkie streszczenie bez modelu.
+void Service::summarizeLater(const QString &id)
+{
+    if (!memoryEnabled() || !Catalog::find(providerId()).needsKey || qEnvironmentVariableIsSet("ASTER_NO_SUMMARY"))
+        return;
+    if (!m_toSummarize.contains(id))
+        m_toSummarize << id;
+    m_summarize.start();
+}
+
+void Service::summarizeNext()
+{
+    for (const Request &r : std::as_const(m_requests))
+        if (r.summary)
+            return;          // jedno naraz
+    while (!m_toSummarize.isEmpty()) {
+        const QString id = m_toSummarize.takeFirst();
+        Conv *c = conversation(id, false);
+        if (!c || c->messages.size() < 2 || c->messages.size() == c->summaryCount || !c->pendingAction.isEmpty())
+            continue;
+        bool busy = false;
+        for (const Request &r : std::as_const(m_requests))
+            busy |= r.conversation == id;
+        if (busy) {            // rozmowa trwa — streścimy, gdy się skończy
+            m_toSummarize << id;
+            m_summarize.start();
+            return;
+        }
+        QJsonArray asJson;
+        QString transcript;
+        for (const Message &m : std::as_const(c->messages)) {
+            asJson.append(QJsonObject{{QStringLiteral("role"), m.role}, {QStringLiteral("badge"), m.badge}});
+            if (m.role == QLatin1String("user"))
+                transcript += QStringLiteral("Użytkownik: ") + m.text.left(1500) + QLatin1Char('\n');
+            else if (m.role == QLatin1String("assistant"))
+                transcript += QStringLiteral("Asystent: ") + withoutCode(m.text).left(1500) + QLatin1Char('\n');
+            else
+                transcript += QStringLiteral("(polecenie `%1`, kod %2)\n").arg(m.command.left(200)).arg(m.exitCode);
+        }
+        const Provider p = Catalog::find(providerId());
+        if (!p.needsKey || localOnly(asJson))
+            continue;
+        QString error;
+        const QString key = apiKey(p, &error);
+        if (key.isEmpty())
+            return;
+        if (transcript.size() > 8000)
+            transcript = transcript.left(1500) + QStringLiteral("\n[…]\n") + transcript.right(6500);
+        const QString system = QStringLiteral(
+            "Streszczasz rozmowę użytkownika z asystentem systemu Aster, żeby asystent pamiętał ją w kolejnych rozmowach. "
+            "Napisz po polsku jedno–dwa zdania (najwyżej 300 znaków): czego dotyczyła, co ustalono albo zrobiono na komputerze, "
+            "co zostało do zrobienia. Konkretnie (nazwy programów, plików, urządzeń), bez wstępu i bez formatowania.");
+        QJsonArray msgs{QJsonObject{{QStringLiteral("role"), QStringLiteral("user")}, {QStringLiteral("content"), transcript}}};
+        QNetworkReply *reply = post(p, key, system, msgs, true);
+        Request r;
+        r.conversation = id;
+        r.providerName = p.name;
+        r.url = urlFor(p);
+        r.anthropic = p.kind == Provider::Anthropic;
+        r.summary = true;
+        r.summaryCount = int(c->messages.size());
+        m_requests.insert(reply, r);
+        connect(reply, &QNetworkReply::readyRead, this, [this, reply] { onData(reply); });
+        connect(reply, &QNetworkReply::finished, this, [this, reply] { onFinished(reply); });
+        return;
+    }
+}
+
+// Bez polskich znaków i wielkości liter („Żółw” = „zolw”)
+static QString fold(const QString &t)
+{
+    QString n = t.toLower().normalized(QString::NormalizationForm_D);
+    n.remove(QRegularExpression(QStringLiteral("\\p{Mn}")));
+    n.replace(QChar(0x0142), QLatin1Char('l'));
+    return n;
+}
+
+QString Service::SearchConversations(const QString &phrase, bool agent)
+{
+    touch();
+    const bool hideLocal = agent && Catalog::find(providerId()).needsKey;
+    const QStringList words = fold(phrase).split(QRegularExpression(QStringLiteral("\\W+")), Qt::SkipEmptyParts);
+    QJsonArray out;
+    if (!historyEnabled())
+        return QStringLiteral("[]");
+    const QDir dir(historyDir());
+    for (const QFileInfo &fi : dir.entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Time)) {
+        if (out.size() >= 10)
+            break;
+        // Rozmowa, w której agent właśnie szuka (czeka na wynik polecenia), to nie „wcześniejsza rozmowa”
+        if (const auto it = m_convs.constFind(fi.completeBaseName()); it != m_convs.constEnd() && !it->pendingAction.isEmpty())
+            continue;
+        const QJsonObject o = readConversation(fi.filePath());
+        const QJsonArray msgs = o.value(QStringLiteral("messages")).toArray();
+        if (msgs.isEmpty())
+            continue;
+        const bool local = localOnly(msgs);
+        if (hideLocal && local)
+            continue;
+        const QString title = o.value(QStringLiteral("title")).toString();
+        QString sum = o.value(QStringLiteral("summary")).toString();
+        if (sum.isEmpty())
+            sum = quickSummary(title, msgs);
+        QString body;
+        for (const QJsonValue &v : msgs)
+            body += v.toObject().value(QStringLiteral("text")).toString() + QLatin1Char('\n');
+        const QString hay = fold(title + QLatin1Char('\n') + sum + QLatin1Char('\n') + body);
+        // Słowa dopasowywane po początku (odmiana: „drukark” znajdzie „drukarka” i „drukarki”)
+        bool all = true;
+        qsizetype first = -1;
+        for (const QString &w : words) {
+            const QString stem = w.size() > 5 ? w.left(w.size() - 2) : w;
+            const qsizetype at = hay.indexOf(stem);
+            all &= at >= 0;
+            if (first < 0)
+                first = at;
+        }
+        if (!all)
+            continue;
+        QString snippet;
+        const qsizetype bodyStart = title.size() + sum.size() + 2;
+        if (first >= bodyStart) {
+            const QString plain = QString(title + QLatin1Char('\n') + sum + QLatin1Char('\n') + body);
+            snippet = withoutCode(plain.mid(std::max<qsizetype>(bodyStart, first - 60), 180));
+        }
+        out.append(QJsonObject{{QStringLiteral("id"), fi.completeBaseName()}, {QStringLiteral("title"), title},
+                               {QStringLiteral("updated"), o.value(QStringLiteral("updated"))}, {QStringLiteral("summary"), sum},
+                               {QStringLiteral("snippet"), snippet}, {QStringLiteral("local"), local}});
+    }
+    return QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+}
+
+QString Service::ConversationText(const QString &id, bool agent)
+{
+    touch();
+    if (id.isEmpty() || id.contains(QLatin1Char('/')))
+        return {};
+    const QJsonObject o = readConversation(historyDir() + QLatin1Char('/') + id + QStringLiteral(".json"));
+    const QJsonArray msgs = o.value(QStringLiteral("messages")).toArray();
+    if (msgs.isEmpty())
+        return {};
+    const bool priv = agent && Catalog::find(providerId()).needsKey && localOnly(msgs);
+    QString text;
+    if (!priv) {
+        for (const QJsonValue &v : msgs) {
+            const QJsonObject m = v.toObject();
+            const QString role = m.value(QStringLiteral("role")).toString();
+            if (role == QLatin1String("user"))
+                text += QStringLiteral("Ty: ") + m.value(QStringLiteral("text")).toString().trimmed() + QStringLiteral("\n\n");
+            else if (role == QLatin1String("assistant")) {
+                const QString t = m.value(QStringLiteral("text")).toString().trimmed();
+                const QString plain = withoutCode(t);
+                if (!plain.isEmpty())
+                    text += QStringLiteral("Aster Intelligence: ") + t.section(QStringLiteral("```"), 0, 0).trimmed() + QStringLiteral("\n\n");
+            } else {
+                text += QStringLiteral("  [%1 — `%2`, %3]\n\n")
+                            .arg(m.value(QStringLiteral("description")).toString(), m.value(QStringLiteral("command")).toString(),
+                                 m.value(QStringLiteral("exit")).toInt() == -2 ? QStringLiteral("pominięte")
+                                 : m.value(QStringLiteral("exit")).toInt() == 0 ? QStringLiteral("zrobione")
+                                                                                : QStringLiteral("nie wyszło"));
+            }
+        }
+        if (text.size() > 8000)
+            text = QStringLiteral("[… początek pominięty …]\n") + text.right(8000);
+    }
+    return QString::fromUtf8(QJsonDocument(QJsonObject{
+        {QStringLiteral("id"), id}, {QStringLiteral("title"), o.value(QStringLiteral("title"))},
+        {QStringLiteral("updated"), o.value(QStringLiteral("updated"))}, {QStringLiteral("private"), priv},
+        {QStringLiteral("summary"), o.value(QStringLiteral("summary")).toString().isEmpty() ? quickSummary(o.value(QStringLiteral("title")).toString(), msgs) : o.value(QStringLiteral("summary")).toString()},
+        {QStringLiteral("text"), text}}).toJson(QJsonDocument::Compact));
 }

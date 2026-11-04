@@ -107,12 +107,14 @@ Q_SIGNALS:
     void toggleRequested();
     void answered();            // odpowiedź skończona (albo błąd)
     void selectionChanged();
+    void conversationShown();   // agent otworzył wcześniejszą rozmowę — Shell pokazuje panel
 
 private Q_SLOTS:
     void onChunk(const QString &conversation, const QString &text);
     void onFinished(const QString &conversation, const QString &text, const QString &badge);
     void onFailed(const QString &conversation, const QString &message);
     void onShortcut(const QString &component, const QString &action, qlonglong timestamp);
+    void onShowConversation(const QString &conversation, const QString &target);
     void onActionRequested(const QString &conversation, const QString &action, const QString &command, const QString &description, bool safe);
 
 private:

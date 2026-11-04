@@ -8,6 +8,7 @@ qt_add_executable(aster-assistant
     src/providers.cpp src/providers.h
     src/secrets.cpp src/secrets.h
     src/localmodels.cpp src/localmodels.h
+    src/commands.cpp src/commands.h
 )
 target_link_libraries(aster-assistant PRIVATE Qt6::Core Qt6::Network Qt6::DBus)
 

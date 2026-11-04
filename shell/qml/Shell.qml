@@ -24,6 +24,11 @@ QtObject {
             onStartRequested: { controlWin.close(); assistWin.close(); startWin.toggle(); }
             onControlRequested: { startWin.close(); assistWin.close(); controlWin.toggle(); }
             onAskOpened: edgeGlow.flash()
+            onChatsRequested: {
+                if (assistWin.open) { assistWin.close(); return; }
+                startWin.close(); controlWin.close(); assistWin.show();
+                if (Assistant.count === 0) assistWin.openHistory();
+            }
             onAssistantPanelRequested: show => {
                 if (!show) { assistWin.close(); return; }
                 startWin.close(); controlWin.close(); assistWin.show();
@@ -43,6 +48,17 @@ QtObject {
     property var dock: DockWindow {
         startOpen: startWin.open
         onStartRequested: { controlWin.close(); startWin.toggle(); }
+    }
+
+    // Agent znalazł wcześniejszą rozmowę — otwiera ją w panelu
+    property var shownConversation: Connections {
+        target: Assistant
+        function onConversationShown() {
+            const h = shell.horizons.objectAt(0);
+            if (h) h.closeAsk();
+            startWin.close(); controlWin.close();
+            if (!assistWin.open) assistWin.show();
+        }
     }
 
     // Super+Spacja: pole pytania w wyspie głównego ekranu (albo zamknięcie otwartego panelu)
