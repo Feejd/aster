@@ -3,8 +3,9 @@ import QtQuick
 import Aster.Ui
 import Aster.Studio
 
-// Panel z prawej w trzech zakładkach: Ścieżka (gotowe brzmienie, korektor, autotune, dynamika, przestrzeń),
-// Klip (głośność, narastanie, wyciszanie, pętla) i Piosenka (mastering, tonacja, pogłos i echo, metronom).
+// Panel z prawej w czterech zakładkach: Ścieżka (gotowe brzmienie, korektor, autotune, dynamika, przestrzeń),
+// Klip (głośność, narastanie, wyciszanie, pętla), Piosenka (mastering, tonacja, pogłos i echo, metronom)
+// i Tekst (pisanie, rymy, czas wersów, prompter).
 Item {
     id: insp
     property var colors: []
@@ -29,15 +30,25 @@ Item {
         x: 1; width: parent.width - 1; height: 58
         Segmented {
             anchors.centerIn: parent
-            model: [{ label: "Ścieżka", value: "track" }, { label: "Klip", value: "clip" }, { label: "Piosenka", value: "song" }]
+            model: [{ label: "Ścieżka", value: "track" }, { label: "Klip", value: "clip" }, { label: "Piosenka", value: "song" }, { label: "Tekst", value: "lyrics" }]
             value: insp.page
             onPicked: (v) => insp.page = v
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line; opacity: 0.6 }
     }
 
+    // Tekst piosenki — własny układ (pole do pisania, lista wersów), bez wspólnego przewijania
+    property alias lyrics: lyricsPanel
+    Lyrics {
+        id: lyricsPanel
+        visible: insp.page === "lyrics"
+        x: 1; y: tabs.height
+        width: parent.width - 1; height: parent.height - y
+    }
+
     Flickable {
         id: flick
+        visible: insp.page !== "lyrics"
         x: 1; y: tabs.height
         width: parent.width - 1; height: parent.height - y
         contentHeight: col.height + 30

@@ -1,5 +1,6 @@
 #include "studio.h"
 #include "analysis.h"
+#include "lyrics.h"
 #include "beatsynth.h"
 #include "share.h"
 
@@ -101,6 +102,7 @@ void Studio::setBeatsPerBar(int v)
     checkpoint();
     m_beatsPerBar = v;
     emit settingsChanged();
+    rebuildLyrics();
     changed();
 }
 
@@ -260,6 +262,7 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
     emit cycleChanged();
     m_engine.setMetronome(true);
     m_tracks.clear();
+    resetLyrics();
     m_undo.clear();
     m_redo.clear();
     const QVariantMap genre = [&] {
@@ -411,6 +414,7 @@ void Studio::closeProject()
     m_folder.clear();
     m_name.clear();
     m_tracks.clear();
+    resetLyrics();
     m_sources.clear();
     m_undo.clear();
     m_redo.clear();
@@ -430,6 +434,9 @@ void Studio::setDirty(bool d)
 
 QJsonObject Studio::toJson() const
 {
+    QVariantList marks;
+    for (double m : m_lyricMarks)
+        marks << m;
     QJsonArray tracks;
     for (const Track &t : m_tracks) {
         QJsonArray clips;
@@ -499,6 +506,10 @@ QJsonObject Studio::toJson() const
                                                                 {QStringLiteral("drive"), m_mastering.drive}}},
                        {QStringLiteral("cycleStart"), m_cycleStart},
                        {QStringLiteral("cycleEnd"), m_cycleEnd},
+                       {QStringLiteral("lyrics"), QJsonObject{{QStringLiteral("text"), m_lyrics},
+                                                             {QStringLiteral("start"), m_lyricsStart},
+                                                             {QStringLiteral("bars"), m_lyricsBars},
+                                                             {QStringLiteral("marks"), QJsonArray::fromVariantList(marks)}}},
                        {QStringLiteral("tracks"), tracks}};
 }
 
@@ -518,6 +529,16 @@ void Studio::fromJson(const QJsonObject &o)
     const QJsonObject ko = o.value(QStringLiteral("key")).toObject();
     m_keyRoot = std::clamp(ko.value(QStringLiteral("root")).toInt(9), 0, 11);
     m_keyMinor = ko.value(QStringLiteral("minor")).toBool(true);
+    {
+        const QJsonObject lo = o.value(QStringLiteral("lyrics")).toObject();
+        m_lyrics = lo.value(QStringLiteral("text")).toString();
+        m_lyricsStart = std::clamp(lo.value(QStringLiteral("start")).toInt(1), 1, 999);
+        m_lyricsBars = std::clamp(lo.value(QStringLiteral("bars")).toInt(1), 1, 4);
+        m_lyricMarks.clear();
+        for (const QJsonValue &v : lo.value(QStringLiteral("marks")).toArray())
+            m_lyricMarks << v.toDouble(-1);
+        rebuildLyrics();
+    }
     const QJsonObject mo = o.value(QStringLiteral("mastering")).toObject();
     m_mastering.preset = mo.value(QStringLiteral("preset")).toString();
     m_mastering.eqLow = std::clamp(mo.value(QStringLiteral("eqLow")).toDouble(), -12.0, 12.0);
@@ -614,7 +635,15 @@ void Studio::undo()
     if (m_undo.isEmpty() || recording())
         return;
     m_redo.append(toJson());
+    const QString text = m_lyrics;
+    const QList<double> marks = m_lyricMarks;
+    const int ls = m_lyricsStart, lb = m_lyricsBars;
     fromJson(m_undo.takeLast());
+    m_lyrics = text;
+    m_lyricMarks = marks;
+    m_lyricsStart = ls;
+    m_lyricsBars = lb;
+    rebuildLyrics();
     emit historyChanged();
 }
 
@@ -623,7 +652,15 @@ void Studio::redo()
     if (m_redo.isEmpty() || recording())
         return;
     m_undo.append(toJson());
+    const QString text = m_lyrics;
+    const QList<double> marks = m_lyricMarks;
+    const int ls = m_lyricsStart, lb = m_lyricsBars;
     fromJson(m_redo.takeLast());
+    m_lyrics = text;
+    m_lyricMarks = marks;
+    m_lyricsStart = ls;
+    m_lyricsBars = lb;
+    rebuildLyrics();
     emit historyChanged();
 }
 
@@ -2099,6 +2136,146 @@ void Studio::cycleClip(int id)
 {
     if (Clip *c = findClip(id))
         setCycle(double(c->start) / Engine::Rate, double(c->start + c->length) / Engine::Rate);
+}
+
+// ——— Tekst piosenki ———
+
+void Studio::resetLyrics()
+{
+    m_lyrics.clear();
+    m_lyricMarks.clear();
+    m_lyricsStart = m_lyricsBars = 1;
+    rebuildLyrics();
+}
+
+void Studio::setLyrics(const QString &text)
+{
+    if (text == m_lyrics)
+        return;
+    // Znaczniki idą za wersami: ta sama liczba wierszy — po numerze (poprawka literówki),
+    // inaczej po treści wiersza (dopisany albo usunięty wers przesuwa resztę)
+    const QStringList before = m_lyrics.split(QLatin1Char('\n')), after = text.split(QLatin1Char('\n'));
+    QList<double> marks(after.size(), -1);
+    if (before.size() == after.size()) {
+        for (int i = 0; i < after.size() && i < m_lyricMarks.size(); ++i)
+            marks[i] = m_lyricMarks[i];
+    } else {
+        QHash<QString, QList<double>> byText;
+        for (int i = 0; i < before.size() && i < m_lyricMarks.size(); ++i)
+            if (m_lyricMarks[i] >= 0)
+                byText[before[i].trimmed()] << m_lyricMarks[i];
+        for (int i = 0; i < after.size(); ++i) {
+            auto it = byText.find(after[i].trimmed());
+            if (it != byText.end() && !it->isEmpty())
+                marks[i] = it->takeFirst();
+        }
+    }
+    m_lyrics = text;
+    m_lyricMarks = marks;
+    rebuildLyrics();
+    setDirty(true);
+}
+
+void Studio::setLyricsStart(int bar)
+{
+    bar = std::clamp(bar, 1, 999);
+    if (bar == m_lyricsStart)
+        return;
+    m_lyricsStart = bar;
+    rebuildLyrics();
+    setDirty(true);
+}
+
+void Studio::setLyricsBars(int bars)
+{
+    bars = std::clamp(bars, 1, 4);
+    if (bars == m_lyricsBars)
+        return;
+    m_lyricsBars = bars;
+    rebuildLyrics();
+    setDirty(true);
+}
+
+void Studio::markLyric(int line, double seconds)
+{
+    if (line < 0 || line >= m_lyrics.count(QLatin1Char('\n')) + 1)
+        return;
+    while (m_lyricMarks.size() <= line)
+        m_lyricMarks << -1;
+    // W miarach, żeby tekst szedł za zmianą tempa; do szesnastki — drobne spóźnienie palca znika
+    m_lyricMarks[line] = seconds < 0 ? -1 : std::round(seconds * m_bpm / 60.0 * 4) / 4;
+    rebuildLyrics();
+    setDirty(true);
+}
+
+void Studio::clearLyricMarks()
+{
+    if (std::none_of(m_lyricMarks.begin(), m_lyricMarks.end(), [](double m) { return m >= 0; }))
+        return;
+    m_lyricMarks.clear();
+    rebuildLyrics();
+    setDirty(true);
+}
+
+int Studio::lyricAt(double seconds) const
+{
+    // Wers pokazuje się chwilę wcześniej — oko wyprzedza głos
+    const double beat = (seconds + 0.15) * m_bpm / 60.0;
+    int cur = -1;
+    double best = -1;
+    for (const QVariant &v : m_lyricView) {
+        const QVariantMap m = v.toMap();
+        const double b = m.value(QStringLiteral("beat")).toDouble();
+        if (b >= 0 && b <= beat && b >= best) {
+            best = b;
+            cur = m.value(QStringLiteral("line")).toInt();
+        }
+    }
+    return cur;
+}
+
+// Widok dla QML: każdy wiersz z rodzajem, początkiem i końcem (miary), numerem taktu i rymem
+void Studio::rebuildLyrics()
+{
+    const QStringList lines = m_lyrics.isEmpty() ? QStringList() : m_lyrics.split(QLatin1Char('\n'));
+    const QList<Lyrics::Line> info = Lyrics::analyze(lines);
+    const double step = double(m_lyricsBars) * m_beatsPerBar;
+    QList<double> begin(lines.size(), -1);
+    double next = double(m_lyricsStart - 1) * m_beatsPerBar;
+    for (int i = 0; i < lines.size(); ++i) {
+        if (info[i].kind != Lyrics::Kind::Line)
+            continue;
+        const double m = i < m_lyricMarks.size() ? m_lyricMarks[i] : -1;
+        begin[i] = m >= 0 ? m : next;
+        next = begin[i] + step;
+    }
+    m_lyricView.clear();
+    int content = 0;
+    for (int i = 0; i < lines.size(); ++i) {
+        double end = -1;
+        if (begin[i] >= 0) {
+            end = begin[i] + step;
+            for (int j = i + 1; j < lines.size(); ++j)
+                if (begin[j] >= 0) {
+                    end = begin[j] > begin[i] ? begin[j] : end;
+                    break;
+                }
+        }
+        const Lyrics::Line &l = info[i];
+        m_lyricView.append(QVariantMap{
+            {QStringLiteral("line"), i},
+            {QStringLiteral("text"), lines[i]},
+            {QStringLiteral("kind"), l.kind == Lyrics::Kind::Line ? QStringLiteral("line") : l.kind == Lyrics::Kind::Head ? QStringLiteral("head") : QStringLiteral("blank")},
+            {QStringLiteral("index"), l.kind == Lyrics::Kind::Line ? content++ : -1},
+            {QStringLiteral("beat"), begin[i]},
+            {QStringLiteral("end"), end},
+            {QStringLiteral("bar"), begin[i] >= 0 ? int(std::floor(begin[i] / m_beatsPerBar)) + 1 : 0},
+            {QStringLiteral("marked"), i < m_lyricMarks.size() && m_lyricMarks[i] >= 0},
+            {QStringLiteral("rhyme"), l.rhyme},
+            {QStringLiteral("rhymeAt"), l.rhymeAt},
+            {QStringLiteral("exact"), l.exact}});
+    }
+    emit lyricsChanged();
 }
 
 void Studio::setPunch(bool on)

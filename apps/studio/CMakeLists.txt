@@ -24,6 +24,9 @@ set(STUDIO_QML
     qml/Field.qml
     qml/Segmented.qml
     qml/Inspector.qml
+    qml/Lyrics.qml
+    qml/LyricText.qml
+    qml/Prompter.qml
     qml/PatternEditor.qml
     qml/PianoRoll.qml
 )
@@ -37,7 +40,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
-        src/analysis.cpp src/analysis.h
+        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h

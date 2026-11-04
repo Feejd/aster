@@ -40,6 +40,11 @@ class Studio : public QObject
     Q_PROPERTY(double cycleEnd READ cycleEnd NOTIFY cycleChanged)
     // Wymiana fragmentu (punch-in): nagranie tylko w regionie pętli, z rozbiegiem przed nim; reszta zostaje
     Q_PROPERTY(bool punch READ punch WRITE setPunch NOTIFY cycleChanged)
+    // Tekst piosenki: wersy z czasem (od taktu, co ile taktów albo ustawione w trakcie grania) i rymami
+    Q_PROPERTY(QString lyrics READ lyrics WRITE setLyrics NOTIFY lyricsChanged)
+    Q_PROPERTY(QVariantList lyricLines READ lyricLines NOTIFY lyricsChanged)
+    Q_PROPERTY(int lyricsStart READ lyricsStart WRITE setLyricsStart NOTIFY lyricsChanged)   // takt pierwszego wersu (od 1)
+    Q_PROPERTY(int lyricsBars READ lyricsBars WRITE setLyricsBars NOTIFY lyricsChanged)     // taktów na wers
     Q_PROPERTY(QVariantList presets READ presets CONSTANT)
     Q_PROPERTY(QVariantMap mastering READ mastering NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList masteringPresets READ masteringPresets CONSTANT)
@@ -118,6 +123,13 @@ public:
     double cycleStart() const { return m_cycleStart; }
     double cycleEnd() const { return m_cycleEnd; }
     bool punch() const { return m_punch; }
+    QString lyrics() const { return m_lyrics; }
+    void setLyrics(const QString &text);
+    QVariantList lyricLines() const { return m_lyricView; }
+    int lyricsStart() const { return m_lyricsStart; }
+    void setLyricsStart(int bar);
+    int lyricsBars() const { return m_lyricsBars; }
+    void setLyricsBars(int bars);
     void setPunch(bool on);
     QVariantList presets() const;
     QVariantMap mastering() const;
@@ -240,6 +252,10 @@ public:
     Q_INVOKABLE int vocalTrack(const QString &role);
     // Dubel albo ad-lib do fragmentu klipu: ścieżka roli, region = klip, wymiana fragmentu i od razu nagrywanie
     Q_INVOKABLE void recordOver(int clipId, const QString &role);
+    // Wers `line` (numer wiersza tekstu) zaczyna się w `seconds` (do 1/16 nuty); seconds < 0 — znów według taktów
+    Q_INVOKABLE void markLyric(int line, double seconds);
+    Q_INVOKABLE void clearLyricMarks();
+    Q_INVOKABLE int lyricAt(double seconds) const;   // wiersz tekstu, który właśnie leci (−1 — przed pierwszym)
     // Gotowy bit (MP3, WAV…): rozpoznaje tempo i tonację, ustawia je w projekcie i kładzie bit na siatce taktów.
     // Bez otwartego projektu tworzy nowy „na swoim bicie” — ścieżki na wokal, dubel i ad-libsy.
     Q_INVOKABLE void importBeat(const QVariant &url);
@@ -297,6 +313,7 @@ signals:
     void midiDevicesChanged();
     void artistChanged();
     void sharingChanged();
+    void lyricsChanged();
     void shareReady(const QString &path, const QString &kind);
     void shareFailed(const QString &error);
     void midiNote(int pitch, int velocity, bool on);            // nuta z klawiatury MIDI (siła 1…127)
@@ -396,6 +413,12 @@ private:
     bool m_monitor = false;
     long long m_recLoopStart = 0, m_recLoopEnd = 0;   // region pętli przy nagrywaniu (ramki); równe — bez pętli
     bool m_punch = false;
+    QString m_lyrics;
+    QList<double> m_lyricMarks;        // początek wersu w miarach od początku piosenki (dla każdego wiersza; −1 — z taktów)
+    int m_lyricsStart = 1, m_lyricsBars = 1;
+    QVariantList m_lyricView;
+    void rebuildLyrics();
+    void resetLyrics();
     long long m_punchIn = 0, m_punchOut = 0;          // wymiana fragmentu w trakcie nagrywania (ramki); równe — wyłączona
     void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)
     QList<Track> m_tracks;

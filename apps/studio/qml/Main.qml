@@ -26,7 +26,7 @@ Window {
     property bool showMixer: false
     property bool showInspector: true
     property int editTrack: -1                  // ścieżka otwarta w Beat Makerze (-1 — zamknięty)
-    readonly property bool textTyping: activeFocusItem instanceof TextInput
+    readonly property bool textTyping: activeFocusItem instanceof TextInput || activeFocusItem instanceof TextEdit
     // Litery są zajęte przez wpisywanie tekstu albo granie na klawiaturze w piano rollu
     readonly property bool typing: textTyping || (pianoRoll.visible && pianoRoll.keysActive)
 
@@ -97,6 +97,8 @@ Window {
     Shortcut { sequences: ["K"]; enabled: Studio.open && !win.typing; onActivated: Studio.metronome = !Studio.metronome }
     Shortcut { sequences: ["X"]; enabled: Studio.open && !win.typing; onActivated: win.showMixer = !win.showMixer }
     Shortcut { sequences: ["E"]; enabled: Studio.open && !win.typing; onActivated: win.showInspector = !win.showInspector }
+    Shortcut { sequences: ["T"]; enabled: Studio.open && !win.typing; onActivated: win.toggleLyrics() }
+    Shortcut { sequences: ["Down"]; enabled: Studio.open && !win.typing && inspector.lyrics.syncing; onActivated: inspector.lyrics.tap() }
     Shortcut { sequences: ["C"]; enabled: Studio.open && !win.typing; onActivated: Studio.cycle = !Studio.cycle }
     Shortcut { sequences: ["P"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.togglePunch() }
     Shortcut { sequences: ["1"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.recordOn("main") }
@@ -185,6 +187,11 @@ Window {
         else if (what === "mixer") showMixer = true;
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
+        else if (what.startsWith("lyrics:")) Studio.lyrics = what.substring(7).replace(/\|/g, "\n");
+        else if (what.startsWith("lyricsMode:")) inspector.lyrics.mode = what.substring(11);
+        else if (what.startsWith("lyricsStart:")) Studio.lyricsStart = Number(what.substring(12));
+        else if (what === "sync") inspector.lyrics.startSync();
+        else if (what === "tap") inspector.lyrics.tap();
         else if (what.startsWith("over:")) { const a = what.split(":"); Studio.recordOver(clips(Number(a[1]))[0].id, a[2]); }
         else if (what.startsWith("role:")) recordOn(what.substring(5));
         else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
@@ -267,6 +274,14 @@ Window {
         if (i < 0) return;
         toast((had ? "Nagrywasz na: " : "Nowa ścieżka do nagrania: ") + Studio.tracks[i].name
               + (role === "double" ? " — rapuj to samo co w zwrotce" : role === "adlib" ? " — okrzyki i powtórzenia między wersami" : ""));
+    }
+    function toggleLyrics() {
+        if (showInspector && inspector.page === "lyrics") {
+            showInspector = false;
+        } else {
+            inspector.page = "lyrics";
+            showInspector = true;
+        }
     }
     function togglePunch() {
         Studio.punch = !Studio.punch;
@@ -634,6 +649,14 @@ Window {
                 onEditPattern: (track) => { win.editTrack = track; Studio.selectedTrack = track; }
             }
 
+            // Prompter tekstu w trakcie nagrywania — u dołu osi czasu, nad paskiem
+            Prompter {
+                visible: inspector.lyrics.prompter && Studio.recording && Studio.lyrics.trim() !== ""
+                x: timeline.headerW + 16
+                width: timeline.width - x - 16
+                y: timeline.y + timeline.height - height - 14
+            }
+
             // Pasek pod osią: dodawanie dźwięku, siatka, powiększenie, panele (mikser, efekty)
             Item {
                 id: statusBar
@@ -688,7 +711,8 @@ Window {
                             x: 3; anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
                             ViewBtn { icon: "sliders"; label: "Mikser"; active: win.showMixer; tip: "Głośność i panorama wszystkich ścieżek (X)"; onClicked: win.showMixer = !win.showMixer }
-                            ViewBtn { icon: "sparkle"; label: "Efekty"; active: win.showInspector; tip: "Brzmienie ścieżki, klip i mastering (E)"; onClicked: win.showInspector = !win.showInspector }
+                            ViewBtn { icon: "sparkle"; label: "Efekty"; active: win.showInspector && inspector.page !== "lyrics"; tip: "Brzmienie ścieżki, klip i mastering (E)"; onClicked: { if (win.showInspector && inspector.page === "lyrics") inspector.page = "track"; else win.showInspector = !win.showInspector; } }
+                            ViewBtn { icon: "doc"; label: "Tekst"; active: win.showInspector && inspector.page === "lyrics"; tip: "Tekst piosenki z rymami i prompterem (T)"; onClicked: win.toggleLyrics() }
                         }
                     }
                 }

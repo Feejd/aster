@@ -241,7 +241,10 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] role ścieżek rapera (Wokal / Dubel / Ad-libsy, klawisze 1–3, „nagrywasz na” przy przycisku nagrywania;
         brakującą ścieżkę Studio zakłada z brzmieniem); w menu klipu „Nagraj dubel / ad-libsy do tego fragmentu”;
         efekt „Sztuczny dubel” (dwie pływające kopie 19 i 27 ms po bokach) w karcie Przestrzeń
-  - [ ] Dalej (raperzy): odszumianie i de-esser, tekst z prompterem i rymami,
+  - [x] tekst piosenki (zakładka Tekst, T): pisanie, czytanie z kolorowymi rymami (`src/lyrics.*`: od przedostatniej
+        sylaby, wymowa ó/u, rz/ż, ubezdźwięcznienie; asonanse i rymy męskie; para do 3 wersów odstępu), czas wersów
+        od taktu co 1–2 takty albo ustawiany ↓ w trakcie grania (miary, do szesnastki), prompter nad osią przy nagrywaniu
+  - [ ] Dalej (raperzy): odszumianie i de-esser, podpowiedzi rymów (słownik hunspell-pl),
         znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
         separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
