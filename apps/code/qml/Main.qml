@@ -47,6 +47,9 @@ Window {
         property bool lsp: true
         property string recentTasks: "{}"        // folder projektu → ostatnie polecenia (JSON)
         property string debugPrograms: "{}"      // folder projektu → program i argumenty do debugowania (JSON)
+        property real previewWidth: 0.45
+        property bool previewOnSave: true
+        property bool previewAuto: true
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
 
@@ -243,6 +246,7 @@ Window {
         lastSave[t.path] = Date.now();
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
+            if (prefs.previewOnSave) preview.reload();
             for (let k = 0; k < tabs.count; ++k) if (k !== i && tabs.get(k).path === t.path) page(k).markSaved();
             Lsp.saved(t.path);
             p.refreshBlame();
@@ -546,7 +550,7 @@ Window {
     function showTasks() { if (hasProject) palette.openTasks(taskList()); }
     function runTask(t) {
         saveAll();
-        Tasks.run(t.label, t.command, t.cwd || Project.root);
+        Tasks.run(t.label, t.command, t.cwd || Project.root, taskEnv(t.cwd || Project.root));
         // Ostatnie 6 poleceń na projekt — na górze listy
         let all = {};
         try { all = JSON.parse(prefs.recentTasks); } catch (e) {}
@@ -556,6 +560,44 @@ Window {
         prefs.recentTasks = JSON.stringify(all);
         terminalShown = true;
         terminalPanel.tab = 3;
+    }
+    // ▶ Uruchom (Ctrl+F5): serwer deweloperski z każdego projektu naraz (np. frontend i backend), każdy z własnymi logami
+    function runApp() {
+        if (!hasProject) return;
+        const targets = Tasks.runTargets(Project.root);
+        if (!targets.length) { showTasks(); return; }
+        saveAll();
+        previewScore = -1;
+        for (const t of targets) Tasks.run(t.label, t.command, t.cwd || Project.root, win.taskEnv(t.cwd || Project.root));
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    function showRunMenu() {
+        const p = runBtn.mapToItem(frame, 0, runBtn.height + 6);
+        const targets = Tasks.runTargets(Project.root);
+        const items = [];
+        if (targets.length > 1) items.push({ label: "Uruchom wszystko (" + targets.length + ")", icon: "play", shortcut: "Ctrl+F5", action: "run:all" });
+        targets.forEach((t, i) => items.push({ label: t.label, icon: "play", action: "run:" + i, shortcut: targets.length === 1 ? "Ctrl+F5" : "" }));
+        if (Tasks.runningCount) items.push({ separator: true }, { label: "Zatrzymaj wszystko", icon: "stop", action: "run:stop", danger: true });
+        items.push({ separator: true }, { label: "Inne zadania…", icon: "apps", action: "tasks" }, { label: "Podgląd strony", icon: "globe", action: "preview" });
+        runMenuTargets = targets;
+        menu.openAt(Math.min(p.x, frame.width - 280), p.y, items);
+    }
+    property var runMenuTargets: []
+    property int previewScore: -1
+    // Zmienne środowiska dla zadania (sekrety projektu — punkt „Sekrety”)
+    function taskEnv(cwd) { return ({}); }
+    Connections {
+        target: Tasks
+        // Kilka serwerów — w podglądzie strona (frontend), nie API; lepszy adres zastępuje gorszy
+        function onUrlDetected(id, label, url) {
+            const score = /front|web|client|ui|site|app:|vite|next|dev/i.test(label) ? 2 : /back|api|server|uvicorn|flask|django/i.test(label) ? 0 : 1;
+            if (prefs.previewAuto && (!preview.shown || score > win.previewScore || !preview.url)) {
+                win.previewScore = score;
+                preview.open(url);
+            }
+            win.toast("„" + label + "” działa: " + url);
+        }
     }
     // Ctrl+Shift+B: ostatnio uruchomione zadanie budowania od razu, inaczej lista
     function buildTask() {
@@ -837,6 +879,9 @@ Window {
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Uruchom aplikację (serwery)", shortcut: "Ctrl+F5", action: "run:all", icon: "play" },
+        { label: "Zatrzymaj wszystkie procesy", shortcut: "", action: "run:stop", icon: "stop" },
+        { label: "Podgląd strony", shortcut: "", action: "preview", icon: "globe" },
         { label: "Debuguj", shortcut: "F5", action: "debug", icon: "bug" },
         { label: "Debuguj inny program…", shortcut: "", action: "debugAsk", icon: "bug" },
         { label: "Punkt przerwania", shortcut: "F9", action: "breakpoint", icon: "bug" },
@@ -972,6 +1017,10 @@ Window {
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
         else if (a === "tasks") showTasks();
+        else if (a === "run:all") runApp();
+        else if (a === "run:stop") Tasks.stopAll();
+        else if (a === "preview") preview.shown ? preview.close() : preview.open("");
+        else if (a.startsWith("run:")) { const t = runMenuTargets[Number(a.slice(4))]; if (t) { saveAll(); Tasks.run(t.label, t.command, t.cwd || Project.root, taskEnv(t.cwd || Project.root)); terminalShown = true; terminalPanel.tab = 3; } }
         else if (a === "debug") startDebug(false);
         else if (a === "debugAsk") startDebug(true);
         else if (a === "breakpoint") toggleBreakpointHere();
@@ -1090,6 +1139,10 @@ Window {
         else if (what === "split") splitEditor();
         else if (what === "settings") settingsView.open();
         else if (what === "tasks") showTasks();
+        else if (what === "runapp") runApp();
+        else if (what.startsWith("preview:")) preview.open(arg);
+        else if (what === "phone") preview.phone = true;
+        else if (what === "pconsole") preview.consoleOpen = true;
         else if (what === "history") showHistory(curPath);
         else if (what.startsWith("histdiff:")) { const n = Number(arg); const e = historyView.entries[n]; if (e) diffView.openCommit(curPath, e.rel, e.hash, e.subject); }
         else if (what.startsWith("histfiles:")) { const e = historyView.entries[Number(arg)]; if (e) showCommit(e.hash); }
@@ -1143,6 +1196,7 @@ Window {
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
     Shortcut { sequence: "Ctrl+Shift+B"; enabled: win.hasProject; onActivated: win.buildTask() }
+    Shortcut { sequence: "Ctrl+F5"; enabled: win.hasProject; onActivated: win.runApp() }
     Shortcut { sequence: "F5"; enabled: win.hasProject; onActivated: win.startDebug(false) }
     Shortcut { sequence: "Shift+F5"; enabled: !!Debugger.state; onActivated: Debugger.stop() }
     Shortcut { sequence: "F6"; enabled: Debugger.state === "running"; onActivated: Debugger.pause() }
@@ -1284,6 +1338,22 @@ Window {
                     anchors.right: winButtons.left; anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
+                    // ▶ Uruchom — z wykrytych serwerów; zielony, gdy coś działa
+                    ToolBtn {
+                        id: runBtn
+                        visible: win.hasProject
+                        icon: "play"
+                        opacity: 1
+                        onClicked: Tasks.runningCount ? win.showRunMenu() : win.runApp()
+                        Rectangle {
+                            visible: Tasks.runningCount > 0
+                            anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 3
+                            width: 8; height: 8; radius: 4
+                            color: Theme.dark ? "#3FB950" : "#1A7F37"
+                        }
+                    }
+                    ToolBtn { icon: "chevronDown"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
+                    ToolBtn { icon: "globe"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
                     ToolBtn { icon: "search"; onClicked: palette.open("") }
                     ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
                     ToolBtn { icon: "panelBottom"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
@@ -1341,7 +1411,7 @@ Window {
             Item {
                 id: editorArea
                 y: crumbs.y + crumbs.height
-                width: parent.width
+                width: parent.width - (preview.shown ? preview.width : 0)
                 height: (win.terminalShown && win.terminalMax ? 0 : parent.height - y - status.height - (win.terminalShown ? terminalPanel.height : 0))
                 clip: true
 
@@ -1570,6 +1640,24 @@ Window {
                 }
             }
 
+            // Podgląd strony obok edytora (szerokość do przeciągnięcia)
+            PreviewPane {
+                id: preview
+                x: editorArea.width
+                y: editorArea.y
+                width: Math.max(320, Math.min(parent.width - 360, parent.width * prefs.previewWidth))
+                height: editorArea.height
+                onClosed: if (win.cur) win.cur.focusEditor()
+                Rectangle { width: 1; height: parent.height; color: Theme.line }
+                MouseArea {
+                    width: 8; height: parent.height; x: -4
+                    cursorShape: Qt.SplitHCursor
+                    property real startX
+                    onPressed: (e) => startX = e.x
+                    onPositionChanged: (e) => { if (pressed) prefs.previewWidth = Math.max(0.2, Math.min(0.8, (preview.width - (e.x - startX)) / preview.parent.width)); }
+                }
+            }
+
             // Terminal
             TerminalPanel {
                 id: terminalPanel
@@ -1585,6 +1673,7 @@ Window {
                 onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
                 onOpenLocation: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 onOpenFrame: (i) => Debugger.selectFrame(i)
+                onOpenPreview: (url) => preview.open(url)
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5

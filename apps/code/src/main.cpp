@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QUrl>
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <QtQml/qqmlextensionplugin.h>
 #include "typography.h"
 
@@ -20,6 +21,9 @@ Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
+    // Podgląd strony (QtWebEngine) — przed utworzeniem aplikacji
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QtWebEngineQuick::initialize();
     QGuiApplication app(argc, argv);
     asterTypography();
     app.setApplicationName(QStringLiteral("aster-code"));

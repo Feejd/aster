@@ -8,11 +8,14 @@
 #include <QStringList>
 #include <QTimer>
 #include <QVariantList>
+#include <functional>
 
 // Zadania projektu w Aster Code (jak „Tasks” w VS Code): wykrywane z plików projektu (package.json,
-// Makefile, CMakeLists.txt, meson.build, Cargo.toml, go.mod, justfile, Python) i uruchamiane w tle
-// przez powłokę. Wyjście bez kolorów ANSI idzie do karty „Zadanie”; błędy kompilatorów (gcc/clang,
-// tsc, rustc, Python) — do panelu Problemy, w tym samym kształcie co Lsp.problems.
+// Makefile, CMakeLists.txt, meson.build, Cargo.toml, go.mod, justfile, pyproject/Python — także w podfolderach,
+// np. frontend/ i backend/) i uruchamiane w tle przez powłokę. Kilka procesów naraz, każdy z własnym
+// wyjściem (bez kolorów ANSI); adres serwera z wyjścia (http://localhost:5173) — sprawdzony i zgłoszony
+// do podglądu. Błędy kompilatorów (gcc/clang, tsc, rustc, Python) — do panelu Problemy, w kształcie Lsp.problems.
+// Właściwości lines/running/title/exitCode dotyczą procesu wybranego w karcie Zadania.
 class Tasks : public QObject
 {
     Q_OBJECT
@@ -26,50 +29,79 @@ class Tasks : public QObject
     Q_PROPERTY(QVariantList problems READ problems NOTIFY problemsChanged)
     Q_PROPERTY(int errorCount READ errorCount NOTIFY problemsChanged)
     Q_PROPERTY(int warningCount READ warningCount NOTIFY problemsChanged)
+    Q_PROPERTY(QVariantList processes READ processes NOTIFY processesChanged)   // [{ id, label, command, running, exitCode, url, errors }]
+    Q_PROPERTY(int selected READ selected NOTIFY stateChanged)
+    Q_PROPERTY(int runningCount READ runningCount NOTIFY processesChanged)
 
 public:
     explicit Tasks(QObject *parent = nullptr);
     ~Tasks() override;
 
-    QStringList lines() const { return m_lines; }
-    bool running() const { return m_proc && m_proc->state() != QProcess::NotRunning; }
-    QString title() const { return m_title; }
-    int exitCode() const { return m_exitCode; }
-    qint64 elapsed() const { return m_elapsed; }
+    QStringList lines() const;
+    bool running() const;
+    QString title() const;
+    int exitCode() const;
+    qint64 elapsed() const;
     QVariantList problems() const;
-    int errorCount() const { return m_errors; }
-    int warningCount() const { return m_warnings; }
+    int errorCount() const;
+    int warningCount() const;
+    QVariantList processes() const;
+    int selected() const { return m_selected; }
+    int runningCount() const;
 
     // [{ label, command, cwd, group: build | test | run | other, source }] — od najważniejszych
     Q_INVOKABLE QVariantList detect(const QString &root) const;
-    Q_INVOKABLE void run(const QString &label, const QString &command, const QString &cwd);
-    Q_INVOKABLE void stop();
-    Q_INVOKABLE void rerun();
+    Q_INVOKABLE QVariantList runTargets(const QString &root) const;
+    // Zwraca id procesu; to samo polecenie w tym samym folderze — uruchamia się od nowa w tym samym miejscu
+    Q_INVOKABLE int run(const QString &label, const QString &command, const QString &cwd, const QVariantMap &env = QVariantMap());
+    Q_INVOKABLE void stop(int id = -1);                // −1 — wybrany
+    Q_INVOKABLE void stopAll();
+    Q_INVOKABLE void rerun(int id = -1);
     Q_INVOKABLE void clear();
+    Q_INVOKABLE void select(int id);
+    Q_INVOKABLE void remove(int id);                   // zakończony proces znika z listy
     // Wiersz wyjścia ze wskazaniem miejsca: { path, line, col } (od 0) albo pusty
     Q_INVOKABLE QVariantMap locate(const QString &line) const;
-    Q_INVOKABLE QVariantList diagnostics(const QString &path) const { return m_problems.value(path); }
+    Q_INVOKABLE QVariantList diagnostics(const QString &path) const;
+    // Polecenia uruchamiane przez Tasks idą przez tę funkcję (kontener projektu, Flatpak) — ustawia ProjectEnv
+    std::function<QStringList(const QString &command, const QString &cwd)> wrap;
 
 Q_SIGNALS:
     void outputChanged();
     void stateChanged();
     void problemsChanged();
     void finished(const QString &title, int exitCode);
+    void processesChanged();
+    void urlDetected(int id, const QString &label, const QString &url);
 
 private:
-    void append(const QByteArray &data);
-    void flushPartial();
-    void parseLine(const QString &line);
-    void finish(int code);
+    struct Proc {
+        int id = 0;
+        QPointer<QProcess> proc;
+        QStringList lines;
+        QString partial, title, command, cwd;
+        QVariantMap env;
+        int exitCode = -1, errors = 0, warnings = 0;
+        qint64 elapsed = 0;
+        QElapsedTimer clock;
+        QHash<QString, QVariantList> problems;
+        QString pyFile, rustMsg, url;
+        int pyLine = -1, rustSev = 0;
+        bool urlPending = false;
+    };
+    Proc *find(int id) const;
+    Proc *current() const { return find(m_selected); }
+    void start(Proc *p);
+    void append(Proc *p, const QByteArray &data);
+    void parseLine(Proc *p, const QString &line);
+    void finish(Proc *p, int code);
+    void checkUrl(Proc *p, const QString &line);
+    void kill(Proc *p);
+    QVariantList detectOne(const QString &root) const;
+    static QVariantMap locateIn(const QString &line, const QString &cwd);
 
-    QPointer<QProcess> m_proc;
-    QStringList m_lines;
-    QString m_partial, m_title, m_command, m_cwd, m_root;
-    int m_exitCode = -1, m_errors = 0, m_warnings = 0;
-    qint64 m_elapsed = 0;
-    QElapsedTimer m_clock;
+    QList<Proc *> m_procs;
+    int m_selected = 0, m_nextId = 1;
+    QString m_root;
     QTimer m_notify;                    // zmiany wyjścia najwyżej co 80 ms
-    QHash<QString, QVariantList> m_problems;
-    QString m_pyFile;                   // Python: „File "x", line N” — komunikat przychodzi w ostatnim wierszu
-    int m_pyLine = -1;
 };

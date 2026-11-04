@@ -181,3 +181,5 @@ var stepOver = "M4 14a8 8 0 0 1 15-3.5M20 6v5h-5M12 19.5h.01";
 var stepIn = "M12 3v11M7 10l5 5 5-5M12 20h.01";
 var stepOut = "M12 15V4M7 8l5-5 5 5M12 20h.01";
 var pause = "M8 5v14M16 5v14";
+var monitor = "M3 5h18v11H3zM8 20h8M12 16v4";
+var external = "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5";

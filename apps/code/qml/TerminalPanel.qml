@@ -19,6 +19,7 @@ Item {
     signal openReference(string path, int line, int col, int length)
     signal openLocation(string path, int line, int col)
     signal openFrame(int index)
+    signal openPreview(string url)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -53,8 +54,9 @@ Item {
                 onClicked: tp.tab = 1
             }
             PanelTab {
-                visible: Tasks.lines.length > 0 || Tasks.running
-                label: "ZADANIE"; icon: Tasks.running ? "reload" : "play"; on: tp.tab === 3
+                visible: Tasks.processes.length > 0
+                label: "ZADANIA"; icon: Tasks.runningCount ? "reload" : "play"; on: tp.tab === 3
+                badge: Tasks.processes.length > 1 ? Tasks.runningCount : 0
                 onClicked: tp.tab = 3
             }
             PanelTab {
@@ -109,6 +111,7 @@ Item {
         anchors.fill: parent
         anchors.topMargin: header.height + 1
         onOpenLocation: (path, line, col) => tp.openLocation(path, line, col)
+        onOpenPreview: (url) => tp.openPreview(url)
     }
 
     ReferencesView {

@@ -2,6 +2,7 @@
 # Kolorowanie składni: KSyntaxHighlighting (jak Edytor tekstu), terminal na dole: libvterm (jak Terminal).
 # Wspólne pliki z Edytora i Terminala są kompilowane wprost z ich katalogów — jedno źródło, bez kopii.
 find_package(KF6SyntaxHighlighting REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS WebEngineQuick Network)       # podgląd strony, wykrywanie portów
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(VTERM REQUIRED IMPORTED_TARGET vterm)
 
@@ -29,6 +30,7 @@ set(CODE_QML
     qml/TaskOutput.qml
     qml/DebugView.qml
     qml/HistoryView.qml
+    qml/PreviewPane.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -70,6 +72,8 @@ target_link_libraries(aster-code PRIVATE
     Qt6::Gui
     Qt6::Quick
     Qt6::Qml
+    Qt6::Network
+    Qt6::WebEngineQuick
     KF6::SyntaxHighlighting
     KF6::WindowSystem
     PkgConfig::VTERM

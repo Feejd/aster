@@ -3,6 +3,8 @@ app-id: org.aster.code
 runtime: org.kde.Platform
 runtime-version: "6.11"
 sdk: org.kde.Sdk
+base: io.qt.qtwebengine.BaseApp                # podgląd strony (QtWebEngine)
+base-version: "6.11"
 command: aster-code
 finish-args:
   - --socket=wayland
