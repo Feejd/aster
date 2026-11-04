@@ -1,4 +1,5 @@
 #include "lsp.h"
+#include "projectenv.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -334,13 +335,25 @@ void Lsp::setEnabled(bool on)
     Q_EMIT serversChanged();
 }
 
+void Lsp::restartServers()
+{
+    for (LspServer *s : std::as_const(m_servers))
+        s->deleteLater();
+    m_servers.clear();
+    m_docs.clear();
+    m_diagnostics.clear();
+    recount();
+    Q_EMIT serversChanged();
+    Q_EMIT enabledChanged();               // karty ponownie otwierają swoje pliki
+}
+
 QVariantList Lsp::servers() const
 {
     QVariantList out;
     for (const ServerDef &d : definitions()) {
         bool available = false;
         for (const QStringList &c : d.commands)
-            if (!QStandardPaths::findExecutable(c.first()).isEmpty() || QFileInfo(c.first()).isExecutable())
+            if (ProjectEnv::instance()->has(c.first()))
                 available = true;
         const LspServer *s = m_servers.value(QString::fromLatin1(d.id));
         QStringList exts;
@@ -365,11 +378,11 @@ QVariantMap Lsp::serverFor(const QString &path) const
         return {{QStringLiteral("id"), QString()}};
     bool available = false;
     for (const QStringList &c : d->commands)
-        if (!QStandardPaths::findExecutable(c.first()).isEmpty() || QFileInfo(c.first()).isExecutable())
+        if (ProjectEnv::instance()->has(c.first()))
             available = true;
     const LspServer *s = m_servers.value(QString::fromLatin1(d->id));
     return {{QStringLiteral("id"), QString::fromLatin1(d->id)},
-            {QStringLiteral("name"), s ? QFileInfo(s->program()).fileName() : QString::fromUtf8(d->name)},
+            {QStringLiteral("name"), s ? s->displayName() : QString::fromUtf8(d->name)},
             {QStringLiteral("available"), available},
             {QStringLiteral("running"), s && s->ready()},
             {QStringLiteral("failed"), s && s->failed()},
@@ -387,12 +400,12 @@ LspServer *Lsp::serverForPath(const QString &path)
     if (LspServer *s = m_servers.value(id))
         return s->failed() ? nullptr : s;
     for (const QStringList &c : d->commands) {
-        QString exe = QStandardPaths::findExecutable(c.first());
-        if (exe.isEmpty() && QFileInfo(c.first()).isExecutable())
-            exe = c.first();
-        if (exe.isEmpty())
+        // W kontenerze projektu albo w systemie (ProjectEnv)
+        if (!ProjectEnv::instance()->has(c.first()))
             continue;
-        auto *s = new LspServer(id, exe, c.mid(1), m_root, this);
+        const QStringList argv = ProjectEnv::instance()->program(c);
+        auto *s = new LspServer(id, argv.first(), argv.mid(1), m_root, this);
+        s->setDisplayName(QFileInfo(c.first()).fileName());
         m_servers.insert(id, s);
         connect(s, &LspServer::notification, this, &Lsp::onNotification);
         connect(s, &LspServer::applyEdit, this, [this](const QJsonObject &edit) { Q_EMIT workspaceEditReady(workspaceEdit(edit)); });

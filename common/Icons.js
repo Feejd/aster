@@ -183,3 +183,4 @@ var stepOut = "M12 15V4M7 8l5-5 5 5M12 20h.01";
 var pause = "M8 5v14M16 5v14";
 var monitor = "M3 5h18v11H3zM8 20h8M12 16v4";
 var external = "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5";
+var box = "M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9";

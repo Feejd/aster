@@ -1,4 +1,5 @@
 #include "tasks.h"
+#include "projectenv.h"
 
 #include <QDir>
 #include <QFile>
@@ -369,7 +370,8 @@ void Tasks::start(Proc *p)
     env.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
     env.insert(QStringLiteral("BROWSER"), QStringLiteral("none"));          // serwery deweloperskie nie otwierają przeglądarki
     for (auto it = p->env.cbegin(); it != p->env.cend(); ++it)
-        env.insert(it.key(), it.value().toString());
+        if (!it.key().startsWith(QLatin1String("__")))
+            env.insert(it.key(), it.value().toString());
     proc->setProcessEnvironment(env);
     const int id = p->id;
     connect(proc, &QProcess::readyRead, this, [this, id, proc] { if (Proc *q = find(id)) append(q, proc->readAll()); });
@@ -388,7 +390,9 @@ void Tasks::start(Proc *p)
         }
     });
     p->clock.start();
-    QStringList argv = wrap ? wrap(p->command, p->cwd) : QStringList();
+    // Kontener projektu albo system (z Flatpaka); „__host” w env — zawsze w systemie (zakładanie kontenera)
+    const bool onHost = p->env.value(QStringLiteral("__host")).toBool();
+    QStringList argv = onHost ? ProjectEnv::instance()->hostShell(p->command, p->cwd) : ProjectEnv::instance()->shell(p->command, p->cwd);
     if (argv.isEmpty())
         argv = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), p->command};
     proc->start(argv.first(), argv.mid(1));

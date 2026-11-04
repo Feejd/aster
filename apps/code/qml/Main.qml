@@ -52,6 +52,7 @@ Window {
         property bool previewAuto: true
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
+    Binding { target: ProjectEnv; property: "root"; value: Project.root }
 
     // Samozapis po chwili od ostatniej zmiany (bez porządkowania pliku — nie przeszkadza w pisaniu)
     Timer {
@@ -356,7 +357,7 @@ Window {
             }
         }
         function onMessage(text) { win.toast(text); }
-        function onRootChanged() { Lsp.setRoot(Project.root); }
+        function onRootChanged() { Lsp.setRoot(Project.root); ProjectEnv.root = Project.root; }
         function onFileChanged(path) {
             const i = win.indexOfPath(path);
             if (i < 0 || Date.now() - (win.lastSave[path] || 0) < 2000) return;
@@ -679,6 +680,50 @@ Window {
         pin(i);
         toast("Wersja z " + hash.slice(0, 7) + " w edytorze — zapisz (Ctrl+S) albo cofnij (Ctrl+Z)");
     }
+    // ——— Środowisko projektu (kontener) ———
+    property string envState: ProjectEnv.state
+    onEnvStateChanged: Lsp.restartServers()
+    function createContainer() {
+        if (!ProjectEnv.toolAvailable()) { toast("W systemie nie ma toolbox ani distrobox"); return; }
+        nameBox.ask("Kontener dla „" + Project.name + "”", ProjectEnv.suggestPackages().join(" "),
+                    "Pakiety Fedory do zainstalowania (spacja między nimi). Wszystko trafi do kontenera — w systemie nic nie przybędzie.", (text) => {
+            ProjectEnv.useContainer(true);
+            const pk = text.trim().split(/\s+/).filter(x => !!x);
+            win.envTask("Kontener: przygotowanie", ProjectEnv.createCommand(pk));
+        });
+    }
+    function envTask(label, command) {
+        Tasks.run(label, command, Project.root, { __host: true });
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    function showEnvMenu() {
+        const p = envBtn.mapToItem(frame, 0, 0);
+        const st = ProjectEnv.state;
+        const items = st === "ready" ? [
+            { label: "Terminal w kontenerze", icon: "terminal", action: "env:terminal" },
+            { label: "Zainstaluj pakiety…", icon: "download", action: "env:install" },
+            { separator: true },
+            { label: "Pracuj w systemie (kontener zostaje)", icon: "monitor", action: "env:off" },
+            { label: "Usuń kontener…", icon: "trash", action: "env:remove", danger: true }
+        ] : st === "none" ? [
+            { label: "Załóż kontener " + ProjectEnv.container, icon: "plus", action: "env:create" },
+            { label: "Pracuj w systemie", icon: "monitor", action: "env:off" }
+        ] : [
+            { label: "Utwórz kontener projektu…", icon: "plus", action: "env:create", enabled: ProjectEnv.toolAvailable() },
+            { label: ProjectEnv.toolAvailable() ? "Node, Python, bazy danych — w kontenerze, nie w systemie" : "Brak toolbox — zainstaluj: rpm-ostree install toolbox",
+              icon: "info", action: "", enabled: false }
+        ];
+        menu.openAt(Math.max(8, p.x - 160), p.y - items.length * 34 - 18, items);
+    }
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (!title.startsWith("Kontener")) return;
+            ProjectEnv.refresh();
+            if (code === 0) win.toast(title === "Kontener: usuwanie" ? "Kontener usunięty" : "Kontener gotowy — terminal, zadania i serwery języków działają w nim");
+        }
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -879,6 +924,8 @@ Window {
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
+        { label: "Kontener projektu: zainstaluj pakiety…", shortcut: "", action: "env:install", icon: "box" },
         { label: "Uruchom aplikację (serwery)", shortcut: "Ctrl+F5", action: "run:all", icon: "play" },
         { label: "Zatrzymaj wszystkie procesy", shortcut: "", action: "run:stop", icon: "stop" },
         { label: "Podgląd strony", shortcut: "", action: "preview", icon: "globe" },
@@ -1017,6 +1064,11 @@ Window {
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
         else if (a === "tasks") showTasks();
+        else if (a === "env:create") createContainer();
+        else if (a === "env:terminal") { terminalShown = true; terminalPanel.tab = 0; terminalPanel.restart(); }
+        else if (a === "env:off") ProjectEnv.useContainer(false);
+        else if (a === "env:install") nameBox.ask("Zainstaluj w kontenerze", "", "Pakiety Fedory, np. nodejs postgresql-server redis", (t) => { if (t.trim()) win.envTask("Kontener: pakiety", ProjectEnv.installCommand(t.trim().split(/\s+/))); });
+        else if (a === "env:remove") win.confirm = { kind: "envRemove", name: ProjectEnv.container };
         else if (a === "run:all") runApp();
         else if (a === "run:stop") Tasks.stopAll();
         else if (a === "preview") preview.shown ? preview.close() : preview.open("");
@@ -1140,6 +1192,8 @@ Window {
         else if (what === "settings") settingsView.open();
         else if (what === "tasks") showTasks();
         else if (what === "runapp") runApp();
+        else if (what === "envcreate") { ProjectEnv.useContainer(true); envTask("Kontener: przygotowanie", ProjectEnv.createCommand(ProjectEnv.suggestPackages())); }
+        else if (what === "envmenu") showEnvMenu();
         else if (what.startsWith("preview:")) preview.open(arg);
         else if (what === "phone") preview.phone = true;
         else if (what === "pconsole") preview.consoleOpen = true;
@@ -1755,6 +1809,15 @@ Window {
                         text: tabs.count && win.revision >= 0 ? (tabs.get(win.current).eol === "\r\n" ? "CRLF" : "LF") : ""
                         onClicked: win.showStatusMenu("eol", eolBtn)
                     }
+                    // Środowisko projektu: kontener albo system
+                    StatusBtn {
+                        id: envBtn
+                        visible: win.hasProject && (ProjectEnv.toolAvailable() || ProjectEnv.state !== "off")
+                        icon: ProjectEnv.state === "ready" ? "box" : ProjectEnv.state === "off" ? "monitor" : "alertCircle"
+                        text: ProjectEnv.state === "ready" ? ProjectEnv.container : ProjectEnv.state === "none" ? "Kontener do założenia"
+                            : ProjectEnv.state === "missing" ? "Brak toolbox" : "System"
+                        onClicked: win.showEnvMenu()
+                    }
                     StatusBtn { text: win.cur ? win.cur.language : "" }
                     // Serwer języka: nazwa (działa), „uruchamia się” albo podpowiedź, co doinstalować
                     StatusBtn {
@@ -1961,7 +2024,8 @@ Window {
                     spacing: 8
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: !win.confirm ? "" : win.confirm.kind === "replace"
+                        text: !win.confirm ? "" : win.confirm.kind === "envRemove" ? "Usunąć kontener „" + win.confirm.name + "”?"
+                            : win.confirm.kind === "replace"
                               ? "Zamienić " + win.confirm.count + " wystąpień w " + win.confirm.files + (win.confirm.files === 1 ? " pliku?" : " plikach?")
                             : win.confirm.kind === "discard"
                               ? (win.confirm.hunk !== undefined ? "Odrzucić ten fragment zmian w „" + win.confirm.name + "”?"
@@ -1972,7 +2036,8 @@ Window {
                     }
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: win.confirm && win.confirm.kind === "replace" ? "„" + searchView.query + "” → „" + searchView.replacement + "”. Otwarte karty zmienią się w edytorze (do cofnięcia), pozostałe pliki zostaną zapisane od razu."
+                        text: win.confirm && win.confirm.kind === "envRemove" ? "Zainstalowane w nim programy znikną. Pliki projektu zostają (są w katalogu domowym)."
+                            : win.confirm && win.confirm.kind === "replace" ? "„" + searchView.query + "” → „" + searchView.replacement + "”. Otwarte karty zmienią się w edytorze (do cofnięcia), pozostałe pliki zostaną zapisane od razu."
                             : win.confirm && win.confirm.kind === "discard" ? "Pliki wrócą do ostatniej zatwierdzonej wersji — tego nie da się cofnąć. Nowe pliki trafią do Kosza."
                                                                            : "Jeśli nie zapiszesz, zmiany przepadną."
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
@@ -1981,7 +2046,7 @@ Window {
                     Item {
                         width: parent.width; height: 34
                         Pill {
-                            visible: !!win.confirm && win.confirm.kind !== "discard" && win.confirm.kind !== "replace"
+                            visible: !!win.confirm && ["discard", "replace", "envRemove"].indexOf(win.confirm.kind) < 0
                             text: "Nie zapisuj"; danger: true
                             onClicked: {
                                 const c = win.confirm;
@@ -2006,12 +2071,17 @@ Window {
                                 }
                             }
                             Pill {
+                                visible: !!win.confirm && win.confirm.kind === "envRemove"
+                                text: "Usuń kontener"; danger: true
+                                onClicked: { win.confirm = null; const cmd = ProjectEnv.removeCommand(); ProjectEnv.useContainer(false); win.envTask("Kontener: usuwanie", cmd); }
+                            }
+                            Pill {
                                 visible: !!win.confirm && win.confirm.kind === "replace"
                                 text: "Zamień wszystko"; primary: true
                                 onClicked: { const c = win.confirm; win.confirm = null; win.replaceInPaths(c.paths); }
                             }
                             Pill {
-                                visible: !win.confirm || (win.confirm.kind !== "discard" && win.confirm.kind !== "replace")
+                                visible: !win.confirm || ["discard", "replace", "envRemove"].indexOf(win.confirm.kind) < 0
                                 text: win.confirm && win.confirm.kind === "all" ? "Zapisz wszystkie" : "Zapisz"; primary: true
                                 onClicked: {
                                     const c = win.confirm;

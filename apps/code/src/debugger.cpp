@@ -1,4 +1,5 @@
 #include "debugger.h"
+#include "projectenv.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -14,7 +15,7 @@ namespace {
 
 bool has(const QString &program)
 {
-    return !QStandardPaths::findExecutable(program).isEmpty();
+    return ProjectEnv::instance()->has(program);
 }
 
 bool hasDebugpy()
@@ -22,7 +23,8 @@ bool hasDebugpy()
     static int cached = -1;
     if (cached < 0) {
         QProcess p;
-        p.start(QStringLiteral("python3"), {QStringLiteral("-c"), QStringLiteral("import debugpy")});
+        const QStringList argv = ProjectEnv::instance()->program({QStringLiteral("python3"), QStringLiteral("-c"), QStringLiteral("import debugpy")});
+        p.start(argv.first(), argv.mid(1));
         cached = p.waitForFinished(3000) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0 ? 1 : 0;
     }
     return cached == 1;
@@ -36,7 +38,8 @@ bool gdbHasDap()
         cached = 0;
         if (has(QStringLiteral("gdb"))) {
             QProcess p;
-            p.start(QStringLiteral("gdb"), {QStringLiteral("--version")});
+            const QStringList argv = ProjectEnv::instance()->program({QStringLiteral("gdb"), QStringLiteral("--version")});
+            p.start(argv.first(), argv.mid(1));
             if (p.waitForFinished(3000)) {
                 const QString v = QString::fromUtf8(p.readAllStandardOutput()).section(QLatin1Char('\n'), 0, 0);
                 static const QRegularExpression ver(QStringLiteral("(\\d+)\\.\\d+"));
@@ -214,7 +217,9 @@ bool Debugger::start(const QString &kind, const QString &program, const QString 
     print(QStringLiteral("Debugowanie: ") + QFileInfo(program).fileName() + (args.isEmpty() ? QString() : QLatin1Char(' ') + args)
               + QStringLiteral("  (") + m_adapterName + QLatin1Char(')'),
           QStringLiteral("info"));
-    p->start(exe, exeArgs);
+    // Debuger w kontenerze projektu albo w systemie
+    const QStringList adapterArgv = ProjectEnv::instance()->program(QStringList{exe} + exeArgs);
+    p->start(adapterArgv.first(), adapterArgv.mid(1));
 
     // initialize → launch → (zdarzenie initialized) → punkty przerwania → configurationDone
     send(QStringLiteral("initialize"),

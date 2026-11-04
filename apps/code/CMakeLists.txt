@@ -60,6 +60,8 @@ qt_add_qml_module(aster-code
         src/tasks.h
         src/debugger.cpp
         src/debugger.h
+        src/projectenv.cpp
+        src/projectenv.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

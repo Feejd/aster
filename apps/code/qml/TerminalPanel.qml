@@ -32,6 +32,10 @@ Item {
     onVisibleChanged: if (visible && tab === 0) started = true
     onTabChanged: if (visible && tab === 0) started = true
     onDirChanged: if (started) restart()
+    Connections {
+        target: ProjectEnv
+        function onChanged() { if (tp.started) tp.restart(); }
+    }
 
     readonly property var colors: Theme.dark
         ? { fg: "#E6E8EE", bg: "#090A0D", palette: ["#1C1E26", "#FF6B7A", "#7EE0A0", "#F5D07A", "#6EA8FF", "#C79BFF", "#67E1E6", "#C9CED8",
@@ -139,6 +143,8 @@ Item {
         anchors.leftMargin: 16; anchors.rightMargin: 10; anchors.bottomMargin: 6
         sourceComponent: CodeTerminal {
             workingDirectory: tp.dir
+            // Powłoka w kontenerze projektu (toolbox enter) albo w systemie
+            command: { ProjectEnv.state; return ProjectEnv.terminalCommand(); }
             fontFamily: "JetBrains Mono"
             fontSize: 13
             lineHeight: 1.2

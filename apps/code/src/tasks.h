@@ -63,8 +63,6 @@ public:
     // Wiersz wyjścia ze wskazaniem miejsca: { path, line, col } (od 0) albo pusty
     Q_INVOKABLE QVariantMap locate(const QString &line) const;
     Q_INVOKABLE QVariantList diagnostics(const QString &path) const;
-    // Polecenia uruchamiane przez Tasks idą przez tę funkcję (kontener projektu, Flatpak) — ustawia ProjectEnv
-    std::function<QStringList(const QString &command, const QString &cwd)> wrap;
 
 Q_SIGNALS:
     void outputChanged();
