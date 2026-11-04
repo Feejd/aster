@@ -9,10 +9,12 @@ qt_add_executable(aster-assistant
     src/secrets.cpp src/secrets.h
     src/localmodels.cpp src/localmodels.h
     src/commands.cpp src/commands.h
+    src/blocks.cpp src/blocks.h
 )
 target_link_libraries(aster-assistant PRIVATE Qt6::Core Qt6::Network Qt6::DBus)
 
-qt_add_executable(aster-cli cli/aster.cpp)
+qt_add_executable(aster-cli cli/aster.cpp src/commands.cpp src/blocks.cpp)
+target_include_directories(aster-cli PRIVATE src)
 set_target_properties(aster-cli PROPERTIES OUTPUT_NAME aster)
 target_link_libraries(aster-cli PRIVATE Qt6::Core Qt6::DBus)
 

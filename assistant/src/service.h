@@ -39,6 +39,9 @@ public:
 public Q_SLOTS:
     // source: terminal | wyspa | panel (dobiera styl odpowiedzi); context: dane z potoku albo zaznaczony tekst
     Q_SCRIPTABLE QString Ask(const QString &conversation, const QString &prompt, const QString &context, const QString &source);
+    // To samo z folderem roboczym (terminal: bieżący folder) — względne ścieżki plików i polecenia liczą się od niego
+    Q_SCRIPTABLE QString AskIn(const QString &conversation, const QString &prompt, const QString &context, const QString &source,
+                               const QString &workdir);
     Q_SCRIPTABLE void Cancel(const QString &conversation);
     Q_SCRIPTABLE void ActionResult(const QString &conversation, const QString &action, int exitCode, const QString &output);
 
@@ -106,6 +109,8 @@ private:
         QList<Message> messages;
         QString source;          // skąd ostatnie pytanie (styl odpowiedzi agenta w kolejnych krokach)
         int steps = 0;           // polecenia wykonane dla bieżącego pytania
+        QString workdir;         // folder roboczy (terminal — bieżący folder, powłoka — katalog domowy)
+        int question = 0;        // numer bieżącego pytania — nazwa punktu powrotu przed zmianami agenta
         QString pendingAction;   // id polecenia czekającego na wynik od klienta
         QString pendingCommand;
         QString pendingDescription;
@@ -156,6 +161,8 @@ private:
     QNetworkReply *post(const Provider &p, const QString &key, const QString &system, QJsonArray messages, bool stream);
 public:
     static QString commandIn(const QString &text);     // pierwsze polecenie z bloku ```bash w odpowiedzi
+    // Pliki (```plik / ```zmiana) z odpowiedzi → katalog z manifestem i polecenie `aster --zmiany`; consent: trzeba zapytać
+    QString fileAction(Conv &c, const QString &text, const QString &action, bool *consent, QString *summary) const;
     static QString describe(const QString &text, const QString &command, bool asks);
     static bool localOnly(const QJsonArray &messages); // rozmowa (choć częściowo) tylko na tym komputerze
     static QString quickSummary(const QString &title, const QJsonArray &messages);

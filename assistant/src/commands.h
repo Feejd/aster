@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 // Polecenia, które agent chce uruchomić: które zrobić od razu, a o które najpierw zapytać.
 //
@@ -15,4 +16,9 @@ namespace Commands {
 bool readOnly(const QString &command);
 // Ważne — trzeba zapytać; why: krótko, czemu (do testów i dziennika)
 bool needsConsent(const QString &command, QString *why = nullptr);
+// Folder projektu, w którym leży plik (pierwszy w górę z .git, package.json, pyproject.toml, Cargo.toml, go.mod,
+// CMakeLists.txt, index.html…), nigdy sam katalog domowy ani „/”; pusty — plik nie należy do projektu.
+// extra: pliki, które dopiero powstaną (np. package.json nowego projektu) — też wyznaczają projekt.
+QString projectRoot(const QString &absolutePath, const QStringList &extra = {});
+QString expandPath(const QString &path, const QString &workdir);
 }

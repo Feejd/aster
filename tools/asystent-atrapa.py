@@ -33,6 +33,19 @@ def answer(messages):
     if isinstance(system, str) and system.startswith("Streszczasz"):
         first = next((l[len("Użytkownik: "):] for l in content.splitlines() if l.startswith("Użytkownik: ")), "coś")
         return f"Streszczenie: użytkownik pytał „{first[:80]}”; asystent sprawdził to na komputerze i odpowiedział."
+    # Tryb projektu: strona → pliki, zmiana, serwer w tle, sprawdzenie curl
+    if content.startswith("[System] Wynik polecenia `aster --zmiany") and "index.html (nowy" in content:
+        return ("Plan:\n1. Pliki strony — gotowe\n2. Poprawka tytułu\n3. Serwer i sprawdzenie\n\n"
+                "```zmiana:~/Projekty/demo/index.html\n<<<<<<< STARE\n<h1>Witaj</h1>\n=======\n<h1>Witaj w Demo</h1>\n>>>>>>> NOWE\n```\n\n"
+                "Uruchamiam stronę w tle.\n\n```bash\naster --tlo start demo --w ~/Projekty/demo -- python3 -m http.server 8765\n```")
+    if content.startswith("[System] Wynik polecenia `aster --zmiany"):
+        return "Sprawdzam, czy strona odpowiada.\n\n```bash\ncurl -s localhost:8765 | grep h1\n```"
+    if content.startswith("[System] Wynik polecenia `curl"):
+        return "Gotowe — strona Demo działa pod http://localhost:8765, pliki są w ~/Projekty/demo."
+    if "stron" in q and "zrób" in q:
+        return ("Zrobię prostą stronę.\n\n```plik:~/Projekty/demo/index.html\n<!doctype html>\n<title>Demo</title>\n<h1>Witaj</h1>\n```\n\n"
+                "````plik:~/Projekty/demo/README.md\n# Demo\n\n```bash\npython3 -m http.server\n```\n````\n\n"
+                "Zapisuję pliki strony.")
     # Pamięć: znaleziona rozmowa → otwórz ją
     if content.startswith("[System] Wynik polecenia `aster --historia"):
         import re

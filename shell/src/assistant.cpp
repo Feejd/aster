@@ -1,4 +1,5 @@
 #include "assistant.h"
+#include "blocks.h"
 
 #include <QClipboard>
 #include <QDBusArgument>
@@ -327,7 +328,7 @@ void Assistant::openConversation(const QString &id)
                           m.value(QStringLiteral("text")).toString(), QString()});
             continue;
         }
-        QString text = m.value(QStringLiteral("text")).toString();
+        QString text = Blocks::display(m.value(QStringLiteral("text")).toString());
         items.append({role, text, m.value(QStringLiteral("badge")).toString(), false, false});
     }
     m_conversation = id;
@@ -375,7 +376,9 @@ void Assistant::onChunk(const QString &conversation, const QString &text)
         return;
     if (!m_messages.last().pending)
         m_messages.append({QStringLiteral("assistant"), QString(), m_status.value(QStringLiteral("badge")).toString(), false, true});
-    m_messages.last().text += text;
+    auto &last = m_messages.last();
+    last.raw += text;
+    last.text = Blocks::display(last.raw);
     m_messages.lastChanged();
     Q_EMIT changed();
 }
@@ -387,7 +390,8 @@ void Assistant::onFinished(const QString &conversation, const QString &text, con
     if (!m_messages.last().pending)
         m_messages.append({QStringLiteral("assistant"), QString(), badge, false, true});
     auto &m = m_messages.last();
-    m.text = text;
+    m.raw = text;
+    m.text = Blocks::display(text);
     m.badge = badge;
     m.pending = false;
     m_messages.lastChanged();
@@ -431,10 +435,7 @@ void Assistant::onActionRequested(const QString &conversation, const QString &ac
         return;
     // Tekst odpowiedzi bez bloku z poleceniem i bez zdania-opisu (oba są na karcie działania)
     if (m_messages.last().pending) {
-        QString t = m_messages.last().text;
-        static const QRegularExpression block(QStringLiteral("```(?:bash|sh|shell|zsh|console)[ \\t]*\\n[\\s\\S]*?(```|$)"));
-        t.remove(block);
-        t = t.trimmed();
+        QString t = Blocks::display(m_messages.last().raw.isEmpty() ? m_messages.last().text : m_messages.last().raw);
         // ostatni wiersz to zwykle zdanie-opis — jest już na karcie
         const int nl = t.lastIndexOf(QLatin1Char('\n'));
         const QString lastLine = t.mid(nl + 1).remove(QRegularExpression(QStringLiteral("[*_`#>]"))).trimmed();
@@ -550,4 +551,49 @@ void Assistant::sendResult(int index, int exitCode, const QString &output)
 void Assistant::openInTerminal(const QString &command) const
 {
     QProcess::startDetached(QStringLiteral("aster-terminal"), {QStringLiteral("--wpisz"), command});
+}
+
+// Punkt powrotu z ostatniego pytania: działanie `aster --zmiany … --punkt P`, które się udało, i jeszcze nie cofnięte
+QString Assistant::undoPoint() const
+{
+    const auto &items = m_messages.items();
+    static const QRegularExpression re(QStringLiteral("--punkt\\s+(\\S+)"));
+    for (qsizetype i = items.size() - 1; i >= 0; --i) {
+        const auto &m = items.at(i);
+        if (m.role == QLatin1String("user"))
+            break;
+        if (m.role != QLatin1String("action") || !m.command.startsWith(QLatin1String("aster --zmiany ")) || m.state == QLatin1String("odmowa"))
+            continue;
+        const auto match = re.match(m.command);
+        if (match.hasMatch() && !m_undone.contains(match.captured(1)))
+            return match.captured(1);
+    }
+    return {};
+}
+
+void Assistant::undoChanges()
+{
+    const QString point = undoPoint();
+    if (point.isEmpty() || m_busy)
+        return;
+    m_undone << point;
+    AssistantMessages::Message m{QStringLiteral("action"), QStringLiteral("Cofam zmiany w plikach z tej odpowiedzi."), QString(), false, false,
+                                 QStringLiteral("aster --cofnij ") + point, QStringLiteral("dziala"), QString(), QString()};
+    m_messages.append(m);
+    const int index = int(m_messages.items().size()) - 1;
+    Q_EMIT changed();
+    auto *p = new QProcess(this);
+    p->setProcessChannelMode(QProcess::MergedChannels);
+    p->setWorkingDirectory(QDir::homePath());
+    connect(p, &QProcess::finished, this, [this, p, index](int code, QProcess::ExitStatus st) {
+        p->deleteLater();
+        if (index >= m_messages.items().size())
+            return;
+        auto &a = m_messages.at(index);
+        a.output = QString::fromUtf8(p->readAll()).trimmed();
+        a.state = st == QProcess::NormalExit && code == 0 ? QStringLiteral("gotowe") : QStringLiteral("blad");
+        m_messages.changedAt(index);
+        Q_EMIT changed();
+    });
+    p->start(QStringLiteral("aster"), {QStringLiteral("--cofnij"), point});
 }

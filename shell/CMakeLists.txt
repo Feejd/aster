@@ -12,6 +12,7 @@ qt_add_executable(aster-shell
     src/assistant.h
     src/windows.cpp
     src/windows.h
+    ../assistant/src/blocks.cpp
 )
 
 target_include_directories(aster-shell PRIVATE src)
@@ -50,6 +51,7 @@ target_compile_definitions(aster-shell PRIVATE
     ASTER_INSTALL_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/aster"
 )
 
+target_include_directories(aster-shell PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../assistant/src)
 target_link_libraries(aster-shell PRIVATE
     Qt6::Gui
     Qt6::Quick

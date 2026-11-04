@@ -472,10 +472,18 @@ bool simple(QStringList w, QString *why, int depth)
         return no(QStringLiteral("usuwa albo przenosi pliki"));
     if (prog == QLatin1String("bluetoothctl") && has(w, {"remove", "untrust", "block", "power off"}))
         return no(QStringLiteral("zmienia Bluetooth"));
+    // Procesy w tle: liczy się to, co uruchamiają (po „--”)
+    if ((prog == QLatin1String("aster") || prog == QLatin1String("ai")) && w.value(1) == QLatin1String("--tlo")) {
+        const int dash = int(w.indexOf(QLatin1String("--"), 2));
+        if (w.value(2) == QLatin1String("start"))
+            return dash < 0 || dash + 1 >= w.size() ? no(QStringLiteral("brak polecenia")) : simple(w.mid(dash + 1), why, depth + 1);
+        return false;
+    }
     if ((prog == QLatin1String("aster") || prog == QLatin1String("ai"))
         && !(QStringList{QStringLiteral("--historia"), QStringLiteral("--rozmowa"), QStringLiteral("--stan"), QStringLiteral("--pomoc"),
                          QStringLiteral("--help"), QStringLiteral("--okna"), QStringLiteral("--pokaz"), QStringLiteral("--zminimalizuj"),
-                         QStringLiteral("--maksymalizuj"), QStringLiteral("--otworz")}.contains(w.value(1)) || (w.value(1) == QLatin1String("--model-lokalny") && w.size() <= 3 && (w.size() == 2 || w.at(2) == QLatin1String("lista")))))
+                         QStringLiteral("--maksymalizuj"), QStringLiteral("--otworz"),
+                         QStringLiteral("--punkty")}.contains(w.value(1)) || (w.value(1) == QLatin1String("--model-lokalny") && w.size() <= 3 && (w.size() == 2 || w.at(2) == QLatin1String("lista")))))
         return no(QStringLiteral("zagnieżdżone pytanie albo pobieranie modelu"));
     return false;
 }
@@ -506,6 +514,32 @@ bool check(const QString &command, QString *why, int depth)
 }
 
 } // namespace
+
+QString Commands::expandPath(const QString &path, const QString &workdir)
+{
+    QString p = expandHome(path.trimmed());
+    if (!p.startsWith(QLatin1Char('/')))
+        p = (workdir.isEmpty() ? QDir::homePath() : workdir) + QLatin1Char('/') + p;
+    return QDir::cleanPath(p);
+}
+
+QString Commands::projectRoot(const QString &absolutePath, const QStringList &extra)
+{
+    static const QStringList markers{QStringLiteral(".git"), QStringLiteral("package.json"), QStringLiteral("pyproject.toml"),
+                                     QStringLiteral("requirements.txt"), QStringLiteral("Cargo.toml"), QStringLiteral("go.mod"),
+                                     QStringLiteral("CMakeLists.txt"), QStringLiteral("composer.json"), QStringLiteral("Gemfile"),
+                                     QStringLiteral("pom.xml"), QStringLiteral("build.gradle"), QStringLiteral("deno.json"),
+                                     QStringLiteral("index.html"), QStringLiteral(".aster-projekt")};
+    const QString home = QDir::cleanPath(QDir::homePath());
+    QString dir = QFileInfo(absolutePath).absolutePath();
+    while (dir.size() > home.size() && dir.startsWith(home + QLatin1Char('/'))) {
+        for (const QString &m : markers)
+            if (QFileInfo::exists(dir + QLatin1Char('/') + m) || extra.contains(dir + QLatin1Char('/') + m))
+                return dir;
+        dir = QFileInfo(dir).absolutePath();
+    }
+    return {};
+}
 
 bool Commands::needsConsent(const QString &command, QString *why)
 {

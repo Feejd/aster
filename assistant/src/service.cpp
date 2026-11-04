@@ -1,4 +1,5 @@
 #include "service.h"
+#include "blocks.h"
 #include "commands.h"
 #include "secrets.h"
 
@@ -6,6 +7,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
@@ -19,11 +21,11 @@
 #include <algorithm>
 
 // Ile ostatnich wiadomości rozmowy idzie do modelu (starsze zostają tylko w historii)
-static constexpr int kContextMessages = 24;
+static constexpr int kContextMessages = 40;
 // Dane z potoku: większe przycinane (początek i — ważniejszy przy logach — koniec)
 static constexpr int kMaxContext = 48000;
 // Agent: ile poleceń najwyżej na jedno pytanie i ile znaków wyniku polecenia trafia do modelu
-static constexpr int kMaxSteps = 10;
+static constexpr int kMaxSteps = 80;   // duże projekty: wiele plików, testy, poprawki
 static constexpr int kMaxOutput = 4000;
 
 static QSettings config()
@@ -498,6 +500,33 @@ QString Service::systemPrompt(const QString &source, const QString &memory) cons
         "`aster --okna` pokazuje otwarte okna; `aster --pokaz OKNO`, `aster --zminimalizuj OKNO`, `aster --maksymalizuj OKNO`, "
         "`aster --zamknij-okno OKNO` (OKNO: numer z listy albo nazwa programu/tytuł). Gdy użytkownik mówi o „tym oknie”, "
         "„przeglądarce”, „otwartym pliku” — najpierw sprawdź `aster --okna`.");
+    // Model na tym komputerze ma mały kontekst (4–8 tys. tokenów) i nie zbuduje dużej aplikacji — bez tej części
+    if (Catalog::find(providerId()).needsKey || !qEnvironmentVariableIsEmpty("ASTER_ASSISTANT_URL"))
+    s += QStringLiteral(
+        "\n\nPROJEKTY I APLIKACJE (strony, aplikacje webowe z backendem, skrypty): budujesz je sam, od początku do końca.\n"
+        "- Duże zadanie: najpierw krótki plan (lista 3–8 kroków), potem rób krok po kroku i po każdym sprawdzaj efekt.\n"
+        "- PLIKI zapisuj blokiem z całą treścią:\n```plik:ścieżka/do/pliku\ncała treść\n```\n"
+        "a fragment istniejącego pliku zmieniaj blokiem:\n```zmiana:ścieżka/do/pliku\n<<<<<<< STARE\n"
+        "dokładnie te wiersze, które są teraz w pliku\n=======\nnowe wiersze\n>>>>>>> NOWE\n```\n"
+        "(w jednym bloku może być kilka takich par). W jednej odpowiedzi możesz zapisać wiele plików i na końcu dodać jeden "
+        "```bash (np. instalacja zależności albo testy) — wykona się po zapisaniu. Plik, w którym są ``` (np. README), otaczaj "
+        "czterema znakami ````. Nigdy nie zapisuj plików przez cat/echo/tee. Zanim zmienisz istniejący plik, przeczytaj go "
+        "(`cat -n plik` albo `sed -n '1,120p' plik`). Względne ścieżki liczą się od folderu roboczego.\n"
+        "- Nowe projekty zakładaj w ~/Projekty/<nazwa> (bez spacji w nazwie). Przed pierwszą zmianą w każdym pytaniu system sam "
+        "robi punkt powrotu projektu — użytkownik może cofnąć wszystko, co zrobiłeś (`aster --cofnij`); nie pytaj o zgodę na "
+        "zapis plików w projekcie.\n"
+        "- SERWERY i inne długie procesy (npm run dev, uvicorn, python -m http.server, bazy) uruchamiaj TYLKO w tle: "
+        "`aster --tlo start NAZWA --w FOLDER -- polecenie` (pokaże pierwsze logi i porty), `aster --tlo logi NAZWA`, "
+        "`aster --tlo stop NAZWA`, `aster --tlo lista`. Zwykły blok ```bash z serwerem zawiesiłby się i zostałby przerwany.\n"
+        "- Sprawdzaj swoją pracę: `curl -s localhost:PORT/api/...`, testy, logi serwera; błąd → popraw i sprawdź jeszcze raz. "
+        "Na koniec otwórz wynik użytkownikowi (`aster --otworz przegladarka http://localhost:PORT`, `aster --otworz \"aster code\" FOLDER`) "
+        "i krótko powiedz, co powstało, gdzie jest i jak to uruchomić.\n"
+        "- Narzędzia: najpierw sprawdź, co jest (`command -v node npm python3 git`). /usr jest tylko do odczytu, więc brakujące "
+        "(Node, Python z pip, bazy) instaluj w kontenerze deweloperskim: raz `toolbox create -y aster-dev`, potem "
+        "`toolbox run -c aster-dev sudo dnf install -y nodejs` i uruchamiaj przez `toolbox run -c aster-dev …` (w tle: "
+        "`aster --tlo start web --w FOLDER -- toolbox run -c aster-dev npm run dev`). Zależności projektu (npm install, "
+        "pip install w .venv) instaluj bez pytania. Prosty backend bez instalacji: Python (http.server, sqlite3).");
+    s += QStringLiteral("\nFolder roboczy: {FOLDER}.");
     s = s.arg(askAlways()
                   ? QStringLiteral("Polecenia, które tylko coś sprawdzają, uruchamiają się od razu; wszystko, co cokolwiek zmienia, użytkownik "
                                    "najpierw zatwierdza — wtedy zdanie jest pytaniem, np. „Zainstalować Google Chrome?”. ")
@@ -578,24 +607,21 @@ QString Service::describe(const QString &text, const QString &command, bool asks
 // Pierwsze polecenie z bloku ```bash/sh/shell/console (wiersze zaczynające się od „$ ” bez znaku zachęty)
 QString Service::commandIn(const QString &text)
 {
-    static const QRegularExpression block(QStringLiteral("```(?:bash|sh|shell|zsh|console)[ \\t]*\\n([\\s\\S]*?)```"));
-    const QRegularExpressionMatch m = block.match(text);
-    if (!m.hasMatch())
-        return {};
-    QStringList lines;
-    for (QString l : m.captured(1).split(QLatin1Char('\n'))) {
-        if (l.startsWith(QLatin1String("$ ")))
-            l = l.mid(2);
-        if (!l.trimmed().isEmpty() && !l.trimmed().startsWith(QLatin1Char('#')))
-            lines << l;
-    }
-    return lines.join(QLatin1Char('\n')).trimmed();
+    return Blocks::command(Blocks::parse(text));
 }
 
 QString Service::Ask(const QString &conversationId, const QString &prompt, const QString &context, const QString &source)
 {
+    return AskIn(conversationId, prompt, context, source, QString());
+}
+
+QString Service::AskIn(const QString &conversationId, const QString &prompt, const QString &context, const QString &source,
+                       const QString &workdir)
+{
     touch();
     Conv *c = conversation(conversationId, true);
+    c->workdir = workdir.isEmpty() ? QDir::homePath() : QDir::cleanPath(workdir);
+    c->question = int(c->messages.size());
     // Nowe pytanie w tej samej rozmowie przerywa poprzednią odpowiedź
     Cancel(c->id);
     QString ctx = context;
@@ -676,9 +702,16 @@ void Service::send(Conv &c, const QString &source)
     // Ostatnie wiadomości rozmowy; dane z potoku dołączone do pytania, którego dotyczą
     QJsonArray messages;
     const int from = std::max(0, int(c.messages.size()) - kContextMessages);
-    for (int i = from; i < c.messages.size(); ++i) {
+    // Długa praca agenta nie może wypchnąć z kontekstu samego zadania — bieżące pytanie zostaje zawsze
+    int asked = -1;
+    for (int i = int(c.messages.size()) - 1; i >= 0; --i)
+        if (c.messages.at(i).role == QLatin1String("user")) {
+            asked = i;
+            break;
+        }
+    for (int i = (asked >= 0 && asked < from) ? asked : from; i < c.messages.size(); i = (i == asked && asked < from) ? from : i + 1) {
         const Message &m = c.messages.at(i);
-        QString content = m.text;
+        QString content = m.role == QLatin1String("assistant") ? Blocks::compact(m.text) : m.text;
         QString role = m.role;
         if (m.role == QLatin1String("action")) {
             // Wynik polecenia wraca do modelu jako wiadomość od użytkownika (działa u każdego dostawcy)
@@ -697,7 +730,9 @@ void Service::send(Conv &c, const QString &source)
 
     const bool cloud = p.needsKey;
     const QString memory = memoryEnabled() && source != QLatin1String("pisanie") ? memoryFor(c, cloud) : QString();
-    QNetworkReply *reply = post(p, key, systemPrompt(source, memory), messages, true);
+    QString system = systemPrompt(source, memory);
+    system.replace(QStringLiteral("{FOLDER}"), c.workdir.isEmpty() ? QDir::homePath() : c.workdir);
+    QNetworkReply *reply = post(p, key, system, messages, true);
     Request r;
     r.conversation = id;
     r.badge = badgeFor(p);
@@ -786,12 +821,17 @@ void Service::onData(QNetworkReply *reply)
     if (!delta.isEmpty()) {
         // Agent: po zamknięciu bloku z poleceniem odpowiedź się urywa — model nie zna jeszcze wyniku,
         // więc dalszy tekst byłby zgadywaniem (a na słabym komputerze to też oszczędność czasu)
-        static const QRegularExpression block(QStringLiteral("```(?:bash|sh|shell|zsh|console)[ \\t]*\\n[\\s\\S]*?```"));
         const qsizetype before = r.text.size();
         r.text += delta;
-        if (r.agent) {
-            if (const auto m = block.match(r.text); m.hasMatch()) {
-                r.text.truncate(m.capturedEnd());
+        if (r.agent && r.text.contains(QLatin1String("```"))) {
+            qsizetype cut = -1;
+            for (const Blocks::Block &b : Blocks::parse(r.text))
+                if (b.kind == QLatin1String("bash") && b.closed) {
+                    cut = b.end;
+                    break;
+                }
+            if (cut >= 0) {
+                r.text.truncate(cut);
                 delta = r.text.mid(before);
                 r.stopped = true;
                 QMetaObject::invokeMethod(reply, &QNetworkReply::abort, Qt::QueuedConnection);
@@ -882,12 +922,24 @@ void Service::onFinished(QNetworkReply *reply)
         c->updated = QDateTime::currentMSecsSinceEpoch();
         save(*c);
         // Agent: polecenie w odpowiedzi → klient je uruchamia i odsyła wynik, a model działa dalej
-        const QString command = c->source == QLatin1String("pisanie") ? QString() : commandIn(r.text);
-        if (!command.isEmpty() && c->steps < kMaxSteps) {
-            c->pendingAction = QString::number(QDateTime::currentMSecsSinceEpoch(), 36) + QString::number(c->steps);
+        QString command = c->source == QLatin1String("pisanie") ? QString() : commandIn(r.text);
+        const QString action = QString::number(QDateTime::currentMSecsSinceEpoch(), 36) + QString::number(c->steps);
+        bool filesConsent = false;
+        QString filesSummary;
+        const QString files = c->source == QLatin1String("pisanie") || c->steps >= kMaxSteps
+                                  ? QString() : fileAction(*c, r.text, action, &filesConsent, &filesSummary);
+        if ((!command.isEmpty() || !files.isEmpty()) && c->steps < kMaxSteps) {
+            const bool now = !filesConsent && (command.isEmpty() || runsWithoutAsking(command));
+            QString desc = describe(r.text, command.isEmpty() ? files : command, !now);
+            if (!files.isEmpty()) {
+                // Pliki i (opcjonalnie) polecenie po nich — jedno działanie, np. zapis kodu i od razu testy
+                if (desc == QLatin1String("Robię to na komputerze.") || desc == QLatin1String("Wprowadzić tę zmianę w systemie?"))
+                    desc = filesConsent ? filesSummary + QStringLiteral("?") : filesSummary + QLatin1Char('.');
+                command = command.isEmpty() ? files : files + QStringLiteral(" && \\\n") + command;
+            }
+            c->pendingAction = action;
             c->pendingCommand = command;
-            const bool now = runsWithoutAsking(command);
-            c->pendingDescription = describe(r.text, command, !now);
+            c->pendingDescription = desc;
             Q_EMIT ActionRequested(c->id, c->pendingAction, command, c->pendingDescription, now);
             return;
         }
@@ -912,6 +964,9 @@ void Service::ActionResult(const QString &conv, const QString &action, int exitC
     const int limit = Catalog::find(providerId()).needsKey ? kMaxOutput : kMaxOutput / 2;
     if (out.size() > limit)
         out = out.left(limit / 4) + QStringLiteral("\n[… pominięto %1 znaków …]\n").arg(out.size() - limit) + out.right(limit * 3 / 4);
+    // Zapis plików nie wyszedł albo przeszedł — tymczasowy katalog z treścią już niepotrzebny
+    if (c->pendingCommand.startsWith(QLatin1String("aster --zmiany ")))
+        QDir(QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/aster/zmiany/") + action).removeRecursively();
     // Agent otworzył wcześniejszą rozmowę — panel pokaże ją, gdy skończy odpowiadać
     static const QRegularExpression show(QStringLiteral("^aster\\s+--rozmowa\\s+['\"]?([0-9A-Za-z-]+)"));
     if (const auto m = show.match(c->pendingCommand); m.hasMatch() && exitCode != -2 && c->source != QLatin1String("terminal")
@@ -1170,4 +1225,63 @@ QString Service::ConversationText(const QString &id, bool agent)
         {QStringLiteral("updated"), o.value(QStringLiteral("updated"))}, {QStringLiteral("private"), priv},
         {QStringLiteral("summary"), o.value(QStringLiteral("summary")).toString().isEmpty() ? quickSummary(o.value(QStringLiteral("title")).toString(), msgs) : o.value(QStringLiteral("summary")).toString()},
         {QStringLiteral("text"), text}}).toJson(QJsonDocument::Compact));
+}
+
+// ——— Pliki od agenta ———
+
+// Bloki ```plik / ```zmiana z odpowiedzi trafiają do ~/.cache/aster/zmiany/<działanie>/ (treść i manifest), a klient
+// uruchamia `aster --zmiany KATALOG --punkt PUNKT --w FOLDER`: przed pierwszą zmianą w danym pytaniu robi punkt
+// powrotu projektu, potem zapisuje pliki i odpisuje, co zmienił. Bez pytania: pliki w projekcie (da się cofnąć)
+// i nowe pliki; pytamy, gdy nadpisuje istniejący plik poza projektem (albo w trybie „przy każdej zmianie”).
+QString Service::fileAction(Conv &c, const QString &text, const QString &action, bool *consent, QString *summary) const
+{
+    QJsonArray manifest;
+    QStringList names;
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/aster/zmiany/") + action;
+    const QList<Blocks::Block> blocks = Blocks::parse(text);
+    QStringList planned;
+    for (const Blocks::Block &b : blocks)
+        if (b.closed && b.kind == QLatin1String("plik") && !b.arg.isEmpty())
+            planned << Commands::expandPath(b.arg, c.workdir);
+    *consent = false;
+    int n = 0;
+    for (const Blocks::Block &b : blocks) {
+        if (!b.closed || (b.kind != QLatin1String("plik") && b.kind != QLatin1String("zmiana")) || b.arg.isEmpty())
+            continue;
+        const QString path = Commands::expandPath(b.arg, c.workdir);
+        const bool exists = QFileInfo::exists(path);
+        const bool inProject = !Commands::projectRoot(path, planned).isEmpty();
+        if (askAlways() ? exists : (exists && !inProject))
+            *consent = true;
+        if (!path.startsWith(QDir::homePath() + QLatin1Char('/')))
+            *consent = true;    // poza katalogiem domowym — zawsze pytamy
+        QDir().mkpath(dir);
+        const QString file = QStringLiteral("%1.txt").arg(n++);
+        QFile f(dir + QLatin1Char('/') + file);
+        if (!f.open(QIODevice::WriteOnly))
+            continue;
+        QString body = b.body;
+        if (b.kind == QLatin1String("plik") && !body.endsWith(QLatin1Char('\n')))
+            body += QLatin1Char('\n');
+        f.write(body.toUtf8());
+        manifest.append(QJsonObject{{QStringLiteral("kind"), b.kind}, {QStringLiteral("path"), path}, {QStringLiteral("file"), file}});
+        names << QFileInfo(path).fileName();
+    }
+    if (manifest.isEmpty())
+        return {};
+    QFile m(dir + QStringLiteral("/manifest.json"));
+    if (m.open(QIODevice::WriteOnly))
+        m.write(QJsonDocument(manifest).toJson(QJsonDocument::Compact));
+    names.removeDuplicates();
+    if (names.size() == 1)
+        *summary = (*consent ? QStringLiteral("Zapisać plik %1") : QStringLiteral("Zapisuję plik %1")).arg(names.first());
+    else
+        *summary = (*consent ? QStringLiteral("Zapisać %1 (%2)") : QStringLiteral("Zapisuję %1: %2"))
+                       .arg(QStringLiteral("%1 %2").arg(names.size()).arg(names.size() % 10 >= 2 && names.size() % 10 <= 4
+                                                                           && (names.size() % 100 < 12 || names.size() % 100 > 14)
+                                                                       ? QStringLiteral("pliki") : QStringLiteral("plików")))
+                       .arg(names.size() > 4 ? names.mid(0, 4).join(QStringLiteral(", ")) + QStringLiteral("…") : names.join(QStringLiteral(", ")));
+    auto quote = [](const QString &s) { return QLatin1Char('\'') + QString(s).replace(QLatin1Char('\''), QStringLiteral("'\\''")) + QLatin1Char('\''); };
+    return QStringLiteral("aster --zmiany %1 --punkt %2 --w %3")
+        .arg(quote(dir), QStringLiteral("%1-%2").arg(c.id).arg(c.question), quote(c.workdir));
 }

@@ -22,6 +22,7 @@ public:
         QString state;      // action: czeka | dziala | gotowe | blad | odmowa
         QString output;     // action: wynik
         QString actionId;
+        QString raw;        // assistant: surowa odpowiedź (z blokami plików) — text to wersja do pokazania
     };
     using QAbstractListModel::QAbstractListModel;
     int rowCount(const QModelIndex &parent = {}) const override { return parent.isValid() ? 0 : int(m_items.size()); }
@@ -61,6 +62,7 @@ class Assistant : public QObject
     Q_PROPERTY(bool lastError READ lastError NOTIFY changed)
     Q_PROPERTY(bool acting READ acting NOTIFY changed)                  // agent coś uruchamia albo czeka na zgodę
     Q_PROPERTY(bool waiting READ waiting NOTIFY changed)                // polecenie czeka na zgodę użytkownika
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY changed)                // ostatnia odpowiedź zmieniła pliki — można je cofnąć
     // {provider, providerName, model, local, badge, region, ready, problem, history}
     Q_PROPERTY(QVariantMap status READ status NOTIFY statusChanged)
     Q_PROPERTY(bool available READ available NOTIFY statusChanged)
@@ -81,6 +83,7 @@ public:
     bool lastError() const;
     bool acting() const;
     bool waiting() const { return waitingAction() >= 0; }
+    bool canUndo() const { return !m_busy && !undoPoint().isEmpty(); }
     QVariantMap status() const { return m_status; }
     bool available() const { return m_available; }
     QString selection() const { return m_selection; }
@@ -91,6 +94,8 @@ public:
     Q_INVOKABLE void refreshSelection();
     // Zgoda (albo odmowa) na polecenie, które agent chce uruchomić
     Q_INVOKABLE void approve(bool yes);
+    // Cofa zmiany w plikach z ostatniego pytania (punkt powrotu zrobiony przed zmianami agenta)
+    Q_INVOKABLE void undoChanges();
     // Polecenie z karty działania — do Terminala Aster, wpisane, ale nie uruchomione
     Q_INVOKABLE void openInTerminal(const QString &command) const;
     Q_INVOKABLE void cancel();
@@ -124,6 +129,8 @@ private:
     void runAction(int index);
     void sendResult(int index, int exitCode, const QString &output);
     int waitingAction() const;
+    QString undoPoint() const;
+    QStringList m_undone;
     AssistantMessages m_messages;
     QString m_conversation;
     bool m_busy = false;

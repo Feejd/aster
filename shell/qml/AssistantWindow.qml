@@ -165,7 +165,7 @@ Window {
             x: 16
             y: header.y + header.height + 9
             width: parent.width - 32
-            height: composer.y - y - 6
+            height: (undoChip.visible ? undoChip.y : composer.y) - y - 6
             clip: true
             spacing: 14
             topMargin: 14; bottomMargin: 10
@@ -397,6 +397,31 @@ Window {
                 color: Theme.text2
                 font.family: Theme.font; font.pixelSize: 13
             }
+        }
+
+        // Agent zmienił pliki projektu — jednym klikiem wszystko wraca (punkt powrotu sprzed zmian)
+        Rectangle {
+            id: undoChip
+            visible: Assistant.canUndo && !aw.showHistory
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: composer.y - height - 8
+            height: 28
+            width: undoRow.implicitWidth + 24
+            radius: 14
+            color: undoArea.containsMouse ? Theme.hover : Theme.fill
+            Row {
+                id: undoRow
+                anchors.centerIn: parent
+                spacing: 6
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.undo; size: 13; stroke: 2; color: Theme.text }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Cofnij zmiany w plikach"
+                    color: Theme.text
+                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                }
+            }
+            MouseArea { id: undoArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Assistant.undoChanges() }
         }
 
         // ——— Pole pytania ———

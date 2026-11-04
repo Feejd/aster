@@ -7,7 +7,15 @@
 // po odpowiedzi [T/n] na pytanie po ludzku. Odpowiedzi daje usługa aster-assistant (D-Bus).
 
 #include <QCoreApplication>
+#include "blocks.h"
+#include "commands.h"
+
+#include <QCryptographicHash>
 #include <QDateTime>
+#include <QSaveFile>
+#include <QSet>
+#include <QStandardPaths>
+#include <QThread>
 #include <QDir>
 #include <QFile>
 #include <QHash>
@@ -123,14 +131,29 @@ struct Printer {
         else
             out(part);
     }
+    QString fence;          // otwarcie bieżącego bloku (``` albo ````)
     void feed(const QString &t)
     {
+        static const QRegularExpression open(QStringLiteral("^(`{3,})\\s*([A-Za-z]*)(?:\\s*:\\s*(.*))?$"));
         for (const QChar ch : t) {
             if (ch == QLatin1Char('\n')) {
-                if (line.trimmed().startsWith(QLatin1String("```"))) {
-                    inCode = !inCode;
-                    static const QRegularExpression shell(QStringLiteral("^```(bash|sh|shell|zsh|console)\\s*$"));
-                    hidden = inCode && shell.match(line.trimmed()).hasMatch();
+                const QString tl = line.trimmed();
+                const bool closing = inCode && tl.size() >= fence.size() && !tl.isEmpty() && tl.count(QLatin1Char('`')) == tl.size();
+                const auto m = inCode ? QRegularExpressionMatch() : open.match(tl);
+                if (closing) {
+                    inCode = false;
+                    hidden = false;
+                } else if (!inCode && m.hasMatch()) {
+                    inCode = true;
+                    fence = m.captured(1);
+                    const QString kind = m.captured(2).toLower();
+                    static const QStringList shells{QStringLiteral("bash"), QStringLiteral("sh"), QStringLiteral("shell"), QStringLiteral("zsh"), QStringLiteral("console")};
+                    hidden = shells.contains(kind) || kind == QLatin1String("plik") || kind == QLatin1String("zmiana");
+                    // Treść pliku nie zalewa terminala — wystarczy, który plik powstaje
+                    if (kind == QLatin1String("plik") || kind == QLatin1String("zmiana")) {
+                        out(dim(QStringLiteral("  %1 %2\n").arg(kind == QLatin1String("plik") ? QStringLiteral("📄") : QStringLiteral("✎"), m.captured(3).trimmed()), g_color));
+                        midLine = false;
+                    }
                 } else if (hidden) {
                     // pomijane
                 } else {
@@ -160,6 +183,7 @@ struct Printer {
         line.clear();
         printed = 0;
         inCode = false;
+        fence.clear();
     }
 };
 
@@ -192,7 +216,7 @@ public:
         badge.clear();
         error.clear();
         printer = Printer();
-        const QDBusMessage r = call(QStringLiteral("Ask"), {conv, prompt, context, QStringLiteral("terminal")});
+        const QDBusMessage r = call(QStringLiteral("AskIn"), {conv, prompt, context, QStringLiteral("terminal"), QDir::currentPath()});
         if (failedCall(r))
             return false;
         conv = r.arguments().value(0).toString();
@@ -273,8 +297,11 @@ public Q_SLOTS:
         const bool tty = isatty(STDIN_FILENO) || isatty(STDERR_FILENO);
         // Zdanie-opis zwykle już widać (było przed blokiem z poleceniem); polecenie — przygaszone, pod nim
         const bool said = text.contains(description);
-        err(dim(QStringLiteral("  $ ") + command.section(QLatin1Char('\n'), 0, 0)
-                    + (command.contains(QLatin1Char('\n')) ? QStringLiteral(" …") : QString()), g_errColor) + QStringLiteral("\n"));
+        // Zapis plików: wystarczy opis (pliki już widać wyżej); polecenie po nich — pokazane
+        const QString shown = command.startsWith(QLatin1String("aster --zmiany ")) ? command.section(QStringLiteral("&& \\\n"), 1) : command;
+        if (!shown.trimmed().isEmpty())
+            err(dim(QStringLiteral("  $ ") + shown.trimmed().section(QLatin1Char('\n'), 0, 0)
+                        + (shown.trimmed().contains(QLatin1Char('\n')) ? QStringLiteral(" …") : QString()), g_errColor) + QStringLiteral("\n"));
         int code = -2;
         QString output;
         if (!safe) {
@@ -604,6 +631,476 @@ static int installApp(QString id)
     return code;
 }
 
+// ——— Tryb projektu: pliki od agenta, punkty powrotu, procesy w tle ———
+
+static QString capture(const QString &program, const QStringList &args, int *code = nullptr, const QProcessEnvironment &env = {})
+{
+    QProcess p;
+    if (!env.isEmpty())
+        p.setProcessEnvironment(env);
+    p.setStandardInputFile(QProcess::nullDevice());
+    p.start(program, args);
+    if (!p.waitForStarted(10000)) {
+        if (code)
+            *code = 127;
+        return {};
+    }
+    p.waitForFinished(-1);
+    if (code)
+        *code = p.exitStatus() == QProcess::NormalExit ? p.exitCode() : 130;
+    return QString::fromUtf8(p.readAllStandardOutput()) + QString::fromUtf8(p.readAllStandardError());
+}
+
+// Punkty powrotu: osobne repozytorium gita poza projektem (~/.local/share/aster/punkty/<skrót>.git, drzewo robocze =
+// folder projektu) — działa też w folderach bez gita i nie dotyka gita użytkownika
+struct Snapshots {
+    QString root;
+    QString gitDir;
+
+    explicit Snapshots(const QString &projectRoot)
+        : root(projectRoot)
+    {
+        const QString hash = QString::fromLatin1(QCryptographicHash::hash(projectRoot.toUtf8(), QCryptographicHash::Sha1).toHex().left(12));
+        gitDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/aster/punkty/") + hash + QStringLiteral(".git");
+    }
+    QString git(const QStringList &args, int *code = nullptr) const
+    {
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("GIT_AUTHOR_NAME"), QStringLiteral("Aster Intelligence"));
+        env.insert(QStringLiteral("GIT_AUTHOR_EMAIL"), QStringLiteral("intelligence@aster.local"));
+        env.insert(QStringLiteral("GIT_COMMITTER_NAME"), QStringLiteral("Aster Intelligence"));
+        env.insert(QStringLiteral("GIT_COMMITTER_EMAIL"), QStringLiteral("intelligence@aster.local"));
+        return capture(QStringLiteral("git"), QStringList{QStringLiteral("--git-dir=") + gitDir, QStringLiteral("--work-tree=") + root,
+                                                          QStringLiteral("-c"), QStringLiteral("core.quotepath=off")} + args,
+                       code, env);
+    }
+    bool ensure() const
+    {
+        if (QFileInfo::exists(gitDir + QStringLiteral("/HEAD")))
+            return true;
+        QDir().mkpath(gitDir);
+        int code = 0;
+        capture(QStringLiteral("git"), {QStringLiteral("init"), QStringLiteral("-q"), QStringLiteral("--bare"), gitDir}, &code);
+        if (code != 0)
+            return false;
+        QFile ex(gitDir + QStringLiteral("/info/exclude"));
+        QDir().mkpath(gitDir + QStringLiteral("/info"));
+        if (ex.open(QIODevice::WriteOnly))
+            ex.write("# Duże i odtwarzalne foldery — bez nich punkty powrotu są szybkie\n.git/\nnode_modules/\n.venv/\nvenv/\n"
+                     "__pycache__/\n.next/\n.nuxt/\ndist/\nbuild/\ntarget/\n.cache/\n*.log\n*.sqlite-journal\n");
+        QFile r(gitDir + QStringLiteral("/aster-root"));
+        if (r.open(QIODevice::WriteOnly))
+            r.write(root.toUtf8());
+        return true;
+    }
+    // Stan projektu teraz → refs/punkty/<nazwa> (jeśli już jest — nic)
+    bool take(const QString &name) const
+    {
+        if (!ensure())
+            return false;
+        int code = 0;
+        git({QStringLiteral("rev-parse"), QStringLiteral("-q"), QStringLiteral("--verify"), QStringLiteral("refs/punkty/") + name}, &code);
+        if (code == 0)
+            return true;
+        git({QStringLiteral("add"), QStringLiteral("-A"), QStringLiteral(".")}, &code);
+        git({QStringLiteral("commit"), QStringLiteral("-q"), QStringLiteral("--allow-empty"), QStringLiteral("--no-verify"), QStringLiteral("-m"), name}, &code);
+        if (code != 0)
+            return false;
+        git({QStringLiteral("update-ref"), QStringLiteral("refs/punkty/") + name, QStringLiteral("HEAD")}, &code);
+        return code == 0;
+    }
+    QStringList list() const
+    {
+        if (!QFileInfo::exists(gitDir + QStringLiteral("/HEAD")))
+            return {};
+        return git({QStringLiteral("for-each-ref"), QStringLiteral("--sort=-creatordate"),
+                    QStringLiteral("--format=%(refname:lstrip=2)\t%(creatordate:format:%Y-%m-%d %H:%M)"), QStringLiteral("refs/punkty")})
+            .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    }
+    // Projekt wraca do stanu z punktu; obecny stan zostaje jako punkt „przed-cofnieciem-…” (cofnięcie da się cofnąć)
+    QString restore(const QString &name) const
+    {
+        const QString ref = QStringLiteral("refs/punkty/") + name;
+        int code = 0;
+        git({QStringLiteral("rev-parse"), QStringLiteral("-q"), QStringLiteral("--verify"), ref}, &code);
+        if (code != 0)
+            return QStringLiteral("Nie ma punktu %1").arg(name);
+        take(QStringLiteral("przed-cofnieciem-") + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+        // pliki dodane po punkcie — do usunięcia; reszta wraca z punktu
+        const QStringList added = git({QStringLiteral("diff"), QStringLiteral("--name-only"), QStringLiteral("--diff-filter=A"), ref, QStringLiteral("HEAD")})
+                                      .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        for (const QString &f : added)
+            QFile::remove(root + QLatin1Char('/') + f);
+        const QString changed = git({QStringLiteral("diff"), QStringLiteral("--name-only"), ref, QStringLiteral("HEAD")});
+        git({QStringLiteral("checkout"), QStringLiteral("-f"), ref, QStringLiteral("--"), QStringLiteral(".")}, &code);
+        if (code != 0)
+            return QStringLiteral("Nie udało się przywrócić plików");
+        const int n = int(changed.split(QLatin1Char('\n'), Qt::SkipEmptyParts).size());
+        return QStringLiteral("ok:%1").arg(n);
+    }
+};
+
+static QStringList allSnapshotRoots()
+{
+    QStringList roots;
+    const QDir d(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/aster/punkty"));
+    for (const QString &g : d.entryList({QStringLiteral("*.git")}, QDir::Dirs)) {
+        QFile f(d.filePath(g) + QStringLiteral("/aster-root"));
+        if (f.open(QIODevice::ReadOnly))
+            roots << QString::fromUtf8(f.readAll()).trimmed();
+    }
+    return roots;
+}
+
+static QString rel(const QString &path, const QString &workdir)
+{
+    if (!workdir.isEmpty() && path.startsWith(workdir + QLatin1Char('/')))
+        return path.mid(workdir.size() + 1);
+    if (path.startsWith(QDir::homePath() + QLatin1Char('/')))
+        return QStringLiteral("~/") + path.mid(QDir::homePath().size() + 1);
+    return path;
+}
+
+static int lineCount(const QString &t)
+{
+    if (t.isEmpty())
+        return 0;
+    return int(t.count(QLatin1Char('\n'))) + (t.endsWith(QLatin1Char('\n')) ? 0 : 1);
+}
+
+// Zamiana fragmentu: dokładnie raz; inaczej — te same wiersze bez różnic w odstępach na końcach i wcięciach
+static bool replaceOnce(QString &text, const QString &before, const QString &after, QString *problem)
+{
+    if (before.isEmpty()) {
+        *problem = QStringLiteral("pusty fragment STARE");
+        return false;
+    }
+    const qsizetype n = text.count(before);
+    if (n == 1) {
+        text.replace(text.indexOf(before), before.size(), after);
+        return true;
+    }
+    if (n > 1) {
+        *problem = QStringLiteral("fragment występuje %1 razy — dodaj więcej wierszy dla jednoznaczności").arg(n);
+        return false;
+    }
+    QStringList lines = text.split(QLatin1Char('\n'));
+    QStringList want = before.split(QLatin1Char('\n'));
+    while (!want.isEmpty() && want.last().trimmed().isEmpty())
+        want.removeLast();
+    int found = -1, count = 0;
+    for (int i = 0; i + want.size() <= lines.size(); ++i) {
+        bool ok = true;
+        for (int j = 0; j < want.size() && ok; ++j)
+            ok = lines.at(i + j).trimmed() == want.at(j).trimmed();
+        if (ok) {
+            found = i;
+            ++count;
+        }
+    }
+    if (count != 1) {
+        *problem = count == 0 ? QStringLiteral("nie ma w pliku fragmentu zaczynającego się od „%1”").arg(want.value(0).trimmed().left(80))
+                              : QStringLiteral("fragment występuje %1 razy").arg(count);
+        return false;
+    }
+    QStringList repl = after.split(QLatin1Char('\n'));
+    for (int j = 0; j < want.size(); ++j)
+        lines.removeAt(found);
+    for (int j = 0; j < repl.size(); ++j)
+        lines.insert(found + j, repl.at(j));
+    text = lines.join(QLatin1Char('\n'));
+    return true;
+}
+
+// aster --zmiany KATALOG --punkt PUNKT --w FOLDER — pliki zapisane przez agenta (manifest od usługi)
+static int applyChanges(const QStringList &args)
+{
+    const QString dir = args.value(0);
+    const QString punkt = args.indexOf(QLatin1String("--punkt")) >= 0 ? args.value(args.indexOf(QLatin1String("--punkt")) + 1) : QString();
+    const QString workdir = args.indexOf(QLatin1String("--w")) >= 0 ? args.value(args.indexOf(QLatin1String("--w")) + 1) : QDir::currentPath();
+    QFile mf(dir + QStringLiteral("/manifest.json"));
+    if (!mf.open(QIODevice::ReadOnly)) {
+        err(QStringLiteral("aster: nie ma zmian w %1\n").arg(dir));
+        return 2;
+    }
+    const QJsonArray items = QJsonDocument::fromJson(mf.readAll()).array();
+    QStringList planned;
+    for (const QJsonValue &v : items)
+        if (v.toObject().value(QStringLiteral("kind")).toString() == QLatin1String("plik"))
+            planned << v.toObject().value(QStringLiteral("path")).toString();
+    // Punkt powrotu każdego projektu, którego dotyczą zmiany — raz na pytanie, przed pierwszym zapisem
+    QStringList roots;
+    for (const QJsonValue &v : items) {
+        const QString root = Commands::projectRoot(v.toObject().value(QStringLiteral("path")).toString(), planned);
+        if (!root.isEmpty() && !roots.contains(root) && QFileInfo(root).isDir())
+            roots << root;
+    }
+    if (!punkt.isEmpty())
+        for (const QString &r : std::as_const(roots))
+            if (!Snapshots(r).take(punkt))
+                err(dim(QStringLiteral("(nie udało się zrobić punktu powrotu w %1)\n").arg(rel(r, workdir)), g_errColor));
+    int failed = 0;
+    for (const QJsonValue &v : items) {
+        const QJsonObject o = v.toObject();
+        const QString path = o.value(QStringLiteral("path")).toString();
+        QFile src(dir + QLatin1Char('/') + o.value(QStringLiteral("file")).toString());
+        if (!src.open(QIODevice::ReadOnly))
+            continue;
+        const QString body = QString::fromUtf8(src.readAll());
+        QFile target(path);
+        const bool existed = target.exists();
+        QString old;
+        if (existed && target.open(QIODevice::ReadOnly)) {
+            old = QString::fromUtf8(target.readAll());
+            target.close();
+        }
+        QString next;
+        if (o.value(QStringLiteral("kind")).toString() == QLatin1String("plik")) {
+            next = body;
+        } else {
+            if (!existed) {
+                out(QStringLiteral("✗ %1: plik nie istnieje (nowy plik zapisz blokiem plik)\n").arg(rel(path, workdir)));
+                ++failed;
+                continue;
+            }
+            next = old;
+            QStringList problems;
+            const auto hs = Blocks::hunks(body);
+            if (hs.isEmpty())
+                problems << QStringLiteral("brak par <<<<<<< STARE / ======= / >>>>>>> NOWE");
+            for (const Blocks::Hunk &h : hs) {
+                QString problem;
+                if (!replaceOnce(next, h.before, h.after, &problem))
+                    problems << problem;
+            }
+            if (!problems.isEmpty()) {
+                out(QStringLiteral("✗ %1: %2 — przeczytaj plik (cat -n) i spróbuj jeszcze raz; nic w nim nie zmieniłem\n")
+                        .arg(rel(path, workdir), problems.join(QStringLiteral("; "))));
+                ++failed;
+                continue;
+            }
+        }
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QSaveFile w(path);
+        if (!w.open(QIODevice::WriteOnly) || w.write(next.toUtf8()) < 0 || !w.commit()) {
+            out(QStringLiteral("✗ %1: nie da się zapisać (%2)\n").arg(rel(path, workdir), w.errorString()));
+            ++failed;
+            continue;
+        }
+        if (!existed)
+            out(QStringLiteral("+ %1 (nowy, %2 wierszy)\n").arg(rel(path, workdir)).arg(lineCount(next)));
+        else
+            out(QStringLiteral("~ %1 (%2 → %3 wierszy)\n").arg(rel(path, workdir)).arg(lineCount(old)).arg(lineCount(next)));
+    }
+    if (!roots.isEmpty() && !punkt.isEmpty())
+        out(dim(QStringLiteral("(punkt powrotu: %1 — cofnięcie: aster --cofnij %1)\n").arg(punkt), g_color));
+    QDir(dir).removeRecursively();
+    return failed ? 1 : 0;
+}
+
+// aster --punkty [FOLDER] — punkty powrotu projektu (bez folderu: bieżący projekt albo wszystkie)
+static int listSnapshots(const QString &folder)
+{
+    const QString start = folder.isEmpty() ? QDir::currentPath() : Commands::expandPath(folder, QDir::currentPath());
+    QString root = Commands::projectRoot(start + QStringLiteral("/x"));
+    const QStringList roots = root.isEmpty() ? allSnapshotRoots() : QStringList{root};
+    bool any = false;
+    for (const QString &r : roots) {
+        const QStringList l = Snapshots(r).list();
+        if (l.isEmpty())
+            continue;
+        any = true;
+        out(bold(rel(r, QString()), g_color) + QStringLiteral("\n"));
+        for (const QString &line : l.mid(0, 15))
+            out(QStringLiteral("  %1   %2\n").arg(line.section(QLatin1Char('\t'), 1), line.section(QLatin1Char('\t'), 0, 0)));
+    }
+    if (!any)
+        out(QStringLiteral("Brak punktów powrotu — powstają same, gdy Aster Intelligence zmienia pliki projektu.\n"));
+    return 0;
+}
+
+// aster --cofnij [PUNKT] [--w FOLDER] — projekt wraca do stanu sprzed zmian agenta (bez punktu: ostatni w bieżącym projekcie)
+static int undo(const QStringList &args)
+{
+    QString name = args.value(0);
+    if (name == QLatin1String("--w"))
+        name.clear();
+    const QString folder = args.indexOf(QLatin1String("--w")) >= 0 ? args.value(args.indexOf(QLatin1String("--w")) + 1) : QDir::currentPath();
+    QStringList roots;
+    if (!name.isEmpty()) {
+        for (const QString &r : allSnapshotRoots())
+            for (const QString &l : Snapshots(r).list())
+                if (l.section(QLatin1Char('\t'), 0, 0) == name)
+                    roots << r;
+    } else {
+        const QString r = Commands::projectRoot(Commands::expandPath(folder, QDir::currentPath()) + QStringLiteral("/x"));
+        if (!r.isEmpty()) {
+            for (const QString &l : Snapshots(r).list())
+                if (!l.startsWith(QLatin1String("przed-cofnieciem-"))) {
+                    name = l.section(QLatin1Char('\t'), 0, 0);
+                    break;
+                }
+            roots << r;
+        }
+    }
+    if (roots.isEmpty() || name.isEmpty()) {
+        err(QStringLiteral("aster: nie ma takiego punktu powrotu (lista: aster --punkty)\n"));
+        return 1;
+    }
+    int code = 0;
+    for (const QString &r : roots) {
+        const QString res = Snapshots(r).restore(name);
+        if (res.startsWith(QLatin1String("ok:")))
+            out(QStringLiteral("Cofnięto zmiany w %1 (%2 plików wróciło do stanu z punktu %3). Ponowne zastosowanie: "
+                               "aster --punkty i aster --cofnij przed-cofnieciem-…\n").arg(rel(r, QString()), res.mid(3), name));
+        else {
+            err(res + QStringLiteral("\n"));
+            code = 1;
+        }
+    }
+    return code;
+}
+
+// ——— Procesy w tle (systemd --user: aster-tlo-NAZWA) ———
+
+static QString unitFor(const QString &name)
+{
+    QString n = name.toLower();
+    n.replace(QRegularExpression(QStringLiteral("[^a-z0-9_-]")), QStringLiteral("-"));
+    return QStringLiteral("aster-tlo-") + (n.isEmpty() ? QStringLiteral("serwer") : n);
+}
+
+static QString shellQuote(const QString &s)
+{
+    static const QRegularExpression plain(QStringLiteral("^[A-Za-z0-9_./:=@%+,-]+$"));
+    if (plain.match(s).hasMatch())
+        return s;
+    return QLatin1Char('\'') + QString(s).replace(QLatin1Char('\''), QStringLiteral("'\\''")) + QLatin1Char('\'');
+}
+
+// Porty, na których nasłuchują procesy usługi (cgroup); gdy żadnych (np. kontener) — wszystkie porty użytkownika
+static QString portsOf(const QString &unit)
+{
+    const QString cg = capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("show"), QStringLiteral("-p"),
+                                                             QStringLiteral("ControlGroup"), QStringLiteral("--value"), unit}).trimmed();
+    QSet<QString> pids;
+    if (!cg.isEmpty()) {
+        QFile f(QStringLiteral("/sys/fs/cgroup") + cg + QStringLiteral("/cgroup.procs"));
+        if (f.open(QIODevice::ReadOnly))
+            for (const QByteArray &p : f.readAll().split('\n'))
+                if (!p.trimmed().isEmpty())
+                    pids << QString::fromLatin1(p.trimmed());
+    }
+    const QStringList lines = capture(QStringLiteral("ss"), {QStringLiteral("-ltnpH")}).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    QStringList mine, all;
+    static const QRegularExpression pidRe(QStringLiteral("pid=(\\d+)"));
+    for (const QString &l : lines) {
+        const QStringList cols = l.simplified().split(QLatin1Char(' '));
+        const QString addr = cols.value(3);
+        const QString port = addr.section(QLatin1Char(':'), -1);
+        const QString prog = l.section(QStringLiteral("((\""), 1).section(QLatin1Char('"'), 0, 0);
+        if (prog.isEmpty())
+            continue;
+        const QString entry = QStringLiteral("%1 (%2)").arg(port, prog);
+        all << entry;
+        auto it = pidRe.globalMatch(l);
+        while (it.hasNext())
+            if (pids.contains(it.next().captured(1)))
+                mine << entry;
+    }
+    mine.removeDuplicates();
+    all.removeDuplicates();
+    if (!mine.isEmpty())
+        return QStringLiteral("Porty: ") + mine.join(QStringLiteral(", "));
+    return all.isEmpty() ? QStringLiteral("Porty: na razie żaden") : QStringLiteral("Porty użytkownika: ") + all.join(QStringLiteral(", "));
+}
+
+static QString unitState(const QString &unit)
+{
+    return capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("is-active"), unit}).trimmed();
+}
+
+static QString unitLogs(const QString &unit, int n)
+{
+    return capture(QStringLiteral("journalctl"), {QStringLiteral("--user"), QStringLiteral("-u"), unit, QStringLiteral("-n"), QString::number(n),
+                                                  QStringLiteral("--no-pager"), QStringLiteral("-o"), QStringLiteral("cat")});
+}
+
+static int background(const QStringList &args)
+{
+    const QString what = args.value(0);
+    if (what == QLatin1String("lista") || what.isEmpty()) {
+        const QStringList units = capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("list-units"), QStringLiteral("aster-tlo-*"),
+                                                                        QStringLiteral("--all"), QStringLiteral("--no-legend"), QStringLiteral("--plain")})
+                                      .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (units.isEmpty())
+            out(QStringLiteral("Nic nie działa w tle.\n"));
+        for (const QString &u : units) {
+            const QString unit = u.simplified().section(QLatin1Char(' '), 0, 0);
+            if (!unit.startsWith(QLatin1String("aster-tlo-")) || !unit.endsWith(QLatin1String(".service")))
+                continue;
+            out(QStringLiteral("%1 — %2 · %3\n").arg(unit.mid(10).chopped(8), u.simplified().section(QLatin1Char(' '), 2, 3), portsOf(unit)));
+        }
+        return 0;
+    }
+    const QString name = args.value(1);
+    const QString unit = unitFor(name) + QStringLiteral(".service");
+    if (what == QLatin1String("logi")) {
+        out(QStringLiteral("%1: %2 · %3\n").arg(name, unitState(unit), portsOf(unit)));
+        out(unitLogs(unit, args.value(2).toInt() > 0 ? args.value(2).toInt() : 60));
+        return 0;
+    }
+    if (what == QLatin1String("stop")) {
+        int code = 0;
+        capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("stop"), unit}, &code);
+        out(code == 0 ? QStringLiteral("Zatrzymano: %1\n").arg(name) : QStringLiteral("Nie było uruchomione: %1\n").arg(name));
+        return 0;
+    }
+    if (what != QLatin1String("start") || name.isEmpty()) {
+        err(QStringLiteral("aster --tlo start NAZWA [--w FOLDER] -- polecenie | logi NAZWA [N] | stop NAZWA | lista\n"));
+        return 2;
+    }
+    const int dash = int(args.indexOf(QLatin1String("--")));
+    if (dash < 0 || dash + 1 >= args.size()) {
+        err(QStringLiteral("aster: po „--” podaj polecenie, np. aster --tlo start web --w ~/Projekty/sklep -- npm run dev\n"));
+        return 2;
+    }
+    const int wi = int(args.indexOf(QLatin1String("--w")));
+    const QString dir = wi >= 0 && wi < dash ? Commands::expandPath(args.value(wi + 1), QDir::currentPath()) : QDir::currentPath();
+    QStringList cmd;
+    for (const QString &a : args.mid(dash + 1))
+        cmd << shellQuote(a);
+    // To samo NAZWA działa już — restart z nowym poleceniem
+    capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("stop"), unit});
+    capture(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("reset-failed"), unit});
+    int code = 0;
+    const QString res = capture(QStringLiteral("systemd-run"),
+                                {QStringLiteral("--user"), QStringLiteral("--quiet"), QStringLiteral("--collect"), QStringLiteral("--unit=") + unit,
+                                 QStringLiteral("--property=WorkingDirectory=") + dir, QStringLiteral("--setenv=PATH=") + qEnvironmentVariable("PATH"),
+                                 QStringLiteral("--setenv=TERM=dumb"), QStringLiteral("--setenv=FORCE_COLOR=0"), QStringLiteral("--setenv=CI=1"),
+                                 QStringLiteral("bash"), QStringLiteral("-lc"), cmd.join(QLatin1Char(' '))},
+                                &code);
+    if (code != 0) {
+        err(QStringLiteral("aster: nie udało się uruchomić w tle: %1\n").arg(res.trimmed()));
+        return 1;
+    }
+    // Chwila na start — model od razu widzi pierwsze logi, port albo błąd
+    QString state;
+    for (int i = 0; i < 16; ++i) {
+        QThread::msleep(500);
+        state = unitState(unit);
+        if (state != QLatin1String("active") && state != QLatin1String("activating"))
+            break;
+        if (i >= 5 && portsOf(unit).startsWith(QLatin1String("Porty: ")) && !portsOf(unit).contains(QLatin1String("żaden")))
+            break;
+    }
+    const bool running = state == QLatin1String("active") || state == QLatin1String("activating");
+    out(running ? QStringLiteral("Działa w tle: %1 (w %2) · %3\n").arg(name, rel(dir, QString()), portsOf(unit))
+                : QStringLiteral("Zakończył się od razu: %1 (stan: %2)\n").arg(name, state));
+    out(QStringLiteral("— ostatnie logi —\n") + unitLogs(unit, 25));
+    return running ? 0 : 1;
+}
+
 // Polecenie uruchomione przez agenta (ASTER_AGENT=1): przy chmurze bez rozmów prowadzonych tylko na tym komputerze
 static bool fromAgent() { return qEnvironmentVariableIsSet("ASTER_AGENT"); }
 
@@ -676,7 +1173,9 @@ static void printHelp()
         "  aster --rozmowa ID         cała wcześniejsza rozmowa\n"
         "  aster --okna               otwarte okna; --pokaz / --zminimalizuj / --maksymalizuj / --zamknij-okno OKNO\n"
         "  aster --otworz PROGRAM [plik|adres…]  np. aster --otworz \"aster code\" ~/projekt\n"
-        "  aster --instaluj PROGRAM   program Aster (code, grafika, montaz, studio…)\n\n"
+        "  aster --instaluj PROGRAM   program Aster (code, grafika, montaz, studio…)\n"
+        "  aster --tlo start NAZWA [--w FOLDER] -- polecenie   serwer w tle; logi NAZWA, stop NAZWA, lista\n"
+        "  aster --punkty [FOLDER]    punkty powrotu projektu; aster --cofnij [PUNKT] — cofa zmiany agenta\n\n"
         "W rozmowie: /nowa — nowa rozmowa, /model — dostawca i model, /wyjdz — koniec.\n"
         "Aster Intelligence sam sprawdza i naprawia: zwykłe polecenia uruchamia od razu, a przed ważnymi\n"
         "(instalacja, usuwanie, hasło administratora, restart) pyta [T/n].\n"
@@ -826,6 +1325,14 @@ int main(int argc, char *argv[])
     }
     if (!args.isEmpty() && (args.first() == QLatin1String("--model-lokalny") || args.first() == QLatin1String("--local-model")))
         return localModel(args.value(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--zmiany"))
+        return applyChanges(args.mid(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--punkty"))
+        return listSnapshots(args.value(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--cofnij"))
+        return undo(args.mid(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--tlo"))
+        return background(args.mid(1));
     if (!args.isEmpty() && args.first() == QLatin1String("--okna"))
         return listWindows();
     if (!args.isEmpty() && (args.first() == QLatin1String("--pokaz") || args.first() == QLatin1String("--zminimalizuj")
