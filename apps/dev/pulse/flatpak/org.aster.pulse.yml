@@ -1,0 +1,45 @@
+# Aster Pulse jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh.
+# Budowa ręczna (z katalogu głównego repozytorium):
+#   flatpak-builder --user --install-deps-from=flathub build apps/dev/pulse/flatpak/org.aster.pulse.yml
+# W terminalu: flatpak run org.aster.pulse run 'kolekcja/zapytanie' --env lokalne
+app-id: org.aster.pulse
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-pulse
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --share=network                      # zapytania HTTP (także do serwerów na localhost)
+  - --filesystem=home                    # kolekcje w folderach projektów (pulse/) i ~/Dokumenty/Pulse
+  - --filesystem=xdg-config/aster:ro     # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.secrets  # tajne zmienne środowisk w portfelu systemu
+  - --own-name=org.aster.pulse           # usługa dla agenta (interfejs org.aster.Pulse)
+  - --talk-name=org.freedesktop.portal.*
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: pulse
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=dev/pulse
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
+    post-install:
+      - install -Dm644 apps/dev/pulse/flatpak/org.aster.pulse.svg /app/share/icons/hicolor/scalable/apps/org.aster.pulse.svg
+      - install -Dm644 apps/dev/pulse/flatpak/org.aster.pulse.metainfo.xml /app/share/metainfo/org.aster.pulse.metainfo.xml
+      - sed -i 's/^Icon=.*/Icon=org.aster.pulse/' /app/share/applications/org.aster.pulse.desktop

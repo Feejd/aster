@@ -1,6 +1,6 @@
 # Aplikacje Aster jako Flatpaki dla dowolnego Linuksa (x86_64 i ARM), każda w osobnym zadaniu, równolegle.
 # Paczki trafiają do wydania „aplikacje” na GitHubie, skąd instaluje je tools/install-apps.sh (jedna komenda).
-# Manifesty: apps/<aplikacja>/flatpak/org.aster.<aplikacja>.yml
+# Manifesty: apps/<aplikacja>/flatpak/org.aster.<aplikacja>.yml (narzędzia developera: apps/dev/<aplikacja>/…)
 name: Aplikacje (Flatpak)
 
 on:
@@ -10,6 +10,7 @@ on:
       - "apps/calculator/**"
       - "apps/camera/**"
       - "apps/code/**"
+      - "apps/dev/pulse/**"
       - "apps/editor/**"
       - "apps/grafika/**"
       - "apps/montaz/**"
@@ -46,11 +47,13 @@ jobs:
         env:
           WANT: ${{ inputs.apps }}
         run: |
-          all="grafika montaz studio code editor calculator photos music video pdf camera"
+          all="grafika montaz studio code editor calculator photos music video pdf camera pulse"
           apps="${WANT:-$all}"
           inc=""
           for a in $apps; do
-            inc="$inc{\"app\":\"$a\",\"arch\":\"x86_64\",\"runner\":\"ubuntu-24.04\"},{\"app\":\"$a\",\"arch\":\"aarch64\",\"runner\":\"ubuntu-24.04-arm\"},"
+            # Narzędzia developera leżą w apps/dev/<nazwa>
+            case "$a" in pulse) dir="dev/$a" ;; *) dir="$a" ;; esac
+            inc="$inc{\"app\":\"$a\",\"dir\":\"$dir\",\"arch\":\"x86_64\",\"runner\":\"ubuntu-24.04\"},{\"app\":\"$a\",\"dir\":\"$dir\",\"arch\":\"aarch64\",\"runner\":\"ubuntu-24.04-arm\"},"
           done
           echo "matrix={\"include\":[${inc%,}]}" >> "$GITHUB_OUTPUT"
 
@@ -74,7 +77,7 @@ jobs:
         run: |
           id=org.aster.${{ matrix.app }}
           flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean \
-            --repo=repo build apps/${{ matrix.app }}/flatpak/$id.yml
+            --repo=repo build apps/${{ matrix.dir }}/flatpak/$id.yml
           flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             repo ${{ matrix.app }}-${{ matrix.arch }}.flatpak $id
       - uses: actions/upload-artifact@v4

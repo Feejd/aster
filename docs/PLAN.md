@@ -292,6 +292,32 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,
         przełączanie urządzeń w trakcie, zachowanie przy niedoborach bufora (xrun)
 
+- [x] Aster Pulse — `apps/dev/pulse`, testowanie API (jak Postman) dla programistów, Start → Narzędzia developera
+      (`Categories=Development`), Flatpak `org.aster.pulse`:
+  - [x] zapytania GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS: parametry (zsynchronizowane z adresem), nagłówki,
+        treść JSON (kolory, formatowanie, błąd z numerem wiersza), tekst, formularz, pola z plikami (multipart),
+        plik; autoryzacja Bearer i Basic; pomijanie sprawdzania certyfikatu dla serwerów testowych
+  - [x] odpowiedź: kod, czas, rozmiar; drzewo JSON ze zwijaniem, podglądem zwiniętych węzłów i wyszukiwaniem
+        (trafienia + droga do nich), kopiowanie wartości i ścieżki `$.a[0].b`; surowa treść, nagłówki wysłane
+        i odebrane, obrazki, zapis do pliku
+  - [x] obszar roboczy = folder z plikami JSON (`<projekt>/pulse/` — do repozytorium, albo `~/Dokumenty/Pulse`):
+        `pulse.json` (środowiska ze zmiennymi `{{baseUrl}}`, wybrane środowisko) + `<kolekcja>.json`; tajne
+        zmienne w portfelu (Secret Service: KWallet/GNOME Keyring), w pliku zostaje sama nazwa; odświeżanie po
+        zmianie plików z zewnątrz (git pull, agent)
+  - [x] historia (`~/.local/share/aster-pulse/history.json`, 300 ostatnich, także z terminala i od agenta),
+        import cURL (wklejenie do paska adresu albo Ctrl+I; Bearer → Autoryzacja, ?a=1 → Parametry) i eksport do
+        cURL (tajne zostają jako `{{nazwa}}`)
+  - [x] dla agenta asystenta: `aster-pulse run kolekcja/zapytanie --env lokalne` (oraz `send`, `list`, `curl`,
+        `import`) zwraca wynik jako JSON, kod wyjścia 0/2/1; usługa D-Bus `org.aster.pulse` `/org/aster/Pulse`,
+        interfejs `org.aster.Pulse` (Run, RunWith, Send, List, Curl, ImportCurl) — wystawia ją okno albo
+        `aster-pulse --dbus` uruchamiane na żądanie; działa bez usługi asystenta
+  - [x] sprawdzone w kontenerze z `tools/pulse-test-server.py` (JSON, 401/Bearer, Basic, multipart, przekierowanie,
+        204, obrazek, 5000 elementów, przekroczony czas) i atrapą portfela; zrzuty jasne i ciemne
+  - [ ] Dalej: karty z kilkoma otwartymi zapytaniami, skrypty/asercje po odpowiedzi (np. „status = 200”,
+        zapis tokenu z odpowiedzi do zmiennej), uruchamianie całej kolekcji, import kolekcji Postmana/OpenAPI,
+        ciasteczka, WebSocket i GraphQL; narzędzie asystenta wołające org.aster.Pulse (po scaleniu gałęzi asystenta)
+  - [ ] Sprawdzić na prawdziwym KWin: okna wyboru plików (portal), odblokowanie KWallet przy pierwszej tajnej zmiennej
+
 ### Studio — wybór silnika dźwięku
 Wybór: **bezpośrednio PipeWire** (`pw_stream`, wątek czasu rzeczywistego PipeWire) + **libsndfile** (odczyt i zapis
 WAV/FLAC/OGG/Opus/MP3) + **libsamplerate** (przepróbkowanie importu do 48 kHz). Wszystko w repozytoriach Fedory 44

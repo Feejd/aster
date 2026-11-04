@@ -176,3 +176,8 @@ var panelBottom = "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 
 var hash = "M5 9h15M4 15h15M10 3L8 21M16 3l-2 18";
 var alertCircle = "M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0M12 7.5v5M12 16.5h.01";
 var warning = "M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01";
+// Aster Pulse: puls (logo), wyślij, klucz (tajna zmienna), historia
+var pulse = "M3 12h4l2.5-6 4 12 2.5-6H21";
+var send = "M21 3L10 14M21 3l-6.5 18-4.5-7-7-4.5z";
+var key = "M14.5 9.5a4.5 4.5 0 1 1-9 0a4.5 4.5 0 1 1 9 0M13.2 12.8L21 20.5M18 17.5l2-2M15.5 15l2-2";
+var history = "M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4.5h4.5M12 7.5V12l3 2";

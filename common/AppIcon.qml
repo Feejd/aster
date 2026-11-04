@@ -33,6 +33,7 @@ Item {
         "org.aster.calculator": ["#FFE394", "#F08A0A", "grid"],
         "org.aster.editor": ["#FFCB73", "#EF6420", "pencil"],
         "org.aster.code": ["#8FD3FF", "#4338CA", "code"],
+        "org.aster.pulse": ["#FFB38A", "#E0336E", "pulse"],
         "org.aster.pdf": ["#FF9AAE", "#DC2550", "doc"],
         "org.aster.photos": ["#FFB0DC", "#B23DE0", "image"],
         "org.aster.video": ["#9DB8FF", "#3A36D8", "film"],
