@@ -55,6 +55,7 @@ Okna systemowe (używają ich wszystkie programy, więc najważniejsze):
 
 Programy:
 - [x] Pliki (Dolphin), Przeglądarka (Firefox), Terminal (Konsole), Sklep (Discover), Ustawienia (Ustawienia systemowe)
+- [x] Menedżer zadań — zakładka Porty (Aster Radar): kto nasłuchuje na którym porcie, program i PID, „Dostępny z” (wszystkie sieci / tylko ten komputer), wyszukiwanie po porcie, „Otwórz” w przeglądarce i „Zakończ” (`aster-tasks ports`)
 - [x] Menedżer zadań (Plasma System Monitor) — `apps/tasks`: Ctrl+Shift+Esc, procesy pogrupowane po programach, „Zakończ zadanie”
       (cudze procesy przez polkit), właściwości, wydajność: procesor (też każdy rdzeń), pamięć, dyski, sieć; programy po zalogowaniu → Ustawienia
 - [x] Zdjęcia (Gwenview) — `apps/photos`: biblioteka (Obrazy, Pobrane, Pulpit, zrzuty, dodane foldery), oglądanie z paskiem

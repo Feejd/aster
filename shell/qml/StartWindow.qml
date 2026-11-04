@@ -49,7 +49,7 @@ Window {
         { id: "grafika", name: "Grafika", icon: "image", colors: ["#F9A8D4", "#C026D3"] },
         { id: "multimedia", name: "Multimedia", icon: "music", colors: ["#FF8A8A", "#E11D48"] },
         { id: "gry", name: "Gry", icon: "game", colors: ["#86EFAC", "#16A34A"] },
-        { id: "programowanie", name: "Programowanie", icon: "code", colors: ["#71717A", "#27272A"] },
+        { id: "programowanie", name: "Narzędzia developera", icon: "code", colors: ["#71717A", "#27272A"] },
         { id: "edukacja", name: "Edukacja", icon: "book", colors: ["#FDBA74", "#EA580C"] },
         { id: "narzedzia", name: "Narzędzia", icon: "tool", colors: ["#94A3B8", "#475569"] },
         { id: "system", name: "System", icon: "sliders", colors: ["#A3A9B5", "#4B5262"] },

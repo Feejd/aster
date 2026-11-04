@@ -7,6 +7,7 @@ set(TASKS_QML
     qml/Main.qml
     qml/ProcessesPage.qml
     qml/PerformancePage.qml
+    qml/PortsPage.qml
     qml/Graph.qml
 )
 foreach(f ${TASKS_QML})
@@ -23,6 +24,8 @@ qt_add_qml_module(aster-tasks
         src/monitor.h
         src/processmodel.cpp
         src/processmodel.h
+        src/portmodel.cpp
+        src/portmodel.h
 )
 
 target_link_libraries(aster-tasks PRIVATE

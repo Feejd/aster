@@ -1,6 +1,7 @@
 // aster-tasks — Menedżer zadań Aster (Ctrl+Shift+Esc).
 //   aster-tasks                 okno z procesami
 //   aster-tasks performance     od razu Wydajność
+//   aster-tasks ports           od razu Porty (kto zajmuje port)
 // Druga kopia przywołuje już otwarte okno (D-Bus: org.aster.tasks).
 
 #include "instance.h"
@@ -29,9 +30,10 @@ int main(int argc, char *argv[])
     app.setDesktopFileName(QStringLiteral("org.aster.tasks"));
 
     const QStringList args = app.arguments();
-    const QString page = args.contains(QLatin1String("performance")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("performance")
-        ? QStringLiteral("performance")
-        : QStringLiteral("processes");
+    const QString envPage = qEnvironmentVariable("ASTER_PAGE");
+    const QString page = args.contains(QLatin1String("performance")) || envPage == QLatin1String("performance") ? QStringLiteral("performance")
+        : args.contains(QLatin1String("ports")) || envPage == QLatin1String("ports")                            ? QStringLiteral("ports")
+                                                                                                                 : QStringLiteral("processes");
 
     const QString service = QStringLiteral("org.aster.tasks");
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -57,7 +59,7 @@ int main(int argc, char *argv[])
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
 
     QObject::connect(&instance, &Instance::activated, window, [window](const QString &page, const QString &token) {
-        if (page == QLatin1String("performance"))
+        if (page != QLatin1String("processes"))
             window->setProperty("page", page);
         if (window->visibility() == QWindow::Minimized)
             window->showNormal();
