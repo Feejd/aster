@@ -399,6 +399,30 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [ ] Aster Harbor dalej: wolumeny i sieci, budowanie obrazu z Containerfile, pobieranie obrazu z wyszukiwarką,
       szczegóły kontenera (zmienne, montowania), eksport/import środowiska, devcontainer.json, podpięcie
       narzędzi Harbora do asystenta (po scaleniu gałęzi asystenta), test na prawdziwym Asterze (VM)
+- [x] Aster Launch — wdrożenia aplikacji (`apps/dev/launch`, `aster-launch`, Start → Narzędzia developera):
+      projekty z folderu (wykrycie: statyczna strona — też Vite/React/Astro z budowaniem, Node.js, Python, Dockerfile,
+      Docker Compose); cel: własny serwer przez SSH (klucz z ~/.ssh albo nowy ed25519, „Dodaj na serwer hasłem” —
+      ssh-copy-id w Terminalu, sprawdzenie serwera tylko do odczytu) albo Netlify / Vercel / Cloudflare Pages przez ich
+      CLI (wykrycie programu, instalacja `npm -g --prefix ~/.local`, logowanie w przeglądarce, stan konta);
+      na serwerze: /srv/aster-launch/<nazwa>/releases/vN + `current`, wysyłka rsync (niezmienione pliki jako
+      twarde dowiązania do poprzedniej wersji), usługa systemd `aster-<nazwa>` (DynamicUser, ochrona systemu) albo
+      kontener podman/docker (obraz na wersję), Caddy z plikiem w Caddyfile.d — domena z automatycznym HTTPS,
+      bez domeny port serwera; doinstalowanie brakujących programów (dnf/apt); sprawdzenie DNS domeny (rekord A
+      vs adres serwera, domeny lokalne); KAŻDA zmiana najpierw jako plan z dokładnymi poleceniami i skryptami
+      i dopiero po „Wykonaj”; przebieg na żywo, przerwanie; sprawdzenie strony po wdrożeniu (curl, także przed
+      zmianą DNS — `--resolve`); historia wersji z gitem (zatwierdzenie, niezatwierdzone zmiany), zdarzenia,
+      przywrócenie wersji jednym kliknięciem (na serwerze tylko przełączenie, w hostingach ponowne wdrożenie kopii
+      albo `vercel rollback`), sprzątanie — zostaje N ostatnich wersji; logi produkcji na żywo (journalctl / podman
+      logs przez SSH) z filtrem; polecenie `aster-launch lista|status|wdroz|przywroc|logi|dodaj` (potwierdzenie
+      [t/N] tylko z terminala, nie ze stdin; bez terminala — plan w oknie); D-Bus `org.aster.Launch`
+      (Projects, Status, Deploy, Rollback, Logs — wdrożenie, przywrócenie i logi zawsze czekają na zgodę w oknie);
+      Flatpak `org.aster.launch` (ssh/rsync/CLI z systemu przez flatpak-spawn --host).
+      Test: kontener Fedora 44 z systemd, sshd, Caddy i podmanem — strona statyczna (domena .internal, HTTPS z urzędu
+      Caddy), aplikacja Python (systemd), Dockerfile (podman), przywracanie, logi, sprzątanie, D-Bus z odmową i zgodą
+- [ ] Aster Launch, dalej: zmienne środowiskowe i sekrety aplikacji (portfel systemu → plik env na serwerze),
+      użytkownik bez roota z sudo (niesprawdzone), bazy danych obok aplikacji, kilka serwerów naraz, wdrożenie po
+      każdym push (hook gita), podgląd zmian plików przed wysyłką (rsync --dry-run), logi z hostingów, powiadomienie
+      po wdrożeniu, prawdziwe Netlify/Vercel/Cloudflare (sprawdzone tylko z atrapą CLI)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
 
 ## Asystent Aster

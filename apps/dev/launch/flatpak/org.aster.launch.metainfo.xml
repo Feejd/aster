@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.aster.launch</id>
+  <name>Aster Launch</name>
+  <summary>Wdrażanie stron i aplikacji na własny serwer albo do hostingu</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <developer id="org.aster">
+    <name>Aster</name>
+  </developer>
+  <description>
+    <p>Wskaż folder z kodem — Aster Launch rozpozna statyczną stronę, aplikację Node.js albo Python, Dockerfile
+       i Docker Compose. Wdrożenie na własny serwer przez SSH (rsync, usługa systemd albo kontener podman/docker,
+       Caddy z automatycznym HTTPS dla Twojej domeny) albo do Netlify, Vercel i Cloudflare Pages przez ich programy.</p>
+    <p>Każda zmiana na serwerze jest najpierw pokazana i czeka na potwierdzenie. Historia wersji, powrót do
+       poprzedniej jednym kliknięciem, logi produkcji na żywo i sprawdzenie, czy strona odpowiada.</p>
+  </description>
+  <launchable type="desktop-id">org.aster.launch.desktop</launchable>
+  <url type="homepage">https://github.com/Feejd/aster</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0" date="2026-11-04"/>
+  </releases>
+</component>
