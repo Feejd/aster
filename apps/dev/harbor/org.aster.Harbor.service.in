@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.aster.Harbor
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/aster-harbor --dbus
