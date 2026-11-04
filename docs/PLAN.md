@@ -209,6 +209,33 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       szablony, nagrywanie lektora, eksport w 60 kl./s i 4K; docelowo rozdawany jako Flatpak przez Sklep Aster
 - [ ] Montaż: ostateczna nazwa programu (propozycje: Klaps, Kadr, Ujęcie) i kodeki H.264 na systemach bez OpenH264
 - [ ] Aster Code — edytor kodu w stylu Aster
+- [x] Aster Vault (`apps/dev/vault`, `aster-vault`, Start → Narzędzia developera) — bazy danych dla programistów:
+  - [x] SQLite (plik: otwórz / nowa baza), PostgreSQL i MySQL/MariaDB przez Qt SQL (QSQLITE/QPSQL/QMYSQL — w obrazie
+        `qt6-qtbase-postgresql`, `qt6-qtbase-mysql`); zapisane połączenia w `~/.config/aster-vault/connections.json`
+        (bez haseł), hasła w portfelu przez Secret Service (KWallet/gnome-keyring) albo pytanie przy połączeniu;
+        „Sprawdź” w formularzu, tryb tylko do odczytu (blokada w bazie: plik SQLite do odczytu, transakcje READ ONLY)
+  - [x] pasek boczny: tabele i widoki (schematy PostgreSQL w grupach), szukanie, przełączanie baz na serwerze
+  - [x] Dane: siatka (wątek roboczy, strony po 200 wierszy, stały porządek po kluczu), filtr WHERE, sortowanie
+        nagłówkiem, edycja w miejscu / w oknie wiersza (długie i wielowierszowe wartości, NULL), dodawanie i usuwanie;
+        zmiany czekają na podgląd poleceń SQL i zapis w jednej transakcji (błąd → nic nie zapisane); klucz główny,
+        w SQLite bez niego — ukryty rowid; widoki i tabele bez klucza tylko do odczytu (z wyjaśnieniem)
+  - [x] Struktura: kolumny (typ, NULL, domyślna wartość, klucz), indeksy, klucze obce (klik — tabela docelowa), definicja
+  - [x] SQL: edytor z kolorowaniem (własne, bez KSyntaxHighlighting), podpowiedzi tabel/kolumn (także po skrótach
+        „k.” z FROM/JOIN), Ctrl+Enter — polecenie pod kursorem, Ctrl+Shift+Enter — całość, pytanie przed DROP/TRUNCATE
+        i UPDATE/DELETE bez WHERE, wynik (do 2000 wierszy w siatce), historia (`~/.local/share/aster-vault/history.json`)
+  - [x] eksport tabeli (z filtrem) i wyniku do CSV/JSON — strumieniowo, wszystkie wiersze
+  - [x] dla asystenta i terminala, tylko odczyt: `aster-vault --list | --schema POŁ [TABELA] | --query POŁ "SQL"
+        [--limit N] [--json]` i usługa D-Bus `org.aster.Vault` (/org/aster/Vault: Connections, Schema, Query —
+        JSON w napisie; uruchamiana na żądanie, koniec po 5 min); filtr poleceń + blokada READ ONLY w bazie,
+        limit 30 s, zgoda per połączenie („Dostęp dla asystenta i terminala”); działa bez usługi asystenta
+  - [x] Flatpak `apps/dev/vault/flatpak/org.aster.vault.yml` (libpq, mariadb-connector-c i wtyczki qsqlpsql/qsqlmysql
+        z qtbase 6.11 — runtime KDE ma tylko SQLite); w workflow i `tools/install-apps.sh` jako `vault`
+  - [x] Sprawdzone w kontenerze: przykładowa baza SQLite, PostgreSQL 18 (hasło SCRAM, schematy, numeric, jsonb, tablice),
+        MariaDB; portfel gnome-keyring (zapis z okna → odczyt z CLI i D-Bus); zrzuty w jasnym i ciemnym motywie
+  - [ ] Dalej: kilka kart zapytań, EXPLAIN jako drzewo, edytor JSON/jsonb, tunel SSH, import CSV, diagram relacji,
+        przerywanie długiego zapytania; budowa Flatpaka sprawdzona tylko częściowo (wtyczki sqldrivers z qtbase
+        zbudowane samodzielnie w kontenerze) — pierwsze przejście w GitHub Actions do obejrzenia; dwuklik pliku .db
+        (MimeType) i ikona motywu `server-database` do sprawdzenia w VM
 - [x] Studio (nazwa robocza) — `apps/studio`, proste studio nagrań dla amatorów (nagrać wokal i gitarę, ułożyć pętle,
       zmiksować piosenkę); pierwsza wersja w drzewie, docelowo Flatpak w Sklepie Aster:
   - [x] projekt = folder w Muzyka/Studio: `projekt.json` (tempo, metrum, ścieżki, klipy w ramkach 48 kHz) + `audio/`

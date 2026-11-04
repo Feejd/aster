@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.aster.vault</id>
+  <name>Aster Vault</name>
+  <summary>Bazy danych SQLite, PostgreSQL i MySQL dla programistów</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <developer id="org.aster">
+    <name>Aster</name>
+  </developer>
+  <description>
+    <p>Lekki program do baz danych: pliki SQLite oraz serwery PostgreSQL i MySQL/MariaDB. Lista tabel i widoków,
+       struktura (kolumny, klucze, indeksy, definicja), siatka wierszy z edycją, dodawaniem i usuwaniem — z podglądem
+       poleceń przed zapisem w jednej transakcji. Edytor SQL z kolorowaniem i podpowiedziami nazw tabel i kolumn,
+       historia zapytań, eksport do CSV i JSON. Hasła w portfelu systemu, nigdy w plikach.</p>
+  </description>
+  <launchable type="desktop-id">org.aster.vault.desktop</launchable>
+  <url type="homepage">https://github.com/Feejd/aster</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0" date="2026-11-04"/>
+  </releases>
+</component>
