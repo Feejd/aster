@@ -38,6 +38,8 @@ class Studio : public QObject
     Q_PROPERTY(bool cycle READ cycle WRITE setCycleOn NOTIFY cycleChanged)                       // region pętli odtwarzania
     Q_PROPERTY(double cycleStart READ cycleStart NOTIFY cycleChanged)
     Q_PROPERTY(double cycleEnd READ cycleEnd NOTIFY cycleChanged)
+    // Wymiana fragmentu (punch-in): nagranie tylko w regionie pętli, z rozbiegiem przed nim; reszta zostaje
+    Q_PROPERTY(bool punch READ punch WRITE setPunch NOTIFY cycleChanged)
     Q_PROPERTY(QVariantList presets READ presets CONSTANT)
     Q_PROPERTY(QVariantMap mastering READ mastering NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList masteringPresets READ masteringPresets CONSTANT)
@@ -115,6 +117,8 @@ public:
     void setCycleOn(bool on);
     double cycleStart() const { return m_cycleStart; }
     double cycleEnd() const { return m_cycleEnd; }
+    bool punch() const { return m_punch; }
+    void setPunch(bool on);
     QVariantList presets() const;
     QVariantMap mastering() const;
     QVariantList masteringPresets() const;
@@ -231,6 +235,11 @@ public:
     Q_INVOKABLE void cycleClip(int id);                         // region pętli = klip
     Q_INVOKABLE void importFiles(const QVariantList &urls, int track, double start);
     Q_INVOKABLE void setClipTake(int id, int take);             // podejście z nagrywania w pętli (comping: podziel i wybierz)
+    // Ścieżki rapera: role "main" (wokal), "double" (dubel), "adlib" (ad-libsy). Znajduje albo zakłada ścieżkę
+    // z dopasowanym brzmieniem i ustawia ją do nagrania; zwraca jej numer (−1 — nie da się)
+    Q_INVOKABLE int vocalTrack(const QString &role);
+    // Dubel albo ad-lib do fragmentu klipu: ścieżka roli, region = klip, wymiana fragmentu i od razu nagrywanie
+    Q_INVOKABLE void recordOver(int clipId, const QString &role);
     // Gotowy bit (MP3, WAV…): rozpoznaje tempo i tonację, ustawia je w projekcie i kładzie bit na siatce taktów.
     // Bez otwartego projektu tworzy nowy „na swoim bicie” — ścieżki na wokal, dubel i ad-libsy.
     Q_INVOKABLE void importBeat(const QVariant &url);
@@ -318,11 +327,13 @@ private:
         int input = 0;
         // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
         double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0, tune = 0;
+        double dbl = 0;                 // sztuczny dubel: dwie lekko przesunięte i rozstrojone kopie po bokach
         bool lowCut = false;
         QString preset;
         // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
         QString kind = QStringLiteral("audio");
         bool beat = false;              // bit z pliku (rodzaj audio) — inny podpis i ikona w nagłówku
+        QString role;                   // "main" | "double" | "adlib" — ścieżki wokalu rapera (zob. vocalTrack)
         QJsonObject pattern;
         QList<Clip> clips;
     };
@@ -337,6 +348,7 @@ private:
     void applyMasteringPreset(const QString &preset);
     static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)
     void carve(int track, long long a, long long b, int keepId);   // wytnij [a, b) z klipów ścieżki
+    static QList<Clip> carved(const QList<Clip> &clips, long long a, long long b, int keepId, int *nextId);
 
     QJsonObject toJson() const;
     void fromJson(const QJsonObject &o);
@@ -383,6 +395,8 @@ private:
     double m_latencyMs = 0;
     bool m_monitor = false;
     long long m_recLoopStart = 0, m_recLoopEnd = 0;   // region pętli przy nagrywaniu (ramki); równe — bez pętli
+    bool m_punch = false;
+    long long m_punchIn = 0, m_punchOut = 0;          // wymiana fragmentu w trakcie nagrywania (ramki); równe — wyłączona
     void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)
     QList<Track> m_tracks;
     QVariantList m_tracksView, m_mixView;

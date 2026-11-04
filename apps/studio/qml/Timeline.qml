@@ -110,8 +110,9 @@ Item {
             visible: Studio.cycleEnd > Studio.cycleStart
             x: x0; y: 2
             width: (Studio.cycleEnd - Studio.cycleStart) * tl.pps; height: 10; radius: 4
-            color: Studio.cycle ? "#F5B83D" : Theme.fill
-            border.width: 1; border.color: Studio.cycle ? "#D9961A" : Theme.edge
+            // Wymiana fragmentu — czerwony (tu nagranie zastąpi stare), pętla — żółty
+            color: Studio.punch ? "#F07C7F" : Studio.cycle ? "#F5B83D" : Theme.fill
+            border.width: 1; border.color: Studio.punch ? "#E5484D" : Studio.cycle ? "#D9961A" : Theme.edge
         }
         MouseArea {
             id: rulerArea

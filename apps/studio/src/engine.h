@@ -48,6 +48,7 @@ struct TrackRT
     float send = 0;                       // ile do pogłosu (po suwaku głośności)
     float echo = 0;                       // ile do echa
     float drive = 0;                      // przester / ciepło (0 = brak)
+    float dbl = 0;                        // sztuczny dubel (0 = brak)
     TuneParams tune;                      // autotune
 };
 
@@ -73,7 +74,7 @@ public:
     static constexpr int MaxTracks = 64;
     using Meters = std::atomic<float>[MaxTracks + 1][2];     // [ścieżka][kanał], ostatnia — suma
 
-    Renderer() : m_tune(MaxTracks) {}
+    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
@@ -93,6 +94,7 @@ private:
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];
     std::vector<PitchCorrector> m_tune;   // osobny stan autotune dla każdej ścieżki
+    std::vector<Doubler> m_dbl;           // i sztucznego dubla
     Reverb m_reverb;
     int m_reverbRate = 0;
     float m_rl[MaxBlock], m_rr[MaxBlock], m_el[MaxBlock], m_er[MaxBlock];

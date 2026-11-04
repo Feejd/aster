@@ -102,7 +102,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             if (!any)
                 continue;
 
-            // Efekty ścieżki: autotune → korektor → kompresor → głośność i panorama → wysyłka do pogłosu
+            // Efekty ścieżki: autotune → korektor → przester → kompresor → sztuczny dubel → głośność i panorama → wysyłka do pogłosu
             if (ti < size_t(MaxTracks)) {
                 if (t.tune.on)
                     m_tune[ti].process(m_tl, m_tr, n, t.tune, rate);
@@ -131,6 +131,10 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                         m_tr[i] *= g;
                     }
                 }
+                if (t.dbl > 0)
+                    m_dbl[ti].process(m_tl, m_tr, n, t.dbl, rate);
+                else
+                    m_dbl[ti].idle();
             }
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {

@@ -236,7 +236,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] odsłuch głosu w słuchawkach z efektami uzbrojonej ścieżki (autotune na żywo), ostrzeżenie o sprzężeniu
   - [x] nagrywanie w pętli: każde przejście regionu to podejście (jeden plik, przesunięcia w klipie), domyślnie
         ostatnie pełne; wybór w zakładce Klip, menu klipu albo plakietką na klipie; comping = podziel i wybierz
-  - [ ] Dalej (raperzy): punch-in, przyciski „Dubel”/„Ad-lib”, odszumianie i de-esser, tekst z prompterem i rymami,
+  - [x] wymiana fragmentu (punch-in, P): nagranie tylko w regionie na linijce, rozbieg ok. 3 s (pełne takty) z bitem
+        i starym nagraniem, w regionie stare milknie; po regionie koniec sam, 10 ms przenikania na brzegach
+  - [x] role ścieżek rapera (Wokal / Dubel / Ad-libsy, klawisze 1–3, „nagrywasz na” przy przycisku nagrywania;
+        brakującą ścieżkę Studio zakłada z brzmieniem); w menu klipu „Nagraj dubel / ad-libsy do tego fragmentu”;
+        efekt „Sztuczny dubel” (dwie pływające kopie 19 i 27 ms po bokach) w karcie Przestrzeń
+  - [ ] Dalej (raperzy): odszumianie i de-esser, tekst z prompterem i rymami,
         znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
         separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,

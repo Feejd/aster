@@ -272,13 +272,16 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
         // Na swoim bicie: zwrotka, dubel i ad-libsy z gotowym brzmieniem; bit dokłada importBeat
         addTrack(QStringLiteral("Wokal"));
         applyPresetTo(m_tracks.last(), QStringLiteral("rap"));
+        m_tracks.last().role = QStringLiteral("main");
         addTrack(QStringLiteral("Dubel"));
         applyPresetTo(m_tracks.last(), QStringLiteral("backing"));
         m_tracks.last().pan = -0.25;
+        m_tracks.last().role = QStringLiteral("double");
         addTrack(QStringLiteral("Ad-libsy"));
         applyPresetTo(m_tracks.last(), QStringLiteral("radio"));
         m_tracks.last().pan = 0.3;
         m_tracks.last().volume = -3;
+        m_tracks.last().role = QStringLiteral("adlib");
         m_metronome = false;                      // rytm słychać w bicie
         m_engine.setMetronome(false);
         changed(false);
@@ -292,9 +295,11 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
         const bool trap = templ == QLatin1String("trap") || templ == QLatin1String("drill");
         addTrack(QStringLiteral("Wokal"));
         applyPresetTo(m_tracks.last(), trap ? QStringLiteral("trapvocal") : templ == QLatin1String("boombap") ? QStringLiteral("rap") : QStringLiteral("vocal"));
+        m_tracks.last().role = QStringLiteral("main");
         addTrack(QStringLiteral("Wokal 2"));
         applyPresetTo(m_tracks.last(), QStringLiteral("backing"));
         m_tracks.last().pan = -0.2;
+        m_tracks.last().role = QStringLiteral("double");
         // Podkład trochę ciszej — zostaje miejsce na głos
         m_tracks[addPatternTrack(QStringLiteral("drums"), templ)].volume = -4;
         m_tracks[addPatternTrack(QStringLiteral("bass"), templ)].volume = -5;
@@ -457,6 +462,7 @@ QJsonObject Studio::toJson() const
                                   {QStringLiteral("solo"), t.solo},
                                   {QStringLiteral("input"), t.input},
                                   {QStringLiteral("beat"), t.beat},
+                                  {QStringLiteral("role"), t.role},
                                   {QStringLiteral("effects"), QJsonObject{{QStringLiteral("preset"), t.preset},
                                                                           {QStringLiteral("lowCut"), t.lowCut},
                                                                           {QStringLiteral("eqLow"), t.eqLow},
@@ -466,7 +472,8 @@ QJsonObject Studio::toJson() const
                                                                           {QStringLiteral("reverb"), t.reverb},
                                                                           {QStringLiteral("echo"), t.echo},
                                                                           {QStringLiteral("drive"), t.drive},
-                                                                          {QStringLiteral("autotune"), t.tune}}},
+                                                                          {QStringLiteral("autotune"), t.tune},
+                                                                          {QStringLiteral("double"), t.dbl}}},
                                   {QStringLiteral("kind"), t.kind},
                                   {QStringLiteral("pattern"), t.pattern},
                                   {QStringLiteral("clips"), clips}});
@@ -544,6 +551,7 @@ void Studio::fromJson(const QJsonObject &o)
         t.solo = to.value(QStringLiteral("solo")).toBool();
         t.input = to.value(QStringLiteral("input")).toInt();
         t.beat = to.value(QStringLiteral("beat")).toBool();
+        t.role = to.value(QStringLiteral("role")).toString();
         const QJsonObject fx = to.value(QStringLiteral("effects")).toObject();
         t.preset = fx.value(QStringLiteral("preset")).toString();
         t.lowCut = fx.value(QStringLiteral("lowCut")).toBool();
@@ -555,6 +563,7 @@ void Studio::fromJson(const QJsonObject &o)
         t.echo = std::clamp(fx.value(QStringLiteral("echo")).toDouble(), 0.0, 1.0);
         t.drive = std::clamp(fx.value(QStringLiteral("drive")).toDouble(), 0.0, 1.0);
         t.tune = std::clamp(fx.value(QStringLiteral("autotune")).toDouble(), 0.0, 1.0);
+        t.dbl = std::clamp(fx.value(QStringLiteral("double")).toDouble(), 0.0, 1.0);
         t.kind = to.value(QStringLiteral("kind")).toString(QStringLiteral("audio"));
         t.pattern = to.value(QStringLiteral("pattern")).toObject();
         t.armed = armed.contains(t.id);
@@ -674,6 +683,7 @@ void Studio::rebuildView()
                                         {QStringLiteral("input"), t.input},
                                         {QStringLiteral("kind"), t.kind},
                                         {QStringLiteral("beat"), t.beat},
+                                        {QStringLiteral("role"), t.role},
                                         {QStringLiteral("pattern"), t.pattern.toVariantMap()},
                                         {QStringLiteral("clips"), clips}});
     }
@@ -703,6 +713,7 @@ void Studio::rebuildMix()
                                      {QStringLiteral("echo"), t.echo},
                                      {QStringLiteral("drive"), t.drive},
                                      {QStringLiteral("tune"), t.tune},
+                                     {QStringLiteral("double"), t.dbl},
                                      {QStringLiteral("preset"), t.preset}});
     emit mixChanged();
 }
@@ -752,6 +763,7 @@ Snapshot *Studio::buildSnapshot() const
         rt.send = float(t.reverb * 0.6);
         rt.echo = float(t.echo * 0.7);
         rt.drive = float(t.drive);
+        rt.dbl = float(t.dbl);
         if (t.tune > 0.005) {
             static const int minor[7] = {0, 2, 3, 5, 7, 8, 10}, major[7] = {0, 2, 4, 5, 7, 9, 11};
             uint16_t mask = 0;
@@ -761,7 +773,8 @@ Snapshot *Studio::buildSnapshot() const
             rt.tune.amount = float(t.tune);
             rt.tune.scale = mask;
         }
-        for (const Clip &c : t.clips) {
+        const bool punched = m_punchOut > m_punchIn && m_recTrack >= 0 && m_recTrack < m_tracks.size() && &t == &m_tracks[m_recTrack];
+        for (const Clip &c : punched ? carved(t.clips, m_punchIn, m_punchOut, -1, nullptr) : t.clips) {
             const SourcePtr src = m_sources.value(c.file);
             if (!src)
                 continue;
@@ -1102,8 +1115,14 @@ void Studio::cutStart(Clip &c, long long d)
 // Wycina fragment [a, b) z klipów ścieżki (poza klipem keepId): nowe nagranie zastępuje to, co było pod spodem
 void Studio::carve(int track, long long a, long long b, int keepId)
 {
+    m_tracks[track].clips = carved(m_tracks[track].clips, a, b, keepId, &m_nextId);
+}
+
+// Klipy po wycięciu [a, b); nextId — numery dla klipów rozciętych na dwa (nullptr — bez nowych numerów, do migawki)
+QList<Studio::Clip> Studio::carved(const QList<Clip> &clips, long long a, long long b, int keepId, int *nextId)
+{
     QList<Clip> out;
-    for (Clip c : m_tracks[track].clips) {
+    for (Clip c : clips) {
         const long long cs = c.start, ce = c.start + c.length;
         if (c.id == keepId || ce <= a || cs >= b) {
             out.append(c);
@@ -1119,14 +1138,14 @@ void Studio::carve(int track, long long a, long long b, int keepId)
         }
         if (ce > b) {                       // i część po
             Clip right = c;
-            if (cs < a)
-                right.id = m_nextId++;
+            if (cs < a && nextId)
+                right.id = (*nextId)++;
             cutStart(right, b - cs);
             right.fadeIn = 0;
             out.append(right);
         }
     }
-    m_tracks[track].clips = out;
+    return out;
 }
 
 void Studio::trimClipEnd(int id, double end)
@@ -1510,21 +1529,40 @@ void Studio::record()
     m_recTrack = ti;
     updateMonitor();
     m_recPath = uniqueAudioPath(m_tracks[ti].name, QStringLiteral("wav"));
-    // Pętla włączona: nagrywanie od jej początku, każde przejście to nowe podejście
     m_recLoopStart = m_recLoopEnd = 0;
-    if (m_cycle && m_cycleEnd - m_cycleStart > 0.25) {
+    m_punchIn = m_punchOut = 0;
+    const bool region = m_cycleEnd - m_cycleStart > 0.25;
+    const double bar = m_beatsPerBar * 60.0 / m_bpm;
+    long long start = frames(m_position), from = start - (m_countIn ? llround(bar * Engine::Rate) : 0);
+    long long countInEnd = m_countIn ? start : Engine::NoSeek;
+    if (m_punch && region) {
+        // Wymiana fragmentu: rozbieg z bitem i dotychczasowym nagraniem (ok. 3 s, pełne takty), w regionie
+        // stare milknie. Nagrywa się też rozbieg — klip da się potem wydłużyć w lewo
+        m_punchIn = frames(m_cycleStart);
+        m_punchOut = frames(m_cycleEnd);
+        const int bars = std::clamp(int(std::ceil(3.0 / bar - 0.01)), 1, 4);
+        from = m_punchIn - llround(bars * bar * Engine::Rate);
+        start = std::max(0LL, from);
+        countInEnd = from < 0 ? 0 : Engine::NoSeek;      // przed początkiem piosenki — metronom
+        m_engine.setCycle(false, 0, 0);                  // bez zawracania: jedno przejście
+    } else if (m_cycle && region) {
+        // Pętla włączona: nagrywanie od jej początku, każde przejście to nowe podejście
         m_recLoopStart = frames(m_cycleStart);
         m_recLoopEnd = frames(m_cycleEnd);
-        m_position = m_cycleStart;
+        start = m_recLoopStart;
+        from = start - (m_countIn ? llround(bar * Engine::Rate) : 0);
+        countInEnd = m_countIn ? start : Engine::NoSeek;
     }
-    const long long start = frames(m_position);
     if (!m_engine.startRecording(m_recPath, start, m_tracks[ti].input)) {
+        m_punchIn = m_punchOut = 0;
+        m_engine.setCycle(m_cycle, frames(m_cycleStart), frames(m_cycleEnd));
         emit message(QStringLiteral("Nie ma wejścia dźwięku — podłącz mikrofon i wybierz go w ustawieniach dźwięku."));
         return;
     }
-    const long long preroll = m_countIn ? llround(m_beatsPerBar * 60.0 / m_bpm * Engine::Rate) : 0;
-    m_engine.play(start - preroll, m_countIn ? start : Engine::NoSeek);
-    m_position = double(start - preroll) / Engine::Rate;
+    if (m_punchOut > m_punchIn)
+        m_engine.setSnapshot(buildSnapshot());          // stare nagranie w regionie wyciszone
+    m_engine.play(from, countInEnd);
+    m_position = double(from) / Engine::Rate;
     emit transportChanged();
     emit positionChanged();
 }
@@ -1536,11 +1574,24 @@ void Studio::finishRecording()
     const std::shared_ptr<AudioSource> src = m_engine.stopRecording(&start);
     const int ti = m_recTrack;
     m_recTrack = -1;
+    const long long pin = m_punchIn, pout = m_punchOut;
+    if (pout > pin) {
+        m_punchIn = m_punchOut = 0;
+        m_engine.setCycle(m_cycle, frames(m_cycleStart), frames(m_cycleEnd));
+        m_engine.setSnapshot(buildSnapshot());          // stare nagranie znów gra w całości
+    }
     emit transportChanged();
-    if (!src || src->frames < Engine::Rate / 20 || ti < 0 || ti >= m_tracks.size()) {
+    // Wymiana fragmentu: z nagrania zostaje region i po 10 ms z obu stron na przenikanie ze starym
+    const long long xf = Engine::Rate / 100;
+    const long long pa = std::max(start, pin - xf);
+    const long long pb = src ? std::min(start + src->frames, pout + xf) : 0;
+    const bool missed = pout > pin && src && pb - pa < Engine::Rate / 10;
+    if (!src || src->frames < Engine::Rate / 20 || ti < 0 || ti >= m_tracks.size() || missed) {
         QFile::remove(m_recPath);
         if (!src)
             emit message(QStringLiteral("Nic się nie nagrało — sprawdź mikrofon w ustawieniach dźwięku."));
+        else if (missed)
+            emit message(QStringLiteral("Nagrywanie skończyło się przed fragmentem do wymiany — nic się nie zmieniło."));
         return;
     }
     src->file = QFileInfo(m_recPath).fileName();
@@ -1577,7 +1628,21 @@ void Studio::finishRecording()
         c.srcStart = at[best] + (c.start - cs);
         c.length = c.srcLen = ce - c.start;
     }
-    carve(ti, c.start, c.start + c.length, 0);
+    if (pout > pin) {
+        c.name = m_tracks[ti].name;
+        for (const Clip &o : std::as_const(m_tracks[ti].clips))
+            if (o.start < pout && o.start + o.length > pin)
+                c.name = m_tracks[ti].name + QStringLiteral(" — poprawka");
+        c.start = pa;
+        c.srcStart = pa - start;
+        c.length = c.srcLen = pb - pa;
+        c.fadeIn = pa < pin ? pin - pa : 0;
+        c.fadeOut = pb > pout ? pb - pout : 0;
+        // Zatrzymane w środku regionu — dalej zostaje stare nagranie, nowe w nie przechodzi
+        carve(ti, std::max(pin, pa), pb >= pout + xf ? pout : std::max(pin, pb - xf), 0);
+    } else {
+        carve(ti, c.start, c.start + c.length, 0);
+    }
     m_tracks[ti].clips.append(c);
     m_selClip = c.id;
     emit selectionChanged();
@@ -1625,6 +1690,11 @@ double Studio::recordTakeOffset() const
 void Studio::tick()
 {
     m_engine.collect();
+    // Wymiana fragmentu: po regionie i krótkim wybrzmieniu nagrywanie kończy się samo
+    if (recording() && m_punchOut > m_punchIn && m_engine.position() > m_punchOut + Engine::Rate * 3 / 4) {
+        finishRecording();
+        return;
+    }
     if (playing()) {
         const double pos = double(m_engine.position()) / Engine::Rate;
         if (pos != m_position) {
@@ -1932,9 +2002,12 @@ void Studio::setTrackFx(int index, const QString &key, double value)
         t.drive = std::clamp(value, 0.0, 1.0);
     else if (key == QLatin1String("tune"))
         t.tune = std::clamp(value, 0.0, 1.0);
+    else if (key == QLatin1String("double"))
+        t.dbl = std::clamp(value, 0.0, 1.0);
     else
         return;
-    t.preset.clear();               // ręczna zmiana — już nie gotowe ustawienie
+    if (key != QLatin1String("double"))
+        t.preset.clear();           // ręczna zmiana — już nie gotowe ustawienie (sztucznego dubla gotowe brzmienia nie ustawiają)
     changed(false);
 }
 
@@ -2026,6 +2099,107 @@ void Studio::cycleClip(int id)
 {
     if (Clip *c = findClip(id))
         setCycle(double(c->start) / Engine::Rate, double(c->start + c->length) / Engine::Rate);
+}
+
+void Studio::setPunch(bool on)
+{
+    if (on == m_punch || recording())
+        return;
+    if (on && m_cycleEnd - m_cycleStart < 0.25) {
+        // Bez regionu: zaznaczony klip, a gdy go nie ma — dwa takty od taktu z głowicą (pętla się nie włącza)
+        if (const Clip *c = findClip(m_selClip)) {
+            m_cycleStart = double(c->start) / Engine::Rate;
+            m_cycleEnd = double(c->start + c->length) / Engine::Rate;
+        } else {
+            const double bar = 60.0 / m_bpm * m_beatsPerBar;
+            m_cycleStart = std::floor(std::max(0.0, m_position) / bar) * bar;
+            m_cycleEnd = m_cycleStart + 2 * bar;
+        }
+        m_engine.setCycle(m_cycle, frames(m_cycleStart), frames(m_cycleEnd));
+        setDirty(true);
+    }
+    m_punch = on;
+    emit cycleChanged();
+}
+
+namespace {
+struct VocalRole
+{
+    const char *id, *name, *preset;
+    double pan, volume;
+};
+const VocalRole s_roles[] = {
+    {"main", "Wokal", "rap", 0, 0},
+    {"double", "Dubel", "backing", -0.25, 0},
+    {"adlib", "Ad-libsy", "radio", 0.3, -3},
+};
+}
+
+int Studio::vocalTrack(const QString &role)
+{
+    if (!isOpen() || recording())
+        return -1;
+    const VocalRole *r = nullptr;
+    for (const VocalRole &v : s_roles)
+        if (role == QLatin1String(v.id))
+            r = &v;
+    if (!r)
+        return -1;
+    auto vocal = [this](int i) { return m_tracks[i].kind == QLatin1String("audio") && !m_tracks[i].beat; };
+    int ti = -1;
+    for (int i = 0; i < m_tracks.size() && ti < 0; ++i)
+        if (vocal(i) && m_tracks[i].role == role)
+            ti = i;
+    // Starsze projekty bez ról: po nazwie (Dubel / Wokal 2, Ad-lib…), wokal — pierwsza ścieżka nagrań bez roli
+    for (int i = 0; i < m_tracks.size() && ti < 0; ++i) {
+        if (!vocal(i) || !m_tracks[i].role.isEmpty())
+            continue;
+        const QString n = m_tracks[i].name.toLower();
+        const bool dbl = n.startsWith(QLatin1String("dubel")) || n == QLatin1String("wokal 2");
+        const bool adl = n.startsWith(QLatin1String("ad-lib")) || n.startsWith(QLatin1String("adlib"));
+        if ((role == QLatin1String("double") && dbl) || (role == QLatin1String("adlib") && adl) || (role == QLatin1String("main") && !dbl && !adl))
+            ti = i;
+    }
+    if (ti >= 0) {
+        m_tracks[ti].role = role;
+    } else {
+        addTrack(QString::fromUtf8(r->name));
+        if (m_tracks.size() == 0 || m_tracks.last().name != QString::fromUtf8(r->name))
+            return -1;                              // za dużo ścieżek
+        ti = int(m_tracks.size()) - 1;
+        Track &t = m_tracks[ti];
+        applyPresetTo(t, QString::fromLatin1(r->preset));
+        t.pan = r->pan;
+        t.volume = r->volume;
+        t.role = role;
+        changed(false);
+    }
+    setTrackArmed(ti, true);
+    return ti;
+}
+
+void Studio::recordOver(int clipId, const QString &role)
+{
+    const Clip *c = findClip(clipId);
+    if (!c || recording())
+        return;
+    const double a = double(c->start) / Engine::Rate, b = double(c->start + c->length) / Engine::Rate;
+    if (vocalTrack(role) < 0)
+        return;
+    if (playing())
+        m_engine.stop();
+    m_cycleStart = a;
+    m_cycleEnd = b;
+    m_engine.setCycle(m_cycle, frames(a), frames(b));
+    m_punch = true;
+    emit cycleChanged();
+    setDirty(true);
+    m_position = a;
+    record();
+    if (recording())
+        emit message(role == QLatin1String("double")
+                         ? QStringLiteral("Dubel: rapuj to samo, co w zwrotce, słowo w słowo. Rozbieg słychać z bitem i głównym wokalem.")
+                         : QStringLiteral("Ad-libsy: dorzucaj okrzyki i powtórzenia między wersami — nagrywa się tylko w tym fragmencie."));
 }
 
 // ——— Beat Maker ———

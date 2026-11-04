@@ -98,6 +98,10 @@ Window {
     Shortcut { sequences: ["X"]; enabled: Studio.open && !win.typing; onActivated: win.showMixer = !win.showMixer }
     Shortcut { sequences: ["E"]; enabled: Studio.open && !win.typing; onActivated: win.showInspector = !win.showInspector }
     Shortcut { sequences: ["C"]; enabled: Studio.open && !win.typing; onActivated: Studio.cycle = !Studio.cycle }
+    Shortcut { sequences: ["P"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.togglePunch() }
+    Shortcut { sequences: ["1"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.recordOn("main") }
+    Shortcut { sequences: ["2"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.recordOn("double") }
+    Shortcut { sequences: ["3"]; enabled: Studio.open && !win.typing && !Studio.recording; onActivated: win.recordOn("adlib") }
     Shortcut { sequences: ["M"]; enabled: Studio.open && !win.typing && Studio.tracks.length > 0; onActivated: Studio.setTrackMute(Studio.selectedTrack, !Studio.mix[Studio.selectedTrack].mute) }
     Shortcut { sequences: ["S"]; enabled: Studio.open && !win.typing && Studio.selectedClip > 0; onActivated: { if (!Studio.splitClip(Studio.selectedClip, Studio.position)) win.toast("Ustaw głowicę na zaznaczonym klipie, żeby go podzielić"); } }
     Shortcut { sequences: ["L"]; enabled: Studio.open && !win.typing && Studio.selectedClip > 0; onActivated: Studio.setClipLoop(Studio.selectedClip, !Studio.clip(Studio.selectedClip).loop) }
@@ -180,6 +184,11 @@ Window {
         else if (what === "split") { const c = clips(0)[0]; Studio.splitClip(c.id, c.start + timeline.barSec * 6); }
         else if (what === "mixer") showMixer = true;
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
+        else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
+        else if (what.startsWith("over:")) { const a = what.split(":"); Studio.recordOver(clips(Number(a[1]))[0].id, a[2]); }
+        else if (what.startsWith("role:")) recordOn(what.substring(5));
+        else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
+        else if (what === "targetMenu") targetMenu(recTargetBtn);
         else if (what.startsWith("beat:")) Studio.importBeat(what.substring(5));
         else if (what.startsWith("insp:")) { showInspector = true; inspector.page = what.substring(5); }
         else if (what.startsWith("seek:")) Studio.seek(Number(what.substring(5)));
@@ -213,8 +222,11 @@ Window {
 
     // ——— Menu ———
     function clipMenu(c, track, item, x, y, at) {
+        const tr = Studio.tracks[track];
+        const vocalClip = !!tr && tr.kind === "audio" && !tr.beat;
         Studio.selectedClip = c.id;
         menu.clipId = c.id;
+        menu.track = track;
         menu.at = at;
         const p = item.mapToItem(frame, x, y);
         menu.openAt(p.x, p.y, [
@@ -225,12 +237,58 @@ Window {
             { label: "Ćwicz w pętli", icon: "repeat", action: "cycle" },
             { label: "Zmień nazwę…", icon: "pencil", action: "renameClip" },
             { separator: true }
-        ].concat(Array.from({ length: c.takes || 0 }, (_, k) => ({
+        ].concat(vocalClip ? [
+            { label: "Nagraj dubel do tego fragmentu", icon: "mic", action: "over:double" },
+            { label: "Nagraj ad-libsy w tym fragmencie", icon: "mic", action: "over:adlib" },
+            { label: "Wymień ten fragment (nagraj od nowa)", icon: "mic", action: "over:here" },
+            { separator: true }
+        ] : []).concat(Array.from({ length: c.takes || 0 }, (_, k) => ({
             label: "Podejście " + (k + 1) + ((c.takeOk || [])[k] ? "" : " (niepełne)"),
             icon: k === c.take ? "check" : "", action: "take:" + k, enabled: !!(c.takeOk || [])[k]
         }))).concat(c.takes > 1 ? [{ separator: true }] : []).concat([
             { label: "Usuń klip", icon: "trash", shortcut: "Del", action: "remove", danger: true }
         ]));
+    }
+    // Na którą ścieżkę pójdzie nagranie (R): gotowa do nagrania, zaznaczona albo pierwsza ścieżka nagrań
+    readonly property int recTarget: {
+        const t = Studio.tracks;
+        const ok = (i) => !!t[i] && t[i].kind === "audio" && !t[i].beat;
+        for (let i = 0; i < t.length; ++i)
+            if (t[i].armed) return i;
+        if (ok(Studio.selectedTrack)) return Studio.selectedTrack;
+        for (let i = 0; i < t.length; ++i)
+            if (ok(i)) return i;
+        return -1;
+    }
+    readonly property var roleNames: ({ main: "Wokal", double: "Dubel", adlib: "Ad-libsy" })
+    function recordOn(role) {
+        const had = Studio.tracks.some((t) => t.role === role);
+        const i = Studio.vocalTrack(role);
+        if (i < 0) return;
+        toast((had ? "Nagrywasz na: " : "Nowa ścieżka do nagrania: ") + Studio.tracks[i].name
+              + (role === "double" ? " — rapuj to samo co w zwrotce" : role === "adlib" ? " — okrzyki i powtórzenia między wersami" : ""));
+    }
+    function togglePunch() {
+        Studio.punch = !Studio.punch;
+        if (Studio.punch)
+            toast("Wymiana fragmentu: nagrasz tylko zaznaczony region na linijce, z rozbiegiem przed nim. Reszta nagrania zostaje.");
+    }
+    // Menu „Nagrywasz na”: role rapera (zakłada brakującą ścieżkę) i pozostałe ścieżki nagrań
+    function targetMenu(item) {
+        const t = Studio.tracks;
+        const items = [];
+        for (const role of ["main", "double", "adlib"]) {
+            const i = t.findIndex((x) => x.role === role);
+            items.push({ label: i >= 0 ? t[i].name : roleNames[role] + " — nowa ścieżka",
+                         icon: i >= 0 && i === recTarget ? "check" : i < 0 ? "plus" : "",
+                         shortcut: String(["main", "double", "adlib"].indexOf(role) + 1), action: "role:" + role });
+        }
+        const rest = [];
+        for (let i = 0; i < t.length; ++i)
+            if (t[i].kind === "audio" && !t[i].beat && ["main", "double", "adlib"].indexOf(t[i].role) < 0)
+                rest.push({ label: t[i].name, icon: i === recTarget ? "check" : "", action: "armTrack:" + i });
+        const p = item.mapToItem(frame, 0, item.height + 6);
+        menu.openAt(p.x, p.y, rest.length ? items.concat([{ separator: true }]).concat(rest) : items);
     }
     function trackMenu(track, item, x, y) {
         Studio.selectedTrack = track;
@@ -282,6 +340,10 @@ Window {
         else if (a === "renameClip") { renameSheet.clipId = menu.clipId; renameField.text = Studio.clip(menu.clipId).name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "remove") Studio.removeClip(menu.clipId);
         else if (a.startsWith("take:")) Studio.setClipTake(menu.clipId, Number(a.substring(5)));
+        else if (a === "over:here") { Studio.cycleClip(menu.clipId); Studio.cycle = false; Studio.punch = true; Studio.setTrackArmed(menu.track, true); Studio.seek(Studio.cycleStart); Studio.record(); }
+        else if (a.startsWith("over:")) Studio.recordOver(menu.clipId, a.substring(5));
+        else if (a.startsWith("role:")) recordOn(a.substring(5));
+        else if (a.startsWith("armTrack:")) Studio.setTrackArmed(Number(a.substring(9)), true);
         else if (a === "rename") { renameSheet.clipId = 0; renameField.text = Studio.tracks[menu.track].name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "arm") Studio.setTrackArmed(menu.track, !Studio.tracks[menu.track].armed);
         else if (a === "import") importDialog.open();
@@ -437,6 +499,30 @@ Window {
                         }
                         Tip { shown: parent.hovered; text: Studio.recording ? "Zakończ nagrywanie (R)" : "Nagrywaj na zaznaczoną ścieżkę (R)"; below: true }
                     }
+                    // Na co nagrywasz: wokal, dubel, ad-libsy (1, 2, 3)
+                    HoverButton {
+                        id: recTargetBtn
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(124, targetCol.implicitWidth + 30); height: 42; radius: 12
+                        baseColor: Theme.fill
+                        enabled: !Studio.recording
+                        onClicked: win.targetMenu(recTargetBtn)
+                        Column {
+                            id: targetCol
+                            x: 10; anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, 124 - 30)
+                            Text { text: "nagrywasz na"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10 }
+                            Text {
+                                width: parent.width
+                                text: win.recTarget >= 0 ? Studio.tracks[win.recTarget].name : "nowa ścieżka"
+                                elide: Text.ElideRight
+                                color: Studio.recording ? "#E5484D" : Theme.text
+                                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                            }
+                        }
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
+                        Tip { shown: parent.hovered; text: "Wokal (1), dubel (2), ad-libsy (3) — brakującą ścieżkę Studio założy samo"; below: true }
+                    }
                     Item { width: 6; height: 1 }
                     // Licznik: takt.miara, czas, tempo, metrum
                     Rectangle {
@@ -487,6 +573,13 @@ Window {
                             active: Studio.cycle
                             tip: Studio.cycle ? "Pętla odtwarzania: wł. (C)" : "Pętla odtwarzania — ćwicz fragment (C)"
                             onClicked: Studio.cycle = !Studio.cycle
+                        }
+                        RoundBtn {
+                            path: win.punchPath
+                            active: Studio.punch
+                            enabled: !Studio.recording
+                            tip: Studio.punch ? "Wymiana fragmentu: wł. — nagrywasz tylko region na linijce (P)" : "Wymiana fragmentu — popraw jeden wers, reszta zostaje (P)"
+                            onClicked: win.togglePunch()
                         }
                         RoundBtn { icon: "speaker"; tip: "Głośniki, mikrofon i klawiatury MIDI"; onClicked: audioSheet.open(); warn: !Studio.audioOk || Studio.audioError !== "" }
                     }
@@ -1134,6 +1227,8 @@ Window {
 
     // Metronom (ikona w siatce 24×24)
     readonly property string metronomePath: "M9.5 3h5l4 18h-13zM7.6 15h8.8M12 15l5.5-9"
+    // Wymiana fragmentu: nawiasy regionu z kropką nagrywania
+    readonly property string punchPath: "M7 5H4v14h3M17 5h3v14h-3M12 9.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 1 1 0-5"
 
     // ——— Elementy ———
     component RoundBtn: HoverButton {

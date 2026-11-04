@@ -170,6 +170,7 @@ Item {
                     title: "Przestrzeń"
                     FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "reverb", v) }
                     FxSlider { label: "Echo"; hint: "Powtórzenia co " + Studio.echoTime.replace("3/16", "1/8 z kropką"); from: 0; to: 1; value: insp.mx.echo || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "echo", v) }
+                    FxSlider { label: "Sztuczny dubel"; hint: "Dwie kopie głosu po bokach, jak nagrane drugi raz — szerzej i grubiej"; from: 0; to: 1; value: insp.mx["double"] || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "double", v) }
                 }
             }
 

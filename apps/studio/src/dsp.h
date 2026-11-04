@@ -206,6 +206,58 @@ private:
     float m_lpL = 0, m_lpR = 0;
 };
 
+// Sztuczny dubel (ADT): dwie kopie głosu opóźnione o ok. 19 i 27 ms, każda z wolno pływającym opóźnieniem —
+// lekko inne wejście i wysokość (kilka centów), jak drugie nagranie tego samego tekstu. Kopie idą na boki,
+// oryginał zostaje na środku. Bufor przydzielany raz, poza wątkiem audio.
+class Doubler
+{
+public:
+    static constexpr int Size = 8192;               // > 80 ms przy 96 kHz
+    Doubler() : m_buf(Size, 0.f) {}
+    void process(float *l, float *r, int n, float amount, int rate)
+    {
+        if (!m_used) {
+            std::fill(m_buf.begin(), m_buf.end(), 0.f);
+            m_used = true;
+        }
+        const float sr = float(rate), dry = 1.f - 0.25f * amount, wet = 0.7f * amount;
+        const float incA = 6.2831853f * 0.37f / sr, incB = 6.2831853f * 0.29f / sr;
+        for (int i = 0; i < n; ++i) {
+            m_buf[size_t(m_pos)] = 0.5f * (l[i] + r[i]);
+            const float a = tap((0.019f + 0.0022f * std::sin(m_phA)) * sr);
+            const float b = tap((0.027f + 0.0026f * std::sin(m_phB)) * sr);
+            m_phA += incA;
+            m_phB += incB;
+            if (m_phA > 6.2831853f)
+                m_phA -= 6.2831853f;
+            if (m_phB > 6.2831853f)
+                m_phB -= 6.2831853f;
+            if (++m_pos >= Size)
+                m_pos = 0;
+            l[i] = l[i] * dry + a * wet;
+            r[i] = r[i] * dry + b * wet;
+        }
+    }
+    // Nieużywany — przy ponownym włączeniu bez starego dźwięku w buforze
+    void idle() { m_used = false; }
+
+private:
+    float tap(float delay) const
+    {
+        float p = float(m_pos) - delay;
+        if (p < 0)
+            p += Size;
+        const int i = int(p);
+        const float f = p - float(i);
+        const float x0 = m_buf[size_t(i % Size)], x1 = m_buf[size_t((i + 1) % Size)];
+        return x0 + (x1 - x0) * f;
+    }
+    std::vector<float> m_buf;
+    int m_pos = 0;
+    float m_phA = 0, m_phB = 1.7f;
+    bool m_used = false;
+};
+
 // Ogranicznik z wyprzedzeniem (~1,3 ms): widzi szczyt, zanim ten dojdzie do wyjścia, i łagodnie ścisza,
 // więc nawet mocno „dociśnięty” mastering nie trzeszczy. Na końcu twarde cięcie na pułapie (bezpiecznik).
 class Limiter
