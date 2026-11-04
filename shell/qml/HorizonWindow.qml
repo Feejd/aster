@@ -795,6 +795,123 @@ Window {
         }
     }
 
+    // ——— Kropla rozmowy ———
+    // Bieżąca rozmowa z Aster Intelligence chowa się w małą kroplę tuż pod prawą wyspą (jak druga wyspa).
+    // Klik rozlewa ją z powrotem w panel; gdy rozmowy nie ma (nowa / usunięta), kropli też nie ma.
+    // Pojawia się jak kropla, która odrywa się od wyspy: rośnie od góry na sprężynie, a przez chwilę łączy ją
+    // z wyspą cienka „szyjka”. Gdy agent myśli — niebieska poświata; gdy czeka na zgodę — pulsuje.
+    readonly property bool dropShown: hz.primary && Assistant.count > 0 && !hz.assistantOpen && !hz.asking
+    onDropShownChanged: {
+        if (dropShown) neckAnim.restart();
+        hz.updateRegion();
+    }
+
+    Island {
+        id: neck
+        // Szyjka między wyspą a kroplą — znika, gdy kropla się oderwie
+        property real w: 0
+        visible: w > 0.5
+        x: drop.x + drop.width - 34 - w / 2
+        y: right.y + right.height - 6
+        width: w
+        height: drop.y - y + 8
+        radius: w / 2
+        shadowStrength: 0
+        onWChanged: hz.updateRegion()
+        SequentialAnimation {
+            id: neckAnim
+            NumberAnimation { target: neck; property: "w"; from: 16; to: 16; duration: 60 }
+            NumberAnimation { target: neck; property: "w"; to: 0; duration: 340; easing.type: Easing.InOutCubic }
+        }
+        onVisibleChanged: hz.updateRegion()
+    }
+
+    Island {
+        id: drop
+        readonly property bool thinking: Assistant.busy && !Assistant.waiting
+        anchors.right: right.right
+        y: hz.barY + hz.barH + 7
+        height: 30
+        width: Math.min(dropRow.implicitWidth + 18, 320)
+        radius: height / 2
+        visible: opacity > 0.01
+        opacity: hz.dropShown ? 1 : 0
+        shadowStrength: 0.8
+        property real s: hz.dropShown ? 1 : 0.35
+        property real bump: 1
+        transform: Scale { origin.x: drop.width - 34; origin.y: 0; xScale: drop.s * drop.bump; yScale: drop.s * drop.bump }
+        Behavior on opacity { NumberAnimation { duration: hz.dropShown ? 160 : 120 } }
+        Behavior on s { SpringAnimation { spring: 4.2; damping: 0.3; epsilon: 0.002 } }
+        Behavior on width { SpringAnimation { spring: 3.6; damping: 0.32; epsilon: 0.25 } }
+        onWidthChanged: hz.updateRegion()
+        onVisibleChanged: hz.updateRegion()
+
+        // Nowa odpowiedź, gdy rozmowa jest schowana — kropla lekko podskakuje
+        SequentialAnimation {
+            id: bumpAnim
+            NumberAnimation { target: drop; property: "bump"; to: 1.12; duration: 140; easing.type: Easing.OutQuad }
+            NumberAnimation { target: drop; property: "bump"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 3 }
+        }
+        Connections {
+            target: Assistant
+            function onAnswered() { if (hz.dropShown) bumpAnim.restart(); }
+        }
+
+        IntelligenceGlow {
+            anchors.fill: parent
+            radius: drop.radius
+            thickness: 1.6
+            haloWidth: 6
+            haloBlur: 22
+            speed: 170
+            intensity: drop.thinking || drop.waitPulse > 0 ? 1 : 0
+            Behavior on intensity { NumberAnimation { duration: 400 } }
+        }
+        property real waitPulse: 0
+        SequentialAnimation on waitPulse {
+            running: Assistant.waiting && hz.dropShown
+            loops: Animation.Infinite
+            NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.2; duration: 700; easing.type: Easing.InOutSine }
+            onRunningChanged: if (!running) drop.waitPulse = 0
+        }
+
+        Row {
+            id: dropRow
+            x: 6
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 8
+            IntelligenceOrb {
+                anchors.verticalCenter: parent.verticalCenter
+                size: 19
+                busy: drop.thinking
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !drop.thinking
+                width: Math.min(implicitWidth, 250)
+                elide: Text.ElideRight
+                text: Assistant.waiting ? "Czeka na twoją zgodę" : Assistant.title
+                color: Assistant.waiting ? (Theme.dark ? "#7DD3FC" : "#2563EB") : Theme.text
+                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+            }
+            ShimmerText {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: drop.thinking
+                text: Assistant.acting ? "Działam…" : "Myślę…"
+                pixelSize: 13
+                base: Theme.dark ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(0, 0, 0, 0.45)
+            }
+            Item { width: 2; height: 1 }
+        }
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: hz.assistantPanelRequested(true)
+        }
+    }
+
     // Przycisk na pasku: pigułka, która podświetla się pod kursorem
     component BarButton: Rectangle {
         id: bb
@@ -824,7 +941,10 @@ Window {
         id: regionTimer
         interval: 16
         onTriggered: {
-            const r = [left, island, right].map(i => ({ x: i.x, y: i.y, w: i.width, h: i.height, r: i.radius }));
+            const items = [left, island, right];
+            if (drop.visible) items.push(drop);
+            if (neck.visible) items.push(neck);
+            const r = items.map(i => ({ x: i.x, y: i.y, w: i.width, h: i.height, r: i.radius }));
             Platform.setBlur(hz, r);
             Platform.setInputRegion(hz, r);
         }

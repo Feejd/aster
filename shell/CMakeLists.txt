@@ -10,6 +10,8 @@ qt_add_executable(aster-shell
     src/polkitagent.h
     src/assistant.cpp
     src/assistant.h
+    src/windows.cpp
+    src/windows.h
 )
 
 target_include_directories(aster-shell PRIVATE src)

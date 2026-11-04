@@ -29,8 +29,8 @@ Item {
     }
     Repeater {
         model: [
-            { w: 0.55, c: "#C686FF", o: 0.75 },
-            { w: 0.32, c: "#FFBA71", o: 0.85 },
+            { w: 0.55, c: "#38BDF8", o: 0.75 },
+            { w: 0.32, c: "#7DD3FC", o: 0.9 },
             { w: 0.12, c: "#FFFFFF", o: 1.0 }
         ]
         delegate: Item {

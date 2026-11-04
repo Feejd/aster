@@ -64,7 +64,7 @@ Window {
         return d.toLocaleDateString(loc, "d MMMM");
     }
 
-    Timer { id: hideTimer; interval: 110; onTriggered: aw.visible = false }
+    Timer { id: hideTimer; interval: 180; onTriggered: aw.visible = false }
 
     MouseArea { anchors.fill: parent; onClicked: aw.close() }
     Shortcut { sequence: "Escape"; onActivated: { if (aw.showHistory) aw.showHistory = false; else aw.close(); } }
@@ -77,9 +77,9 @@ Window {
         y: 4
         onHeightChanged: blurTimer.restart()
 
-        // Wejście: wysuwa się z prawej i lekko rośnie
-        property real offset: 24
-        property real s: 0.97
+        // Rozlewa się z kropli rozmowy (prawy górny róg, pod prawą wyspą) i w nią się chowa
+        property real offset: 0
+        property real s: 0.55
         opacity: 0
         transform: [
             Scale { origin.x: panel.width; origin.y: 0; xScale: panel.s; yScale: panel.s },
@@ -93,23 +93,23 @@ Window {
             Transition {
                 to: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: panel; property: "offset"; duration: 260; easing.type: Easing.OutQuint }
-                    NumberAnimation { target: panel; property: "s"; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 0.7 }
-                    NumberAnimation { target: panel; property: "opacity"; duration: 90 }
+                    NumberAnimation { target: panel; property: "s"; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+                    NumberAnimation { target: panel; property: "opacity"; duration: 110 }
                 }
             },
             Transition {
                 from: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: panel; property: "offset"; to: 16; duration: 100; easing.type: Easing.InCubic }
-                    NumberAnimation { target: panel; property: "opacity"; duration: 100 }
+                    // chowa się z powrotem w kroplę pod prawą wyspą
+                    NumberAnimation { target: panel; property: "s"; to: 0.5; duration: 170; easing.type: Easing.InCubic }
+                    NumberAnimation { target: panel; property: "opacity"; duration: 170; easing.type: Easing.InQuad }
                 }
             }
         ]
 
         MouseArea { anchors.fill: parent }
 
-        // Tęczowa poświata wokół panelu, gdy model myśli
+        // Niebieska poświata wokół panelu, gdy model myśli
         IntelligenceGlow {
             anchors.fill: parent
             radius: 30
@@ -324,7 +324,8 @@ Window {
                 bottomPadding: 6
             }
             Repeater {
-                model: ["Jak spakować folder do zip?", "Co robi polecenie chmod +x?", "Przetłumacz na angielski: dzień dobry, jak się masz?"]
+                model: ["Ile mam wolnego miejsca na dysku?", "Zrób mi prostą stronę o mnie i otwórz ją w Aster Code",
+                        "Jakie okna mam otwarte? Zostaw tylko przeglądarkę", "O czym rozmawialiśmy ostatnio?"]
                 delegate: Rectangle {
                     id: sug
                     required property string modelData
@@ -342,6 +343,14 @@ Window {
                     }
                     MouseArea { id: sugArea; anchors.fill: parent; hoverEnabled: true; onClicked: aw.askNow(sug.modelData) }
                 }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                topPadding: 6
+                text: "Poprzednie rozmowy"
+                color: prevArea.containsMouse ? Theme.text : (Theme.dark ? "#7DD3FC" : "#2563EB")
+                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                MouseArea { id: prevArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: aw.openHistory() }
             }
         }
 
@@ -503,12 +512,12 @@ Window {
         readonly property bool waiting: phase === "czeka"
         readonly property bool running: phase === "dziala"
         readonly property color tint: phase === "gotowe" ? "#34C759" : phase === "blad" ? "#FF453A"
-                                    : phase === "odmowa" ? Theme.text2 : "#AA6EEE"
+                                    : phase === "odmowa" ? Theme.text2 : "#3B82F6"
         height: col.implicitHeight + 24
         radius: 16
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.7)
         border.width: 1
-        border.color: waiting ? Qt.rgba(0.67, 0.43, 0.93, 0.55) : Theme.line
+        border.color: waiting ? Qt.rgba(0.23, 0.51, 0.96, 0.6) : Theme.line
         Behavior on border.color { ColorAnimation { duration: 200 } }
 
         // Czekające na zgodę — obwiedzione kolorami Aster Intelligence
@@ -572,8 +581,8 @@ Window {
                     width: runText.implicitWidth + 30; height: 32; radius: 16
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: runArea.containsMouse ? "#9B7BFF" : "#8D79F6" }
-                        GradientStop { position: 1; color: runArea.containsMouse ? "#F07BB8" : "#E46FAE" }
+                        GradientStop { position: 0; color: runArea.containsMouse ? "#38BDF8" : "#3B82F6" }
+                        GradientStop { position: 1; color: runArea.containsMouse ? "#2563EB" : "#1D4ED8" }
                     }
                     scale: runArea.pressed ? 0.95 : 1
                     Behavior on scale { NumberAnimation { duration: 90 } }

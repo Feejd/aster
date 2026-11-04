@@ -26,11 +26,11 @@ Item {
             fillGradient: ConicalGradient {
                 centerX: o.size / 2; centerY: o.size / 2
                 angle: o.angle
-                GradientStop { position: 0.00; color: "#8D9FFF" }
-                GradientStop { position: 0.25; color: "#C686FF" }
-                GradientStop { position: 0.50; color: "#FF6778" }
-                GradientStop { position: 0.72; color: "#FFBA71" }
-                GradientStop { position: 1.00; color: "#8D9FFF" }
+                GradientStop { position: 0.00; color: "#60A5FA" }
+                GradientStop { position: 0.25; color: "#22D3EE" }
+                GradientStop { position: 0.50; color: "#2563EB" }
+                GradientStop { position: 0.72; color: "#7DD3FC" }
+                GradientStop { position: 1.00; color: "#60A5FA" }
             }
             PathRectangle { width: o.size; height: o.size; radius: o.size / 2 }
         }
@@ -42,7 +42,7 @@ Item {
         gradient: Gradient {
             GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.42) }
             GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, 0.0) }
-            GradientStop { position: 1.0; color: Qt.rgba(0.2, 0.05, 0.35, 0.28) }
+            GradientStop { position: 1.0; color: Qt.rgba(0.02, 0.10, 0.35, 0.30) }
         }
     }
     Rectangle {

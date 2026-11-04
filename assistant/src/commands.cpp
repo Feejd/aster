@@ -474,7 +474,8 @@ bool simple(QStringList w, QString *why, int depth)
         return no(QStringLiteral("zmienia Bluetooth"));
     if ((prog == QLatin1String("aster") || prog == QLatin1String("ai"))
         && !(QStringList{QStringLiteral("--historia"), QStringLiteral("--rozmowa"), QStringLiteral("--stan"), QStringLiteral("--pomoc"),
-                         QStringLiteral("--help")}.contains(w.value(1)) || (w.value(1) == QLatin1String("--model-lokalny") && w.size() <= 3 && (w.size() == 2 || w.at(2) == QLatin1String("lista")))))
+                         QStringLiteral("--help"), QStringLiteral("--okna"), QStringLiteral("--pokaz"), QStringLiteral("--zminimalizuj"),
+                         QStringLiteral("--maksymalizuj"), QStringLiteral("--otworz")}.contains(w.value(1)) || (w.value(1) == QLatin1String("--model-lokalny") && w.size() <= 3 && (w.size() == 2 || w.at(2) == QLatin1String("lista")))))
         return no(QStringLiteral("zagnieżdżone pytanie albo pobieranie modelu"));
     return false;
 }

@@ -483,12 +483,21 @@ QString Service::systemPrompt(const QString &source, const QString &memory) cons
         "NAJPIERW PROGRAMY ASTER — są już w systemie, poleć je i uruchamiaj zamiast innych (GNOME, KDE, Fedora):\n"
         "Pliki (aster-files), Przeglądarka (aster-browser), Terminal (aster-terminal), Ustawienia (aster-settings, np. "
         "`aster-settings wifi`), Sklep z programami (aster-store), Edytor tekstu (aster-editor), Aster Code — projekty i kod "
-        "(aster-code), Kalkulator (aster-calculator), Zdjęcia (aster-photos), Muzyka (aster-music), Wideo (aster-video), "
-        "Podgląd PDF (aster-pdf), Kamera (aster-camera), Skaner (aster-scanner), Grafika — plakaty, posty, CV (aster-grafika), "
-        "Montaż — filmy na TikTok/YouTube (aster-montaz), Studio — nagrywanie muzyki (aster-studio), Menedżer zadań "
+        "(aster --otworz code), Kalkulator (aster-calculator), Zdjęcia (aster-photos), Muzyka (aster-music), Wideo (aster-video), "
+        "Podgląd PDF (aster-pdf), Kamera (aster-camera), Skaner (aster-scanner), Grafika — plakaty, posty, CV (aster --otworz grafika), "
+        "Montaż — filmy na TikTok/YouTube (aster --otworz montaz), Studio — nagrywanie muzyki (aster --otworz studio), Menedżer zadań "
         "(aster-tasks), Telefon (aster-phone), Aplikacje webowe (aster-webapps), Emoji (aster-emoji). "
         "Program otwierasz jego poleceniem, np. ```bash\naster-files ~/Pobrane\n```. Programu spoza tej listy szukaj w Sklepie "
-        "(Flathub) — nigdy nie polecaj programu, którego istnienia nie jesteś pewien.");
+        "(Flathub) — nigdy nie polecaj programu, którego istnienia nie jesteś pewien.\n"
+        "OKNA I PROGRAMY: `aster --otworz NAZWA [plik|adres…]` otwiera dowolny zainstalowany program po zwykłej nazwie "
+        "(np. `aster --otworz \"aster code\" ~/strona`, `aster --otworz grafika`, `aster --otworz firefox`) — używaj tego, gdy nie znasz "
+        "dokładnego polecenia. Aster Code, Grafika, Montaż i Studio (oraz inne programy Aster) bywają jeszcze niezainstalowane: "
+        "gdy `aster --otworz` odpowie, że programu nie ma, zaproponuj `aster --instaluj code` (grafika, montaz, studio…) — "
+        "zapytaj „Zainstalować Aster Code?” — a po instalacji otwórz go i dokończ zadanie. Gdy do zadania brakuje programu, "
+        "sam go doinstaluj w ten sposób (albo z Flathub), zamiast tłumaczyć użytkownikowi, jak to zrobić. "
+        "`aster --okna` pokazuje otwarte okna; `aster --pokaz OKNO`, `aster --zminimalizuj OKNO`, `aster --maksymalizuj OKNO`, "
+        "`aster --zamknij-okno OKNO` (OKNO: numer z listy albo nazwa programu/tytuł). Gdy użytkownik mówi o „tym oknie”, "
+        "„przeglądarce”, „otwartym pliku” — najpierw sprawdź `aster --okna`.");
     s = s.arg(askAlways()
                   ? QStringLiteral("Polecenia, które tylko coś sprawdzają, uruchamiają się od razu; wszystko, co cokolwiek zmienia, użytkownik "
                                    "najpierw zatwierdza — wtedy zdanie jest pytaniem, np. „Zainstalować Google Chrome?”. ")
@@ -545,6 +554,20 @@ QString Service::describe(const QString &text, const QString &command, bool asks
         return QStringLiteral("Odinstalować program?");
     if (command.startsWith(QLatin1String("aster-")))
         return QStringLiteral("Otwieram program.");
+    static const QRegularExpression asterInstall(QStringLiteral("^aster\\s+--instaluj\\s+(\\S+)"));
+    if (const auto m = asterInstall.match(command); m.hasMatch()) {
+        static const QHash<QString, QString> names{{QStringLiteral("code"), QStringLiteral("Aster Code")}, {QStringLiteral("grafika"), QStringLiteral("Grafikę")},
+                                                   {QStringLiteral("montaz"), QStringLiteral("Montaż")}, {QStringLiteral("studio"), QStringLiteral("Studio")}};
+        return QStringLiteral("Zainstalować %1?").arg(names.value(m.captured(1), QStringLiteral("program Aster")));
+    }
+    if (command.startsWith(QLatin1String("aster --otworz")))
+        return QStringLiteral("Otwieram program.");
+    if (command.startsWith(QLatin1String("aster --okna")))
+        return QStringLiteral("Sprawdzam, jakie okna są otwarte.");
+    if (command.startsWith(QLatin1String("aster --pokaz")))
+        return QStringLiteral("Pokazuję okno.");
+    if (command.startsWith(QLatin1String("aster --zamknij-okno")))
+        return QStringLiteral("Zamknąć to okno?");
     if (command.startsWith(QLatin1String("aster --historia")))
         return QStringLiteral("Szukam w naszych wcześniejszych rozmowach.");
     if (command.startsWith(QLatin1String("aster --rozmowa")))

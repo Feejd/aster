@@ -429,4 +429,9 @@ historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
       w tle; rozmowy z modelem lokalnym — bez modelu i nigdy do chmury), `aster --historia [słowa]`, `aster --rozmowa ID`
       — panel sam otwiera znalezioną rozmowę. Przycisk Aster Intelligence w prawej wyspie (za Centrum sterowania)
       otwiera panel z rozmowami
+- [x] A4.6. Niebieski motyw (poświata, kula, panel). Kropla rozmowy pod prawą wyspą: bieżąca rozmowa się w nią chowa
+      (panel rozlewa się z niej i w nią wraca), bez rozmowy kropli nie ma; myśli — poświata, czeka na zgodę — pulsuje.
+      Okna i programy: powłoka wystawia D-Bus org.aster.Shell (ListWindows, WindowAction, OpenApp), w terminalu
+      `aster --okna`, `--pokaz/--zminimalizuj/--maksymalizuj/--zamknij-okno OKNO`, `aster --otworz PROGRAM [pliki]`,
+      `aster --instaluj code|grafika|montaz|studio…` (Flatpak z wydania „aplikacje”) — agent sam doinstalowuje brakujące
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie

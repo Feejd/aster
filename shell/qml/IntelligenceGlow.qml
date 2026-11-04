@@ -21,7 +21,7 @@ Item {
     property bool animate: true           // false: kąt podaje ktoś inny (druga warstwa tej samej poświaty)
     property bool showRing: true
     // Paleta jak w Apple Intelligence: fiolet, róż, błękit, koral, brzoskwinia
-    readonly property var palette: ["#BC82F3", "#F5B9EA", "#8D9FFF", "#AA6EEE", "#FF6778", "#FFBA71", "#C686FF", "#BC82F3"]
+    readonly property var palette: ["#3B82F6", "#60A5FA", "#22D3EE", "#2563EB", "#7DD3FC", "#1D4ED8", "#38BDF8", "#3B82F6"]
 
     visible: intensity > 0.005
     opacity: intensity

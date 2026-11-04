@@ -8,6 +8,10 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QHash>
+#include <QSysInfo>
 #include <QDBusConnection>
 #include <QDBusArgument>
 #include <QDBusMessage>
@@ -463,6 +467,143 @@ static int localModel(const QString &arg)
     return 0;
 }
 
+// ——— Okna i programy (powłoka Aster: D-Bus org.aster.Shell) ———
+
+static QDBusMessage shellCall(const QString &method, const QVariantList &args = {})
+{
+    QDBusMessage m = QDBusMessage::createMethodCall(QStringLiteral("org.aster.Shell"), QStringLiteral("/org/aster/Shell"),
+                                                    QStringLiteral("org.aster.Shell"), method);
+    m.setArguments(args);
+    return QDBusConnection::sessionBus().call(m, QDBus::Block, 10000);
+}
+
+static bool shellFailed(const QDBusMessage &r)
+{
+    if (r.type() != QDBusMessage::ErrorMessage)
+        return false;
+    err(QStringLiteral("aster: powłoka Aster nie odpowiada — okna i programy obsługuje tylko pulpit Aster (%1)\n").arg(r.errorMessage()));
+    return true;
+}
+
+static int listWindows()
+{
+    const QDBusMessage r = shellCall(QStringLiteral("ListWindows"));
+    if (shellFailed(r))
+        return 1;
+    const QJsonArray list = QJsonDocument::fromJson(r.arguments().value(0).toString().toUtf8()).array();
+    if (list.isEmpty()) {
+        out(QStringLiteral("Nie ma otwartych okien.\n"));
+        return 0;
+    }
+    for (const QJsonValue &v : list) {
+        const QJsonObject o = v.toObject();
+        QString state;
+        if (o.value(QStringLiteral("active")).toBool())
+            state = QStringLiteral("  (na wierzchu)");
+        else if (o.value(QStringLiteral("minimized")).toBool())
+            state = QStringLiteral("  (zminimalizowane)");
+        out(QStringLiteral("%1. %2 — %3%4\n").arg(o.value(QStringLiteral("n")).toInt())
+                .arg(o.value(QStringLiteral("app")).toString(), o.value(QStringLiteral("title")).toString(), state));
+    }
+    return 0;
+}
+
+static int windowAction(const QString &action, const QString &query)
+{
+    if (query.isEmpty()) {
+        err(QStringLiteral("aster: które okno? Podaj numer albo nazwę (lista: aster --okna)\n"));
+        return 2;
+    }
+    const QDBusMessage r = shellCall(QStringLiteral("WindowAction"), {action, query});
+    if (shellFailed(r))
+        return 1;
+    const QString problem = r.arguments().value(0).toString();
+    if (!problem.isEmpty()) {
+        err(problem + QStringLiteral("\n"));
+        return 1;
+    }
+    return 0;
+}
+
+// Programy Aster z GitHuba (jak tools/install-apps.sh): id → nazwa
+static QString asterAppName(const QString &id)
+{
+    static const QHash<QString, QString> names{
+        {QStringLiteral("code"), QStringLiteral("Aster Code")}, {QStringLiteral("grafika"), QStringLiteral("Grafika")},
+        {QStringLiteral("montaz"), QStringLiteral("Montaż")}, {QStringLiteral("studio"), QStringLiteral("Studio")},
+        {QStringLiteral("editor"), QStringLiteral("Edytor tekstu")}, {QStringLiteral("calculator"), QStringLiteral("Kalkulator")},
+        {QStringLiteral("photos"), QStringLiteral("Zdjęcia")}, {QStringLiteral("music"), QStringLiteral("Muzyka")},
+        {QStringLiteral("video"), QStringLiteral("Wideo")}, {QStringLiteral("pdf"), QStringLiteral("Podgląd PDF")},
+        {QStringLiteral("camera"), QStringLiteral("Kamera")}};
+    return names.value(id);
+}
+
+static int openApp(const QStringList &args)
+{
+    if (args.isEmpty()) {
+        err(QStringLiteral("aster: który program? np. aster --otworz \"aster code\" ~/projekt\n"));
+        return 2;
+    }
+    const QDBusMessage r = shellCall(QStringLiteral("OpenApp"), {args.first(), QStringList(args.mid(1)), QDir::currentPath()});
+    if (shellFailed(r))
+        return 1;
+    const QString res = r.arguments().value(0).toString();
+    if (res.startsWith(QLatin1String("ok:"))) {
+        out(QStringLiteral("Otwarto: %1 (okno pojawi się za chwilę)\n").arg(res.mid(3)));
+        return 0;
+    }
+    if (res.startsWith(QLatin1String("nie-ma:"))) {
+        const QString id = res.mid(7);
+        out(QStringLiteral("Programu %1 nie ma jeszcze na tym komputerze. Instalacja: aster --instaluj %2\n").arg(asterAppName(id), id));
+        return 3;
+    }
+    err(res + QStringLiteral("\n"));
+    return 1;
+}
+
+static int run(const QString &program, const QStringList &args)
+{
+    QProcess p;
+    p.setProcessChannelMode(QProcess::ForwardedChannels);
+    p.setInputChannelMode(QProcess::ForwardedInputChannel);
+    p.start(program, args);
+    if (!p.waitForStarted(10000))
+        return 127;
+    p.waitForFinished(-1);
+    return p.exitStatus() == QProcess::NormalExit ? p.exitCode() : 130;
+}
+
+// Program Aster jako Flatpak z wydania „aplikacje” na GitHubie (pierwszy raz dochodzą biblioteki KDE z Flathub, ok. 400 MB)
+static int installApp(QString id)
+{
+    id = id.toLower().remove(QStringLiteral("aster")).remove(QStringLiteral("org.")).remove(QLatin1Char('.')).trimmed();
+    if (id == QLatin1String("montaż"))
+        id = QStringLiteral("montaz");
+    if (asterAppName(id).isEmpty()) {
+        err(QStringLiteral("aster: nie znam programu Aster „%1”. Są: code, grafika, montaz, studio, editor, calculator, photos, "
+                           "music, video, pdf, camera. Inne programy: flatpak install --user flathub <id>\n").arg(id));
+        return 2;
+    }
+    const QString arch = QSysInfo::currentCpuArchitecture() == QLatin1String("arm64") ? QStringLiteral("aarch64") : QStringLiteral("x86_64");
+    const QString file = QDir::tempPath() + QStringLiteral("/aster-%1-%2.flatpak").arg(id, arch);
+    err(bold(QStringLiteral("Pobieram %1…").arg(asterAppName(id)), g_errColor) + QStringLiteral("\n"));
+    run(QStringLiteral("flatpak"), {QStringLiteral("remote-add"), QStringLiteral("--user"), QStringLiteral("--if-not-exists"), QStringLiteral("flathub"),
+                                    QStringLiteral("https://dl.flathub.org/repo/flathub.flatpakrepo")});
+    if (run(QStringLiteral("curl"), {QStringLiteral("-fL"), isatty(STDERR_FILENO) ? QStringLiteral("--progress-bar") : QStringLiteral("-sS"),
+                                     QStringLiteral("-o"), file,
+                                     QStringLiteral("https://github.com/Feejd/aster/releases/download/aplikacje/%1-%2.flatpak").arg(id, arch)}) != 0) {
+        err(QStringLiteral("aster: nie udało się pobrać %1 (brak internetu albo paczki dla %2)\n").arg(asterAppName(id), arch));
+        return 1;
+    }
+    err(bold(QStringLiteral("Instaluję %1 (za pierwszym razem dochodzą biblioteki KDE, ok. 400 MB)…").arg(asterAppName(id)), g_errColor) + QStringLiteral("\n"));
+    const int code = run(QStringLiteral("flatpak"), {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("--reinstall"), QStringLiteral("-y"),
+                                                     QStringLiteral("--noninteractive"), file});
+    QFile::remove(file);
+    if (code == 0)
+        out(QStringLiteral("Gotowe — %1 jest zainstalowany (aster --otworz %2).\n").arg(asterAppName(id), id));
+    return code;
+}
+
 // Polecenie uruchomione przez agenta (ASTER_AGENT=1): przy chmurze bez rozmów prowadzonych tylko na tym komputerze
 static bool fromAgent() { return qEnvironmentVariableIsSet("ASTER_AGENT"); }
 
@@ -532,7 +673,10 @@ static void printHelp()
         "                             git diff | aster \"napisz opis commita\"\n"
         "  aster --stan               kto odpowiada (model lokalny czy chmura)\n"
         "  aster --historia [słowa]   wcześniejsze rozmowy (szukanie po słowach)\n"
-        "  aster --rozmowa ID         cała wcześniejsza rozmowa\n\n"
+        "  aster --rozmowa ID         cała wcześniejsza rozmowa\n"
+        "  aster --okna               otwarte okna; --pokaz / --zminimalizuj / --maksymalizuj / --zamknij-okno OKNO\n"
+        "  aster --otworz PROGRAM [plik|adres…]  np. aster --otworz \"aster code\" ~/projekt\n"
+        "  aster --instaluj PROGRAM   program Aster (code, grafika, montaz, studio…)\n\n"
         "W rozmowie: /nowa — nowa rozmowa, /model — dostawca i model, /wyjdz — koniec.\n"
         "Aster Intelligence sam sprawdza i naprawia: zwykłe polecenia uruchamia od razu, a przed ważnymi\n"
         "(instalacja, usuwanie, hasło administratora, restart) pyta [T/n].\n"
@@ -682,6 +826,16 @@ int main(int argc, char *argv[])
     }
     if (!args.isEmpty() && (args.first() == QLatin1String("--model-lokalny") || args.first() == QLatin1String("--local-model")))
         return localModel(args.value(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--okna"))
+        return listWindows();
+    if (!args.isEmpty() && (args.first() == QLatin1String("--pokaz") || args.first() == QLatin1String("--zminimalizuj")
+                            || args.first() == QLatin1String("--maksymalizuj") || args.first() == QLatin1String("--zamknij-okno")))
+        return windowAction(args.first() == QLatin1String("--zamknij-okno") ? QStringLiteral("zamknij") : args.first().mid(2),
+                            args.mid(1).join(QLatin1Char(' ')));
+    if (!args.isEmpty() && args.first() == QLatin1String("--otworz"))
+        return openApp(args.mid(1));
+    if (!args.isEmpty() && args.first() == QLatin1String("--instaluj"))
+        return installApp(args.mid(1).join(QLatin1Char(' ')));
     if (!args.isEmpty() && args.first() == QLatin1String("--historia"))
         return history(args.mid(1).join(QLatin1Char(' ')));
     if (!args.isEmpty() && args.first() == QLatin1String("--rozmowa")) {

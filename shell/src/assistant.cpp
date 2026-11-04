@@ -200,6 +200,14 @@ void Assistant::refreshSelection()
     Q_EMIT selectionChanged();
 }
 
+QString Assistant::title() const
+{
+    for (const auto &m : m_messages.items())
+        if (m.role == QLatin1String("user"))
+            return m.text.simplified();
+    return {};
+}
+
 int Assistant::exchanges() const
 {
     int n = 0;
@@ -496,6 +504,9 @@ void Assistant::runAction(int index)
     auto *timeout = new QTimer(p);
     timeout->setSingleShot(true);
     connect(timeout, &QTimer::timeout, p, [p] { p->kill(); });
+    // Instalacja programu może pobierać setki MB — dostaje pół godziny, reszta 3 minuty
+    const bool long_ = cmd.contains(QLatin1String("flatpak install")) || cmd.contains(QLatin1String("aster --instaluj"))
+                    || cmd.contains(QLatin1String("flatpak update")) || cmd.contains(QLatin1String("bootc upgrade"));
     connect(p, &QProcess::finished, this, [this, p, id](int code, QProcess::ExitStatus st) {
         p->deleteLater();
         const auto &items = m_messages.items();
@@ -503,7 +514,7 @@ void Assistant::runAction(int index)
             if (items.at(i).actionId == id) {
                 QString out = QString::fromUtf8(p->readAll());
                 if (st != QProcess::NormalExit)
-                    out += QStringLiteral("\n(polecenie przerwane po 3 minutach)");
+                    out += QStringLiteral("\n(polecenie przerwane — trwało za długo)");
                 sendResult(i, st == QProcess::NormalExit ? code : 124, out);
                 return;
             }
@@ -519,7 +530,7 @@ void Assistant::runAction(int index)
     });
     p->start(QStringLiteral("bash"), {QStringLiteral("-lc"), cmd}, QIODevice::ReadOnly);
     p->closeWriteChannel();
-    timeout->start(180000);
+    timeout->start(long_ ? 30 * 60 * 1000 : 180000);
 }
 
 void Assistant::sendResult(int index, int exitCode, const QString &output)

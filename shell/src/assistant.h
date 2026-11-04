@@ -53,6 +53,7 @@ class Assistant : public QObject
     Q_PROPERTY(AssistantMessages *messages READ messages CONSTANT)
     Q_PROPERTY(int count READ count NOTIFY changed)
     Q_PROPERTY(int exchanges READ exchanges NOTIFY changed)             // liczba pytań w rozmowie
+    Q_PROPERTY(QString title READ title NOTIFY changed)                 // pierwsze pytanie rozmowy (kropla na pasku)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(QString conversation READ conversation NOTIFY changed)
     Q_PROPERTY(QString lastAnswer READ lastAnswer NOTIFY changed)
@@ -72,6 +73,7 @@ public:
     AssistantMessages *messages() { return &m_messages; }
     int count() const { return m_messages.rowCount(); }
     int exchanges() const;
+    QString title() const;
     bool busy() const { return m_busy; }
     QString conversation() const { return m_conversation; }
     QString lastAnswer() const;

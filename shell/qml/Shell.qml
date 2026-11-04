@@ -1,5 +1,6 @@
 import QtQuick
 import QtQml.Models
+import org.kde.taskmanager as TaskManager
 import Aster.Shell
 
 // Korzeń powłoki: tworzy jej okna-warstwy. Tapeta i górny pasek są na każdym ekranie (jak w macOS),
@@ -34,6 +35,15 @@ QtObject {
                 startWin.close(); controlWin.close(); assistWin.show();
             }
         }
+    }
+    // Okna dla Aster Intelligence (D-Bus org.aster.Shell): każde okno osobno, ze wszystkich ekranów i pulpitów
+    property var windowList: TaskManager.TasksModel {
+        groupMode: TaskManager.TasksModel.GroupDisabled
+        filterByVirtualDesktop: false
+        filterByActivity: false
+        filterByScreen: false
+        filterHidden: false
+        Component.onCompleted: Windows.model = this
     }
     property var clock: ClockWindow {}
     property var start: StartWindow { id: startWin }
@@ -70,7 +80,7 @@ QtObject {
             else if (h) h.toggleAsk();
         }
     }
-    // Do testów: ASTER_SHOT_ASK="pytanie|kolejne|…" — pierwsze w wyspie, kolejne jak dopytanie
+    // Do testów: ASTER_SHOT_ASK="pytanie|kolejne|…|^" — pierwsze w wyspie, kolejne jak dopytanie, „^” chowa rozmowę do kropli
     // (ASTER_SHOT_GLOW=1 zapala poświatę ekranu bez pytania)
     property var shotAsk: Timer {
         readonly property var questions: Platform.env("ASTER_SHOT_ASK") === "" ? [] : Platform.env("ASTER_SHOT_ASK").split("|")
@@ -91,6 +101,8 @@ QtObject {
             if (shell.shotAsk.next >= shell.shotAsk.questions.length) return;
             const q = shell.shotAsk.questions[shell.shotAsk.next++];
             const h = shell.horizons.objectAt(0);
+            // „^”: schowaj rozmowę (do kropli pod prawą wyspą)
+            if (q === "^") { Qt.callLater(() => { if (h) h.closeAsk(); assistWin.close(); }); return; }
             Qt.callLater(() => { if (assistWin.open) assistWin.askNow(q); else if (h) h.askNow(q); });
         }
     }

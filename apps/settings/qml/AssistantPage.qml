@@ -92,7 +92,7 @@ Page {
         SettingRow {
             title: "Dostawca"
             subtitle: ap.where(ap.cur)
-            icon: "sparkle"; colors: ["#C4B5FD", "#6D28D9"]
+            icon: "sparkle"; colors: ["#7DD3FC", "#2563EB"]
             Dropdown {
                 anchors.verticalCenter: parent.verticalCenter
                 maxWidth: 280
@@ -171,7 +171,7 @@ Page {
                         : !mr.modelData.fits ? "Za mało pamięci — potrzeba " + mr.modelData.minRam + " GB"
                         : ap.gb(mr.modelData.size) + " · " + mr.modelData.description
                 icon: "sparkle"
-                colors: mr.modelData.active ? ["#F5B9EA", "#8D5CF6"] : ["#D4D4D8", "#71717A"]
+                colors: mr.modelData.active ? ["#7DD3FC", "#2563EB"] : ["#D4D4D8", "#71717A"]
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
@@ -185,8 +185,8 @@ Page {
                             width: parent.width * mr.frac; height: parent.height; radius: 3
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0; color: "#8D9FFF" }
-                                GradientStop { position: 1; color: "#E46FAE" }
+                                GradientStop { position: 0; color: "#38BDF8" }
+                                GradientStop { position: 1; color: "#2563EB" }
                             }
                             Behavior on width { NumberAnimation { duration: 400 } }
                         }
@@ -253,7 +253,7 @@ Page {
         SettingRow {
             title: "Narzędzia do pisania"
             subtitle: "Zaznacz tekst w dowolnym programie — popraw błędy, przeredaguj, zmień ton, streść"
-            icon: "pencil"; colors: ["#F5B9EA", "#C026D3"]
+            icon: "pencil"; colors: ["#93C5FD", "#1D4ED8"]
             value: "Super + Spacja"
         }
         SettingRow {
