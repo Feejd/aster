@@ -54,6 +54,15 @@ Item {
     // Gdzie jeszcze ten program występuje w przewodnikach
     readonly property var related: Catalog.tasks.filter(t => t.picks.some(p => p.ref === ref))
 
+    // Sąsiedzi z tej samej półki katalogu
+    readonly property var neighbours: {
+        for (const cat in Catalog.shelves)
+            for (const shelf of Catalog.shelves[cat])
+                if (shelf.refs.indexOf(ref) >= 0)
+                    return { title: shelf.title, refs: shelf.refs.filter(r => r !== ref).slice(0, 6) };
+        return { title: "", refs: [] };
+    }
+
     readonly property bool wide: page.width > 960
 
     function shot(s) {
@@ -114,9 +123,9 @@ Item {
                         }
                         Txt {
                             visible: !page.meta
-                            text: "Spoza katalogu Aster: nie sprawdzaliśmy tego programu"
-                            color: Ui.tone("warn")
-                            font.pixelSize: 13; font.weight: Font.Medium
+                            text: "Opis pochodzi od autora programu"
+                            color: Theme.text2
+                            font.pixelSize: 13
                         }
                     }
                 }
@@ -257,6 +266,18 @@ Item {
                     }
                 }
 
+                // Co jeszcze jest na tej półce
+                Column {
+                    visible: page.neighbours.refs.length > 0
+                    width: parent.width
+                    spacing: 2
+                    Txt { text: page.neighbours.title; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; bottomPadding: 4 }
+                    Repeater {
+                        model: page.neighbours.refs
+                        delegate: AppRow { required property string modelData; width: mainCol.width; ref: modelData }
+                    }
+                }
+
                 // Głosy użytkowników
                 Column {
                     visible: !!page.ratingInfo || page.reviewList.length > 0
@@ -325,10 +346,14 @@ Item {
                     spacing: 8
                     GetButton { ref: page.ref; big: true }
                     Btn {
-                        visible: page.removable
+                        visible: page.removable && page.kind !== "via"
                         height: 44
                         text: "Usuń"; danger: true
-                        onClicked: page.kind === "web" ? Flatpak.removeWebApp(page.ref, Flatpak.webApps[page.meta.url]) : Store.requestRemoval(page.kind === "aster" ? page.meta.id : page.ref)
+                        onClicked: {
+                            if (page.kind === "web") Flatpak.removeWebApp(page.ref, Flatpak.webApps[page.meta.url]);
+                            else if (page.kind === "get") Flatpak.removeGet(page.ref);
+                            else Store.requestRemoval(page.kind === "aster" ? page.meta.id : page.ref);
+                        }
                     }
                 }
                 Txt {
@@ -337,6 +362,8 @@ Item {
                     wrapMode: Text.Wrap
                     color: Theme.text2; font.pixelSize: 13
                     text: page.kind === "web" ? "Bez hasła. Pojawi się w Starcie jak zwykły program."
+                        : page.kind === "get" ? "Bez hasła. Pobierze około " + Facts.size((page.meta.mb || 0) * 1e6) + " ze strony producenta."
+                        : page.kind === "via" ? "Najpierw zainstaluje Lutris, potem kliknij Otwórz, a uruchomi się instalator."
                         : page.bill ? "Bez hasła. Zajmie " + (page.bill.extra > 0 ? "około " : "") + Facts.billText(page.bill) + "."
                         : "Bez hasła."
                 }
@@ -371,6 +398,19 @@ Item {
                     }
                 }
 
+                // Dokładnie to, co się stanie: bez ukrytych kroków
+                Column {
+                    visible: page.kind === "get"
+                    width: parent.width
+                    spacing: 4
+                    Txt { text: "Co zrobi sklep"; color: Theme.text2; font.pixelSize: 11; font.weight: Font.DemiBold }
+                    Txt {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        font.pixelSize: 12
+                        text: page.meta && page.meta.command ? page.meta.command : page.meta ? "Pobierze paczkę z " + page.meta.site + " i rozpakuje ją do ~/.local/share/aster-get" : ""
+                    }
+                }
                 Rectangle { visible: !!page.stats || !!page.appData; width: parent.width; height: 1; color: Theme.line }
                 Txt {
                     width: parent.width

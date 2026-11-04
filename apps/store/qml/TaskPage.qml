@@ -161,6 +161,7 @@ Item {
                                     if (pick.sum) bits.push(Facts.size(pick.sum.installed_size));
                                     else if (pick.info.kind === "web") bits.push("nic na dysku");
                                     else if (pick.info.kind === "aster") bits.push("w systemie");
+                                    else if (pick.info.kind === "get") bits.push("od producenta");
                                     if (m.offline === "tak") bits.push("działa bez internetu");
                                     else if (m.offline === "nie") bits.push("wymaga internetu");
                                     if (m.account === "tak") bits.push("wymaga konta");

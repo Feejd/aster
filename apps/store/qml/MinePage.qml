@@ -18,6 +18,8 @@ Item {
     readonly property var apps: Flatpak.installedApps.slice().sort((a, b) => b.size - a.size)
     readonly property real appsSize: apps.reduce((s, a) => s + a.size, 0)
     readonly property var webList: Object.keys(Flatpak.webApps)
+    readonly property var getList: Object.keys(Flatpak.getApps)
+    readonly property int updateCount: Flatpak.updates.length + Flatpak.getUpdates.length
 
     // Biblioteki, których nie używa już żaden program (bez dodatków typu GL i Locale)
     readonly property var unused: {
@@ -79,14 +81,17 @@ Item {
                     }
                     Btn {
                         id: updBtn
-                        visible: Flatpak.updates.length > 0
+                        visible: page.updateCount > 0
                         primary: true
                         text: Flatpak.progress["*"] !== undefined ? "Aktualizuję…" : "Zaktualizuj wszystko"
-                        onClicked: Flatpak.updateAll()
+                        onClicked: {
+                            if (Flatpak.updates.length) Flatpak.updateAll();
+                            Flatpak.getUpdates.forEach(id => Flatpak.updateGet("get:" + id));
+                        }
                     }
                 }
                 Txt {
-                    visible: Flatpak.updates.length === 0
+                    visible: page.updateCount === 0
                     color: Theme.text2; font.pixelSize: 14
                     text: "Wszystko jest aktualne."
                 }
@@ -99,6 +104,17 @@ Item {
                         detail: (modelData.version ? "Wersja " + modelData.version : "Nowa wersja") + (modelData.size ? " · pobierze " + Facts.size(modelData.size) : "")
                         actionText: Flatpak.progress[modelData.id] !== undefined ? "Trwa…" : "Zaktualizuj"
                         onAction: Flatpak.update(modelData.id)
+                    }
+                }
+                Repeater {
+                    model: Flatpak.getUpdates
+                    delegate: ProgramRow {
+                        required property string modelData
+                        ref: "get:" + modelData
+                        title: Store.nameOf("get:" + modelData)
+                        detail: "Nowa wersja od producenta"
+                        actionText: Flatpak.progress["get:" + modelData] !== undefined ? "Trwa…" : "Zaktualizuj"
+                        onAction: Flatpak.updateGet("get:" + modelData)
                     }
                 }
                 Txt { width: parent.width; color: Theme.text2; font.pixelSize: 13; wrapMode: Text.Wrap; text: "System aktualizuje się osobno, z Ustawień. Aplikacje webowe są zawsze aktualne." }
@@ -141,8 +157,8 @@ Item {
             Column {
                 width: parent.width
                 spacing: 8
-                Txt { text: "Programy (" + (page.apps.length + page.webList.length) + ")"; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.5 }
-                Txt { visible: page.apps.length + page.webList.length === 0; text: "Nie ma tu jeszcze żadnych programów ze Sklepu."; color: Theme.text2; font.pixelSize: 14 }
+                Txt { text: "Programy (" + (page.apps.length + page.webList.length + page.getList.length) + ")"; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.5 }
+                Txt { visible: page.apps.length + page.webList.length + page.getList.length === 0; text: "Nie ma tu jeszcze żadnych programów ze Sklepu."; color: Theme.text2; font.pixelSize: 14 }
                 Repeater {
                     model: page.apps
                     delegate: ProgramRow {
@@ -155,6 +171,19 @@ Item {
                         extraText: modelData.installation === "user" && modelData.origin === "flathub" ? "Poprzednia wersja" : ""
                         onAction: Store.requestRemoval(modelData.id)
                         onExtra: Flatpak.rollback(modelData.id)
+                    }
+                }
+                Repeater {
+                    model: page.getList
+                    delegate: ProgramRow {
+                        required property string modelData
+                        readonly property var entry: Flatpak.getApps[modelData]
+                        ref: "get:" + modelData
+                        title: entry ? entry.name : modelData
+                        detail: entry ? (entry.cli ? "W terminalu" : Facts.size(entry.size)) + " · od producenta" : ""
+                        actionText: "Usuń"
+                        actionDanger: true
+                        onAction: Flatpak.removeGet("get:" + modelData)
                     }
                 }
                 Repeater {

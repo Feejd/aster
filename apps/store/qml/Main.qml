@@ -6,7 +6,7 @@ import Aster.Store
 import "Facts.js" as Facts
 
 // Sklep Aster: nie witryna z banerami, tylko przewodnik. Strony idą w stos (wstecz wraca tam, gdzie byłeś),
-// u góry cztery miejsca: Co chcesz zrobić, Z Windowsa, Katalog i Twój komputer. Kolejka instalacji jest zawsze widoczna.
+// u góry pięć miejsc: Start, Gry, Katalog, Z Windowsa i Twój komputer. Kolejka instalacji jest zawsze widoczna.
 Window {
     id: win
     property string openApp
@@ -53,7 +53,7 @@ Window {
         const rest = colon < 0 ? "" : routeText.slice(colon + 1);
         if (page === "task") go("task", rest);
         else if (page === "windows") tab("switch", rest ? rest.split(",") : undefined);
-        else if (page === "catalog") tab("list", { cat: rest || "biuro" });
+        else if (page === "catalog") tab("list", { cat: rest || "ai" });
         else if (page === "mine") tab("mine");
         else if (page === "search") search(rest);
         else if (page === "ask") go("list", { q: rest, ask: true });
@@ -132,13 +132,14 @@ Window {
                     tip: "Wróć"
                     onClicked: win.back()
                 }
-                TabItem { label: "Co chcesz zrobić"; active: win.section === "home"; onClicked: win.tab("home") }
+                TabItem { label: "Start"; active: win.section === "home"; onClicked: win.tab("home") }
+                TabItem { label: "Gry"; active: win.section === "list" && !!win.stack[0].arg && win.stack[0].arg.cat === "gry"; onClicked: win.tab("list", { cat: "gry" }) }
+                TabItem { label: "Katalog"; active: win.section === "list" && !(win.stack[0].arg && win.stack[0].arg.cat === "gry"); onClicked: win.tab("list", { cat: "ai" }) }
                 TabItem { label: "Z Windowsa"; active: win.section === "switch"; onClicked: win.tab("switch") }
-                TabItem { label: "Katalog"; active: win.section === "list"; onClicked: win.tab("list", { cat: "biuro" }) }
                 TabItem {
                     label: "Twój komputer"
                     active: win.section === "mine"
-                    badge: Flatpak.updates.length
+                    badge: Flatpak.updates.length + Flatpak.getUpdates.length
                     onClicked: win.tab("mine")
                 }
             }
@@ -183,8 +184,8 @@ Window {
                         text: {
                             const j = queuePill.job;
                             if (!j) return "";
-                            const verb = { install: "Instaluję", bundle: "Instaluję", webadd: "Dodaję", uninstall: "Usuwam", webremove: "Usuwam",
-                                           update: "Aktualizuję", rollback: "Przywracam", prune: "Sprzątam" }[j.action] || "";
+                            const verb = { install: "Instaluję", bundle: "Instaluję", get: "Instaluję", webadd: "Dodaję", uninstall: "Usuwam", webremove: "Usuwam", getremove: "Usuwam",
+                                           update: "Aktualizuję", getupdate: "Aktualizuję", rollback: "Przywracam", prune: "Sprzątam" }[j.action] || "";
                             const name = j.appId === "*" ? "wszystko" : j.appId === "porzadki" ? "" : Store.nameOf(j.appId);
                             const pct = j.value > 0 ? " " + Math.round(j.value * 100) + "%" : "";
                             const more = Flatpak.activity.length > 1 ? " + " + (Flatpak.activity.length - 1) : "";

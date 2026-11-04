@@ -90,6 +90,19 @@ function cardLines(d) {
         accountLines(line, meta);
         return lines;
     }
+    if (d.kind === "get" || d.kind === "via") {
+        if (d.kind === "via") {
+            line("files", "info", "Skąd", "Instalator oficjalnego launchera z Windowsa, uruchamiany przez Lutris.");
+            line("files2", "warn", "Co działa", "Zależy od gry. Gry z mocnym zabezpieczeniem antycheat mogą nie ruszyć.");
+        } else {
+            line("files", "ok", "Skąd", "Prosto od producenta: " + meta.site + ".");
+            line("sandbox", "warn", "Izolacja", "Bez piaskownicy: ma dostęp do wszystkiego w Twoim katalogu domowym.");
+            if (meta.type === "script") line("how", "info", "Instalacja", "Uruchamia oficjalny skrypt producenta. Bez hasła.");
+            if (meta.unofficial) line("how", "warn", "Wsparcie", meta.unofficial);
+        }
+        accountLines(line, meta);
+        return lines;
+    }
     if (d.kind === "aster") {
         line("files", "ok", "Pochodzenie", "Część systemu Aster, rozwijana przez nas.");
         line("code", "ok", "Kod", "Otwarty: każdy może sprawdzić, co program robi.");
@@ -260,6 +273,8 @@ function compareRows(list) {
         row("Zajmie na dysku", function (x) {
             if (x.kind === "web") return { t: "Prawie nic", n: 0 };
             if (x.kind === "aster") return { t: "W systemie", n: 0 };
+            if (x.kind === "get") return x.meta.mb ? { t: "około " + size(x.meta.mb * 1e6), n: x.meta.mb * 1e6 } : { t: "—" };
+            if (x.kind === "via") return { t: "—" };
             var bill = diskBill(x.summary, x.hasRuntime);
             return bill ? { t: size(bill.total), n: bill.total } : { t: "—" };
         }, "min"),
@@ -271,6 +286,7 @@ function compareRows(list) {
             return { t: "Nie sprawdziliśmy" };
         }, "max"),
         row("Twoje pliki", function (x) {
+            if (x.kind === "get" || x.kind === "via") return { t: "Cały katalog domowy", n: 1 };
             if (x.kind !== "app") return { t: "Tylko wskazane", n: 2 };
             var p = sbox(x);
             if (!p) return { t: "—" };
@@ -295,7 +311,7 @@ function compareRows(list) {
             return c === "free" ? { t: "Bezpłatny" + ads, n: ads ? 1 : 2 } : c === "freemium" ? { t: "Darmowy z płatną częścią" + ads, n: 1 } : c === "paid" ? { t: "Płatny", n: 0 } : { t: "Nie sprawdziliśmy" };
         }, "max"),
         row("Kod", function (x) {
-            if (x.kind === "web") return { t: "Zamknięty" };
+            if (x.kind === "web" || x.kind === "get" || x.kind === "via") return { t: "Zależy od producenta" };
             if (x.kind === "aster") return { t: "Otwarty" };
             return x.app ? { t: x.app.is_free_license ? "Otwarty" : "Zamknięty" } : { t: "—" };
         }),

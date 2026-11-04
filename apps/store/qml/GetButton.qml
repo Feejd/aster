@@ -49,7 +49,7 @@ Item {
             anchors.centerIn: parent
             text: gb.busy ? (gb.prog < 0 ? "W kolejce" : Math.round(gb.fraction * 100) + "%")
                 : gb.installed ? "Otwórz"
-                : !gb.usable ? "Niedostępny"
+                : !gb.usable ? (Flatpak.arch === "aarch64" ? "Tylko x86" : "Niedostępny")
                 : Store.kindOf(gb.ref) === "web" ? "Dodaj" : "Zainstaluj"
             color: gb.busy ? Theme.text
                  : gb.installed ? Theme.text

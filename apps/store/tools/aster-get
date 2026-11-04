@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""aster-get: instaluje programy prosto od producenta, gdy nie ma ich jako Flatpak. Bez hasła, wszystko w katalogu domowym.
+
+  aster-get install '<przepis JSON>'   pobiera, rozpakowuje, dodaje do Startu
+  aster-get update <id>                instaluje najnowszą wersję tym samym przepisem
+  aster-get check                      wypisuje id programów, które mają nowszą wersję
+  aster-get list                       JSON: zainstalowane programy
+  aster-get remove <id>                usuwa program (dane użytkownika zostają w jego katalogu domowym)
+
+Przepisy pochodzą z katalogu wbudowanego w Sklep (apps/store/qml/Catalog.js), a pobieranie idzie tylko po HTTPS.
+Pola przepisu: id, name, type (appimage | tar | deb | rpm | script | binary), adres: url {x86_64, aarch64}
+albo apt {base, package} albo gh {repo, asset {x86_64, aarch64}} albo jsonUrl; exec (ścieżka w paczce), icon, cli (polecenie w terminalu).
+Postęp jako „NN%” w osobnych wierszach, błędy jako „error: …”.
+"""
+import glob
+import hashlib
+import json
+import os
+import platform
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import urllib.request
+
+HOME = os.path.expanduser("~")
+ROOT = os.path.join(os.environ.get("XDG_DATA_HOME", HOME + "/.local/share"), "aster-get")
+APPS = os.path.join(os.path.dirname(ROOT), "applications")
+ICONS = os.path.join(os.path.dirname(ROOT), "icons/hicolor/256x256/apps")
+BIN = HOME + "/.local/bin"
+AGENT = {"User-Agent": "Mozilla/5.0 (X11; Linux) AsterStore/2"}
+
+
+def die(message):
+    print("error: " + message, flush=True)
+    sys.exit(1)
+
+
+def arch():
+    machine = platform.machine()
+    return "aarch64" if machine in ("aarch64", "arm64") else machine
+
+
+def fetch(url):
+    if not url.startswith("https://"):
+        die("adres musi być https: " + url)
+    return urllib.request.urlopen(urllib.request.Request(url, headers=AGENT), timeout=60)
+
+
+def resolve(r):
+    """Adres pliku dla tego procesora."""
+    a = arch()
+    if r.get("url"):
+        url = r["url"].get(a)
+        if not url:
+            die("Nie ma wersji na ten procesor.")
+        return url
+    if r.get("apt"):
+        deb = {"x86_64": "amd64", "aarch64": "arm64"}.get(a, a)
+        base = r["apt"]["base"]
+        index = fetch(f"{base}/dists/stable/main/binary-{deb}/Packages").read().decode()
+        files = re.findall(r"^Filename: (pool/\S*/" + re.escape(r["apt"]["package"]) + r"_\S+\.deb)$", index, re.M)
+        if not files:
+            die("Nie ma wersji na ten procesor.")
+        files.sort(key=lambda f: [int(x) if x.isdigit() else 0 for x in re.split(r"[._-]", f)[-4:]])
+        return f"{base}/{files[-1]}"
+    if r.get("gh"):
+        pattern = r["gh"]["asset"].get(a)
+        if not pattern:
+            die("Nie ma wersji na ten procesor.")
+        data = json.load(fetch(f"https://api.github.com/repos/{r['gh']['repo']}/releases/latest"))
+        for asset in data.get("assets", []):
+            if re.search(pattern, asset["name"]):
+                return asset["browser_download_url"]
+        die("Nie ma wersji na ten procesor.")
+    if r.get("jsonUrl"):
+        url = r["jsonUrl"].get(a)
+        if not url:
+            die("Nie ma wersji na ten procesor.")
+        return json.load(fetch(url))["url"]
+    die("Przepis nie ma adresu.")
+
+
+def stamp(r):
+    """Odcisk wersji: końcowy adres (u większości zawiera numer), ETag i rozmiar."""
+    if r["type"] == "script":
+        return ""
+    url = resolve(r)
+    req = urllib.request.Request(url, headers=AGENT, method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            h = res.headers
+            final = re.sub(r"\?.*$", "", res.geturl())
+            return hashlib.sha1(f"{final}|{h.get('ETag','')}|{h.get('Content-Length','')}".encode()).hexdigest()
+    except OSError:
+        return ""
+
+
+def download(url, path, share):
+    with fetch(url) as res, open(path, "wb") as out:
+        total = int(res.headers.get("Content-Length") or 0)
+        got, last = 0, -1
+        while True:
+            chunk = res.read(256 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            got += len(chunk)
+            pct = int(share * got / total) if total else 0
+            if pct != last:
+                print(f"{pct}%", flush=True)
+                last = pct
+
+
+def run(*cmd, **kw):
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
+
+
+def unpack(r, file, dest):
+    kind = r["type"]
+    if kind == "tar":
+        run("tar", "-xf", file, "-C", dest)
+        # Paczki z jednym katalogiem głównym: jego zawartość na wierzch
+        items = os.listdir(dest)
+        if len(items) == 1 and os.path.isdir(os.path.join(dest, items[0])):
+            inner = os.path.join(dest, items[0])
+            for name in os.listdir(inner):
+                shutil.move(os.path.join(inner, name), dest)
+            os.rmdir(inner)
+    elif kind == "deb":
+        run("ar", "x", file, cwd=dest)
+        data = glob.glob(dest + "/data.tar*")
+        if not data:
+            die("Niezrozumiała paczka.")
+        run("tar", "-xf", data[0], "-C", dest)
+        for name in glob.glob(dest + "/data.tar*") + glob.glob(dest + "/control.tar*") + [dest + "/debian-binary"]:
+            if os.path.exists(name):
+                os.remove(name)
+    elif kind == "rpm":
+        with open(file, "rb") as src:
+            rpm = subprocess.Popen(["rpm2cpio"], stdin=src, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            subprocess.run(["cpio", "-idm", "--quiet"], stdin=rpm.stdout, cwd=dest, check=True, stderr=subprocess.DEVNULL)
+            rpm.wait()
+    elif kind == "appimage":
+        os.chmod(file, 0o755)
+        run(file, "--appimage-extract", cwd=dest)
+        inner = os.path.join(dest, "squashfs-root")
+        for name in os.listdir(inner):
+            shutil.move(os.path.join(inner, name), dest)
+        os.rmdir(inner)
+    elif kind == "binary":
+        target = os.path.join(dest, r.get("exec") or r["id"])
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy(file, target)
+        os.chmod(target, 0o755)
+    else:
+        die("Nieznany typ paczki.")
+
+
+def desktop_entry(dest):
+    found = glob.glob(dest + "/*.desktop") + glob.glob(dest + "/usr/share/applications/*.desktop") + glob.glob(dest + "/share/applications/*.desktop")
+    if not found:
+        return {}
+    text = open(found[0], encoding="utf-8", errors="replace").read()
+    section = text.split("[Desktop Action")[0]
+    pick = lambda key: (re.search(rf"^{key}=(.*)$", section, re.M) or [None, ""])[1]
+    return {"Exec": pick("Exec"), "Icon": pick("Icon"), "Comment": pick("Comment"), "MimeType": pick("MimeType"), "Categories": pick("Categories"), "StartupWMClass": pick("StartupWMClass")}
+
+
+def find_exec(r, dest, entry):
+    if r.get("exec"):
+        return os.path.join(dest, r["exec"])
+    if r["type"] == "appimage":
+        return os.path.join(dest, "AppRun")
+    words = entry.get("Exec", "").split()
+    name = os.path.basename(words[0].strip('"')) if words else r["id"]
+    for base in ("usr/bin", "bin", "opt", ""):
+        direct = os.path.join(dest, base, name)
+        if os.path.isfile(direct):
+            return direct
+    for path in glob.glob(dest + "/**/" + name, recursive=True):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    die("Nie znaleziono programu w paczce.")
+
+
+def find_icon(r, dest, entry):
+    names = [r.get("icon")] if r.get("icon") else []
+    icon = entry.get("Icon", "")
+    if not names and icon:
+        if os.path.isabs(icon):
+            names.append(dest + icon)
+        for size in ("512x512", "256x256", "128x128", "scalable"):
+            names += glob.glob(f"{dest}/**/icons/hicolor/{size}/apps/{icon}.*", recursive=True)
+        names += glob.glob(f"{dest}/{icon}.png") + glob.glob(f"{dest}/.DirIcon")
+    for name in names:
+        path = name if os.path.isabs(name) else os.path.join(dest, name)
+        if os.path.isfile(path):
+            return path
+    return ""
+
+
+def install(r):
+    app_id = r["id"]
+    if not re.fullmatch(r"[a-z0-9-]+", app_id):
+        die("Zły identyfikator.")
+    home = os.path.join(ROOT, app_id)
+    os.makedirs(ROOT, exist_ok=True)
+
+    if r["type"] == "script":
+        url = r["url"].get(arch()) if r.get("url") else None
+        if not url:
+            die("Nie ma wersji na ten procesor.")
+        print("10%", flush=True)
+        script = fetch(url).read()
+        print("20%", flush=True)
+        env = dict(os.environ, **r.get("env", {}))
+        done = subprocess.run(["bash", "-s", "--"] + r.get("args", []), input=script, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if done.returncode != 0:
+            die(done.stderr.decode(errors="replace").strip().split("\n")[-1] or "Instalator producenta zgłosił błąd.")
+        os.makedirs(home, exist_ok=True)
+        save(home, r, "", "")
+        return
+
+    url = resolve(r)
+    version = stamp(r)
+    work = tempfile.mkdtemp(prefix=app_id + "-", dir=ROOT)
+    try:
+        file = os.path.join(work, "paczka")
+        dest = os.path.join(work, "app")
+        os.mkdir(dest)
+        download(url, file, 80)
+        print("80%", flush=True)
+        unpack(r, file, dest)
+        print("90%", flush=True)
+        entry = desktop_entry(dest)
+        target = find_exec(r, dest, entry)
+        icon = find_icon(r, dest, entry)
+        rel_exec = os.path.relpath(target, dest)
+        rel_icon = os.path.relpath(icon, dest) if icon else ""
+        # Podmiana dopiero, gdy wszystko się udało: stara wersja zostaje do końca
+        if os.path.isdir(home):
+            shutil.rmtree(home)
+        os.mkdir(home)
+        shutil.move(dest, os.path.join(home, "app"))
+        final = os.path.join(home, "app", rel_exec)
+        os.chmod(final, os.stat(final).st_mode | stat.S_IXUSR)
+        register(r, final, os.path.join(home, "app", rel_icon) if rel_icon else "", entry)
+        save(home, r, version, final)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def register(r, target, icon, entry):
+    app_id = r["id"]
+    os.makedirs(BIN, exist_ok=True)
+    link = os.path.join(BIN, r.get("command") or app_id)
+    if os.path.islink(link) or not os.path.exists(link):
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(target, link)
+    if r.get("cli"):
+        return
+    os.makedirs(APPS, exist_ok=True)
+    icon_name = "application-x-executable"
+    if icon:
+        os.makedirs(ICONS, exist_ok=True)
+        icon_name = "aster-get-" + app_id
+        shutil.copy(icon, os.path.join(ICONS, icon_name + os.path.splitext(icon)[1].lower().replace(".diricon", ".png")))
+    args = " ".join(r.get("args", []))
+    lines = ["[Desktop Entry]", "Type=Application", "Name=" + r["name"], f'Exec="{target}" {args} %U'.replace("  ", " "), "Icon=" + icon_name, "Terminal=false",
+             "Categories=" + (entry.get("Categories") or "Utility;"), "X-Aster-Get=" + app_id]
+    for key in ("Comment", "MimeType", "StartupWMClass"):
+        if entry.get(key):
+            lines.append(f"{key}={entry[key]}")
+    with open(os.path.join(APPS, f"aster-get-{app_id}.desktop"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    subprocess.run(["update-desktop-database", APPS], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def save(home, r, version, target):
+    with open(os.path.join(home, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump({"recipe": r, "version": version, "exec": target}, f, ensure_ascii=False)
+
+
+def installed():
+    out = []
+    for path in glob.glob(ROOT + "/*/manifest.json"):
+        try:
+            data = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append(data)
+    return out
+
+
+def tree_size(path):
+    total = 0
+    for base, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(base, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def remove(app_id):
+    if not re.fullmatch(r"[a-z0-9-]+", app_id):
+        die("Zły identyfikator.")
+    home = os.path.join(ROOT, app_id)
+    if not os.path.isdir(home):
+        die("Tego programu nie ma.")
+    data = json.load(open(os.path.join(home, "manifest.json"), encoding="utf-8"))
+    r = data["recipe"]
+    link = os.path.join(BIN, r.get("command") or app_id)
+    if os.path.islink(link) and os.readlink(link).startswith(home):
+        os.remove(link)
+    for path in [os.path.join(APPS, f"aster-get-{app_id}.desktop")] + glob.glob(os.path.join(ICONS, f"aster-get-{app_id}.*")):
+        if os.path.exists(path):
+            os.remove(path)
+    if r["type"] == "script" and r.get("removeBin"):
+        for name in r["removeBin"]:
+            path = os.path.join(HOME, name)
+            if os.path.islink(path) or os.path.isfile(path):
+                os.remove(path)
+    shutil.rmtree(home)
+    subprocess.run(["update-desktop-database", APPS], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    try:
+        if cmd == "install":
+            install(json.loads(sys.argv[2]))
+        elif cmd == "update":
+            install(json.load(open(os.path.join(ROOT, sys.argv[2], "manifest.json"), encoding="utf-8"))["recipe"])
+        elif cmd == "remove":
+            remove(sys.argv[2])
+        elif cmd == "list":
+            print(json.dumps([{"id": d["recipe"]["id"], "name": d["recipe"]["name"], "exec": d.get("exec", ""), "cli": bool(d["recipe"].get("cli")),
+                               "size": tree_size(os.path.join(ROOT, d["recipe"]["id"]))} for d in installed()], ensure_ascii=False))
+        elif cmd == "check":
+            for d in installed():
+                try:
+                    now = stamp(d["recipe"])
+                except (OSError, SystemExit, ValueError, KeyError):
+                    continue
+                if now and d.get("version") and now != d["version"]:
+                    print(d["recipe"]["id"])
+        else:
+            print(__doc__)
+    except subprocess.CalledProcessError:
+        die("Nie udało się rozpakować paczki.")
+    except urllib.error.HTTPError as e:
+        die(f"Serwer producenta odpowiedział błędem {e.code}.")
+    except OSError as e:
+        die("network: " + str(e) if "urlopen" in str(e) or "timed out" in str(e) else str(e))
+
+
+if __name__ == "__main__":
+    main()

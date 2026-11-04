@@ -48,7 +48,7 @@ Item {
                 id: badge
                 visible: text !== ""
                 anchors.verticalCenter: parent.verticalCenter
-                text: row.tag || (row.kind === "web" ? "W przeglądarce" : row.kind === "aster" ? "Aster" : "")
+                text: row.tag || (row.kind === "web" ? "W przeglądarce" : row.kind === "aster" ? "Aster" : row.kind === "get" ? "Od producenta" : row.kind === "via" ? "Przez Lutris" : "")
                 color: Theme.accentText
                 font.pixelSize: 11; font.weight: Font.DemiBold
             }

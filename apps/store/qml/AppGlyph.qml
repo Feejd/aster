@@ -25,16 +25,31 @@ Item {
         active: g.kind === "aster"
         sourceComponent: AppIcon { desktopId: g.info ? g.info.id : ""; source: g.info ? g.info.id : ""; size: g.size }
     }
+    // Strony i programy od producentów: znak firmy, a gdy go nie ma, kafel z literą
     Rectangle {
         anchors.fill: parent
-        visible: g.kind === "web"
-        radius: g.size * 0.26
-        color: g.info && g.info.color ? g.info.color : Theme.accent
+        visible: g.kind === "web" || g.kind === "get" || g.kind === "via"
+        radius: g.size * 0.24
+        readonly property bool logo: mark.status === Image.Ready && mark.implicitWidth >= 32
+        color: logo ? "white" : (g.info && g.info.color ? g.info.color : Theme.accent)
+        border.width: logo && !Theme.dark ? 1 : 0
+        border.color: Theme.line
         Txt {
             anchors.centerIn: parent
+            visible: !parent.logo
             text: g.info ? g.info.name.charAt(0) : ""
             color: "white"
             font.pixelSize: g.size * 0.5; font.weight: Font.Bold
+        }
+        Image {
+            id: mark
+            anchors.fill: parent
+            anchors.margins: g.size * 0.14
+            visible: parent.logo
+            source: parent.visible && g.info ? g.info.icon : ""
+            asynchronous: true
+            smooth: true; mipmap: true
+            fillMode: Image.PreserveAspectFit
         }
     }
 }

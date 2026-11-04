@@ -86,6 +86,8 @@ function englishTerms(query) {
 function refMeta(ref) {
     if (ref.indexOf("web:") === 0) return Catalog.web[ref.slice(4)];
     if (ref.indexOf("aster:") === 0) return Catalog.aster[ref.slice(6)];
+    if (ref.indexOf("get:") === 0) return Catalog.get[ref.slice(4)];
+    if (ref.indexOf("via:") === 0) return Catalog.via[ref.slice(4)];
     return Catalog.apps[ref];
 }
 
@@ -120,6 +122,8 @@ function local(query) {
     addRefs(Catalog.apps, "");
     addRefs(Catalog.aster, "aster:");
     addRefs(Catalog.web, "web:");
+    addRefs(Catalog.get, "get:");
+    addRefs(Catalog.via, "via:");
     refs.sort(function (a, b) { return b.s - a.s; });
     // Słabe dopasowania odpadają, a wybór redakcji z najlepszego przewodnika idzie na początek
     var top = refs.length ? refs[0].s : 0;
@@ -129,12 +133,33 @@ function local(query) {
         refs = first.map(function (r) { return { item: r, s: 999 }; }).concat(refs.filter(function (r) { return first.indexOf(r.item) < 0; }));
     }
 
+    // Dokładna nazwa zawsze na początku: kto pisze „claude”, chce Claude'a
+    var wanted = fold(query).trim();
+    function exact(r) { var m = refMeta(r.item), n = m && m.name; return n && fold(n).indexOf(wanted) === 0 ? 1 : 0; }
+    refs = refs.map(function (r, i) { return { item: r.item, s: r.s, i: i }; }).sort(function (a, b) { return exact(b) - exact(a) || a.i - b.i; });
+
     return {
         tasks: tasks.slice(0, 3).map(function (x) { return x.item; }),
         windows: switches.slice(0, 3).map(function (x) { return x.item; }),
         refs: refs.slice(0, 18).map(function (x) { return x.item; }),
         flathub: englishTerms(query)
     };
+}
+
+// Przepis dla aster-get na ten procesor (null, gdy producent nie wydaje takiej wersji)
+function recipe(ref, arch) {
+    var key = ref.slice(4), m = Catalog.get[key];
+    if (!m) return null;
+    if (m.url && !m.url[arch]) return null;
+    if (m.jsonUrl && !m.jsonUrl[arch]) return null;
+    if (m.gh && !m.gh.asset[arch]) return null;
+    var r = { id: key, name: m.name, type: m.type, exec: (m.execByArch && m.execByArch[arch]) || m.exec || "", cli: !!m.cli, args: m.args || [], command: m.commandName || "" };
+    if (m.removeBin) r.removeBin = m.removeBin;
+    if (m.url) r.url = m.url;
+    if (m.apt) r.apt = m.apt;
+    if (m.gh) r.gh = m.gh;
+    if (m.jsonUrl) r.jsonUrl = m.jsonUrl;
+    return r;
 }
 
 // ——— Aster Intelligence ———
@@ -144,6 +169,8 @@ function catalogForAssistant() {
     Object.keys(Catalog.apps).forEach(function (k) { lines.push(k + ": " + Catalog.apps[k].pl); });
     Object.keys(Catalog.web).forEach(function (k) { lines.push("web:" + k + ": " + Catalog.web[k].pl); });
     Object.keys(Catalog.aster).forEach(function (k) { lines.push("aster:" + k + ": " + Catalog.aster[k].pl); });
+    Object.keys(Catalog.get).forEach(function (k) { lines.push("get:" + k + ": " + Catalog.get[k].pl); });
+    Object.keys(Catalog.via).forEach(function (k) { lines.push("via:" + k + ": " + Catalog.via[k].pl); });
     return lines.join("\n");
 }
 

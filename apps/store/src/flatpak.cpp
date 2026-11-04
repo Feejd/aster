@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
@@ -103,9 +104,38 @@ void Flatpak::capture(const QStringList &args, std::function<void(const QString 
     p->start(QStringLiteral("flatpak"), args);
 }
 
+// Co zainstalował aster-get; sprawdzenie nowszych wersji idzie osobno, bo pyta serwery producentów
+void Flatpak::readGetApps()
+{
+    const QString tool = QStandardPaths::findExecutable(QStringLiteral("aster-get"));
+    if (tool.isEmpty())
+        return;
+    auto *p = new QProcess(this);
+    connect(p, &QProcess::finished, this, [this, p] {
+        QVariantMap map;
+        const QJsonArray list = QJsonDocument::fromJson(p->readAllStandardOutput()).array();
+        for (const QJsonValue &v : list) {
+            const QJsonObject o = v.toObject();
+            map.insert(o.value(QStringLiteral("id")).toString(), o.toVariantMap());
+        }
+        m_getApps = map;
+        Q_EMIT getAppsChanged();
+        p->deleteLater();
+    });
+    p->start(tool, {QStringLiteral("list")});
+    auto *c = new QProcess(this);
+    connect(c, &QProcess::finished, this, [this, c] {
+        m_getUpdates = QString::fromUtf8(c->readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        Q_EMIT getAppsChanged();
+        c->deleteLater();
+    });
+    c->start(tool, {QStringLiteral("check")});
+}
+
 void Flatpak::refresh()
 {
     readWebApps();
+    readGetApps();
     if (!available())
         return;
     // Zainstalowane programy (z obu miejsc: użytkownika i systemu)
@@ -227,6 +257,18 @@ void Flatpak::addWebApp(const QString &key, const QString &url, const QString &n
 }
 void Flatpak::removeWebApp(const QString &key, const QString &id) { enqueue({QStringLiteral("webremove"), key, {id}}); }
 
+void Flatpak::installGet(const QString &key, const QString &recipe) { enqueue({QStringLiteral("get"), key, {recipe}}); }
+void Flatpak::updateGet(const QString &key) { enqueue({QStringLiteral("getupdate"), key, {}}); }
+void Flatpak::removeGet(const QString &key) { enqueue({QStringLiteral("getremove"), key, {}}); }
+void Flatpak::launchGet(const QString &key)
+{
+    QProcess::startDetached(m_getApps.value(key.mid(4)).toMap().value(QStringLiteral("exec")).toString(), {});
+}
+void Flatpak::launchWith(const QString &appId, const QString &argument)
+{
+    QProcess::startDetached(QStringLiteral("flatpak"), {QStringLiteral("run"), appId, argument});
+}
+
 void Flatpak::launch(const QString &appId) { QProcess::startDetached(QStringLiteral("flatpak"), {QStringLiteral("run"), appId}); }
 void Flatpak::launchWebApp(const QString &id) { QProcess::startDetached(QStringLiteral("aster-webapps"), {QStringLiteral("--run"), id}); }
 void Flatpak::launchExecutable(const QString &exec) { QProcess::startDetached(exec, {}); }
@@ -336,6 +378,12 @@ void Flatpak::startNext()
     } else if (action == QLatin1String("webadd") || action == QLatin1String("webremove")) {
         runProcess(QStringLiteral("aster-webapps"), action == QLatin1String("webadd") ? m_current.args
                                                                                      : QStringList{QStringLiteral("--remove"), m_current.args.value(0)});
+    } else if (action == QLatin1String("get")) {
+        runProcess(QStringLiteral("aster-get"), {QStringLiteral("install"), m_current.args.value(0)});
+    } else if (action == QLatin1String("getupdate")) {
+        runProcess(QStringLiteral("aster-get"), {QStringLiteral("update"), m_current.appId.mid(4)});
+    } else if (action == QLatin1String("getremove")) {
+        runProcess(QStringLiteral("aster-get"), {QStringLiteral("remove"), m_current.appId.mid(4)});
     } else if (action == QLatin1String("rollback")) {
         // Historia programu z repozytorium: wracamy do pierwszego wydania innego niż zainstalowane
         const QString id = m_current.appId;
@@ -407,7 +455,7 @@ void Flatpak::parseOutput(const QByteArray &chunk)
     const QString text = QString::fromUtf8(chunk);
     static const QRegularExpression lineRe(QStringLiteral("[\\r\\n]"));
     static const QRegularExpression stepRe(QStringLiteral("(\\d+)/(\\d+)"));
-    static const QRegularExpression pctRe(QStringLiteral("(\\d{1,3})%"));
+    static const QRegularExpression pctRe(QStringLiteral("(\\d{1,3})(?:[.,]\\d+)?%"));
     static const QRegularExpression errRe(QStringLiteral("(?:error|Error|błąd|Błąd):\\s*(.+)"));
     const bool bundle = m_current.action == QLatin1String("bundle");
     for (const QString &line : text.split(lineRe, Qt::SkipEmptyParts)) {

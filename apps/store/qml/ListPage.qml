@@ -6,8 +6,8 @@ import "Catalog.js" as Catalog
 import "Facts.js" as Facts
 import "Find.js" as Find
 
-// Katalog i wyniki wyszukiwania. Najpierw to, co znamy i za co ręczymy, potem wyraźnie oddzielona reszta.
-// Wyszukiwanie: lokalnie od razu, potem programy spoza katalogu, a gdy jest Aster Intelligence, także jej propozycja.
+// Katalog (półki w działach, najbardziej znane pierwsze) i wyniki wyszukiwania: lokalnie od razu, potem popularne programy
+// spoza naszej listy, a gdy jest Aster Intelligence, także jej propozycja.
 Item {
     id: page
     property var window
@@ -33,19 +33,13 @@ Item {
             searchOutside(found.flathub);
             aiAsked = "";
             if (arg.ask) Qt.callLater(askAssistant);
-        } else if (cat) {
-            const c = Catalog.categories.find(x => x.id === cat);
-            loading = true;
-            Net.get(Store.api + "collection/category/" + c.flathub + "?page=1&per_page=40&locale=pl", 6 * 3600, (d) => {
-                loading = false;
-                if (page.cat === cat) page.takeHits(d, []);
-            });
         }
     }
+    // Reszta świata tylko w wyszukiwaniu: same znane programy, najpopularniejsze pierwsze
     function takeHits(d, known) {
         if (!d) return;
-        const skip = known.slice();
-        const hits = d.hits.filter(h => Facts.worthShowing(h, Flatpak.arch) && !Catalog.apps[h.app_id] && skip.indexOf(h.app_id) < 0).slice(0, 24);
+        const hits = d.hits.filter(h => Facts.worthShowing(h, Flatpak.arch) && !Catalog.apps[h.app_id] && known.indexOf(h.app_id) < 0 && (h.installs_last_month || 0) >= 1000)
+                           .sort((a, b) => (b.installs_last_month || 0) - (a.installs_last_month || 0)).slice(0, 12);
         hits.forEach(h => Store.fromHit(h));
         others = hits.map(h => h.app_id);
     }
@@ -54,7 +48,9 @@ Item {
         const q = query;
         Net.post(Store.api + "search?locale=pl", { query: terms, filters: [] }, 6 * 3600, (d) => {
             loading = false;
-            if (page.query === q) page.takeHits(d, found ? found.refs : []);
+            // Gdy to dokładnie program, którego szukasz, luźno pasujące wyniki tylko by przeszkadzały
+            if (page.query === q && !(found && found.refs.length && Find.fold(Store.item(found.refs[0]).name).indexOf(Find.fold(q).trim()) === 0))
+                page.takeHits(d, found ? found.refs : []);
         });
     }
     function askAssistant() {
@@ -75,13 +71,7 @@ Item {
         }
     }
 
-    readonly property var catRefs: {
-        if (!cat) return [];
-        const a = Object.keys(Catalog.aster).filter(k => Catalog.aster[k].cat === cat).map(k => "aster:" + k);
-        const p = Object.keys(Catalog.apps).filter(k => Catalog.apps[k].cat === cat);
-        const w = Object.keys(Catalog.web).filter(k => Catalog.web[k].cat === cat).map(k => "web:" + k);
-        return a.concat(p, w);
-    }
+    readonly property var shelves: cat ? (Catalog.shelves[cat] || []) : []
     readonly property int cols: page.width > 1000 ? 2 : 1
 
     Flickable {
@@ -103,7 +93,7 @@ Item {
                 spacing: 14
                 Txt {
                     width: parent.width
-                    text: page.query ? "Chcę " + page.query : "Katalog"
+                    text: page.query ? "Chcę " + page.query : (Catalog.categories.find(c => c.id === page.cat) || { name: "Katalog" }).name
                     wrapMode: Text.Wrap
                     font.pixelSize: 34; font.weight: Font.Bold; font.letterSpacing: -1
                 }
@@ -201,25 +191,44 @@ Item {
                 }
             }
 
-            // Nasz katalog
-            Column {
-                readonly property var refs: page.query ? (page.found ? page.found.refs : []) : page.catRefs
-                id: ours
-                visible: refs.length > 0
+            // Wyniki z katalogu
+            Grid {
+                id: oursGrid
+                visible: !!page.query
                 width: parent.width
-                spacing: 2
-                Txt { text: page.query ? "Z katalogu Aster" : "Polecamy"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; bottomPadding: 6 }
-                Grid {
-                    id: oursGrid
-                    width: parent.width
-                    columns: page.cols
-                    columnSpacing: 36
-                    Repeater {
-                        model: ours.refs
-                        delegate: AppRow {
-                            required property string modelData
-                            width: (oursGrid.width - (page.cols - 1) * 36) / page.cols
-                            ref: modelData
+                columns: page.cols
+                columnSpacing: 36
+                Repeater {
+                    model: page.found ? page.found.refs : []
+                    delegate: AppRow {
+                        required property string modelData
+                        width: (oursGrid.width - (page.cols - 1) * 36) / page.cols
+                        ref: modelData
+                    }
+                }
+            }
+
+            // Półki działu
+            Repeater {
+                model: page.shelves
+                delegate: Column {
+                    id: shelf
+                    required property var modelData
+                    width: col.width
+                    spacing: 2
+                    Txt { text: shelf.modelData.title; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; bottomPadding: 6 }
+                    Grid {
+                        id: shelfGrid
+                        width: parent.width
+                        columns: page.cols
+                        columnSpacing: 36
+                        Repeater {
+                            model: shelf.modelData.refs
+                            delegate: AppRow {
+                                required property string modelData
+                                width: (shelfGrid.width - (page.cols - 1) * 36) / page.cols
+                                ref: modelData
+                            }
                         }
                     }
                 }
@@ -230,8 +239,7 @@ Item {
                 visible: page.others.length > 0
                 width: parent.width
                 spacing: 2
-                Txt { text: "Spoza katalogu"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4 }
-                Txt { width: parent.width; text: "Tych programów nie sprawdzaliśmy. Odrzuciliśmy tylko porzucone i te bez wersji na Twój komputer."; wrapMode: Text.Wrap; color: Theme.text2; font.pixelSize: 14; bottomPadding: 6 }
+                Txt { text: "Inne wyniki"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; bottomPadding: 6 }
                 Grid {
                     id: othersGrid
                     width: parent.width

@@ -35,6 +35,9 @@ class Flatpak : public QObject
     Q_PROPERTY(QVariantList activity READ activity NOTIFY progressChanged)
     // Zainstalowane aplikacje webowe: {adres: id}
     Q_PROPERTY(QVariantMap webApps READ webApps NOTIFY webAppsChanged)
+    // Programy od producentów (aster-get): {id: {name, size, exec, cli}} i id z nowszą wersją
+    Q_PROPERTY(QVariantMap getApps READ getApps NOTIFY getAppsChanged)
+    Q_PROPERTY(QStringList getUpdates READ getUpdates NOTIFY getAppsChanged)
     Q_PROPERTY(bool available READ available CONSTANT)
     Q_PROPERTY(bool webAppsAvailable READ webAppsAvailable CONSTANT)
     Q_PROPERTY(QString arch READ arch CONSTANT)                 // x86_64 | aarch64
@@ -53,6 +56,8 @@ public:
     QVariantMap progress() const { return m_progress; }
     QVariantList activity() const;
     QVariantMap webApps() const { return m_webApps; }
+    QVariantMap getApps() const { return m_getApps; }
+    QStringList getUpdates() const { return m_getUpdates; }
     bool available() const;
     bool webAppsAvailable() const;
     QString arch() const;
@@ -73,6 +78,13 @@ public:
     Q_INVOKABLE void addWebApp(const QString &key, const QString &url, const QString &name, const QString &category, const QString &color);
     Q_INVOKABLE void removeWebApp(const QString &key, const QString &id);
     Q_INVOKABLE void launchWebApp(const QString &id);
+    // Program od producenta: recipe to przepis z katalogu (JSON), key = „get:id”
+    Q_INVOKABLE void installGet(const QString &key, const QString &recipe);
+    Q_INVOKABLE void updateGet(const QString &key);
+    Q_INVOKABLE void removeGet(const QString &key);
+    Q_INVOKABLE void launchGet(const QString &key);
+    // Program uruchamiany z parametrem, np. Lutris z adresem instalatora Battle.net
+    Q_INVOKABLE void launchWith(const QString &appId, const QString &argument);
     Q_INVOKABLE void launchExecutable(const QString &exec);
     Q_INVOKABLE bool hasExecutable(const QString &exec) const;
     Q_INVOKABLE void refresh();
@@ -85,11 +97,12 @@ Q_SIGNALS:
     void usageChanged();
     void progressChanged();
     void webAppsChanged();
+    void getAppsChanged();
     void finished(const QString &appId, const QString &action, bool ok, const QString &message);
 
 private:
     struct Job {
-        QString action;     // install | bundle | uninstall | update | rollback | prune | webadd | webremove
+        QString action;     // install | bundle | uninstall | update | rollback | prune | webadd | webremove | get | getupdate | getremove
         QString appId;
         QStringList args;   // dodatkowe dane operacji
     };
@@ -101,6 +114,7 @@ private:
     void setProgress(const QString &appId, double value);
     void downloadBundle();
     void readWebApps();
+    void readGetApps();
     void capture(const QStringList &args, std::function<void(const QString &)> done);
 
     QStringList m_installed;
@@ -111,6 +125,8 @@ private:
     QVariantMap m_usage;
     QVariantMap m_progress;
     QVariantMap m_webApps;
+    QVariantMap m_getApps;
+    QStringList m_getUpdates;
     QList<Job> m_queue;
     QPointer<QProcess> m_proc;
     QNetworkAccessManager m_net;

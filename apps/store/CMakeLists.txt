@@ -24,6 +24,7 @@ set(STORE_QML
     qml/GetButton.qml
     qml/AppRow.qml
     qml/AppGlyph.qml
+    qml/AppCard.qml
     qml/FactLine.qml
     qml/Txt.qml
     qml/Btn.qml
@@ -56,4 +57,5 @@ target_link_libraries(aster-store PRIVATE
 )
 
 install(TARGETS aster-store RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(PROGRAMS tools/aster-get DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES org.aster.store.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
