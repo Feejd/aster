@@ -10,6 +10,7 @@ on:
       - "apps/calculator/**"
       - "apps/camera/**"
       - "apps/code/**"
+      - "apps/dev/pulse/**"
       - "apps/editor/**"
       - "apps/grafika/**"
       - "apps/montaz/**"
@@ -47,7 +48,7 @@ jobs:
         env:
           WANT: ${{ inputs.apps }}
         run: |
-          all="grafika montaz studio code editor calculator photos music video pdf camera vault"
+          all="grafika montaz studio code editor calculator photos music video pdf camera pulse vault"
           apps="${WANT:-$all}"
           inc=""
           for a in $apps; do

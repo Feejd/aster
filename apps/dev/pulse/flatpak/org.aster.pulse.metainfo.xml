@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.aster.pulse</id>
+  <name>Aster Pulse</name>
+  <summary>Testowanie API: zapytania HTTP, kolekcje, środowiska i historia</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <developer id="org.aster">
+    <name>Aster</name>
+  </developer>
+  <description>
+    <p>Lekki program do testowania API dla programistów. Wysyłaj zapytania GET, POST, PUT, PATCH i DELETE
+       z nagłówkami, parametrami, treścią JSON, formularzem albo plikiem i autoryzacją Bearer lub Basic.
+       Odpowiedź pokazuje kod, czas i rozmiar, a JSON — jako drzewo ze zwijaniem i wyszukiwaniem.</p>
+    <p>Zapytania zapisujesz w kolekcjach — zwykłych plikach JSON w folderze projektu, które można dodać
+       do repozytorium. Środowiska (np. lokalne i produkcyjne) mają zmienne jak {{baseUrl}}, a tajne wartości
+       trafiają do portfela systemu. Import i eksport poleceń cURL, historia wysłanych zapytań oraz polecenie
+       aster-pulse run, które zwraca wynik jako JSON — dla skryptów i asystentów AI.</p>
+  </description>
+  <launchable type="desktop-id">org.aster.pulse.desktop</launchable>
+  <url type="homepage">https://github.com/Feejd/aster</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0" date="2026-11-04"/>
+  </releases>
+</component>

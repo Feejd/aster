@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Aster Pulse
+GenericName=Testowanie API
+Comment=Wysyłaj zapytania HTTP, zapisuj je w kolekcjach i sprawdzaj odpowiedzi
+Exec=aster-pulse %f
+Icon=network-server
+Terminal=false
+Categories=Development;WebDevelopment;
+Keywords=api;http;rest;postman;curl;json;zapytanie;żądanie;backend;serwer;test;
+StartupWMClass=aster-pulse
+SingleMainWindow=true

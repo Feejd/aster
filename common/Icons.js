@@ -180,3 +180,7 @@ var database = "M20 6c0 1.66-3.58 3-8 3S4 7.66 4 6s3.58-3 8-3 8 1.34 8 3zM4 6v12
 var key = "M14.5 9.5a4.5 4.5 0 1 1-9 0a4.5 4.5 0 1 1 9 0M13.2 12.7L21 20.5M18 17.5l2-2M15.8 15.3l2-2";
 var filter = "M3 5h18l-7 8.5V19l-4 2v-7.5z";
 var link = "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1";
+// Aster Pulse: puls (logo), wyślij, klucz (tajna zmienna), historia
+var pulse = "M3 12h4l2.5-6 4 12 2.5-6H21";
+var send = "M21 3L10 14M21 3l-6.5 18-4.5-7-7-4.5z";
+var history = "M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4.5h4.5M12 7.5V12l3 2";
