@@ -53,6 +53,7 @@ Window {
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
     Binding { target: ProjectEnv; property: "root"; value: Project.root }
+    Binding { target: Secrets; property: "root"; value: Project.root }
 
     // Samozapis po chwili od ostatniej zmiany (bez porządkowania pliku — nie przeszkadza w pisaniu)
     Timer {
@@ -587,7 +588,7 @@ Window {
     property var runMenuTargets: []
     property int previewScore: -1
     // Zmienne środowiska dla zadania (sekrety projektu — punkt „Sekrety”)
-    function taskEnv(cwd) { return ({}); }
+    function taskEnv(cwd) { return Secrets.names.length ? { __secrets: true } : {}; }
     Connections {
         target: Tasks
         // Kilka serwerów — w podglądzie strona (frontend), nie API; lepszy adres zastępuje gorszy
@@ -925,6 +926,7 @@ Window {
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
         { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
+        { label: "Sekrety projektu (.env, klucze API)", shortcut: "", action: "secrets", icon: "key" },
         { label: "Kontener projektu: zainstaluj pakiety…", shortcut: "", action: "env:install", icon: "box" },
         { label: "Uruchom aplikację (serwery)", shortcut: "Ctrl+F5", action: "run:all", icon: "play" },
         { label: "Zatrzymaj wszystkie procesy", shortcut: "", action: "run:stop", icon: "stop" },
@@ -1065,6 +1067,7 @@ Window {
         else if (a === "settings") settingsView.open();
         else if (a === "tasks") showTasks();
         else if (a === "env:create") createContainer();
+        else if (a === "secrets") secretsView.open();
         else if (a === "env:terminal") { terminalShown = true; terminalPanel.tab = 0; terminalPanel.restart(); }
         else if (a === "env:off") ProjectEnv.useContainer(false);
         else if (a === "env:install") nameBox.ask("Zainstaluj w kontenerze", "", "Pakiety Fedory, np. nodejs postgresql-server redis", (t) => { if (t.trim()) win.envTask("Kontener: pakiety", ProjectEnv.installCommand(t.trim().split(/\s+/))); });
@@ -1194,6 +1197,9 @@ Window {
         else if (what === "runapp") runApp();
         else if (what === "envcreate") { ProjectEnv.useContainer(true); envTask("Kontener: przygotowanie", ProjectEnv.createCommand(ProjectEnv.suggestPackages())); }
         else if (what === "envmenu") showEnvMenu();
+        else if (what === "secrets") secretsView.open();
+        else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
+        else if (what.startsWith("secret:")) { const kv = arg.split("="); Secrets.set(kv[0], kv.slice(1).join("=")); }
         else if (what.startsWith("preview:")) preview.open(arg);
         else if (what === "phone") preview.phone = true;
         else if (what === "pconsole") preview.consoleOpen = true;
@@ -1295,8 +1301,8 @@ Window {
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; enabled: tabs.count > 1; onActivated: win.activate((win.current + 1) % tabs.count) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; enabled: tabs.count > 1; onActivated: win.activate((win.current - 1 + tabs.count) % tabs.count) }
     Shortcut { sequence: "F11"; onActivated: { if (win.visibility === Window.FullScreen) win.showNormal(); else win.showFullScreen(); } }
-    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown
-        onActivated: { if (win.confirm) win.confirm = null; else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
+    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown || secretsView.shown
+        onActivated: { if (win.confirm) win.confirm = null; else if (secretsView.shown) secretsView.close(); else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -1560,6 +1566,16 @@ Window {
                     }
                 }
 
+                // Sekrety projektu
+                SecretsView {
+                    id: secretsView
+                    parent: pane
+                    x: 0; y: editorArea.y
+                    width: pane.width; height: status.y - y
+                    z: 50
+                    onClosed: if (win.cur) win.cur.focusEditor()
+                }
+
                 // Ustawienia (Ctrl+,)
                 SettingsView {
                     id: settingsView
@@ -1808,6 +1824,13 @@ Window {
                         id: eolBtn
                         text: tabs.count && win.revision >= 0 ? (tabs.get(win.current).eol === "\r\n" ? "CRLF" : "LF") : ""
                         onClicked: win.showStatusMenu("eol", eolBtn)
+                    }
+                    // Sekrety projektu (gdy są albo gdy w projekcie leży .env z wartościami)
+                    StatusBtn {
+                        visible: win.hasProject && Secrets.names.length > 0
+                        icon: "key"
+                        text: Secrets.names.length
+                        onClicked: secretsView.open()
                     }
                     // Środowisko projektu: kontener albo system
                     StatusBtn {

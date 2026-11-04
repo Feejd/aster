@@ -1,5 +1,6 @@
 #include "tasks.h"
 #include "projectenv.h"
+#include "secretstore.h"
 
 #include <QDir>
 #include <QFile>
@@ -392,9 +393,14 @@ void Tasks::start(Proc *p)
     p->clock.start();
     // Kontener projektu albo system (z Flatpaka); „__host” w env — zawsze w systemie (zakładanie kontenera)
     const bool onHost = p->env.value(QStringLiteral("__host")).toBool();
-    QStringList argv = onHost ? ProjectEnv::instance()->hostShell(p->command, p->cwd) : ProjectEnv::instance()->shell(p->command, p->cwd);
+    // Sekrety projektu z portfela: plik „export …” w /run/user, wczytany i skasowany przez powłokę przed poleceniem
+    QString command = p->command;
+    if (p->env.value(QStringLiteral("__secrets")).toBool())
+        if (const QString f = SecretStore::instance()->writeEnvFile(); !f.isEmpty())
+            command = QStringLiteral(". '%1'; rm -f '%1'; %2").arg(f, command);
+    QStringList argv = onHost ? ProjectEnv::instance()->hostShell(command, p->cwd) : ProjectEnv::instance()->shell(command, p->cwd);
     if (argv.isEmpty())
-        argv = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), p->command};
+        argv = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), command};
     proc->start(argv.first(), argv.mid(1));
     proc->closeWriteChannel();
     Q_EMIT stateChanged();

@@ -1,5 +1,6 @@
 #include "debugger.h"
 #include "projectenv.h"
+#include "secretstore.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -182,6 +183,10 @@ bool Debugger::start(const QString &kind, const QString &program, const QString 
         Q_EMIT message(QStringLiteral("To nie jest program do uruchomienia: ") + program);
         return false;
     }
+    // Sekrety projektu jako zmienne środowiska programu (gdb, lldb-dap i debugpy przyjmują „env”)
+    const QVariantMap secrets = SecretStore::instance()->env();
+    if (!secrets.isEmpty())
+        launch.insert(QStringLiteral("env"), QJsonObject::fromVariantMap(secrets));
     m_kind = kind;
     m_launch = launch;
     m_console.clear();
