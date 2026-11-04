@@ -1,6 +1,6 @@
 # Aplikacje Aster jako Flatpaki dla dowolnego Linuksa (x86_64 i ARM), każda w osobnym zadaniu, równolegle.
 # Paczki trafiają do wydania „aplikacje” na GitHubie, skąd instaluje je tools/install-apps.sh (jedna komenda).
-# Manifesty: apps/<aplikacja>/flatpak/org.aster.<aplikacja>.yml
+# Manifesty: apps/<aplikacja>/flatpak/org.aster.<aplikacja>.yml (narzędzia developera: apps/dev/<aplikacja>/…)
 name: Aplikacje (Flatpak)
 
 on:
@@ -18,6 +18,7 @@ on:
       - "apps/photos/**"
       - "apps/studio/**"
       - "apps/video/**"
+      - "apps/dev/vault/**"
       - "common/**"
       - "data/fonts/**"
       - "CMakeLists.txt"
@@ -46,7 +47,7 @@ jobs:
         env:
           WANT: ${{ inputs.apps }}
         run: |
-          all="grafika montaz studio code editor calculator photos music video pdf camera"
+          all="grafika montaz studio code editor calculator photos music video pdf camera vault"
           apps="${WANT:-$all}"
           inc=""
           for a in $apps; do
@@ -73,8 +74,10 @@ jobs:
       - name: Budowa
         run: |
           id=org.aster.${{ matrix.app }}
+          dir=apps/${{ matrix.app }}
+          [ -d "$dir" ] || dir=apps/dev/${{ matrix.app }}
           flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --force-clean \
-            --repo=repo build apps/${{ matrix.app }}/flatpak/$id.yml
+            --repo=repo build $dir/flatpak/$id.yml
           flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             repo ${{ matrix.app }}-${{ matrix.arch }}.flatpak $id
       - uses: actions/upload-artifact@v4

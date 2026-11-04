@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Aster Vault
+GenericName=Bazy danych
+Comment=SQLite, PostgreSQL i MySQL: tabele, edycja wierszy, zapytania SQL i eksport
+Exec=aster-vault %f
+Icon=server-database
+Terminal=false
+Categories=Development;Database;
+Keywords=baza danych;database;sql;sqlite;postgres;postgresql;mysql;mariadb;tabela;zapytanie;dbeaver;
+StartupWMClass=aster-vault
+MimeType=application/vnd.sqlite3;application/x-sqlite3;
