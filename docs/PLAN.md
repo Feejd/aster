@@ -244,7 +244,12 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
   - [x] tekst piosenki (zakładka Tekst, T): pisanie, czytanie z kolorowymi rymami (`src/lyrics.*`: od przedostatniej
         sylaby, wymowa ó/u, rz/ż, ubezdźwięcznienie; asonanse i rymy męskie; para do 3 wersów odstępu), czas wersów
         od taktu co 1–2 takty albo ustawiany ↓ w trakcie grania (miary, do szesnastki), prompter nad osią przy nagrywaniu
-  - [ ] Dalej (raperzy): odszumianie i de-esser, podpowiedzi rymów (słownik hunspell-pl),
+  - [x] czystość głosu (karta w zakładce Ścieżka): odszumianie nagrań w tle (`src/denoise.*`: profil szumu
+        z 10% najcichszych ramek, bramka widmowa STFT 2048/512 z wygładzaniem; lekko/średnio/mocno: szum w pauzach
+        −8/−14/−21 dB, głos ±0,4 dB; plik „· odszumione N.wav”, oryginał w klipie, nowe nagrania ścieżki od razu)
+        i de-esser na żywo (zwrotnica LR4 4,5 kHz, udział góry w sygnale; „s” −9 dB przy 40%, głos bez zmian;
+        gotowe brzmienia wokalu mają 40%)
+  - [ ] Dalej (raperzy): podpowiedzi rymów (słownik hunspell-pl),
         znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
         separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,

@@ -49,6 +49,8 @@ struct TrackRT
     float echo = 0;                       // ile do echa
     float drive = 0;                      // przester / ciepło (0 = brak)
     float dbl = 0;                        // sztuczny dubel (0 = brak)
+    float deess = 0;                      // de-esser (0 = brak)
+    Biquad deessLp, deessHp;              // jego zwrotnica (dół / góra)
     TuneParams tune;                      // autotune
 };
 
@@ -93,6 +95,7 @@ private:
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];
+    DeEsser m_deess[MaxTracks];
     std::vector<PitchCorrector> m_tune;   // osobny stan autotune dla każdej ścieżki
     std::vector<Doubler> m_dbl;           // i sztucznego dubla
     Reverb m_reverb;

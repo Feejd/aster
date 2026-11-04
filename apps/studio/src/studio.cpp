@@ -1,6 +1,7 @@
 #include "studio.h"
 #include "analysis.h"
 #include "lyrics.h"
+#include "denoise.h"
 #include "beatsynth.h"
 #include "share.h"
 
@@ -459,7 +460,8 @@ QJsonObject Studio::toJson() const
                                               a.append(double(v));
                                           return a;
                                       }()},
-                                     {QStringLiteral("take"), c.take}});
+                                     {QStringLiteral("take"), c.take},
+                                     {QStringLiteral("origFile"), c.origFile}});
         tracks.append(QJsonObject{{QStringLiteral("id"), t.id},
                                   {QStringLiteral("name"), t.name},
                                   {QStringLiteral("color"), t.color},
@@ -480,7 +482,9 @@ QJsonObject Studio::toJson() const
                                                                           {QStringLiteral("echo"), t.echo},
                                                                           {QStringLiteral("drive"), t.drive},
                                                                           {QStringLiteral("autotune"), t.tune},
-                                                                          {QStringLiteral("double"), t.dbl}}},
+                                                                          {QStringLiteral("double"), t.dbl},
+                                                                          {QStringLiteral("deess"), t.deess},
+                                                                          {QStringLiteral("denoise"), t.denoise}}},
                                   {QStringLiteral("kind"), t.kind},
                                   {QStringLiteral("pattern"), t.pattern},
                                   {QStringLiteral("clips"), clips}});
@@ -585,6 +589,8 @@ void Studio::fromJson(const QJsonObject &o)
         t.drive = std::clamp(fx.value(QStringLiteral("drive")).toDouble(), 0.0, 1.0);
         t.tune = std::clamp(fx.value(QStringLiteral("autotune")).toDouble(), 0.0, 1.0);
         t.dbl = std::clamp(fx.value(QStringLiteral("double")).toDouble(), 0.0, 1.0);
+        t.deess = std::clamp(fx.value(QStringLiteral("deess")).toDouble(), 0.0, 1.0);
+        t.denoise = std::clamp(fx.value(QStringLiteral("denoise")).toInt(), 0, 3);
         t.kind = to.value(QStringLiteral("kind")).toString(QStringLiteral("audio"));
         t.pattern = to.value(QStringLiteral("pattern")).toObject();
         t.armed = armed.contains(t.id);
@@ -609,6 +615,7 @@ void Studio::fromJson(const QJsonObject &o)
             for (const QJsonValue &v : co.value(QStringLiteral("takes")).toArray())
                 c.takes.append(fr(v));
             c.take = c.takes.isEmpty() ? 0 : std::clamp(co.value(QStringLiteral("take")).toInt(), 0, int(c.takes.size()) - 1);
+            c.origFile = co.value(QStringLiteral("origFile")).toString();
             if (c.file.isEmpty() || c.length <= 0 || c.srcLen <= 0)
                 continue;
             t.clips.append(c);
@@ -751,6 +758,8 @@ void Studio::rebuildMix()
                                      {QStringLiteral("drive"), t.drive},
                                      {QStringLiteral("tune"), t.tune},
                                      {QStringLiteral("double"), t.dbl},
+                                     {QStringLiteral("deess"), t.deess},
+                                     {QStringLiteral("denoise"), t.denoise},
                                      {QStringLiteral("preset"), t.preset}});
     emit mixChanged();
 }
@@ -801,6 +810,11 @@ Snapshot *Studio::buildSnapshot() const
         rt.echo = float(t.echo * 0.7);
         rt.drive = float(t.drive);
         rt.dbl = float(t.dbl);
+        if (t.deess > 0.005) {
+            rt.deess = float(t.deess);
+            rt.deessLp = Biquad::lowPass(4500, R);
+            rt.deessHp = Biquad::highPass(4500, R);
+        }
         if (t.tune > 0.005) {
             static const int minor[7] = {0, 2, 3, 5, 7, 8, 10}, major[7] = {0, 2, 4, 5, 7, 9, 11};
             uint16_t mask = 0;
@@ -1685,6 +1699,9 @@ void Studio::finishRecording()
     emit selectionChanged();
     changed();
     save();          // nagrania nie giną, nawet gdy program się zamknie
+    // Ścieżka z odszumianiem: nowe nagranie też (w tle, bez osobnego kroku do cofania)
+    if (m_tracks[ti].denoise > 0)
+        startDenoise(m_tracks[ti].id, {{c.file, c.file}}, m_tracks[ti].denoise, true);
     if (passes > 1)
         emit message(QStringLiteral("Nagrane podejścia: %1 — wybierz najlepsze w zakładce Klip albo pod prawym przyciskiem. "
                                     "Podziel klip (S), żeby z każdego kawałka wziąć inne.").arg(passes));
@@ -1944,6 +1961,8 @@ void Studio::applyPresetTo(Track &t, const QString &preset)
         t.echo = p.echo;
         t.drive = p.drive;
         t.tune = p.tune;
+        // Jasne wokale syczą — de-esser od razu w gotowym brzmieniu głosu
+        t.deess = QString::fromLatin1(p.group) == QLatin1String("Wokal") ? 0.4 : 0;
         t.preset = preset == QLatin1String("none") ? QString() : preset;
     }
 }
@@ -2041,9 +2060,11 @@ void Studio::setTrackFx(int index, const QString &key, double value)
         t.tune = std::clamp(value, 0.0, 1.0);
     else if (key == QLatin1String("double"))
         t.dbl = std::clamp(value, 0.0, 1.0);
+    else if (key == QLatin1String("deess"))
+        t.deess = std::clamp(value, 0.0, 1.0);
     else
         return;
-    if (key != QLatin1String("double"))
+    if (key != QLatin1String("double") && key != QLatin1String("deess"))
         t.preset.clear();           // ręczna zmiana — już nie gotowe ustawienie (sztucznego dubla gotowe brzmienia nie ustawiają)
     changed(false);
 }
@@ -2136,6 +2157,124 @@ void Studio::cycleClip(int id)
 {
     if (Clip *c = findClip(id))
         setCycle(double(c->start) / Engine::Rate, double(c->start + c->length) / Engine::Rate);
+}
+
+// ——— Odszumianie ———
+
+void Studio::denoiseTrack(int index, int level)
+{
+    if (index < 0 || index >= m_tracks.size() || recording() || m_tracks[index].kind != QLatin1String("audio"))
+        return;
+    level = std::clamp(level, 0, 3);
+    Track &t = m_tracks[index];
+    if (level == 0) {
+        // Z powrotem oryginały
+        checkpoint();
+        QStringList missing;
+        for (Clip &c : t.clips) {
+            if (c.origFile.isEmpty())
+                continue;
+            c.file = c.origFile;
+            c.origFile.clear();
+            if (!m_sources.contains(c.file) && !missing.contains(c.file))
+                missing << c.file;
+        }
+        t.denoise = 0;
+        changed();
+        loadSources(missing);
+        return;
+    }
+    QHash<QString, QString> files;
+    for (const Clip &c : std::as_const(t.clips))
+        files.insert(c.file, c.origFile.isEmpty() ? c.file : c.origFile);
+    if (files.isEmpty()) {
+        // Nic jeszcze nie nagrano — ustawienie zadziała na nowych nagraniach
+        t.denoise = level;
+        changed(false);
+        emit message(QStringLiteral("Nowe nagrania na tej ścieżce będą od razu odszumiane."));
+        return;
+    }
+    startDenoise(t.id, files, level, false);
+}
+
+void Studio::startDenoise(int trackId, const QHash<QString, QString> &files, int level, bool quiet)
+{
+    // Wynik zależy tylko od oryginału i siły — ten sam plik nie liczy się drugi raz
+    QHash<QString, QString> outputs;           // oryginał → odszumiony
+    QHash<QString, SourcePtr> ready;           // oryginały już w pamięci
+    for (const QString &orig : files) {
+        outputs.insert(orig, QFileInfo(orig).completeBaseName() + QStringLiteral(" · odszumione %1.wav").arg(level));
+        if (const SourcePtr s = m_sources.value(orig))
+            ready.insert(orig, s);
+    }
+    ++m_loading;
+    emit busyChanged();
+    const QString dir = m_folder + QStringLiteral("/audio/");
+    QPointer<Studio> self(this);
+    QThreadPool::globalInstance()->start([self, files, outputs, ready, dir, level, trackId, quiet] {
+        QHash<QString, SourcePtr> made;
+        QString error;
+        for (auto it = outputs.begin(); it != outputs.end(); ++it) {
+            const QString out = dir + it.value();
+            std::shared_ptr<AudioSource> res;
+            if (QFileInfo::exists(out))
+                res = loadAudio(out, Engine::Rate, &error);
+            if (!res) {
+                SourcePtr in = ready.value(it.key());
+                if (!in)
+                    in = loadAudio(dir + it.key(), Engine::Rate, &error);
+                if (!in)
+                    continue;
+                res = Denoise::process(*in, level);
+                if (!res || !Denoise::saveWav(*res, out)) {
+                    error = QStringLiteral("Nie udało się odszumić „%1” — nagranie jest za krótkie albo brak miejsca na dysku.").arg(it.key());
+                    continue;
+                }
+            }
+            res->file = it.value();
+            made.insert(it.key(), res);
+        }
+        QMetaObject::invokeMethod(qApp, [self, files, made, error, dir, level, trackId, quiet] {
+            if (!self)
+                return;
+            --self->m_loading;
+            emit self->busyChanged();
+            if (self->m_folder + QStringLiteral("/audio/") != dir)
+                return;
+            Track *t = nullptr;
+            for (Track &x : self->m_tracks)
+                if (x.id == trackId)
+                    t = &x;
+            if (!t || made.isEmpty()) {
+                if (!error.isEmpty())
+                    emit self->message(error);
+                return;
+            }
+            if (!quiet)
+                self->checkpoint();
+            for (const SourcePtr &s : made)
+                self->m_sources.insert(s->file, s);
+            int n = 0;
+            for (Clip &c : t->clips) {
+                const auto it = files.find(c.file);
+                if (it == files.end() || !made.contains(it.value()))
+                    continue;
+                c.origFile = it.value();
+                c.file = made.value(it.value())->file;
+                ++n;
+            }
+            t->denoise = level;
+            ++self->m_sourcesVersion;
+            emit self->sourcesChanged();
+            self->changed();
+            self->save();
+            if (!quiet)
+                emit self->message(n == 1 ? QStringLiteral("Nagranie odszumione — szum tła ściszony, głos został.")
+                                          : QStringLiteral("Odszumione nagrania: %1 — szum tła ściszony, głos został.").arg(n));
+            else if (!error.isEmpty())
+                emit self->message(error);
+        });
+    });
 }
 
 // ——— Tekst piosenki ———

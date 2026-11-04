@@ -255,6 +255,8 @@ public:
     // Wers `line` (numer wiersza tekstu) zaczyna się w `seconds` (do 1/16 nuty); seconds < 0 — znów według taktów
     Q_INVOKABLE void markLyric(int line, double seconds);
     Q_INVOKABLE void clearLyricMarks();
+    // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
+    Q_INVOKABLE void denoiseTrack(int index, int level);
     Q_INVOKABLE int lyricAt(double seconds) const;   // wiersz tekstu, który właśnie leci (−1 — przed pierwszym)
     // Gotowy bit (MP3, WAV…): rozpoznaje tempo i tonację, ustawia je w projekcie i kładzie bit na siatce taktów.
     // Bez otwartego projektu tworzy nowy „na swoim bicie” — ścieżki na wokal, dubel i ad-libsy.
@@ -333,6 +335,7 @@ private:
         // podejścia k jest dalej w pliku niż podejścia 0 (stałe przy przesuwaniu, przycinaniu i dzieleniu klipu)
         QList<long long> takes;
         int take = 0;
+        QString origFile;               // odszumiony klip: plik przed odszumianiem (powrót i ponowne odszumianie)
     };
     struct Track
     {
@@ -345,6 +348,8 @@ private:
         // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
         double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0, tune = 0;
         double dbl = 0;                 // sztuczny dubel: dwie lekko przesunięte i rozstrojone kopie po bokach
+        double deess = 0;               // de-esser: ściszanie syczenia („s”, „sz”, „c”)
+        int denoise = 0;                // odszumianie nagrań: 0 wył., 1 lekko, 2 średnio, 3 mocno (też nowych nagrań)
         bool lowCut = false;
         QString preset;
         // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
@@ -418,6 +423,8 @@ private:
     int m_lyricsStart = 1, m_lyricsBars = 1;
     QVariantList m_lyricView;
     void rebuildLyrics();
+    // Odszumia pliki (obecny plik klipu → oryginał) i podmienia je w klipach ścieżki o numerze id
+    void startDenoise(int trackId, const QHash<QString, QString> &files, int level, bool quiet);
     void resetLyrics();
     long long m_punchIn = 0, m_punchOut = 0;          // wymiana fragmentu w trakcie nagrywania (ramki); równe — wyłączona
     void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)

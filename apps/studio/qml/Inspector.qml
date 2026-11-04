@@ -136,6 +136,38 @@ Item {
                     }
                 }
 
+                // Czystość głosu: szum tła (odszumianie nagrań w tle) i syczenie (de-esser na żywo)
+                Card {
+                    visible: !!insp.track && insp.track.kind === "audio" && !insp.track.beat
+                    title: "Czystość głosu"
+                    Column {
+                        width: parent.width
+                        spacing: 6
+                        Text { text: "Odszumianie"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: Studio.busy ? "Odszumiam… (chwila)" : "Szum mikrofonu, komputera i pokoju — Studio uczy się go z pauz między wersami. Działa też na nowych nagraniach."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                        }
+                        Flow {
+                            width: parent.width
+                            spacing: 6
+                            Repeater {
+                                model: [{ label: "Wył.", value: 0 }, { label: "Lekko", value: 1 }, { label: "Średnio", value: 2 }, { label: "Mocno", value: 3 }]
+                                delegate: Chip {
+                                    required property var modelData
+                                    label: modelData.label
+                                    on: (insp.mx.denoise || 0) === modelData.value
+                                    enabled: !Studio.busy && !Studio.recording
+                                    onClicked: Studio.denoiseTrack(insp.ti, modelData.value)
+                                }
+                            }
+                        }
+                    }
+                    FxSlider { label: "De-esser"; hint: "Ścisza syczenie „s”, „sz”, „c”"; from: 0; to: 1; value: insp.mx.deess || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "deess", v) }
+                }
+
                 Card {
                     visible: !!insp.track
                     title: "Korektor"

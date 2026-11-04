@@ -49,6 +49,11 @@ struct Biquad
         const double A = std::pow(10.0, db / 40), w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * q);
         return make(1 + al * A, -2 * cs, 1 - al * A, 1 + al / A, -2 * cs, 1 - al / A);
     }
+    static Biquad lowPass(double f, double rate)
+    {
+        const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * 0.7071);
+        return make((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + al, -2 * cs, 1 - al);
+    }
     static Biquad highPass(double f, double rate)
     {
         const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * 0.7071);
@@ -65,6 +70,39 @@ struct BiquadState
         z1 = q.b1 * x - q.a1 * y + z2;
         z2 = q.b2 * x - q.a2 * y;
         return y;
+    }
+};
+
+// De-esser: ścisza tylko górę pasma (od ok. 4,5 kHz), gdy przeważa w niej syczenie („s”, „sz”, „c”).
+// Miarą jest udział góry w całym sygnale — nie zależy od głośności nagrania. Zwrotnica Linkwitza-Rileya
+// (24 dB/okt.): dół + góra składają się z powrotem w ten sam dźwięk, więc poza syczeniem nic się nie zmienia.
+struct DeEsser
+{
+    BiquadState lp[2][2], hp[2][2];       // [kanał][stopień]
+    float envHi = 0, envAll = 0, g = 1;
+    void process(float *l, float *r, int n, const Biquad &lpq, const Biquad &hpq, float amount, int rate)
+    {
+        const float sr = float(rate);
+        const float att = 1.f - std::exp(-1.f / (0.0005f * sr)), rel = 1.f - std::exp(-1.f / (0.03f * sr));
+        const float gDown = 1.f - std::exp(-1.f / (0.0005f * sr)), gUp = 1.f - std::exp(-1.f / (0.05f * sr));
+        const float target = 0.5f - 0.3f * amount, power = 0.6f + 1.6f * amount;
+        float *io[2] = {l, r};
+        for (int i = 0; i < n; ++i) {
+            float lo[2], hi[2];
+            for (int c = 0; c < 2; ++c) {
+                const float x = io[c][i];
+                lo[c] = lp[c][1].run(lpq, lp[c][0].run(lpq, x));
+                hi[c] = hp[c][1].run(hpq, hp[c][0].run(hpq, x));
+            }
+            const float h = 0.5f * std::fabs(hi[0] + hi[1]), all = 0.5f * std::fabs(l[i] + r[i]);
+            envHi += (h > envHi ? att : rel) * (h - envHi);
+            envAll += (all > envAll ? att : rel) * (all - envAll);
+            const float ratio = envHi / (envAll + 1e-5f);
+            const float want = ratio > target ? std::max(0.08f, std::pow(target / ratio, power)) : 1.f;
+            g += (want < g ? gDown : gUp) * (want - g);
+            l[i] = lo[0] + hi[0] * g;
+            r[i] = lo[1] + hi[1] * g;
+        }
     }
 };
 

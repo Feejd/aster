@@ -187,6 +187,7 @@ Window {
         else if (what === "mixer") showMixer = true;
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
+        else if (what.startsWith("denoise:")) { const a = what.split(":"); Studio.denoiseTrack(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("lyrics:")) Studio.lyrics = what.substring(7).replace(/\|/g, "\n");
         else if (what.startsWith("lyricsMode:")) inspector.lyrics.mode = what.substring(11);
         else if (what.startsWith("lyricsStart:")) Studio.lyricsStart = Number(what.substring(12));

@@ -102,7 +102,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             if (!any)
                 continue;
 
-            // Efekty ścieżki: autotune → korektor → przester → kompresor → sztuczny dubel → głośność i panorama → wysyłka do pogłosu
+            // Efekty ścieżki: autotune → korektor → de-esser → przester → kompresor → sztuczny dubel → głośność i panorama → wysyłka do pogłosu
             if (ti < size_t(MaxTracks)) {
                 if (t.tune.on)
                     m_tune[ti].process(m_tl, m_tr, n, t.tune, rate);
@@ -115,6 +115,8 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                         m_tr[i] = zr.run(t.eq[k], m_tr[i]);
                     }
                 }
+                if (t.deess > 0)
+                    m_deess[ti].process(m_tl, m_tr, n, t.deessLp, t.deessHp, t.deess, rate);
                 if (t.drive > 0) {
                     // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
                     const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
