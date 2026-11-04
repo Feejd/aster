@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
             // kolejność: pulpit (zegar) → wyspa → dok → Start
             std::sort(windows.begin(), windows.end(), [](QQuickWindow *a, QQuickWindow *b) {
                 static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start"),
-                                                QStringLiteral("Centrum sterowania")};
+                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Aster Intelligence")};
                 return order.indexOf(a->title()) < order.indexOf(b->title());
             });
             for (QQuickWindow *w : windows) {
@@ -108,6 +108,14 @@ int main(int argc, char *argv[])
             for (QWindow *w : QGuiApplication::topLevelWindows())
                 if (w->title() == QLatin1String("Centrum sterowania"))
                     QMetaObject::invokeMethod(w, "toggle");
+        });
+
+    // Do testów: ASTER_OPEN_ASSISTANT=1 otwiera panel asystenta (pusty albo z ASTER_SHOT_ASK)
+    if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_ASSISTANT"))
+        QTimer::singleShot(1000, &app, [] {
+            for (QWindow *w : QGuiApplication::topLevelWindows())
+                if (w->title() == QLatin1String("Aster Intelligence"))
+                    QMetaObject::invokeMethod(w, "show");
         });
 
     // Do testów: ASTER_SHOT_NOTIFY=1 pokazuje przykładowe powiadomienie (dynamiczna wyspa jako karta)

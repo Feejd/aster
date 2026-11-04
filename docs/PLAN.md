@@ -160,7 +160,8 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
 - [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
-- [ ] Asystent Aster — rozpisany niżej („Asystent Aster”).
+- [ ] Aster Intelligence (dawniej Asystent Aster) — rozpisany niżej; gotowe A1 (usługa, `aster` w terminalu, Ustawienia),
+      A2 (wyspa, panel), A2.5 (wygląd jak Apple Intelligence, narzędzia do pisania) i A3 (agent, który sam działa).
 
 ## Etap 6 — programy użytkowe Aster (po Etapie 3b)
 - [x] Montaż (nazwa robocza, `apps/montaz`) — prosty edytor filmów na TikTok/Reels/YouTube i z wakacji, na MLT
@@ -425,8 +426,8 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
       po wdrożeniu, prawdziwe Netlify/Vercel/Cloudflare (sprawdzone tylko z atrapą CLI)
 - [ ] Kolejne programy według potrzeb (notatki, poczta i kalendarz, biuro jako nakładki albo własne)
 
-## Asystent Aster
-Jeden asystent dla całego systemu: na górnym pasku, w osobnym panelu i w terminalu. Odpowiada model w chmurze
+## Aster Intelligence (dawniej Asystent Aster)
+Jeden agent dla całego systemu — nie czat z radami, tylko ktoś, kto sam sprawdza i naprawia (za zgodą): na górnym pasku, w osobnym panelu i w terminalu. Odpowiada model w chmurze
 albo lokalny — zawsze widać który, a nic nie wychodzi z komputera bez zgody.
 
 **Gdzie mieszka**
@@ -467,9 +468,64 @@ albo lokalny — zawsze widać który, a nic nie wychodzi z komputera bez zgody.
 historia, uprawnienia narzędzi (np. „zawsze pytaj przed komendą”).
 
 **Etapy**
-- [ ] A1. Usługa `aster-assistant` + polecenie `aster` w terminalu (jedno pytanie, rozmowa, potok), dostawcy
-      zgodni z OpenAI i Anthropic, klucze w portfelu, Ustawienia → Asystent
-- [ ] A2. Wyspa: pole pytania i krótka odpowiedź; panel z prawej dla rozmów (przejście z wyspy do panelu), historia
-- [ ] A3. Narzędzia systemowe z potwierdzeniem; propozycje komend w terminalu [T/n]; Ctrl+Shift+A w Terminalu Aster
-- [ ] A4. Model lokalny (llama.cpp, pobieranie modelu, tryb offline i „Najpierw lokalnie”)
+- [x] A1. Usługa `aster-assistant` (`assistant/`: Qt Core/Network/DBus, bez GUI; startuje na żądanie przez D-Bus,
+      kończy się po 15 min bezczynności) + polecenie `aster`/`ai` (jedno pytanie strumieniowo, rozmowa z `/nowa`,
+      `/model` — z ostrzeżeniem, gdzie trafią pytania, i wpisaniem klucza bez echa — `/wyjdz`, potok jako kontekst;
+      komendy z bloków ```bash pokazywane z pytaniem [T/n], ryzykowne — sudo, rm -r, dd, systemctl… — domyślnie „nie”).
+      Dostawcy: lokalny llama.cpp (domyślny — nic nie wychodzi bez wyboru chmury), Ollama, Mistral (UE), DeepSeek
+      (Chiny), OpenAI, Claude (Anthropic Messages), Gemini, OpenRouter. Klucze przez Secret Service (KWallet/ksecretd)
+      — własna obsługa przez D-Bus, bez nowych zależności; w pliku tylko „klucz jest”. Historia w
+      ~/.local/share/aster/asystent (pliki 0600, do wyłączenia i wyczyszczenia). Ustawienia → Asystent: dostawca
+      (zgoda z opisem serwerów przy wyborze chmury), model, adres serwera lokalnego, klucz, historia.
+      Testy bez klucza: `tools/asystent-atrapa.py` (atrapa API OpenAI i Anthropic ze strumieniem), zmienne
+      `ASTER_ASSISTANT_URL` / `ASTER_ASSISTANT_API_KEY` dla usługi.
+- [x] A2. Wyspa: Super+Spacja (kglobalaccel przez D-Bus) albo klik — pole pytania w wyspie (klawiatura warstwy
+      przełączana na „exclusive” tylko na czas pytania), krótka odpowiedź ze znaczkiem i znika po 12 s; dopytanie,
+      długa odpowiedź (kod, lista, tabela) albo błąd → panel z prawej (`AssistantWindow.qml`): rozmowa w Markdown,
+      znaczek „Na tym komputerze” / „Chmura: <dostawca>” przy każdej odpowiedzi, kopiowanie, „Nowa rozmowa”,
+      historia (otwieranie, usuwanie), podpowiedzi pierwszych pytań. Zrzuty: `ASTER_SHOT_ASK="pytanie|dopytanie"`,
+      `ASTER_OPEN_ASSISTANT=1`. Do sprawdzenia na prawdziwym KWin: fokus klawiatury wyspy i Super+Spacja.
+- [ ] A2+. Panel: przypięcie na stałe, wklejanie plików i zrzutów (razem z A5); wybór przy pierwszym uruchomieniu
+      (tylko lokalnie / chmura / najpierw lokalnie — razem z A4)
+- [x] A2.5. Nazwa Aster Intelligence i wygląd jak Apple Intelligence: tęczowa poświata krążąca wokół wyspy (i od środka
+      jej krawędzi), poświata na krawędziach ekranu, gdy model myśli (`EdgeGlowWindow.qml`, warstwa overlay
+      przezroczysta dla myszy, schowana, gdy nie świeci), kula z krążącymi kolorami zamiast iskry, migoczące „Myślę…”,
+      sprężyste wejście wyspy, odpowiedź wyłaniająca się z dołu, „Kopiuj” w wyspie, obwódka pola w panelu.
+      Narzędzia do pisania: zaznaczony tekst (podstawowe zaznaczenie Waylanda, inaczej schowek; hasła z menedżerów
+      haseł pomijane) → Popraw błędy, Przeredaguj, Przyjaźniej, Profesjonalnie, Zwięźlej, Streść, Najważniejsze punkty
+      (źródło „pisanie”: sam wynik, bez komentarzy) albo własne polecenie do tego tekstu. Test: `ASTER_SHOT_SELECTION`,
+      `ASTER_SHOT_ASK=-` (samo otwarcie), `ASTER_SHOT_GLOW=1`.
+- [x] A3. Agent: model pisze jedno polecenie w ```bash ze zdaniem po ludzku („Zainstalować Google Chrome?”); usługa
+      urywa odpowiedź po bloku (bez zgadywania wyniku) i wysyła `ActionRequested`; powłoka (karta w panelu: zdanie,
+      „Tak, zrób to” / „Nie”, szczegóły z poleceniem i wynikiem, „Otwórz w Terminalu”) albo `aster` (w bieżącym
+      folderze, [T/n]) uruchamia je i odsyła wynik `ActionResult`, a model działa dalej (do 10 poleceń na pytanie).
+      Polecenia tylko do odczytu (lista w `Service::isSafeCommand`: df, journalctl, systemctl status, flatpak list…)
+      — od razu i bez klawiatury; wszystko inne, w tym instalacja, po zgodzie; odmowa kończy działanie. W powłoce sudo
+      → pkexec (okno hasła), programy Aster (aster-files…) startują osobno. Prompt: najpierw programy Aster (lista
+      z poleceniami), Flatpak z Flathub, nigdy dnf, nie wymyślać programów. `aster-terminal --wpisz POLECENIE`
+      wpisuje bez Entera.
+- [ ] A3+. Narzędzia systemowe bez powłoki (tryb ciemny, jasność, Wi‑Fi przez D-Bus); Ctrl+Shift+A w Terminalu Aster;
+      zgoda „zawsze pozwalaj na to polecenie”
+- [x] A4. Model lokalny dobrany do sprzętu: katalog Gemma 3 1B / 4B / 12B (GGUF Q4_K_M z ggml-org na Hugging Face),
+      polecany według pamięci i rdzeni (1B do 8 GB / 4 rdzeni, 4B od 12 GB i 6 rdzeni, 12B od 32 GB i 8 rdzeni; poniżej
+      minimum nie da się pobrać). Ustawienia → Aster Intelligence → „Model na tym komputerze”: sprzęt, Pobierz z paskiem
+      postępu i Przerwij (wznawianie z pliku .part, samo ponawia po zerwaniu połączenia), Używaj, Usuń. llama-server
+      (pakiet llama-cpp w obrazie) jako `aster-llama.service` bez autostartu: usługa asystenta włącza go przy pytaniu
+      i czeka na /health, a wyłącza, gdy sama kończy pracę po kwadransie bezczynności — model nie zajmuje pamięci, gdy
+      nikt nie pyta. Parametry z ~/.config/aster/llama.env (wątki i kontekst według sprzętu), nadpisania w
+      llama-local.env. Dla instalatora: `aster --model-lokalny auto` (lista: `aster --model-lokalny`).
+- [ ] A4+. Pierwsze uruchomienie / instalator: „Czy chcesz korzystać z Aster Intelligence?” → tak: `aster --model-lokalny auto`
+      w tle (albo wybór chmury), nie: wyspa bez asystenta; tryb offline i „Najpierw lokalnie”
+- [x] A4.5. Zgoda tylko na ważne sprawy (assistant/src/commands.cpp): sam otwiera programy, tworzy foldery, kopiuje,
+      zmienia głośność; pyta przed instalacją/usuwaniem programów, usuwaniem i nadpisywaniem plików, pkexec, restartem,
+      zatrzymywaniem programów i usług, zmianami sieci, dysków i kont, skryptami (Ustawienia: „Pytaj o zgodę” — tylko przy
+      ważnych / przy każdej zmianie). Pamięć rozmów: streszczenia ostatnich 8 rozmów w prompcie (streszcza model w chmurze
+      w tle; rozmowy z modelem lokalnym — bez modelu i nigdy do chmury), `aster --historia [słowa]`, `aster --rozmowa ID`
+      — panel sam otwiera znalezioną rozmowę. Przycisk Aster Intelligence w prawej wyspie (za Centrum sterowania)
+      otwiera panel z rozmowami
+- [x] A4.6. Niebieski motyw (poświata, kula, panel). Kropla rozmowy pod prawą wyspą: bieżąca rozmowa się w nią chowa
+      (panel rozlewa się z niej i w nią wraca), bez rozmowy kropli nie ma; myśli — poświata, czeka na zgodę — pulsuje.
+      Okna i programy: powłoka wystawia D-Bus org.aster.Shell (ListWindows, WindowAction, OpenApp), w terminalu
+      `aster --okna`, `--pokaz/--zminimalizuj/--maksymalizuj/--zamknij-okno OKNO`, `aster --otworz PROGRAM [pliki]`,
+      `aster --instaluj code|grafika|montaz|studio…` (Flatpak z wydania „aplikacje”) — agent sam doinstalowuje brakujące
 - [ ] A5. Kontekst: zaznaczony tekst, pliki, zrzut okna; przypomnienia i minutnik w wyspie

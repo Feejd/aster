@@ -2,6 +2,7 @@
 //   aster-terminal                          nowe okno w folderze domowym
 //   aster-terminal --workdir KATALOG        nowe okno w podanym folderze (też -w, --working-directory)
 //   aster-terminal -e POLECENIE [ARG…]      uruchamia polecenie zamiast powłoki (programy z Terminal=true)
+//   aster-terminal --wpisz POLECENIE        wpisuje polecenie w powłokę, bez Entera (Aster Intelligence)
 
 #include "terminal.h"
 #include "terminalview.h"
@@ -33,6 +34,7 @@ int main(int argc, char *argv[])
 
     QString dir;
     QStringList command;
+    QString typeOnly;
     const QStringList args = app.arguments();
     for (int i = 1; i < args.size(); ++i) {
         const QString &a = args.at(i);
@@ -42,6 +44,10 @@ int main(int argc, char *argv[])
             if (command.size() == 1 && command.first().contains(QLatin1Char(' ')))
                 command = QProcess::splitCommand(command.first());
             break;
+        }
+        if (a == QLatin1String("--wpisz") && i + 1 < args.size()) {
+            typeOnly = args.at(++i);
+            continue;
         }
         if ((a == QLatin1String("--workdir") || a == QLatin1String("-w") || a == QLatin1String("--working-directory")) && i + 1 < args.size())
             dir = args.at(++i);
@@ -59,9 +65,11 @@ int main(int argc, char *argv[])
     if (!window)
         return 1;
 
-    const QString typed = qEnvironmentVariable("ASTER_TYPE");
+    // ASTER_TYPE (testy) wpisuje i zatwierdza; --wpisz tylko wpisuje — Enter naciska użytkownik
+    const QString typed = !typeOnly.isEmpty() ? typeOnly : qEnvironmentVariable("ASTER_TYPE");
+    const bool enter = typeOnly.isEmpty();
     if (!typed.isEmpty())
-        QTimer::singleShot(900, window, [window, typed] {
+        QTimer::singleShot(900, window, [window, typed, enter] {
             // Widok jest w delegacie Repeatera — szukamy po drzewie elementów, nie obiektów
             std::function<TerminalView *(QQuickItem *)> find = [&find](QQuickItem *item) -> TerminalView * {
                 if (auto *v = qobject_cast<TerminalView *>(item))
@@ -72,7 +80,7 @@ int main(int argc, char *argv[])
                 return nullptr;
             };
             if (TerminalView *view = find(window->contentItem()))
-                view->sendText(typed + QLatin1Char('\r'));
+                view->sendText(enter ? typed + QLatin1Char('\r') : typed);
         });
 
     // Do testów: ASTER_OPEN=settings|find|tabs otwiera ustawienia, wyszukiwanie albo drugą kartę

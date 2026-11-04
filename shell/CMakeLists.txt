@@ -8,6 +8,11 @@ qt_add_executable(aster-shell
     src/controlcenter.h
     src/polkitagent.cpp
     src/polkitagent.h
+    src/assistant.cpp
+    src/assistant.h
+    src/windows.cpp
+    src/windows.h
+    ../assistant/src/blocks.cpp
 )
 
 target_include_directories(aster-shell PRIVATE src)
@@ -23,6 +28,11 @@ set(ASTER_QML
     qml/ClockWindow.qml
     qml/ControlCenterWindow.qml
     qml/AuthWindow.qml
+    qml/AssistantWindow.qml
+    qml/AssistantBadge.qml
+    qml/IntelligenceGlow.qml
+    qml/IntelligenceOrb.qml
+    qml/ShimmerText.qml
 )
 # Pliki leżą w qml/, ale w module mają być w jego katalogu głównym — inaczej nie widzą
 # się nawzajem ani singletona Platform
@@ -41,6 +51,7 @@ target_compile_definitions(aster-shell PRIVATE
     ASTER_INSTALL_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/aster"
 )
 
+target_include_directories(aster-shell PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../assistant/src)
 target_link_libraries(aster-shell PRIVATE
     Qt6::Gui
     Qt6::Quick

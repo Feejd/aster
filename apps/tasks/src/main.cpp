@@ -1,10 +1,13 @@
 // aster-tasks — Menedżer zadań Aster (Ctrl+Shift+Esc).
 //   aster-tasks                 okno z procesami
 //   aster-tasks performance     od razu Wydajność
-//   aster-tasks ports           od razu Porty (kto zajmuje port)
+//   aster-tasks ports           od razu Porty
+//   aster-tasks porty [--json]  bez okna: kto nasłuchuje na którym porcie (dla terminala i Aster Intelligence)
+//   aster-tasks zakoncz-port PORT [--teraz]   kończy własny proces na porcie
 // Druga kopia przywołuje już otwarte okno (D-Bus: org.aster.tasks).
 
 #include "instance.h"
+#include "ports.h"
 
 #include <KWindowSystem>
 #include <QDBusConnection>
@@ -20,6 +23,11 @@ Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
+    // Bez okna — od razu wynik (przed QGuiApplication: działa też bez sesji graficznej)
+    if (argc > 1 && (qstrcmp(argv[1], "porty") == 0 || qstrcmp(argv[1], "zakoncz-port") == 0)) {
+        QCoreApplication core(argc, argv);
+        return Ports::runCli(core.arguments().mid(1));
+    }
     QGuiApplication app(argc, argv);
     asterTypography();
     app.setApplicationName(QStringLiteral("aster-tasks"));
@@ -30,10 +38,11 @@ int main(int argc, char *argv[])
     app.setDesktopFileName(QStringLiteral("org.aster.tasks"));
 
     const QStringList args = app.arguments();
-    const QString envPage = qEnvironmentVariable("ASTER_PAGE");
-    const QString page = args.contains(QLatin1String("performance")) || envPage == QLatin1String("performance") ? QStringLiteral("performance")
-        : args.contains(QLatin1String("ports")) || envPage == QLatin1String("ports")                            ? QStringLiteral("ports")
-                                                                                                                 : QStringLiteral("processes");
+    QString page = QStringLiteral("processes");
+    if (args.contains(QLatin1String("performance")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("performance"))
+        page = QStringLiteral("performance");
+    else if (args.contains(QLatin1String("ports")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("ports"))
+        page = QStringLiteral("ports");
 
     const QString service = QStringLiteral("org.aster.tasks");
     QDBusConnection bus = QDBusConnection::sessionBus();

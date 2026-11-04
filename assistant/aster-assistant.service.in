@@ -1,0 +1,10 @@
+[Unit]
+Description=Aster Intelligence (usługa sesji)
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.aster.Assistant
+ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/aster-assistant
+# Kończy się sama po kwadransie bezczynności; D-Bus uruchomi ją znowu przy następnym pytaniu
+Restart=no

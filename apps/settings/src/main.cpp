@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
                                    QStringLiteral("general"), QStringLiteral("appearance"), QStringLiteral("wallpaper"), QStringLiteral("desktop"),
                                    QStringLiteral("display"), QStringLiteral("account"), QStringLiteral("power"), QStringLiteral("mouse"),
                                    QStringLiteral("keyboard"), QStringLiteral("shortcuts"), QStringLiteral("printers"), QStringLiteral("datetime"),
-                                   QStringLiteral("language"), QStringLiteral("apps"), QStringLiteral("accessibility"), QStringLiteral("privacy"),
+                                   QStringLiteral("language"), QStringLiteral("apps"), QStringLiteral("accessibility"), QStringLiteral("assistant"), QStringLiteral("privacy"),
                                    QStringLiteral("storage")};
     QString page = qEnvironmentVariable("ASTER_PAGE");
     const QStringList args = app.arguments();
