@@ -20,6 +20,13 @@ Item {
     property string magicTool: "object"
     property real brushSize: 36                 // piksele ekranu
     property bool magicSubtract: false
+    // Rysowanie odręczne: pen | marker | highlighter | neon | eraser ("" — wyłączone); grubość w pikselach strony
+    property string drawTool: ""
+    property color drawColor: "#16181D"
+    property real drawWidth: 8
+    readonly property bool drawOn: drawTool !== ""
+    signal drawFinished()
+    onDrawOnChanged: if (drawOn) { if (Magic.element !== "") Magic.end(); clearSelection(); }
     property rect marquee: Qt.rect(0, 0, 0, 0)  // ramka zaznaczania (piksele strony)
     property bool marqueeOn: false
     property var marqueeBase: []
@@ -99,9 +106,49 @@ Item {
     }
     // Esc: najpierw kończy kadrowanie, potem zdejmuje zaznaczenie
     function cancel() {
-        if (magicOn) Magic.end();
+        if (drawOn) drawFinished();
+        else if (magicOn) Magic.end();
         else if (cropping !== "") cropping = "";
         else clearSelection();
+    }
+    // ——— Rysowanie ———
+    // Kreska z punktów strony → element „draw” (punkty w częściach pola)
+    function addDrawing(pts) {
+        if (pts.length === 0) return;
+        const sw = drawWidth;
+        const pad = drawTool === "neon" ? sw * 2.2 : sw / 2 + 1;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const q of pts) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+        x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+        const w = x1 - x0, h = y1 - y0;
+        const flat = [];
+        for (const q of pts) flat.push(Math.round((q[0] - x0) / w * 10000) / 10000, Math.round((q[1] - y0) / h * 10000) / 10000);
+        project.add({ type: "draw", pen: drawTool, stroke: String(drawColor), strokeWidth: Math.round(sw * 10) / 10, points: flat,
+                      x: Math.round(x0 * 10) / 10, y: Math.round(y0 * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 });
+    }
+    // Gumka: usuwa rysunki, przez które przechodzi kursor (punkt strony, promień w pikselach strony)
+    function eraseAt(px, py, radius) {
+        const all = project.document().elements;
+        for (let i = all.length - 1; i >= 0; --i) {
+            const o = all[i];
+            if (o.type !== "draw" || o.hidden || o.locked) continue;
+            const r = -(o.rotation || 0) * Math.PI / 180;
+            const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+            const lx = (px - cx) * Math.cos(r) - (py - cy) * Math.sin(r) + o.w / 2;
+            const ly = (px - cx) * Math.sin(r) + (py - cy) * Math.cos(r) + o.h / 2;
+            const reach = radius + (o.strokeWidth || 8) / 2;
+            if (lx < -reach || ly < -reach || lx > o.w + reach || ly > o.h + reach) continue;
+            const p = o.points || [];
+            let hit = false;
+            for (let k = 0; k + 1 < p.length && !hit; k += 2) {
+                const ax = p[k] * o.w, ay = p[k + 1] * o.h;
+                const bx = k + 3 < p.length ? p[k + 2] * o.w : ax, by = k + 3 < p.length ? p[k + 3] * o.h : ay;
+                const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+                const t = len > 0 ? Math.max(0, Math.min(1, ((lx - ax) * dx + (ly - ay) * dy) / len)) : 0;
+                hit = Math.hypot(lx - ax - t * dx, ly - ay - t * dy) <= reach;
+            }
+            if (hit) project.remove(o.id);
+        }
     }
     // Prostokąt (bez obrotu) obejmujący elementy
     function bounds(ids) {
@@ -927,7 +974,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -1094,6 +1141,89 @@ Item {
                     }
                 }
             }
+
+            // ——— Rysowanie odręczne ———
+            Item {
+                id: drawBox
+                anchors.fill: parent
+                visible: stage.drawOn
+                z: 20
+                Canvas {
+                    id: drawCanvas
+                    anchors.fill: parent
+                    anchors.margins: -400               // kreska może wyjść poza stronę
+                    property var pts: []
+                    onPaint: {
+                        const ctx = getContext("2d");
+                        ctx.reset();
+                        if (pts.length === 0 || stage.drawTool === "eraser") return;
+                        const o = 400, t = stage.drawTool;
+                        const lw = stage.drawWidth * stage.zoom;
+                        ctx.beginPath();
+                        ctx.moveTo(pts[0][0] + o, pts[0][1] + o);
+                        if (pts.length === 1) ctx.lineTo(pts[0][0] + o + 0.01, pts[0][1] + o);
+                        for (let i = 1; i < pts.length - 1; ++i)
+                            ctx.quadraticCurveTo(pts[i][0] + o, pts[i][1] + o, (pts[i][0] + pts[i + 1][0]) / 2 + o, (pts[i][1] + pts[i + 1][1]) / 2 + o);
+                        if (pts.length > 1) ctx.lineTo(pts[pts.length - 1][0] + o, pts[pts.length - 1][1] + o);
+                        ctx.lineCap = t === "highlighter" ? "butt" : "round";
+                        ctx.lineJoin = t === "highlighter" ? "bevel" : "round";
+                        ctx.lineWidth = lw;
+                        ctx.strokeStyle = stage.drawColor;
+                        ctx.globalAlpha = t === "highlighter" ? 0.42 : 1;
+                        if (t === "neon") { ctx.shadowColor = stage.drawColor; ctx.shadowBlur = lw * 2.5; }
+                        ctx.stroke();
+                        if (t === "neon") {
+                            ctx.shadowBlur = 0;
+                            ctx.lineWidth = lw * 0.4;
+                            ctx.strokeStyle = "rgba(255, 255, 255, 0.86)";
+                            ctx.stroke();
+                        }
+                    }
+                }
+                Rectangle {
+                    id: penRing
+                    readonly property real d: Math.max(8, (stage.drawTool === "eraser" ? 24 : stage.drawWidth * stage.zoom))
+                    visible: drawArea.containsMouse
+                    width: d; height: d; radius: d / 2
+                    color: stage.drawTool === "eraser" ? Qt.rgba(1, 1, 1, 0.35) : "transparent"
+                    border.width: 1.5; border.color: stage.drawTool === "eraser" ? "#FF3D9A" : "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.45) }
+                }
+                MouseArea {
+                    id: drawArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    hoverEnabled: true
+                    cursorShape: Qt.BlankCursor
+                    function ring(e) {
+                        penRing.x = e.x - 60 - penRing.width / 2;
+                        penRing.y = e.y - 60 - penRing.height / 2;
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        ring(e);
+                        if (stage.drawTool === "eraser") { stage.eraseAt((e.x - 60) / stage.zoom, (e.y - 60) / stage.zoom, 12 / stage.zoom); return; }
+                        drawCanvas.pts = [[e.x - 60, e.y - 60]];
+                        drawCanvas.requestPaint();
+                    }
+                    onPositionChanged: (e) => {
+                        ring(e);
+                        if (!pressed) return;
+                        const x = e.x - 60, y = e.y - 60;
+                        if (stage.drawTool === "eraser") { stage.eraseAt(x / stage.zoom, y / stage.zoom, 12 / stage.zoom); return; }
+                        const pts = drawCanvas.pts;
+                        const last = pts[pts.length - 1];
+                        if (last && Math.hypot(x - last[0], y - last[1]) < 2.5) return;
+                        drawCanvas.pts = pts.concat([[x, y]]);
+                        drawCanvas.requestPaint();
+                    }
+                    onReleased: {
+                        if (stage.drawTool !== "eraser") stage.addDrawing(drawCanvas.pts.map(q => [q[0] / stage.zoom, q[1] / stage.zoom]));
+                        drawCanvas.pts = [];
+                        drawCanvas.requestPaint();
+                    }
+                }
+            }
         }
     }
 
@@ -1200,6 +1330,29 @@ Item {
             if (!pressed) return;
             flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, content.x - (e.x - start.x)));
             flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, content.y - (e.y - start.y)));
+        }
+    }
+
+    // Rysowanie: podpowiedź i wyjście
+    Rectangle {
+        visible: stage.drawOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: drawPillRow.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        Row {
+            id: drawPillRow
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[stage.drawTool === "eraser" ? "eraser" : "brush"] || Icons.brush; size: 16; stroke: 2; color: Theme.text }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: stage.drawTool === "eraser" ? "Przeciągnij po rysunku, żeby go zmazać" : "Rysuj po stronie · każda kreska to osobny element"
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+            }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
         }
     }
 

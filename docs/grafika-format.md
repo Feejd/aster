@@ -65,11 +65,16 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   `duotone` z kolorami `duo1` — cienie i `duo2` — światła), `removeBg` z `bgTolerance` (0–1, usunięcie jednolitego tła).
   Narzędzia AI (usuwanie tła, gumka, wyodrębnianie) nie dodają pól: wynik to nowe zdjęcie w `images/` (PNG
   z przezroczystością), a element dostaje jego `src` — poprzednie zdjęcie zostaje w historii cofania.
+  `stroke` i `strokeWidth` — obramowanie wzdłuż kształtu zdjęcia (w całości wewnątrz ramki).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.
 - `code`: `kind` (`qr`, `code128`, `ean13`), `data` albo dla Wi-Fi `qrType: "wifi"` z `ssid` i `pass`; `color` (kod),
   `bg` (tło, puste — przezroczyste). Rysowany jako kształt (ostry w PDF), biblioteka KDE Prison.
 - `chart`: `chart` (`column`, `bar`, `line`, `pie`, `donut`), `data` — lista `{ label, value, color }`, `values` (false —
   bez liczb), `size` (wielkość napisów), `color` (napisy), `font`.
+- `draw`: rysunek odręczny (jedna kreska) — `points` (płaska lista `x, y, x, y…` w częściach pola elementu, 0–1;
+  linia biegnie gładko przez środki kolejnych odcinków), `stroke` (kolor), `strokeWidth` (px), `pen` = `pen` (pisak),
+  `marker`, `highlighter` (zakreślacz — półprzezroczysty, płaskie końce) albo `neon` (świecąca poświata z jasnym rdzeniem).
+  Pole elementu obejmuje kreskę z marginesem na grubość; zmiana rozmiaru rozciąga rysunek.
 - `vector`: `src` (plik SVG z `images/` — ikona albo naklejka), rysowana ostro w każdym rozmiarze; `color` zastępuje
   `currentColor` (jednokolorowe ikony), `flipX`.

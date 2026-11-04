@@ -411,6 +411,7 @@ Item {
         else if (a === "aiBackground") Magic.removeBackground(project, sel);
         else if (a === "templates") side.tab = "templates";
         else if (a === "shapesTab") side.tab = "shapes";
+        else if (a === "draw") side.tab = "draw";
         else if (a === "addText") side.addTextStyle(side.textStyles[0]);
         else if (a === "addPhoto") { side.tab = "photos"; chooseImage("element"); }
         else if (a === "shortcuts") shortcutsSheet.open = true;
@@ -529,6 +530,15 @@ Item {
         else if (cmd === "magicapply") Magic.apply(arg);
         else if (cmd === "magictool") stage.magicTool = arg;
         else if (cmd === "shortcuts") shortcutsSheet.open = true;
+        else if (cmd === "drawtool") { side.tab = "draw"; side.drawTool = arg; }
+        else if (cmd === "drawcolor") side.drawColor = arg;
+        else if (cmd === "drawwave") {
+            // Fala przez stronę na wysokości arg (część strony)
+            const W = project.pageWidth, H = project.pageHeight, pts = [];
+            for (let i = 0; i <= 40; ++i) pts.push([W * (0.1 + 0.8 * i / 40), H * Number(arg) + Math.sin(i / 40 * Math.PI * 3) * H * 0.06]);
+            stage.addDrawing(pts);
+        }
+        else if (cmd === "erase") { const q = arg.split(","); stage.eraseAt(Number(q[0]) * project.pageWidth, Number(q[1]) * project.pageHeight, 10); }
         else if (cmd === "insertsaved") insertSaved(side.saved[Number(arg)].file);
         else if (cmd === "replacecolor") { const [a, b] = arg.split(","); project.commit(); project.replaceColor(a, b); }
         else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
@@ -764,6 +774,10 @@ Item {
             rulers: viewSettings.rulers
             onRulersChanged: viewSettings.rulers = rulers
             onMenuRequested: (x, y) => ed.showContextMenu(x, y)
+            drawTool: side.tab === "draw" ? side.drawTool : ""
+            drawColor: side.drawColor
+            drawWidth: side.drawWidth
+            onDrawFinished: side.tab = side.lastTab
             onQuickAction: (a) => ed.runMenu(a)
         }
 

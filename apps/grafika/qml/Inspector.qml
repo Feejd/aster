@@ -48,7 +48,7 @@ Item {
         x: 18; y: 16
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
-            : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+            : ins.type === "draw" ? "Rysunek" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
     }
@@ -461,6 +461,38 @@ Item {
                 }
             }
 
+            // ——— Rysunek ———
+            Section {
+                visible: ins.type === "draw"
+                title: "Pisak"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "pen", label: "Pisak" }, { id: "marker", label: "Marker" }, { id: "highlighter", label: "Zakreślacz" }, { id: "neon", label: "Neon" }]
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.label
+                            on: (ins.el.pen || "pen") === modelData.id
+                            onClicked: ins.set({ pen: modelData.id })
+                        }
+                    }
+                }
+                ColorWell {
+                    id: drawStroke
+                    label: "Kolor"
+                    value: ins.el.stroke || "#16181D"
+                    onClicked: ins.editor.pickColor(drawStroke, value, false, (c, done) => ins.set({ stroke: c }, done))
+                }
+                ValueSlider {
+                    label: "Grubość"
+                    from: 1; to: Math.max(20, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.08)); step: 1
+                    value: ins.el.strokeWidth || 8
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
+                }
+            }
+
             // ——— Zdjęcie ———
             Section {
                 visible: ins.type === "image"
@@ -495,6 +527,27 @@ Item {
                     value: ins.el.radius || 0
                     suffix: " px"
                     onMoved: (v, done) => ins.set({ radius: v }, done)
+                }
+                Row {
+                    spacing: 8
+                    ColorWell {
+                        id: frameWell
+                        label: ins.el.stroke ? "Obramowanie" : "+ obramowanie"
+                        value: ins.el.stroke || ""
+                        onClicked: ins.editor.pickColor(frameWell, value, true, (c, done) => {
+                            const p = { stroke: c === "" ? null : c };
+                            if (c !== "" && !(ins.el.strokeWidth > 0)) p.strokeWidth = Math.max(2, Math.round(Math.min(ins.el.w, ins.el.h) * 0.03));
+                            ins.set(p, done);
+                        })
+                    }
+                }
+                ValueSlider {
+                    visible: !!ins.el.stroke
+                    label: "Grubość obramowania"
+                    from: 1; to: Math.max(10, Math.round(Math.min(ins.el.w || 0, ins.el.h || 0) * 0.15)); step: 1
+                    value: ins.el.strokeWidth || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
                 }
                 Text {
                     visible: !!ins.el.credit

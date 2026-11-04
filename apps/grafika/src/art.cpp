@@ -525,6 +525,62 @@ void paintShape(QPainter *p, const QVariantMap &el)
     p->drawPath(path);
 }
 
+// Rysunek odręczny: punkty (x, y) w częściach pola elementu, gładka linia przez środki odcinków.
+// pen: pen (pisak), marker, highlighter (zakreślacz — półprzezroczysty, płaskie końce), neon (świecąca poświata)
+QPainterPath drawPath(const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const QVariantList pts = el.value(QStringLiteral("points")).toList();
+    QPainterPath path;
+    const int n = int(pts.size() / 2);
+    if (n == 0)
+        return path;
+    auto at = [&](int i) { return QPointF(pts[2 * i].toDouble() * w, pts[2 * i + 1].toDouble() * h); };
+    path.moveTo(at(0));
+    if (n == 1) {
+        path.lineTo(at(0) + QPointF(0.01, 0));
+        return path;
+    }
+    for (int i = 1; i < n - 1; ++i) {
+        const QPointF a = at(i), b = at(i + 1);
+        path.quadTo(a, (a + b) / 2);
+    }
+    path.lineTo(at(n - 1));
+    return path;
+}
+
+void paintDraw(QPainter *p, const QVariantMap &el)
+{
+    const QPainterPath path = drawPath(el);
+    if (path.isEmpty())
+        return;
+    const QString kind = el.value(QStringLiteral("pen"), QStringLiteral("pen")).toString();
+    const qreal sw = qMax(0.5, num(el, "strokeWidth", 8));
+    QColor c = color(el, "stroke", Qt::black);
+    p->setBrush(Qt::NoBrush);
+    if (kind == QLatin1String("neon")) {
+        // Poświata: kilka coraz węższych warstw, na środku jasny rdzeń
+        for (const auto &[k, a] : {std::pair{4.2, 0.07}, {3.0, 0.1}, {2.0, 0.16}, {1.4, 0.3}}) {
+            QColor g = c;
+            g.setAlphaF(c.alphaF() * a);
+            QPen pen(g, sw * k, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            p->setPen(pen);
+            p->drawPath(path);
+        }
+        p->setPen(QPen(c, sw, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p->drawPath(path);
+        p->setPen(QPen(QColor(255, 255, 255, 220), sw * 0.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p->drawPath(path);
+        return;
+    }
+    const bool hi = kind == QLatin1String("highlighter");
+    if (hi)
+        c.setAlphaF(c.alphaF() * 0.42);
+    QPen pen(c, sw, Qt::SolidLine, hi ? Qt::FlatCap : Qt::RoundCap, hi ? Qt::BevelJoin : Qt::RoundJoin);
+    p->setPen(pen);
+    p->drawPath(path);
+}
+
 // ——— Poprawki zdjęć ———
 
 // Jasność, kontrast, nasycenie (−1..1) i gotowe filtry; wynik w pamięci podręcznej, bo płótno rysuje się często.
@@ -952,6 +1008,24 @@ void paintVector(QPainter *p, const QVariantMap &el, const ImageSource *images)
     svg.render(p, QRectF(0, 0, w, h));
 }
 
+// Obramowanie zdjęcia: wzdłuż kształtu, w całości wewnątrz ramki
+void paintFrameBorder(QPainter *p, const QVariantMap &el, const QPainterPath &clip, const QRectF &r)
+{
+    const qreal sw = num(el, "strokeWidth", 0);
+    const QColor c = color(el, "stroke");
+    if (sw <= 0 || c.alpha() == 0)
+        return;
+    QPainterPath shape = clip;
+    if (shape.isEmpty())
+        shape.addRect(r);
+    p->save();
+    p->setClipPath(shape, Qt::IntersectClip);
+    p->setPen(QPen(c, sw * 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin));
+    p->setBrush(Qt::NoBrush);
+    p->drawPath(shape);
+    p->restore();
+}
+
 void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
     const qreal w = num(el, "w", 100), h = num(el, "h", 100);
@@ -1001,6 +1075,7 @@ void paintPicture(QPainter *p, const QVariantMap &el, const ImageSource *images)
         p->scale(-1, 1);
     }
     paintCover(p, img, r, clip, num(el, "focusX", 0.5), num(el, "focusY", 0.5), num(el, "zoom", 1));
+    paintFrameBorder(p, el, clip, r);
 }
 
 }
@@ -1151,6 +1226,8 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
         paintCode(p, el);
     else if (type == QLatin1String("chart"))
         paintChart(p, el);
+    else if (type == QLatin1String("draw"))
+        paintDraw(p, el);
     p->restore();
 }
 

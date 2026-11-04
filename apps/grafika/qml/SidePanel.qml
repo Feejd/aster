@@ -20,10 +20,31 @@ Item {
         { id: "text", label: "Tekst", icon: "textT" },
         { id: "shapes", label: "Elementy", icon: "shapes" },
         { id: "photos", label: "Zdjęcia", icon: "image" },
+        { id: "draw", label: "Rysuj", icon: "squiggle" },
         { id: "background", label: "Tło", icon: "palette" },
         { id: "layers", label: "Warstwy", icon: "layers" }
     ]
+    // ——— Rysowanie: narzędzie, kolor i grubość (część krótszego boku strony, osobno dla każdego pisaka) ———
+    property string drawTool: "pen"
+    property color drawColor: "#16181D"
+    property var drawSizes: ({ pen: 0.006, marker: 0.016, highlighter: 0.03, neon: 0.01 })
+    readonly property real drawWidth: Math.max(1, Math.round(base * (drawSizes[drawTool] || 0.01) * 10) / 10)
+    property string lastTab: "templates"       // karta sprzed rysowania (Gotowe / Esc wraca do niej)
+    readonly property var pens: [
+        { id: "pen", label: "Pisak" }, { id: "marker", label: "Marker" },
+        { id: "highlighter", label: "Zakreślacz" }, { id: "neon", label: "Neon" }
+    ]
+    readonly property var drawColors: ["#16181D", "#FFFFFF", "#E53935", "#FF7A00", "#FFD400", "#22B07D", "#1E88E5", "#5B3BE8", "#E040FB", "#8D6E63",
+                                       "#00E5FF", "#76FF03"]
+    readonly property var sample: [0.04, 0.7, 0.16, 0.38, 0.3, 0.22, 0.44, 0.42, 0.56, 0.7, 0.7, 0.62, 0.82, 0.3, 0.96, 0.36]
+    function setDrawSize(px) {
+        const m = Object.assign({}, drawSizes);
+        m[drawTool] = px / base;
+        drawSizes = m;
+    }
+    property string prevTab: "templates"
     onTabChanged: {
+        if (tab !== "draw") prevTab = tab; else lastTab = prevTab;
         if (tab === "photos") photos = Library.photos();
         if (tab === "layers") refreshLayers();
     }
@@ -122,6 +143,10 @@ Item {
     function layerName(o) {
         if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
         if (o.type === "image") return o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        if (o.type === "draw") return o.pen === "highlighter" ? "Zakreślenie" : "Rysunek";
+        if (o.type === "vector") return "Grafika";
+        if (o.type === "code") return o.kind === "qr" ? "Kod QR" : "Kod kreskowy";
+        if (o.type === "chart") return "Wykres";
         return shapeNames[o.shape] || "Kształt";
     }
 
@@ -383,7 +408,7 @@ Item {
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
                       : sp.tab === "shapes" ? elementsCol.height : sp.tab === "photos" ? photosCol.height
-                      : sp.tab === "layers" ? layersCol.height : bgCol.height
+                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : bgCol.height
 
                 // Szablony
                 Column {
@@ -1124,6 +1149,111 @@ Item {
                                 }
                             }
                         }
+                    }
+                }
+
+                // Rysowanie
+                Column {
+                    id: drawCol
+                    visible: sp.tab === "draw"
+                    width: parent.width
+                    spacing: 14
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Rysuj myszą albo piórem tabletu prosto na stronie. Każda kreska to osobny element — można ją potem przesunąć, zmienić kolor albo usunąć."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Grid {
+                        columns: 2
+                        spacing: 8
+                        Repeater {
+                            model: sp.pens
+                            delegate: HoverButton {
+                                id: penBtn
+                                required property var modelData
+                                readonly property bool on: sp.drawTool === modelData.id
+                                width: (pages.width - 8) / 2; height: 78; radius: 12
+                                baseColor: on ? Theme.accentSoft : Theme.fill
+                                color: on ? baseColor : hovered ? Theme.hover : baseColor
+                                border.width: on ? 1.5 : 0; border.color: Theme.accent
+                                tip: modelData.label
+                                onClicked: sp.drawTool = modelData.id
+                                Rectangle {
+                                    // Ciemne tło pod neonem i jasnymi kolorami, żeby było widać kreskę
+                                    readonly property bool darkBg: penBtn.modelData.id === "neon"
+                                    visible: darkBg
+                                    x: 8; y: 8; width: parent.width - 16; height: 40; radius: 8
+                                    color: "#1B1D24"
+                                }
+                                ArtView {
+                                    x: 14; y: 12
+                                    width: parent.width - 28; height: 32
+                                    element: ({ type: "draw", pen: penBtn.modelData.id, stroke: String(sp.drawColor), w: 100, h: 32, points: sp.sample,
+                                                strokeWidth: penBtn.modelData.id === "pen" ? 2.5 : penBtn.modelData.id === "marker" ? 6 : penBtn.modelData.id === "highlighter" ? 10 : 3.5 })
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    y: 54
+                                    text: penBtn.modelData.label
+                                    color: penBtn.on ? Theme.accentText : Theme.text
+                                    font.family: Theme.font; font.pixelSize: 12; font.weight: penBtn.on ? Font.DemiBold : Font.Medium
+                                }
+                            }
+                        }
+                    }
+                    HoverButton {
+                        id: eraserBtn
+                        readonly property bool on: sp.drawTool === "eraser"
+                        width: parent.width; height: 40; radius: 12
+                        baseColor: on ? Theme.accentSoft : Theme.fill
+                        color: on ? baseColor : hovered ? Theme.hover : baseColor
+                        border.width: on ? 1.5 : 0; border.color: Theme.accent
+                        onClicked: sp.drawTool = "eraser"
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 8
+                            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.eraser; size: 17; stroke: 1.8; color: eraserBtn.on ? Theme.accentText : Theme.text }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: "Gumka do rysunków"; color: eraserBtn.on ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: eraserBtn.on ? Font.DemiBold : Font.Medium }
+                        }
+                    }
+                    Section {
+                        visible: sp.drawTool !== "eraser"
+                        title: "Kolor"
+                        Grid {
+                            columns: 6
+                            spacing: 8
+                            Repeater {
+                                model: sp.drawColors
+                                delegate: Rectangle {
+                                    id: dc
+                                    required property string modelData
+                                    readonly property bool on: String(sp.drawColor).toUpperCase() === modelData.toUpperCase()
+                                    width: (pages.width - 40) / 6; height: width; radius: width / 2
+                                    color: modelData
+                                    border.width: on ? 3 : 1; border.color: on ? Theme.accent : Qt.rgba(0, 0, 0, 0.14)
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: sp.drawColor = dc.modelData
+                                    }
+                                }
+                            }
+                        }
+                        ColorWell {
+                            id: drawWell
+                            label: "Inny kolor"
+                            value: String(sp.drawColor)
+                            onClicked: sp.editor.pickColor(drawWell, value, false, (c) => sp.drawColor = c)
+                        }
+                    }
+                    ValueSlider {
+                        visible: sp.drawTool !== "eraser"
+                        label: "Grubość"
+                        from: 1; to: Math.max(20, Math.round(sp.base * 0.08)); step: 1
+                        value: sp.drawWidth
+                        suffix: " px"
+                        onMoved: (v) => sp.setDrawSize(v)
                     }
                 }
 
