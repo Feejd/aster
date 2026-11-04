@@ -32,6 +32,7 @@ set(CODE_QML
     qml/HistoryView.qml
     qml/PreviewPane.qml
     qml/SecretsView.qml
+    qml/NewAppView.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -65,12 +66,43 @@ qt_add_qml_module(aster-code
         src/projectenv.h
         src/secretstore.cpp
         src/secretstore.h
+        src/templates.cpp
+        src/templates.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp
         ${TERMINAL_SRC}/session.h
         ${TERMINAL_SRC}/terminalview.cpp
         ${TERMINAL_SRC}/terminalview.h
+)
+
+
+# Szablony „Nowa aplikacja” (Templates) — w zasobach :/templates
+qt_add_resources(aster-code "code-templates"
+    PREFIX "/"
+    FILES
+        templates/backend-fastapi/_gitignore
+        templates/backend-fastapi/app/__init__.py
+        templates/backend-fastapi/app/db.postgres.py
+        templates/backend-fastapi/app/db.sqlite.py
+        templates/backend-fastapi/app/main.py
+        templates/backend-fastapi/requirements.postgres.txt
+        templates/backend-fastapi/requirements.sqlite.txt
+        templates/backend-fastapi/tests/test_api.py
+        templates/backend-node/_gitignore
+        templates/backend-node/package.json
+        templates/backend-node/src/db.postgres.js
+        templates/backend-node/src/db.sqlite.js
+        templates/backend-node/src/index.js
+        templates/backend-node/test/api.test.js
+        templates/frontend-vite-react/_gitignore
+        templates/frontend-vite-react/index.html
+        templates/frontend-vite-react/package.json
+        templates/frontend-vite-react/src/App.css
+        templates/frontend-vite-react/src/App.jsx
+        templates/frontend-vite-react/src/App.test.jsx
+        templates/frontend-vite-react/src/main.jsx
+        templates/frontend-vite-react/vite.config.js
 )
 
 target_link_libraries(aster-code PRIVATE

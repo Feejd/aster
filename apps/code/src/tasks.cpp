@@ -5,10 +5,12 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QHostAddress>
 #include <QTcpSocket>
 
 namespace {
@@ -115,6 +117,16 @@ QVariantList Tasks::detectOne(const QString &root) const
     if (root.isEmpty())
         return out;
     const QDir dir(root);
+
+    // Własne zadania projektu: .aster/zadania.json — [{ label, command, group, cwd }] (cwd względem folderu)
+    for (const QJsonValue &v : QJsonDocument::fromJson(readText(dir.filePath(QStringLiteral(".aster/zadania.json"))).toUtf8()).array()) {
+        const QJsonObject o = v.toObject();
+        const QString cmd = o.value(QStringLiteral("command")).toString();
+        if (cmd.isEmpty())
+            continue;
+        out << task(o.value(QStringLiteral("label")).toString(cmd), cmd, QDir::cleanPath(dir.filePath(o.value(QStringLiteral("cwd")).toString(QStringLiteral(".")))),
+                    o.value(QStringLiteral("group")).toString(QStringLiteral("other")), QStringLiteral(".aster/zadania.json"));
+    }
 
     // package.json — skrypty przez npm, pnpm albo yarn (wg pliku blokady)
     if (dir.exists(QStringLiteral("package.json"))) {
@@ -506,7 +518,8 @@ void Tasks::checkUrl(Proc *p, const QString &line)
         path = m.captured(4);
         while (path.endsWith(QLatin1Char('.')) || path.endsWith(QLatin1Char(',')))
             path.chop(1);
-    } else if (const auto m2 = portOnly.match(line); m2.hasMatch()) {
+    } else if (const auto m2 = portOnly.match(line); m2.hasMatch() && !line.contains(QLatin1String("IPv"))
+               && !line.contains(QLatin1String("database"), Qt::CaseInsensitive) && !line.contains(QLatin1String("postgres"), Qt::CaseInsensitive)) {
         port = m2.captured(1).toInt();
     }
     if (port <= 0 || port > 65535)
@@ -520,28 +533,28 @@ void Tasks::checkUrl(Proc *p, const QString &line)
     timer->setInterval(300);
     connect(timer, &QTimer::timeout, this, [this, id, port, u, timer, tries] {
         Proc *q = find(id);
-        if (!q || !q->proc || ++*tries > 50) {
+        if (!q || !q->proc || !q->url.isEmpty() || ++*tries > 50) {
             if (q)
                 q->urlPending = false;
             timer->deleteLater();
             delete tries;
             return;
         }
-        auto *s = new QTcpSocket(this);
-        connect(s, &QTcpSocket::connected, this, [this, id, u, s, timer, tries] {
-            s->deleteLater();
-            timer->stop();
-            timer->deleteLater();
-            delete tries;
-            if (Proc *q = find(id); q && q->url.isEmpty()) {
-                q->url = u;
-                q->urlPending = false;
-                Q_EMIT processesChanged();
-                Q_EMIT urlDetected(id, q->title, u);
-            }
-        });
-        connect(s, &QTcpSocket::errorOccurred, s, &QObject::deleteLater);
-        s->connectToHost(QStringLiteral("127.0.0.1"), quint16(port));
+        // IPv4 i IPv6 osobno — Node i Vite słuchają często tylko na ::1, a „localhost” nie zawsze go obejmuje
+        for (const QHostAddress &addr : {QHostAddress(QHostAddress::LocalHost), QHostAddress(QHostAddress::LocalHostIPv6)}) {
+            auto *s = new QTcpSocket(this);
+            connect(s, &QTcpSocket::connected, this, [this, id, u, s] {
+                s->deleteLater();
+                if (Proc *q = find(id); q && q->url.isEmpty()) {
+                    q->url = u;
+                    q->urlPending = false;              // licznik prób sprząta się w następnym takcie
+                    Q_EMIT processesChanged();
+                    Q_EMIT urlDetected(id, q->title, u);
+                }
+            });
+            connect(s, &QTcpSocket::errorOccurred, s, &QObject::deleteLater);
+            s->connectToHost(addr, quint16(port));
+        }
     });
     timer->start();
 }

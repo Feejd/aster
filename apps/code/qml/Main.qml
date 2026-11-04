@@ -593,7 +593,7 @@ Window {
         target: Tasks
         // Kilka serwerów — w podglądzie strona (frontend), nie API; lepszy adres zastępuje gorszy
         function onUrlDetected(id, label, url) {
-            const score = /front|web|client|ui|site|app:|vite|next|dev/i.test(label) ? 2 : /back|api|server|uvicorn|flask|django/i.test(label) ? 0 : 1;
+            const score = /back|api|server|uvicorn|flask|django|baza|db/i.test(label) ? 0 : /front|web|client|ui|site|vite|next|dev|start/i.test(label) ? 2 : 1;
             if (prefs.previewAuto && (!preview.shown || score > win.previewScore || !preview.url)) {
                 win.previewScore = score;
                 preview.open(url);
@@ -723,6 +723,38 @@ Window {
             if (!title.startsWith("Kontener")) return;
             ProjectEnv.refresh();
             if (code === 0) win.toast(title === "Kontener: usuwanie" ? "Kontener usunięty" : "Kontener gotowy — terminal, zadania i serwery języków działają w nim");
+        }
+    }
+    // ——— Nowa aplikacja z szablonu ———
+    // Folder → kontener z pakietami → instalacja zależności (każda jako zadanie z logami) → README
+    property var pendingSetup: []
+    function startFromTemplate(r, container) {
+        openFolder(r.path);
+        ProjectEnv.root = r.path;
+        pendingSetup = r.setup;
+        Qt.callLater(() => win.openFile(r.path + "/README.md", { preview: false }));
+        if (container) {
+            ProjectEnv.useContainer(true);
+            envTask("Kontener: przygotowanie", ProjectEnv.createCommand(r.packages));
+        } else {
+            runPendingSetup();
+        }
+        toast("Aplikacja „" + Project.name + "” utworzona — instaluję zależności");
+    }
+    function runPendingSetup() {
+        const steps = pendingSetup;
+        pendingSetup = [];
+        for (const s of steps) Tasks.run(s.label, s.command, s.cwd, {});
+        if (steps.length) { terminalShown = true; terminalPanel.tab = 3; setupLeft = steps.length; }
+    }
+    property int setupLeft: 0
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (title === "Kontener: przygotowanie" && code === 0 && win.pendingSetup.length) Qt.callLater(win.runPendingSetup);
+            else if (win.setupLeft > 0 && (title.indexOf("install") >= 0 || title.indexOf("zależności") >= 0)) {
+                if (--win.setupLeft === 0) win.toast(code === 0 ? "Gotowe — ▶ Uruchom (Ctrl+F5) startuje aplikację" : "Instalacja zależności nie powiodła się — szczegóły w karcie Zadania");
+            }
         }
     }
     function showProblems() {
@@ -925,6 +957,7 @@ Window {
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Nowa aplikacja…", shortcut: "", action: "newApp", icon: "sparkle" },
         { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
         { label: "Sekrety projektu (.env, klucze API)", shortcut: "", action: "secrets", icon: "key" },
         { label: "Kontener projektu: zainstaluj pakiety…", shortcut: "", action: "env:install", icon: "box" },
@@ -1068,6 +1101,7 @@ Window {
         else if (a === "tasks") showTasks();
         else if (a === "env:create") createContainer();
         else if (a === "secrets") secretsView.open();
+        else if (a === "newApp") newAppView.open();
         else if (a === "env:terminal") { terminalShown = true; terminalPanel.tab = 0; terminalPanel.restart(); }
         else if (a === "env:off") ProjectEnv.useContainer(false);
         else if (a === "env:install") nameBox.ask("Zainstaluj w kontenerze", "", "Pakiety Fedory, np. nodejs postgresql-server redis", (t) => { if (t.trim()) win.envTask("Kontener: pakiety", ProjectEnv.installCommand(t.trim().split(/\s+/))); });
@@ -1104,6 +1138,7 @@ Window {
         menu.openAt(p.x - 250, p.y, [
             { label: "Otwórz folder…", icon: "folder", shortcut: "Ctrl+O", action: "openFolder" },
             { label: "Nowy plik", icon: "filePlus", shortcut: "Ctrl+N", action: "newFile" },
+            { label: "Nowa aplikacja…", icon: "sparkle", action: "newApp" },
             { label: "Zapisz", icon: "download", shortcut: "Ctrl+S", action: "save", enabled: !!win.cur },
             { label: "Zapisz wszystko", icon: "copy", shortcut: "Ctrl+Alt+S", action: "saveAll" },
             { separator: true },
@@ -1198,6 +1233,8 @@ Window {
         else if (what === "envcreate") { ProjectEnv.useContainer(true); envTask("Kontener: przygotowanie", ProjectEnv.createCommand(ProjectEnv.suggestPackages())); }
         else if (what === "envmenu") showEnvMenu();
         else if (what === "secrets") secretsView.open();
+        else if (what === "newapp") newAppView.open();
+        else if (what.startsWith("mkapp:")) { const o = JSON.parse(arg); const r = Templates.create(o); if (r.ok) startFromTemplate(r, !!o.container); else toast(r.error); }
         else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
         else if (what.startsWith("secret:")) { const kv = arg.split("="); Secrets.set(kv[0], kv.slice(1).join("=")); }
         else if (what.startsWith("preview:")) preview.open(arg);
@@ -2019,6 +2056,17 @@ Window {
             radius: win.r
             onOpenFolder: folderDialog.open()
             onOpenRecent: (path) => win.openFolder(path)
+            onNewApp: newAppView.open()
+        }
+
+        // Nowa aplikacja z szablonu — nad całym oknem (działa też bez otwartego projektu)
+        NewAppView {
+            id: newAppView
+            anchors.fill: parent
+            anchors.margins: 1
+            radius: win.r
+            z: 700
+            onCreated: (r, container) => win.startFromTemplate(r, container)
         }
         Item {
             visible: !win.hasProject
