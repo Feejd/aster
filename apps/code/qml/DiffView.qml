@@ -21,13 +21,26 @@ Rectangle {
     property string commit: ""                  // pusty — zmiany robocze; inaczej hash zatwierdzenia
     property string commitRel: ""
     property string commitTitle: ""
+    property bool agentMode: false              // zmiana od agenta: Zastosuj / Odrzuć
+    signal agentAccept(string path)
+    signal agentReject(string path)
 
     visible: shown
     color: Theme.dark ? "#090A0D" : "#FFFFFF"
     // Kliknięcia i kółko nie przechodzą do edytora pod spodem
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: (w) => w.accepted = true }
 
+    function openRows(p, title, r) {
+        agentMode = true;
+        commit = "";
+        commitTitle = title;
+        path = p;
+        rows = r;
+        shown = true;
+        list.positionViewAtBeginning();
+    }
     function open(p, isStaged) {
+        agentMode = false;
         commit = "";
         path = p;
         staged = isStaged;
@@ -36,6 +49,7 @@ Rectangle {
         list.positionViewAtBeginning();
     }
     function openCommit(p, rel, hash, title) {
+        agentMode = false;
         commit = hash;
         commitRel = rel;
         commitTitle = title;
@@ -45,7 +59,7 @@ Rectangle {
         list.positionViewAtBeginning();
     }
     function close() { shown = false; }
-    function reload() { if (!commit) rows = Project.diff(path, staged); }
+    function reload() { if (!commit && !agentMode) rows = Project.diff(path, staged); }
 
     // Po dodaniu / wycofaniu plik może zniknąć z tej strony różnic
     Connections {
@@ -65,7 +79,7 @@ Rectangle {
             width: parent.width - 42 - btns.width - 20
             Text {
                 width: parent.width; elide: Text.ElideMiddle
-                text: Project.fileName(dv.path) + "  —  " + (dv.commit ? dv.commitTitle : dv.staged ? "dodane do zatwierdzenia" : "zmiany względem zatwierdzonej wersji")
+                text: Project.fileName(dv.path) + "  —  " + (dv.commit || dv.agentMode ? dv.commitTitle : dv.staged ? "dodane do zatwierdzenia" : "zmiany względem zatwierdzonej wersji")
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
             }
             Text {
@@ -81,12 +95,22 @@ Rectangle {
             spacing: 6
             Pill { text: "Otwórz plik"; visible: Project.exists(dv.path); onClicked: { dv.close(); dv.openFile(dv.path); } }
             Pill {
+                visible: dv.agentMode
+                text: "Odrzuć"
+                onClicked: { dv.close(); dv.agentReject(dv.path); }
+            }
+            Pill {
+                visible: dv.agentMode
+                text: "Zastosuj"
+                onClicked: { dv.close(); dv.agentAccept(dv.path); }
+            }
+            Pill {
                 visible: !!dv.commit
                 text: "Przywróć tę wersję"
                 onClicked: { dv.close(); dv.restoreVersion(dv.path, dv.commit, dv.commitRel); }
             }
             Pill {
-                visible: !dv.commit
+                visible: !dv.commit && !dv.agentMode
                 text: dv.staged ? "Wycofaj" : "Dodaj"
                 onClicked: { if (dv.staged) Project.unstage([dv.path]); else Project.stage([dv.path]); dv.close(); }
             }
@@ -134,7 +158,7 @@ Rectangle {
             }
             // Fragment: dodaj / wycofaj / odrzuć tylko ten kawałek
             Row {
-                visible: line.modelData.kind === "@" && !dv.commit
+                visible: line.modelData.kind === "@" && !dv.commit && !dv.agentMode
                 anchors.right: parent.right; anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
@@ -151,6 +175,7 @@ Rectangle {
             Text {
                 x: line.modelData.kind === "@" ? 16 : dv.numW * 2 + 14
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText               // kod (HTML, JSX) to tekst, nie znaczniki
                 text: line.modelData.kind === "@" ? "⋯  " + (line.modelData.text || "") : (line.modelData.kind === " " ? "  " : line.modelData.kind + " ") + line.modelData.text.replace(/\t/g, "    ")
                 color: line.modelData.kind === "@" ? Theme.text2 : line.modelData.kind === "+" ? (Theme.dark ? "#7EE0A0" : "#116329")
                      : line.modelData.kind === "-" ? (Theme.dark ? "#FF8B96" : "#A40E26") : Theme.text

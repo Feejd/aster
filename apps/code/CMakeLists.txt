@@ -33,6 +33,7 @@ set(CODE_QML
     qml/PreviewPane.qml
     qml/SecretsView.qml
     qml/NewAppView.qml
+    qml/AgentPanel.qml
 )
 foreach(f ${CODE_QML})
     get_filename_component(name ${f} NAME)
@@ -68,6 +69,8 @@ qt_add_qml_module(aster-code
         src/secretstore.h
         src/templates.cpp
         src/templates.h
+        src/agent.cpp
+        src/agent.h
         ${EDITOR_SRC}/highlighter.cpp
         ${EDITOR_SRC}/highlighter.h
         ${TERMINAL_SRC}/session.cpp

@@ -37,6 +37,7 @@ public:
     Q_INVOKABLE int importEnv(const QString &path, bool clearFile); // liczba zmiennych, −1 — błąd portfela
     Q_INVOKABLE void reload() { m_loaded = false; Q_EMIT changed(); }
     static bool isSecretFile(const QString &path);
+    Q_INVOKABLE bool secretFile(const QString &path) const { return isSecretFile(path); }
     static QVariantMap parseEnv(const QString &path);
     // Plik „export NAZWA='wartość'” dla powłoki (pusty — brak sekretów)
     QString writeEnvFile() const;

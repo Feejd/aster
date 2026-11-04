@@ -88,6 +88,8 @@ Item {
             Text {
                 visible: tp.tab === 3 && !!Tasks.title
                 anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, Math.max(80, tp.width - 560))
+                elide: Text.ElideRight
                 rightPadding: 6
                 text: Tasks.title
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12

@@ -757,6 +757,72 @@ Window {
             }
         }
     }
+    // ——— Agent ———
+    // Kontekst dla modelu: projekt, otwarty plik, zaznaczenie, problemy, git, środowisko — bez .env i wartości sekretów
+    function agentContext(o) {
+        const out = [];
+        out.push("Projekt w Aster Code: " + Project.name + " (" + Project.root + ")");
+        out.push("Środowisko poleceń: " + (ProjectEnv.state === "ready" ? "kontener " + ProjectEnv.container + " (" + ProjectEnv.tool + ") — pakiety instaluj w nim: sudo dnf install -y …" : "system (/usr tylko do odczytu — bez sudo dnf; kontener projektu można założyć w Aster Code)"));
+        if (Project.isGit) out.push("Git: gałąź " + Project.branch + (Project.changes.length ? ", zmienione: " + Project.changes.slice(0, 30).map(c => c.rel + " (" + c.status + ")").join(", ") : ", bez zmian"));
+        const open = []; for (let i = 0; i < tabs.count; ++i) if (open.indexOf(Project.relative(tabs.get(i).path)) < 0) open.push(Project.relative(tabs.get(i).path));
+        if (open.length) out.push("Otwarte karty: " + open.join(", "));
+        out.push("Pliki projektu (część): " + Project.quickOpen("", 150).map(f => f.rel).filter(r => !Secrets.secretFile(r)).join(", "));
+        if (cur && curPath) {
+            const rel = Project.relative(curPath);
+            out.push("\nOtwarty plik: " + rel + " (" + (cur.language || "tekst") + "), kursor w wierszu " + (cur.lineCol.y + 1));
+            if (Secrets.secretFile(curPath)) {
+                out.push("(To plik z sekretami — jego treść nie jest dołączona.)");
+            } else {
+                const sel = cur.edit.selectedText.replace(/\u2029/g, "\n");
+                if (o.selection && sel) {
+                    const a = TextOps.lineColumn(cur.edit.textDocument, cur.edit.selectionStart).y + 1;
+                    out.push("Zaznaczenie (wiersze " + a + "–" + (a + sel.split("\n").length - 1) + "):\n```\n" + sel + "\n```");
+                }
+                if (o.file) {
+                    const t = cur.edit.text;
+                    if (t.length <= 60000) out.push("Treść " + rel + ":\n```\n" + t + "\n```");
+                    else {
+                        const ls = t.split("\n"), c = cur.lineCol.y;
+                        out.push("Fragment " + rel + " (wiersze " + Math.max(1, c - 150) + "–" + Math.min(ls.length, c + 150) + " z " + ls.length + "):\n```\n" + ls.slice(Math.max(0, c - 150), c + 150).join("\n") + "\n```");
+                    }
+                }
+            }
+        }
+        if (o.problems) {
+            const probs = [];
+            for (const f of Lsp.problems.concat(Tasks.problems))
+                for (const d of f.items) if (probs.length < 40 && d.severity <= 2) probs.push(Project.relative(f.path) + ":" + (d.line + 1) + ":" + (d.col + 1) + " " + (d.severity === 1 ? "błąd" : "ostrzeżenie") + ": " + d.message + (d.source ? " [" + d.source + "]" : ""));
+            if (probs.length) out.push("\nProblemy (serwery języków i kompilator):\n" + probs.join("\n"));
+        }
+        out.push("\nZmiany w plikach proponuj wyłącznie blokami — bez sed, cat > ani echo do plików. Użytkownik przejrzy różnice i zaakceptuje je plik po pliku:\n"
+                 + "```aster-edit ścieżka/względem/projektu\n<<<<<<< SZUKAJ\n(dokładnie skopiowany fragment obecnej treści, kilka wierszy)\n=======\n(nowa treść tego fragmentu)\n>>>>>>> ZAMIEŃ\n```\n"
+                 + "W jednym bloku może być kilka par SZUKAJ/ZAMIEŃ. Nowy plik albo cała nowa treść: ```aster-file ścieżka (nowa linia, cała treść)```. "
+                 + "Polecenia (testy, budowanie, instalacja pakietów) — jedno w bloku ```bash; działają w folderze projektu. Pisz po polsku, zwięźle.");
+        const text = out.join("\n");
+        return Secrets.names.length ? Secrets.redact(text) : text;
+    }
+    function agentFileText(abs) {
+        const i = indexOfPath(abs);
+        return i >= 0 && page(i) ? page(i).edit.text : Agent.readFile(abs);
+    }
+    // Zaakceptowana zmiana: plik w edytorze (do cofnięcia Ctrl+Z) i zapis — testy agenta widzą nową treść
+    function applyAgentEdit(path, text) {
+        if (!Project.exists(path)) {
+            Project.save(path, text, "UTF-8", "LF");
+            Project.refreshFiles();
+        }
+        openFile(path, { preview: false });
+        const i = indexOfPath(path);
+        if (i < 0) return;
+        const e = page(i).edit;
+        if (e.text !== text) {
+            const pos = e.cursorPosition;
+            TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [text], 0);
+            e.cursorPosition = Math.min(pos, e.length);
+        }
+        save(i, null, true);
+    }
+    function askAgent(prompt) { agentPanel.ask(prompt); }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -768,6 +834,7 @@ Window {
         const e = cur.edit;
         menu.openAt(p.x, p.y, [
             { label: "Przejdź do definicji", icon: "arrow", shortcut: "F12", action: "definition", enabled: cur.lspOn },
+            { label: "Zapytaj agenta o zaznaczenie", icon: "sparkles", action: "agent:selection", enabled: e.selectedText !== "" },
             { label: "Szybka poprawka", icon: "bolt", shortcut: "Ctrl+.", action: "quickfix", enabled: cur.lspOn },
             { label: "Znajdź odwołania", icon: "search", shortcut: "Shift+F12", action: "references", enabled: cur.lspOn },
             { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: cur.lspOn },
@@ -958,6 +1025,8 @@ Window {
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
         { label: "Nowa aplikacja…", shortcut: "", action: "newApp", icon: "sparkle" },
+        { label: "Agent", shortcut: "Ctrl+Shift+I", action: "agent", icon: "sparkles" },
+        { label: "Agent: napraw problemy", shortcut: "", action: "agent:fix", icon: "sparkles" },
         { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
         { label: "Sekrety projektu (.env, klucze API)", shortcut: "", action: "secrets", icon: "key" },
         { label: "Kontener projektu: zainstaluj pakiety…", shortcut: "", action: "env:install", icon: "box" },
@@ -1102,6 +1171,9 @@ Window {
         else if (a === "env:create") createContainer();
         else if (a === "secrets") secretsView.open();
         else if (a === "newApp") newAppView.open();
+        else if (a === "agent") agentPanel.shown ? agentPanel.close() : agentPanel.open();
+        else if (a === "agent:fix") askAgent("Napraw błędy z panelu Problemy w tym pliku.");
+        else if (a === "agent:selection") askAgent("Wyjaśnij zaznaczony kod i zaproponuj poprawki, jeśli są potrzebne.");
         else if (a === "env:terminal") { terminalShown = true; terminalPanel.tab = 0; terminalPanel.restart(); }
         else if (a === "env:off") ProjectEnv.useContainer(false);
         else if (a === "env:install") nameBox.ask("Zainstaluj w kontenerze", "", "Pakiety Fedory, np. nodejs postgresql-server redis", (t) => { if (t.trim()) win.envTask("Kontener: pakiety", ProjectEnv.installCommand(t.trim().split(/\s+/))); });
@@ -1234,6 +1306,10 @@ Window {
         else if (what === "envmenu") showEnvMenu();
         else if (what === "secrets") secretsView.open();
         else if (what === "newapp") newAppView.open();
+        else if (what === "agent") agentPanel.open();
+        else if (what.startsWith("ask:")) askAgent(arg);
+        else if (what === "acceptall") agentPanel.acceptAll();
+        else if (what === "reviewfirst") { const e = agentPanel.edits.find(x => x.state === "pending"); if (e) agentPanel.review(e.path); }
         else if (what.startsWith("mkapp:")) { const o = JSON.parse(arg); const r = Templates.create(o); if (r.ok) startFromTemplate(r, !!o.container); else toast(r.error); }
         else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
         else if (what.startsWith("secret:")) { const kv = arg.split("="); Secrets.set(kv[0], kv.slice(1).join("=")); }
@@ -1294,6 +1370,7 @@ Window {
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
     Shortcut { sequence: "Ctrl+Shift+B"; enabled: win.hasProject; onActivated: win.buildTask() }
     Shortcut { sequence: "Ctrl+F5"; enabled: win.hasProject; onActivated: win.runApp() }
+    Shortcut { sequence: "Ctrl+Shift+I"; enabled: win.hasProject; onActivated: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
     Shortcut { sequence: "F5"; enabled: win.hasProject; onActivated: win.startDebug(false) }
     Shortcut { sequence: "Shift+F5"; enabled: !!Debugger.state; onActivated: Debugger.stop() }
     Shortcut { sequence: "F6"; enabled: Debugger.state === "running"; onActivated: Debugger.pause() }
@@ -1451,6 +1528,7 @@ Window {
                     }
                     ToolBtn { icon: "chevronDown"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
                     ToolBtn { icon: "globe"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
+                    ToolBtn { icon: "sparkles"; visible: win.hasProject; opacity: agentPanel.shown ? 1 : 0.7; onClicked: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
                     ToolBtn { icon: "search"; onClicked: palette.open("") }
                     ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
                     ToolBtn { icon: "panelBottom"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
@@ -1508,7 +1586,7 @@ Window {
             Item {
                 id: editorArea
                 y: crumbs.y + crumbs.height
-                width: parent.width - (preview.shown ? preview.width : 0)
+                width: parent.width - (preview.shown ? preview.width : 0) - (agentPanel.shown ? agentPanel.width : 0)
                 height: (win.terminalShown && win.terminalMax ? 0 : parent.height - y - status.height - (win.terminalShown ? terminalPanel.height : 0))
                 clip: true
 
@@ -1634,6 +1712,8 @@ Window {
                     fontSize: prefs.fontSize - 0.5
                     onOpenFile: (path) => win.openFile(path)
                     onRestoreVersion: (path, hash, rel) => win.restoreVersion(path, hash, rel)
+                    onAgentAccept: (path) => agentPanel.accept(path)
+                    onAgentReject: (path) => agentPanel.reject(path)
                     onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
                 }
 
@@ -1765,12 +1845,32 @@ Window {
                 }
             }
 
+            // Agent po prawej (Ctrl+Shift+I) — od paska kart do paska stanu
+            AgentPanel {
+                id: agentPanel
+                x: parent.width - width
+                y: editorArea.y
+                width: Math.max(320, Math.min(520, parent.width * 0.3))
+                height: status.y - y
+                z: 5
+                root: Project.root
+                fileRel: win.curPath ? Project.relative(win.curPath) : ""
+                selectionLines: { win.revision; return win.cur && win.cur.edit.selectedText ? win.cur.edit.selectedText.split("\u2029").length : 0; }
+                problemCount: Lsp.errorCount + Lsp.warningCount + Tasks.errorCount + Tasks.warningCount
+                buildContext: (o) => win.agentContext(o)
+                fileText: (abs) => win.agentFileText(abs)
+                onApplyEdit: (path, text) => win.applyAgentEdit(path, text)
+                onShowEdit: (path, title, rows) => diffView.openRows(path, title, rows)
+                onOpenPath: (path) => win.openFile(path)
+                onClosed: if (win.cur) win.cur.focusEditor()
+            }
+
             // Terminal
             TerminalPanel {
                 id: terminalPanel
                 visible: win.terminalShown
                 y: editorArea.y + editorArea.height
-                width: parent.width
+                width: parent.width - (agentPanel.shown ? agentPanel.width : 0)
                 height: win.terminalMax ? parent.height - editorArea.y - status.height : Math.max(120, Math.min(prefs.terminalHeight, parent.height - 200))
                 dir: Project.root
                 maximized: win.terminalMax
@@ -1861,6 +1961,13 @@ Window {
                         id: eolBtn
                         text: tabs.count && win.revision >= 0 ? (tabs.get(win.current).eol === "\r\n" ? "CRLF" : "LF") : ""
                         onClicked: win.showStatusMenu("eol", eolBtn)
+                    }
+                    // Agent pracuje, a panel jest schowany — co robi
+                    StatusBtn {
+                        visible: !agentPanel.shown && !!agentPanel.statusText
+                        icon: "sparkles"
+                        text: agentPanel.statusText
+                        onClicked: agentPanel.open()
                     }
                     // Sekrety projektu (gdy są albo gdy w projekcie leży .env z wartościami)
                     StatusBtn {
