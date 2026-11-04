@@ -22,6 +22,25 @@ Rectangle {
     property string commitRel: ""
     property string commitTitle: ""
     property bool agentMode: false              // zmiana od agenta: Zastosuj / Odrzuć
+    property bool sideBySide: false             // obok siebie (stara | nowa) albo w jednej kolumnie — z ustawień
+    // Pary wierszy do widoku obok siebie: ciągi usuniętych i dodanych idą naprzeciw siebie
+    readonly property var pairs: {
+        if (!sideBySide) return [];
+        const out = [];
+        let dels = [], adds = [];
+        const flush = () => {
+            const n = Math.max(dels.length, adds.length);
+            for (let i = 0; i < n; ++i) out.push({ kind: "pair", l: dels[i] || null, r: adds[i] || null });
+            dels = []; adds = [];
+        };
+        for (const r of rows) {
+            if (r.kind === "-") { if (adds.length) flush(); dels.push(r); }
+            else if (r.kind === "+") adds.push(r);
+            else { flush(); out.push(r.kind === "@" ? r : { kind: "pair", l: r, r: r }); }
+        }
+        flush();
+        return out;
+    }
     signal agentAccept(string path)
     signal agentReject(string path)
 
@@ -93,6 +112,12 @@ Rectangle {
             anchors.right: parent.right; anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
             spacing: 6
+            HoverButton {
+                width: 30; height: 30; radius: 8
+                baseColor: dv.sideBySide ? Theme.accentSoft : "transparent"
+                onClicked: dv.sideBySide = !dv.sideBySide
+                Icon { anchors.centerIn: parent; d: Icons.columns; size: 15; color: dv.sideBySide ? Theme.accentText : Theme.text2 }
+            }
             Pill { text: "Otwórz plik"; visible: Project.exists(dv.path); onClicked: { dv.close(); dv.openFile(dv.path); } }
             Pill {
                 visible: dv.agentMode
@@ -126,8 +151,66 @@ Rectangle {
     FontMetrics { id: fm; font.family: dv.fontFamily; font.pixelSize: dv.fontSize; font.features: { "liga": 0, "calt": 0 } }
     readonly property real numW: fm.averageCharacterWidth * 5 + 10
 
+    // Obok siebie: stara wersja po lewej, nowa po prawej
+    ListView {
+        id: sideList
+        visible: dv.sideBySide
+        y: header.height
+        width: parent.width; height: parent.height - y
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        model: dv.pairs
+        reuseItems: true
+        delegate: Item {
+            id: pr
+            required property var modelData
+            width: ListView.view.width
+            height: modelData.kind === "@" ? 26 : Math.ceil(fm.height * 1.35)
+            readonly property real half: (width - 1) / 2
+            Rectangle {
+                visible: pr.modelData.kind === "@"
+                anchors.fill: parent
+                color: Theme.accentAlpha(Theme.dark ? 0.12 : 0.06)
+                Text { x: 16; anchors.verticalCenter: parent.verticalCenter; text: "⋯  " + (pr.modelData.text || ""); textFormat: Text.PlainText; color: Theme.text2; font: fm.font }
+            }
+            Repeater {
+                model: pr.modelData.kind === "pair" ? [0, 1] : []
+                delegate: Rectangle {
+                    id: side
+                    required property int modelData
+                    readonly property var r: side.modelData === 0 ? pr.modelData.l : pr.modelData.r
+                    readonly property bool changed: !!r && r.kind !== " "
+                    x: side.modelData === 0 ? 0 : pr.half + 1
+                    width: pr.half; height: pr.height
+                    clip: true
+                    color: !r ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(0, 0, 0, 0.03))
+                         : !changed ? "transparent"
+                         : side.modelData === 0 ? Qt.rgba(0.97, 0.32, 0.29, Theme.dark ? 0.16 : 0.11) : Qt.rgba(0.25, 0.73, 0.31, Theme.dark ? 0.16 : 0.13)
+                    Text {
+                        visible: !!side.r
+                        width: dv.numW; horizontalAlignment: Text.AlignRight
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: !side.r ? "" : side.modelData === 0 ? (side.r.old !== undefined ? side.r.old : "") : (side.r.new !== undefined ? side.r.new : "")
+                        color: Theme.text2; opacity: 0.6; font: fm.font
+                    }
+                    Text {
+                        visible: !!side.r
+                        x: dv.numW + 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        textFormat: Text.PlainText
+                        text: side.r ? side.r.text.replace(/\t/g, "    ") : ""
+                        color: !side.changed ? Theme.text : side.modelData === 0 ? (Theme.dark ? "#FF8B96" : "#A40E26") : (Theme.dark ? "#7EE0A0" : "#116329")
+                        font: fm.font
+                    }
+                }
+            }
+            Rectangle { visible: pr.modelData.kind === "pair"; x: pr.half; width: 1; height: parent.height; color: Theme.line }
+        }
+    }
+
     ListView {
         id: list
+        visible: !dv.sideBySide
         y: header.height
         width: parent.width; height: parent.height - y
         clip: true

@@ -50,6 +50,7 @@ Window {
         property real previewWidth: 0.45
         property bool previewOnSave: true
         property bool previewAuto: true
+        property bool diffSideBySide: false
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
     Binding { target: ProjectEnv; property: "root"; value: Project.root }
@@ -1309,6 +1310,7 @@ Window {
         else if (what === "agent") agentPanel.open();
         else if (what.startsWith("ask:")) askAgent(arg);
         else if (what === "acceptall") agentPanel.acceptAll();
+        else if (what === "sidebyside") prefs.diffSideBySide = true;
         else if (what === "reviewfirst") { const e = agentPanel.edits.find(x => x.state === "pending"); if (e) agentPanel.review(e.path); }
         else if (what.startsWith("mkapp:")) { const o = JSON.parse(arg); const r = Templates.create(o); if (r.ok) startFromTemplate(r, !!o.container); else toast(r.error); }
         else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
@@ -1712,6 +1714,8 @@ Window {
                     fontSize: prefs.fontSize - 0.5
                     onOpenFile: (path) => win.openFile(path)
                     onRestoreVersion: (path, hash, rel) => win.restoreVersion(path, hash, rel)
+                    sideBySide: prefs.diffSideBySide
+                    onSideBySideChanged: prefs.diffSideBySide = sideBySide
                     onAgentAccept: (path) => agentPanel.accept(path)
                     onAgentReject: (path) => agentPanel.reject(path)
                     onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
