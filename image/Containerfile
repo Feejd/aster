@@ -5,7 +5,7 @@ ARG FEDORA=44
 
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules python3 \
-        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel qt6-qtsvg-devel kf6-prison-devel onnxruntime-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel qt6-qtsvg-devel kf6-prison-devel onnxruntime-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel kdecoration-devel
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
@@ -28,6 +28,13 @@ RUN dnf install -y onnxruntime google-roboto-fonts layer-shell-qt libvterm git j
  && kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme Aster \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Bouncing false \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Blinking false \
+ # Ramka okien Aster, krótsze animacje i zasysanie do doku
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key library org.aster.decoration \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key scaleEnabled false \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key asteroknaEnabled true \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key squashEnabled false \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key magiclampEnabled true \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key AnimationDurationFactor 0.7 \
  && mkdir -p /usr/share/icons/default && printf '[Icon Theme]\nInherits=Aster\n' > /usr/share/icons/default/index.theme \
  && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
  && glib-compile-schemas /usr/share/glib-2.0/schemas \

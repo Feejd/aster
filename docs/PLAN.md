@@ -24,8 +24,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Super+A = centrum sterowania
 
 ## Etap 3 — spójny wygląd całego systemu
-- [ ] **Ramki okien** (dekoracja KWin): okrągłe kolorowe przyciski, pasek tytułu jak w prototypie.
-- [ ] **Efekty KWin**: zasysanie do doku (Magic Lamp), szybsze animacje, przyciąganie do krawędzi.
+- [x] **Ramki okien** (dekoracja KWin, `shell/decoration`): kolorowe przyciski i wygląd jak w programach Aster dla programów bez własnego paska.
+- [x] **Efekty KWin** (`shell/effects/asterokna`): spójne otwieranie i zamykanie okien, zasysanie do doku (Magic Lamp), krótsze animacje; do sprawdzenia na prawdziwym GPU (VM renderuje programowo i KWin wyłącza tam animacje).
 - [x] Okna aplikacji Aster: trójwarstwowy cień zależny od fokusu, szklany rant i odblask, „zorza” w kolorze akcentu,
       kolorowe przyciski okna, sprężyste otwieranie (wspólne WindowShadow / WindowSheen / WindowButtons w Aster.Ui)
 - [x] Okna jak w profesjonalnych systemach: pasek boczny na lekko przezroczystym szkle, treść na głębokim,

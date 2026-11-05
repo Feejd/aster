@@ -67,6 +67,9 @@ target_link_libraries(aster-shell PRIVATE
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Ramka okien i animacje okien (KWin)
+add_subdirectory(decoration)
+install(DIRECTORY effects/asterokna DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/effects)
 install(DIRECTORY ../data/wallpapers DESTINATION ${CMAKE_INSTALL_DATADIR}/aster)
 install(DIRECTORY ../data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
 install(FILES ../session/aster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/wayland-sessions)
