@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.aster.pulse
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/aster-pulse --dbus

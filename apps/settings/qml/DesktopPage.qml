@@ -55,6 +55,16 @@ Page {
     }
 
     Section {
+        title: "Dok"
+        SettingRow {
+            title: "Chowaj dok, gdy okno go zasłania"
+            subtitle: "Wraca po dojechaniu kursorem do dolnej krawędzi ekranu"
+            icon: "apps"; colors: ["#A5B4FC", "#4F46E5"]
+            Toggle { anchors.verticalCenter: parent.verticalCenter; checked: Config.dockAutoHide; onToggled: on => Config.dockAutoHide = on }
+        }
+    }
+
+    Section {
         title: "Okna"
         footer: "Przeciągnij okno do lewej albo prawej krawędzi, a zajmie pół ekranu; do górnej — cały ekran. Skrótami: Super + strzałki."
         SettingRow {

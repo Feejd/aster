@@ -1,0 +1,45 @@
+# Zdjęcia jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.photos
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-photos
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-download
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: exiv2
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DEXIV2_ENABLE_INIH=OFF, -DEXIV2_BUILD_SAMPLES=OFF,
+                  -DEXIV2_BUILD_EXIV2_COMMAND=OFF, -DEXIV2_ENABLE_BROTLI=OFF, -DEXIV2_BUILD_UNIT_TESTS=OFF]
+    sources:
+      - type: git
+        url: https://github.com/Exiv2/exiv2.git
+        tag: v0.28.9
+  - name: photos
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=photos
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

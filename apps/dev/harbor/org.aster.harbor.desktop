@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Aster Harbor
+GenericName=Kontenery i środowiska
+Comment=Kontenery podmana, toolboxy, projekty compose i obrazy — start, logi, terminal
+Exec=aster-harbor
+Icon=org.aster.harbor
+Terminal=false
+Categories=Development;
+Keywords=kontener;container;podman;docker;toolbox;compose;obraz;image;środowisko;devcontainer;
+StartupWMClass=aster-harbor
+Actions=new-environment;
+
+[Desktop Action new-environment]
+Name=Nowe środowisko
+Exec=aster-harbor new

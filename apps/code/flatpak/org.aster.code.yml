@@ -1,0 +1,51 @@
+# Aster Code jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.code
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+base: io.qt.qtwebengine.BaseApp                # podgląd strony (QtWebEngine)
+base-version: "6.11"
+command: aster-code
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --share=network
+  - --filesystem=home
+  - --filesystem=/tmp
+  - --talk-name=org.freedesktop.Flatpak       # git, kompilatory i serwery języków z systemu
+  - --talk-name=org.freedesktop.secrets       # sekrety projektu i token GitHuba w portfelu
+  - --talk-name=org.aster.Assistant           # agent (usługa Aster Intelligence)
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: libvterm
+    buildsystem: simple
+    build-commands:
+      - make PREFIX=/app
+      - make install PREFIX=/app
+    sources:
+      - type: archive
+        url: https://launchpad.net/libvterm/trunk/v0.3/+download/libvterm-0.3.3.tar.gz
+        sha256: 09156f43dd2128bd347cbeebe50d9a571d32c64e0cf18d211197946aff7226e0
+  - name: code
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=code
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

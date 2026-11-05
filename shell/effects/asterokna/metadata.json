@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Category": "Appearance",
+        "Description": "Otwieranie i zamykanie okien w stylu Aster",
+        "EnabledByDefault": true,
+        "Id": "asterokna",
+        "License": "GPL",
+        "Name": "Okna Aster"
+    },
+    "X-KDE-Ordering": 60,
+    "X-KDE-PluginInfo-Name": "asterokna",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

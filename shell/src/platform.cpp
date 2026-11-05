@@ -298,6 +298,17 @@ void Platform::makeLayer(QQuickWindow *window, const QString &layer, int anchors
     lw->setScope(scope);
 }
 
+void Platform::setKeyboard(QQuickWindow *window, const QString &keyboard)
+{
+    LayerWindow *lw = window ? LayerWindow::get(window) : nullptr;
+    if (!lw)
+        return;
+    lw->setKeyboardInteractivity(keyboard == QLatin1String("exclusive") ? LayerWindow::KeyboardInteractivityExclusive
+                                 : keyboard == QLatin1String("ondemand") ? LayerWindow::KeyboardInteractivityOnDemand
+                                                                         : LayerWindow::KeyboardInteractivityNone);
+    window->requestUpdate();
+}
+
 static QRegion roundedRegion(const QVariantList &rects)
 {
     QRegion region;

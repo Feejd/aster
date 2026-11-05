@@ -1,0 +1,64 @@
+# Grafika jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
+# Budowa: flatpak-builder --user --install-deps-from=flathub build apps/grafika/flatpak/org.aster.grafika.yml
+# (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
+# instaluje ją tools/install-apps.sh (albo tools/install-grafika.sh).
+app-id: org.aster.grafika
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-grafika
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --share=network                 # darmowe zdjęcia, ikony i czcionki z internetu
+  - --filesystem=xdg-documents      # projekty w Dokumenty/Grafiki
+  - --filesystem=xdg-pictures       # zdjęcia z folderu Obrazy, eksport
+  - --filesystem=xdg-download:ro
+  - --filesystem=xdg-config/aster:ro  # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  # Prison (kody QR i kreskowe) i qrencode są już w runtime KDE
+  # ONNX Runtime (MIT) — narzędzia AI: usuwanie tła, gumka, wyodrębnianie; gotowa biblioteka od Microsoftu
+  - name: onnxruntime
+    buildsystem: simple
+    build-commands:
+      - install -d /app/include/onnxruntime /app/lib
+      - cp -a include/. /app/include/onnxruntime/
+      - cp -a lib/libonnxruntime.so* /app/lib/
+    sources:
+      - type: archive
+        only-arches: [x86_64]
+        url: https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz
+        sha256: 8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3
+      - type: archive
+        only-arches: [aarch64]
+        url: https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-aarch64-1.22.0.tgz
+        sha256: bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702
+
+  - name: grafika
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=grafika
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
+    post-install:
+      # Ikona i opis do sklepów z aplikacjami (w systemie Aster ikonę daje motyw)
+      - install -Dm644 apps/grafika/flatpak/org.aster.grafika.svg /app/share/icons/hicolor/scalable/apps/org.aster.grafika.svg
+      - install -Dm644 apps/grafika/flatpak/org.aster.grafika.metainfo.xml /app/share/metainfo/org.aster.grafika.metainfo.xml
+      - sed -i 's/^Icon=.*/Icon=org.aster.grafika/' /app/share/applications/org.aster.grafika.desktop

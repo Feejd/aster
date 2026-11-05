@@ -1,0 +1,72 @@
+# Montaż jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.montaz
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-montaz
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --socket=pulseaudio
+  - --share=network                 # modele rozpoznawania mowy (napisy)
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-music
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-download:ro
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  # Odszumianie głosu (filtr MLT „rnnoise”)
+  - name: rnnoise
+    buildsystem: autotools
+    config-opts: [--disable-static, --disable-examples, --disable-doc]
+    sources:
+      - type: archive
+        url: https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz
+        sha256: 90fce4b00b9ff24c08dbfe31b82ffd43bae383d85c5535676d28b0a2b11c0d37
+      # W wydaniu 0.2 kod dla ARM dołącza nieistniejący plik; to samo poprawiono później w rnnoise
+      - type: shell
+        commands:
+          - sed -i 's/#include "os_support.h"/#include "common.h"/; s/OPUS_CLEAR/RNN_CLEAR/g' src/vec_neon.h
+  - name: mlt
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DCMAKE_INSTALL_LIBDIR=lib, -DGPL=ON, -DGPL3=ON, -DBUILD_TESTING=OFF, -DSWIG_PYTHON=OFF,
+                  -DMOD_QT=OFF, -DMOD_QT6=ON, -DMOD_GLAXNIMATE=OFF, -DMOD_GLAXNIMATE_QT6=OFF, -DMOD_OPENCV=OFF,
+                  -DMOD_MOVIT=OFF, -DMOD_RTAUDIO=OFF, -DMOD_SOX=OFF, -DMOD_VIDSTAB=OFF, -DMOD_JACKRACK=OFF,
+                  -DMOD_RUBBERBAND=OFF, -DMOD_FREI0R=OFF, -DMOD_SPATIALAUDIO=OFF, -DMOD_XINE=OFF, -DMOD_GDK=OFF,
+                  -DMOD_DECKLINK=OFF, -DMOD_NDI=OFF, -DMOD_SDL1=OFF, -DMOD_PLACEBO=OFF]
+    sources:
+      - type: git
+        url: https://github.com/mltframework/mlt.git
+        tag: v7.42.0
+  - name: whisper-cpp
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DCMAKE_INSTALL_LIBDIR=lib, -DWHISPER_BUILD_EXAMPLES=OFF, -DWHISPER_BUILD_TESTS=OFF,
+                  -DWHISPER_BUILD_SERVER=OFF, -DGGML_NATIVE=OFF]
+    sources:
+      - type: git
+        url: https://github.com/ggml-org/whisper.cpp.git
+        tag: v1.9.5
+  - name: montaz
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=montaz
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

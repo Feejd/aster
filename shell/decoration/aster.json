@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Description": "Ramka okien systemu Aster",
+        "EnabledByDefault": true,
+        "Id": "org.aster.decoration",
+        "Name": "Aster"
+    },
+    "org.kde.kdecoration3": {
+        "blur": false,
+        "kcmodule": false
+    }
+}

@@ -37,6 +37,9 @@ public:
     Q_INVOKABLE void makeLayer(QQuickWindow *window, const QString &layer, int anchors,
                                int exclusiveZone, const QString &keyboard, const QString &scope);
 
+    // Zmiana przechwytywania klawiatury działającej warstwy (np. pole pytania asystenta w górnym pasku)
+    Q_INVOKABLE void setKeyboard(QQuickWindow *window, const QString &keyboard);
+
     // Rozmycie tła pod podanymi prostokątami: [{x, y, w, h, r}, ...] (r = promień zaokrąglenia)
     Q_INVOKABLE void setBlur(QQuickWindow *window, const QVariantList &rects);
 

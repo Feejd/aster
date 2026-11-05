@@ -1,0 +1,146 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Urodziny",
+ "category": "Zaproszenie",
+ "width": 1748,
+ "height": 2480,
+ "print": {
+  "width": 148,
+  "height": 210
+ },
+ "background": {
+  "type": "radial",
+  "color": "#FFFFFF",
+  "color2": "#DDE7FF"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 180,
+   "y": 200,
+   "w": 180,
+   "h": 180,
+   "fill": "#FFB300",
+   "rotation": -12,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 1380,
+   "y": 320,
+   "w": 140,
+   "h": 140,
+   "fill": "#FF7AA2",
+   "rotation": 15,
+   "id": "e2"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 1320,
+   "y": 1980,
+   "w": 260,
+   "h": 260,
+   "fill": "#7AD3FF",
+   "opacity": 0.8,
+   "id": "e3"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 150,
+   "y": 2050,
+   "w": 180,
+   "h": 180,
+   "fill": "#B4F07A",
+   "opacity": 0.8,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "Zapraszam na moje",
+   "x": 120,
+   "y": 520,
+   "w": 1508,
+   "size": 110,
+   "font": "Geist",
+   "weight": 600,
+   "color": "#3D4A7A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "urodziny!",
+   "x": 80,
+   "y": 680,
+   "w": 1588,
+   "size": 360,
+   "font": "Z003",
+   "weight": 400,
+   "color": "#FF5A8A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Kuba kończy 7 lat",
+   "x": 120,
+   "y": 1150,
+   "w": 1508,
+   "size": 120,
+   "font": "Inter Display",
+   "weight": 800,
+   "color": "#3D4A7A",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e7"
+  },
+  {
+   "type": "shape",
+   "shape": "line",
+   "x": 674,
+   "y": 1376.0,
+   "w": 400,
+   "h": 48,
+   "fill": "",
+   "stroke": "#FFB300",
+   "strokeWidth": 12,
+   "dash": true,
+   "id": "e8"
+  },
+  {
+   "type": "text",
+   "text": "sobota, 14 marca, godz. 15:00\nSala zabaw „Bajka”, ul. Leśna 3",
+   "x": 120,
+   "y": 1500,
+   "w": 1508,
+   "size": 84,
+   "font": "Geist",
+   "weight": 500,
+   "color": "#3D4A7A",
+   "align": "center",
+   "lineHeight": 1.45,
+   "id": "e9"
+  },
+  {
+   "type": "text",
+   "text": "Potwierdź do 7 marca: 600 100 200",
+   "x": 120,
+   "y": 1820,
+   "w": 1508,
+   "size": 66,
+   "font": "Geist",
+   "weight": 400,
+   "color": "#6B78A8",
+   "align": "center",
+   "lineHeight": 1.15,
+   "id": "e10"
+  }
+ ]
+}

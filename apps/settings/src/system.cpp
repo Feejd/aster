@@ -820,7 +820,7 @@ void System::setNightLight(bool on)
 void System::setDarkMode(bool dark)
 {
     if (!m_preview)
-        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("BreezeDark") : QStringLiteral("BreezeLight")});
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("AsterDark") : QStringLiteral("AsterLight")});
 }
 
 void System::run(const QString &program, const QStringList &args)

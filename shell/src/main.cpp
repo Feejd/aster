@@ -2,11 +2,18 @@
 // Działa w sesji KWin (Wayland) zamiast plasmashell: tapeta, dok i górna wyspa
 // to osobne okna warstwy (wlr-layer-shell), ustawiane w QML przez Platform.makeLayer().
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <cstddef>
+#include <cstring>
 #include "platform.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
+#include <QScreen>
+#include <LayerShellQt/Window>
 #include <QTimer>
 #include <algorithm>
 #include <QPainter>
@@ -15,6 +22,24 @@
 #include "typography.h"
 
 Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
+
+// Wiadomość do systemd bez libsystemd: jeden datagram na gniazdo z $NOTIFY_SOCKET
+static void notifySystemd(const char *message)
+{
+    const QByteArray path = qgetenv("NOTIFY_SOCKET");
+    if (path.isEmpty() || size_t(path.size()) >= sizeof(sockaddr_un::sun_path))
+        return;
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    memcpy(addr.sun_path, path.constData(), size_t(path.size()));
+    if (addr.sun_path[0] == '@')
+        addr.sun_path[0] = 0;   // gniazdo abstrakcyjne
+    const int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        return;
+    sendto(fd, message, strlen(message), MSG_NOSIGNAL, reinterpret_cast<sockaddr *>(&addr), socklen_t(offsetof(sockaddr_un, sun_path) + size_t(path.size())));
+    close(fd);
+}
 
 int main(int argc, char *argv[])
 {
@@ -30,6 +55,38 @@ int main(int argc, char *argv[])
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     engine.loadFromModule("Aster.Shell", "Shell");
+
+    // Znak życia dla systemd (WatchdogSec w aster-shell.service): licznik stoi tylko wtedy, gdy powłoka się zawiesi
+    QTimer watchdog;
+    watchdog.setInterval(10000);
+    QObject::connect(&watchdog, &QTimer::timeout, &app, [] { notifySystemd("WATCHDOG=1"); });
+    watchdog.start();
+    notifySystemd("READY=1");
+
+    // Dok, Start i reszta mieszkają na głównym ekranie: gdy zniknie, przechodzą na nowy główny
+    QTimer screens;
+    screens.setSingleShot(true);
+    screens.setInterval(300);
+    QObject::connect(&screens, &QTimer::timeout, &app, [] {
+        QScreen *primary = QGuiApplication::primaryScreen();
+        if (!primary)
+            return;
+        for (QWindow *w : QGuiApplication::topLevelWindows()) {
+            if (!w->property("followsPrimary").toBool() || w->screen() == primary)
+                continue;
+            const bool wasVisible = w->isVisible();
+            w->hide();
+            w->setScreen(primary);
+            if (auto *layer = LayerShellQt::Window::get(w))
+                layer->setScreen(primary);
+            if (wasVisible)
+                w->show();
+        }
+    });
+    const auto screensChanged = [&screens] { screens.start(); };
+    QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &app, screensChanged);
+    QObject::connect(&app, &QGuiApplication::screenAdded, &app, screensChanged);
+    QObject::connect(&app, &QGuiApplication::screenRemoved, &app, screensChanged);
 
     // Do testów: ASTER_SHOT_DESKTOP=plik.png składa podgląd całego pulpitu z okien powłoki
     // (tapeta, dok, wyspa, zegar) i udaje rozmycie KWin pod szklanymi obszarami
@@ -58,7 +115,7 @@ int main(int argc, char *argv[])
             // kolejność: pulpit (zegar) → wyspa → dok → Start
             std::sort(windows.begin(), windows.end(), [](QQuickWindow *a, QQuickWindow *b) {
                 static const QStringList order{QStringLiteral("Zegar"), QStringLiteral("Horyzont"), QStringLiteral("Dok"), QStringLiteral("Start"),
-                                                QStringLiteral("Centrum sterowania")};
+                                                QStringLiteral("Centrum sterowania"), QStringLiteral("Aster Intelligence")};
                 return order.indexOf(a->title()) < order.indexOf(b->title());
             });
             for (QQuickWindow *w : windows) {
@@ -102,12 +159,22 @@ int main(int argc, char *argv[])
             });
     }
 
-    // Do testów: ASTER_OPEN_CONTROL=1 otwiera centrum sterowania (np. razem z ASTER_SHOT_DESKTOP)
+    // Do testów: ASTER_OPEN_CONTROL=1 otwiera centrum sterowania (np. razem z ASTER_SHOT_DESKTOP), a =wifi, =bluetooth lub =audio od razu jego listę
     if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_CONTROL"))
         QTimer::singleShot(1000, &app, [] {
             for (QWindow *w : QGuiApplication::topLevelWindows())
-                if (w->title() == QLatin1String("Centrum sterowania"))
+                if (w->title() == QLatin1String("Centrum sterowania")) {
                     QMetaObject::invokeMethod(w, "toggle");
+                    w->setProperty("page", qEnvironmentVariable("ASTER_OPEN_CONTROL").remove(QLatin1Char('1')));
+                }
+        });
+
+    // Do testów: ASTER_OPEN_ASSISTANT=1 otwiera panel asystenta (pusty albo z ASTER_SHOT_ASK)
+    if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_ASSISTANT"))
+        QTimer::singleShot(1000, &app, [] {
+            for (QWindow *w : QGuiApplication::topLevelWindows())
+                if (w->title() == QLatin1String("Aster Intelligence"))
+                    QMetaObject::invokeMethod(w, "show");
         });
 
     // Do testów: ASTER_SHOT_NOTIFY=1 pokazuje przykładowe powiadomienie (dynamiczna wyspa jako karta)

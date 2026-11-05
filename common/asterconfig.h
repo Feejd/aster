@@ -19,6 +19,7 @@ class AsterConfig : public QObject
     Q_PROPERTY(bool desktopClock READ desktopClock WRITE setDesktopClock NOTIFY changed)
     Q_PROPERTY(bool batteryPercent READ batteryPercent WRITE setBatteryPercent NOTIFY changed)
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY changed)
+    Q_PROPERTY(bool dockAutoHide READ dockAutoHide WRITE setDockAutoHide NOTIFY changed)
     // Powiadomienia poszczególnych programów: wyciszone (bez dymków) i lista programów, które już coś wysłały
     // (zapisuje ją powłoka): [{ id, name, icon }]
     Q_PROPERTY(QStringList mutedApps READ mutedApps WRITE setMutedApps NOTIFY changed)
@@ -34,6 +35,7 @@ public:
     bool desktopClock() const { return m_values.value(QStringLiteral("desktopClock"), true).toBool(); }
     bool batteryPercent() const { return m_values.value(QStringLiteral("batteryPercent"), true).toBool(); }
     bool doNotDisturb() const { return m_values.value(QStringLiteral("doNotDisturb"), false).toBool(); }
+    bool dockAutoHide() const { return m_values.value(QStringLiteral("dockAutoHide"), true).toBool(); }
     QStringList mutedApps() const { return m_values.value(QStringLiteral("notifications/muted")).toStringList(); }
     QVariantList notifyApps() const;
     QString dataDir() const;
@@ -43,6 +45,7 @@ public:
     void setDesktopClock(bool on) { write(QStringLiteral("desktopClock"), on); }
     void setBatteryPercent(bool on) { write(QStringLiteral("batteryPercent"), on); }
     void setDoNotDisturb(bool on) { write(QStringLiteral("doNotDisturb"), on); }
+    void setDockAutoHide(bool on) { write(QStringLiteral("dockAutoHide"), on); }
     void setMutedApps(const QStringList &ids) { write(QStringLiteral("notifications/muted"), ids); }
     Q_INVOKABLE void setAppMuted(const QString &id, bool muted);
 

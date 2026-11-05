@@ -1,0 +1,97 @@
+# Aster Vault jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
+# Budowa: flatpak-builder --user --install-deps-from=flathub build apps/dev/vault/flatpak/org.aster.vault.yml
+# (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
+# instaluje ją tools/install-apps.sh (… | sh -s -- vault).
+#
+# Runtime KDE ma tylko sterownik SQLite, więc PostgreSQL i MySQL/MariaDB dochodzą tutaj:
+# libpq, mariadb-connector-c i wtyczki Qt (qsqlpsql, qsqlmysql) zbudowane z qtbase w tej samej wersji co runtime.
+# Hasła: portal Secret Service (org.freedesktop.secrets) — KWallet albo gnome-keyring gospodarza.
+app-id: org.aster.vault
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-vault
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --share=network                   # serwery baz danych
+  - --filesystem=home                 # pliki SQLite i eksport tam, gdzie leżą projekty
+  - --filesystem=xdg-config/aster:ro  # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.freedesktop.portal.*
+  - --env=QT_PLUGIN_PATH=/app/lib/plugins
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - /bin/pg_config
+  - /bin/mariadb_config
+  - "*.a"
+modules:
+  # libpq (klient PostgreSQL) — tylko biblioteka i nagłówki, bez serwera
+  - name: libpq
+    buildsystem: simple
+    build-commands:
+      - ./configure --prefix=/app --without-readline --without-icu --with-ssl=openssl
+      - make -C src/include install
+      - make -C src/interfaces/libpq -j $FLATPAK_BUILDER_N_JOBS install
+      - make -C src/bin/pg_config install
+    sources:
+      - type: archive
+        url: https://ftp.postgresql.org/pub/source/v16.10/postgresql-16.10.tar.bz2
+        sha256: de8485f4ce9c32e3ddfeef0b7c261eed1cecb54c9bcd170e437ff454cb292b42
+
+  # Klient MySQL/MariaDB (LGPL)
+  - name: mariadb-connector-c
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DINSTALL_LIBDIR=lib
+      - -DINSTALL_INCLUDEDIR=include/mysql
+      - -DINSTALL_PLUGINDIR=lib/mariadb/plugin
+      - -DWITH_UNIT_TESTS=OFF
+      - -DWITH_SSL=OPENSSL
+    sources:
+      - type: archive
+        url: https://archive.mariadb.org/connector-c-3.4.7/mariadb-connector-c-3.4.7-src.tar.gz
+        sha256: 33bb61168380af706b9e9531396cca223179ac2f9fe72edeae69e4546d7b7a2b
+
+  # Wtyczki Qt SQL dla PostgreSQL i MySQL — samodzielna budowa src/plugins/sqldrivers z qtbase
+  - name: qt-sqldrivers
+    buildsystem: simple
+    build-commands:
+      - cmake -G Ninja -S src/plugins/sqldrivers -B _build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/app
+        -DFEATURE_sql_psql=ON -DFEATURE_sql_mysql=ON -DFEATURE_sql_sqlite=OFF -DFEATURE_sql_odbc=OFF
+        -DFEATURE_sql_ibase=OFF -DFEATURE_sql_db2=OFF -DFEATURE_sql_oci=OFF -DFEATURE_sql_mimer=OFF
+      - cmake --build _build
+      - install -Dm755 -t /app/lib/plugins/sqldrivers $(find _build -name 'libqsql*.so')
+    sources:
+      - type: archive
+        url: https://download.qt.io/official_releases/qt/6.11/6.11.0/submodules/qtbase-everywhere-src-6.11.0.tar.xz
+        sha256: 231ad85979864d914dc9568a1b71c91d6cf20d7b2021d059103bf0eb51cb755e
+
+  - name: vault
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=dev/vault
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
+    post-install:
+      # Ikona i opis do sklepów z aplikacjami (w systemie Aster ikonę daje motyw)
+      - install -Dm644 apps/dev/vault/flatpak/org.aster.vault.svg /app/share/icons/hicolor/scalable/apps/org.aster.vault.svg
+      - install -Dm644 apps/dev/vault/flatpak/org.aster.vault.metainfo.xml /app/share/metainfo/org.aster.vault.metainfo.xml
+      - sed -i 's/^Icon=.*/Icon=org.aster.vault/' /app/share/applications/org.aster.vault.desktop
+      # Usługa D-Bus org.aster.Vault nie pasuje do identyfikatora Flatpaka — asystent woła polecenie
+      # (flatpak run org.aster.vault --query …), więc plik usługi nie jest potrzebny
+      - rm -f /app/share/dbus-1/services/org.aster.Vault.service

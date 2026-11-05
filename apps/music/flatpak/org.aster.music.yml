@@ -1,0 +1,45 @@
+# Muzyka jako Flatpak — buduje .github/workflows/flatpak.yml, instaluje tools/install-apps.sh
+app-id: org.aster.music
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-music
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.portal.*
+  - --socket=pulseaudio
+  - --filesystem=xdg-music
+  - --filesystem=xdg-download:ro
+  - --own-name=org.mpris.MediaPlayer2.*
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: taglib
+    buildsystem: cmake-ninja
+    config-opts: [-DCMAKE_BUILD_TYPE=Release, -DBUILD_SHARED_LIBS=ON, -DBUILD_TESTING=OFF, -DBUILD_EXAMPLES=OFF]
+    sources:
+      - type: git
+        url: https://github.com/taglib/taglib.git
+        tag: v2.3.2
+  - name: music
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=music
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers

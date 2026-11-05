@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Grafika
+GenericName=Projektowanie grafik
+Comment=Posty, plakaty, zaproszenia, CV i miniaturki z gotowych szablonów
+Exec=aster-grafika %f
+Icon=applications-graphics
+Terminal=false
+MimeType=application/x-aster-grafika;
+Categories=Graphics;2DGraphics;VectorGraphics;
+Keywords=grafika;plakat;post;instagram;facebook;zaproszenie;cv;miniaturka;youtube;slajd;szablon;projekt;ulotka;
+StartupWMClass=aster-grafika
