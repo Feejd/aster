@@ -7,10 +7,11 @@ import Aster.Ui
 
 // Dok: jedna szklana wyspa pośrodku dolnej krawędzi, na warstwie „top”, z rezerwacją miejsca.
 //  Start (logo Aster) │ przypięte aplikacje i działające okna │ Kosz
-// Ikony pod kursorem rosną (jak w macOS), po szkle sunie miękka poświata za kursorem.
+// Ikony mają stały rozmiar, po szkle sunie miękka poświata za kursorem.
 // Stan systemu i zegar są na górnym pasku (HorizonWindow).
 Window {
     id: dock
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     title: "Dok"
     visible: false
@@ -24,9 +25,9 @@ Window {
     property bool startOpen: false
     signal startRequested()
 
-    // Powiększanie: rozmiar bazowy, największe powiększenie i zasięg (px od kursora)
+    // Rozmiar bazowy i powiększenie pod kursorem (1 = wyłączone) z zasięgiem w px od kursora
     readonly property real base: 50
-    readonly property real maxMagnify: 1.48
+    readonly property real maxMagnify: 1
     readonly property real reach: 92
     readonly property real slotW: base + 8
     readonly property real dividerW: 17

@@ -62,7 +62,7 @@ Page {
                             Behavior on scale { NumberAnimation { duration: 120 } }
                         }
                         Rectangle { anchors.centerIn: parent; width: 9; height: 9; radius: 4.5; color: "white"; visible: sw.chosen }
-                        MouseArea { id: swArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Config.accent = sw.modelData.color }
+                        MouseArea { id: swArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { Config.accent = sw.modelData.color; System.run("plasma-apply-colorscheme", ["--accent-color", sw.modelData.color]); } }
                     }
                 }
             }

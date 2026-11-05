@@ -2,11 +2,19 @@
 Description=Aster Shell
 PartOf=graphical-session.target
 After=plasma-kwin_wayland.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
 ConditionEnvironment=ASTER_SESSION=1
 
 [Service]
 ExecStart=/usr/bin/aster-shell
 Restart=on-failure
+RestartSec=300ms
+# Powłoka co 10 s melduje, że działa; po zawieszeniu system sam ją uruchomi od nowa, a okna programów zostają
+NotifyAccess=main
+WatchdogSec=30
+# Zrzut pamięci opóźniał powrót powłoki o kilka sekund
+LimitCORE=0
 Slice=session.slice
 
 [Install]

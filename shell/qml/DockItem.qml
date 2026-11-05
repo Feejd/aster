@@ -3,7 +3,7 @@ import Aster.Shell
 import Aster.Ui
 
 // Jedna ikona w doku: Start, przypięta aplikacja, działające okno albo Kosz.
-// Rozmiar zależy od odległości kursora (magnify 1…1.5, liczy DockWindow) — jak w macOS.
+// Rozmiar: base × magnify (liczy DockWindow; domyślnie bez powiększania).
 // Uruchamiany program podskakuje, działający ma kropkę, aktywny — dłuższą kreskę.
 Item {
     id: item

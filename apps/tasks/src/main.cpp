@@ -1,9 +1,13 @@
 // aster-tasks — Menedżer zadań Aster (Ctrl+Shift+Esc).
 //   aster-tasks                 okno z procesami
 //   aster-tasks performance     od razu Wydajność
+//   aster-tasks ports           od razu Porty
+//   aster-tasks porty [--json]  bez okna: kto nasłuchuje na którym porcie (dla terminala i Aster Intelligence)
+//   aster-tasks zakoncz-port PORT [--teraz]   kończy własny proces na porcie
 // Druga kopia przywołuje już otwarte okno (D-Bus: org.aster.tasks).
 
 #include "instance.h"
+#include "ports.h"
 
 #include <KWindowSystem>
 #include <QDBusConnection>
@@ -19,6 +23,11 @@ Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
+    // Bez okna — od razu wynik (przed QGuiApplication: działa też bez sesji graficznej)
+    if (argc > 1 && (qstrcmp(argv[1], "porty") == 0 || qstrcmp(argv[1], "zakoncz-port") == 0)) {
+        QCoreApplication core(argc, argv);
+        return Ports::runCli(core.arguments().mid(1));
+    }
     QGuiApplication app(argc, argv);
     asterTypography();
     app.setApplicationName(QStringLiteral("aster-tasks"));
@@ -29,9 +38,11 @@ int main(int argc, char *argv[])
     app.setDesktopFileName(QStringLiteral("org.aster.tasks"));
 
     const QStringList args = app.arguments();
-    const QString page = args.contains(QLatin1String("performance")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("performance")
-        ? QStringLiteral("performance")
-        : QStringLiteral("processes");
+    QString page = QStringLiteral("processes");
+    if (args.contains(QLatin1String("performance")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("performance"))
+        page = QStringLiteral("performance");
+    else if (args.contains(QLatin1String("ports")) || qEnvironmentVariable("ASTER_PAGE") == QLatin1String("ports"))
+        page = QStringLiteral("ports");
 
     const QString service = QStringLiteral("org.aster.tasks");
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -57,7 +68,7 @@ int main(int argc, char *argv[])
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
 
     QObject::connect(&instance, &Instance::activated, window, [window](const QString &page, const QString &token) {
-        if (page == QLatin1String("performance"))
+        if (page != QLatin1String("processes"))
             window->setProperty("page", page);
         if (window->visibility() == QWindow::Minimized)
             window->showNormal();

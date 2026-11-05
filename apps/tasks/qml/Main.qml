@@ -8,6 +8,7 @@ import Aster.Tasks
 // Menedżer zadań Aster (Ctrl+Shift+Esc) — dla przesiadających się z Windows:
 //  • Procesy: programy (z ich procesami), procesy w tle i systemu; „Zakończ zadanie”, szczegóły,
 //  • Wydajność: procesor, pamięć, dyski i sieć z wykresami z ostatniej minuty,
+//  • Porty: kto nasłuchuje na którym porcie („port 3000 zajęty”) — z możliwością zakończenia,
 //  • Programy po zalogowaniu — w Ustawieniach → Aplikacje.
 Window {
     id: win
@@ -28,7 +29,8 @@ Window {
 
     readonly property var pages: [
         { id: "processes", name: "Procesy", icon: "list", colors: ["#7FA7FF", "#3E63DD"] },
-        { id: "performance", name: "Wydajność", icon: "activity", colors: ["#7EE8A8", "#0E8F5A"] }
+        { id: "performance", name: "Wydajność", icon: "activity", colors: ["#7EE8A8", "#0E8F5A"] },
+        { id: "ports", name: "Porty", icon: "globe", colors: ["#C4B5FD", "#7C3AED"] }
     ]
     readonly property var current: pages.find(p => p.id === page) || pages[0]
     property alias selected: procPage.selected
@@ -257,7 +259,7 @@ Window {
 
                     // Szukaj procesu
                     Rectangle {
-                        visible: win.page === "processes"
+                        visible: win.page === "processes" || win.page === "ports"
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.min(240, topBar.width - pageTitle.width - 420); height: 34; radius: 10
                         color: Theme.fill
@@ -272,9 +274,9 @@ Window {
                             selectionColor: Theme.accentSoft
                             clip: true
                             onTextChanged: Monitor.processes.filter = text
-                            Keys.onEscapePressed: { text = ""; procPage.focusList(); }
-                            Keys.onDownPressed: procPage.focusList()
-                            Text { visible: !search.text; text: "Szukaj procesu"; color: Theme.text2; font: search.font }
+                            Keys.onEscapePressed: { text = ""; win.page === "ports" ? portsLoader.item.focusList() : procPage.focusList(); }
+                            Keys.onDownPressed: win.page === "ports" ? portsLoader.item.focusList() : procPage.focusList()
+                            Text { visible: !search.text; text: win.page === "ports" ? "Port albo program" : "Szukaj procesu"; color: Theme.text2; font: search.font }
                         }
                     }
                     HoverButton {
@@ -336,6 +338,15 @@ Window {
                     anchors.fill: parent
                     active: win.page === "performance"
                     sourceComponent: PerformancePage {}
+                }
+                Loader {
+                    id: portsLoader
+                    anchors.fill: parent
+                    active: win.page === "ports"
+                    sourceComponent: PortsPage {
+                        filter: search.text
+                        onEndRequested: (key, force) => win.askEnd(key, force)
+                    }
                 }
             }
             ParallelAnimation {

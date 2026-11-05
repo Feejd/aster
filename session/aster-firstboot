@@ -23,8 +23,8 @@ mkdir -p "$cfg/aster"
 } > "$cfg/aster/aster.conf"
 
 # Ciemny motyw: kolory KDE od razu w kdeglobals (to samo robi plasma-apply-colorscheme)
-if [ "${DARK:-0}" = 1 ] && [ -f /usr/share/color-schemes/BreezeDark.colors ]; then
-    { cat /usr/share/color-schemes/BreezeDark.colors; printf '\n[General]\nColorScheme=BreezeDark\n'; } > "$cfg/kdeglobals"
+if [ "${DARK:-0}" = 1 ] && [ -f /usr/share/color-schemes/AsterDark.colors ]; then
+    cat /usr/share/color-schemes/AsterDark.colors > "$cfg/kdeglobals"
 fi
 
 # Układ klawiatury w sesji (KWin czyta kxkbrc użytkownika)
@@ -44,7 +44,7 @@ mkdir -p /var/lib/sddm
 printf '[Last]\nSession=/usr/share/wayland-sessions/aster.desktop\nUser=%s\n' "$USERNAME" > /var/lib/sddm/state.conf
 
 if [ "${AUTO_UPDATES:-1}" = 0 ]; then
-    systemctl disable --now bootc-fetch-apply-updates.timer 2>/dev/null || true
+    systemctl disable --now aster-update.timer 2>/dev/null || true
 fi
 
 rm -f "$ENV"

@@ -37,7 +37,9 @@ set(SETTINGS_QML
     qml/AppsPage.qml
     qml/AccessibilityPage.qml
     qml/PrivacyPage.qml
+    qml/AssistantPage.qml
     qml/StoragePage.qml
+    qml/UpdatesPage.qml
     qml/Dropdown.qml
     qml/Sheet.qml
     qml/Field.qml
@@ -65,6 +67,8 @@ qt_add_qml_module(aster-settings
         src/shortcuts.cpp src/shortcuts.h
         src/printers.cpp src/printers.h
         src/storage.cpp src/storage.h
+        src/updates.cpp src/updates.h
+        src/assistant.cpp src/assistant.h
 )
 
 target_link_libraries(aster-settings PRIVATE
