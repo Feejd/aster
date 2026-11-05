@@ -31,6 +31,27 @@ void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool
     }
 }
 
+// Skok głowicy, zawrócenie pętli, nowa migawka: gdzie jesteśmy w nutach kanałów. Zatrzymanie i skok ucinają grające nuty
+void Renderer::sequence(const Snapshot *s, long long pos, int n, bool playing)
+{
+    const bool jump = playing && pos != m_nextPos;
+    const bool stopped = !playing && m_wasPlaying;
+    const int channels = std::min(int(s->channels.size()), int(MaxChannels));
+    if (jump || stopped)
+        for (int c = 0; c < channels; ++c)
+            if (Instrument *i = s->channels[size_t(c)].inst)
+                i->silence();
+    if (playing && (jump || s != m_seqSnap)) {
+        for (int c = 0; c < channels; ++c) {
+            const auto &ev = s->channels[size_t(c)].events;
+            m_cursor[c] = size_t(std::lower_bound(ev.begin(), ev.end(), pos, [](const SeqEvent &e, long long p) { return e.at < p; }) - ev.begin());
+        }
+    }
+    m_seqSnap = s;
+    m_nextPos = pos + n;
+    m_wasPlaying = playing;
+}
+
 void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips)
 {
     std::fill_n(m_l, n, 0.f);
@@ -44,45 +65,73 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
     bool reverb = false;
 
     if (s) {
-        for (size_t ti = 0; ti < s->tracks.size(); ++ti) {
-            const TrackRT &t = s->tracks[ti];
-            reverb |= t.send > 0;
-            echo |= t.echo > 0;
-            bool any = false;
-            // Granie na żywo na tej ścieżce — wchodzi przed efekty, jak klipy
-            if (m_live && m_live->any(int(ti))) {
-                std::fill_n(m_tl, n, 0.f);
-                std::fill_n(m_tr, n, 0.f);
-                any = true;
-                m_live->render(int(ti), m_tl, m_tr, n);
+        const int inserts = std::min(int(s->inserts.size()), int(MaxTracks));
+        std::fill_n(m_any, inserts, false);
+        auto open = [&](int i) {
+            if (!m_any[i]) {
+                std::fill_n(busL(i), n, 0.f);
+                std::fill_n(busR(i), n, 0.f);
+                m_any[i] = true;
             }
-            if (!t.audible)
+        };
+
+        // Kanały: nuty tego bloku do instrumentów, ich dźwięk do insertów
+        sequence(s, pos, n, clips);
+        const Vst3::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
+        const int channels = std::min(int(s->channels.size()), int(MaxChannels));
+        for (int c = 0; c < channels; ++c) {
+            const ChannelRT &ch = s->channels[size_t(c)];
+            if (!ch.inst || ch.insert < 0 || ch.insert >= inserts)
                 continue;
-            // Odsłuch mikrofonu na uzbrojonej ścieżce — słychać od razu z jej efektami (np. autotune)
-            if (m_mon && int(ti) == m_monTrack && m_monPos < m_monN) {
-                if (!any) {
-                    std::fill_n(m_tl, n, 0.f);
-                    std::fill_n(m_tr, n, 0.f);
-                    any = true;
-                }
-                const int k = std::min(n, m_monN - m_monPos);
-                for (int i = 0; i < k; ++i) {
-                    m_tl[i] += m_mon[m_monPos + i];
-                    m_tr[i] += m_mon[m_monPos + i];
+            int count = 0;
+            if (clips) {
+                size_t &cur = m_cursor[c];
+                while (cur < ch.events.size() && ch.events[cur].at < pos + n && count < 512) {
+                    const SeqEvent &e = ch.events[cur++];
+                    if (e.at >= pos)
+                        m_ev[count++] = Vst3::Note{int(e.at - pos), e.on, e.pitch, e.velocity};
                 }
             }
-            for (const ClipRT &c : t.clips) {
-                if (!clips)
-                    break;
+            std::fill_n(m_cl, n, 0.f);
+            std::fill_n(m_cr, n, 0.f);
+            ch.inst->process(m_cl, m_cr, n, m_ev, count, tp);
+            if (!ch.audible)
+                continue;
+            open(ch.insert);
+            float *bl = busL(ch.insert), *br = busR(ch.insert);
+            for (int i = 0; i < n; ++i) {
+                bl[i] += m_cl[i] * ch.gainL;
+                br[i] += m_cr[i] * ch.gainR;
+            }
+        }
+
+        // Granie na żywo i odsłuch mikrofonu — wchodzą przed efekty, jak klipy
+        for (int i = 0; i < inserts; ++i)
+            if (m_live && m_live->any(i)) {
+                open(i);
+                m_live->render(i, busL(i), busR(i), n);
+            }
+        if (m_mon && m_monTrack >= 0 && m_monTrack < inserts && m_monPos < m_monN) {
+            open(m_monTrack);
+            const int k = std::min(n, m_monN - m_monPos);
+            float *bl = busL(m_monTrack), *br = busR(m_monTrack);
+            for (int i = 0; i < k; ++i) {
+                bl[i] += m_mon[m_monPos + i];
+                br[i] += m_mon[m_monPos + i];
+            }
+        }
+
+        // Klipy audio z playlisty
+        for (const LaneRT &lane : s->lanes) {
+            if (!clips || lane.insert < 0 || lane.insert >= inserts)
+                continue;
+            for (const ClipRT &c : lane.clips) {
                 const long long a = std::max(pos, c.start);
                 const long long b = std::min(pos + n, c.start + c.length);
                 if (a >= b || !c.src || c.srcLen <= 0)
                     continue;
-                if (!any) {
-                    std::fill_n(m_tl, n, 0.f);
-                    std::fill_n(m_tr, n, 0.f);
-                    any = true;
-                }
+                open(lane.insert);
+                float *tl = busL(lane.insert), *tr = busR(lane.insert);
                 const AudioSource &src = *c.src;
                 const long long fin = std::max(declick, c.fadeIn), fout = std::max(declick, c.fadeOut);
                 for (long long f = a; f < b; ++f) {
@@ -95,65 +144,70 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                         g *= std::sin(1.5707963f * float(t0) / fin);
                     if (c.length - t0 < fout)
                         g *= std::sin(1.5707963f * float(c.length - t0) / fout);
-                    m_tl[f - pos] += src.at(si, 0) * g;
-                    m_tr[f - pos] += src.at(si, 1) * g;
+                    tl[f - pos] += src.at(si, 0) * g;
+                    tr[f - pos] += src.at(si, 1) * g;
                 }
             }
-            // Wtyczka gra też po końcu klipu (ogony pogłosu i echa)
-            if (!any && !t.fx.empty()) {
-                std::fill_n(m_tl, n, 0.f);
-                std::fill_n(m_tr, n, 0.f);
-                any = true;
-            }
-            if (!any)
-                continue;
+        }
 
-            // Efekty ścieżki: autotune → korektor → de-esser → przester → kompresor → sztuczny dubel → głośność i panorama → wysyłka do pogłosu
-            if (ti < size_t(MaxTracks)) {
-                if (t.tune.on)
-                    m_tune[ti].process(m_tl, m_tr, n, t.tune, rate);
-                for (int k = 0; k < 4; ++k) {
-                    if (t.eq[k].flat())
-                        continue;
-                    BiquadState &zl = m_eq[ti][k][0], &zr = m_eq[ti][k][1];
-                    for (int i = 0; i < n; ++i) {
-                        m_tl[i] = zl.run(t.eq[k], m_tl[i]);
-                        m_tr[i] = zr.run(t.eq[k], m_tr[i]);
-                    }
-                }
-                if (t.deess > 0)
-                    m_deess[ti].process(m_tl, m_tr, n, t.deessLp, t.deessHp, t.deess, rate);
-                if (t.drive > 0) {
-                    // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
-                    const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
-                    for (int i = 0; i < n; ++i) {
-                        m_tl[i] = std::tanh(m_tl[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tl[i] * 0.35f * t.drive;
-                        m_tr[i] = std::tanh(m_tr[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tr[i] * 0.35f * t.drive;
-                    }
-                }
-                if (t.comp.on) {
-                    CompState &cs = m_comp[ti];
-                    for (int i = 0; i < n; ++i) {
-                        const float g = cs.process(t.comp, std::max(std::fabs(m_tl[i]), std::fabs(m_tr[i])), rate);
-                        m_tl[i] *= g;
-                        m_tr[i] *= g;
-                    }
-                }
-                if (t.dbl > 0)
-                    m_dbl[ti].process(m_tl, m_tr, n, t.dbl, rate);
-                else
-                    m_dbl[ti].idle();
-                if (!t.fx.empty()) {
-                    const Vst3::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
-                    for (Vst3::Plugin *p : t.fx)
-                        p->process(m_tl, m_tr, n, nullptr, 0, tp);
+        // Inserty: źródła wysyłek przed celami
+        for (int ii : s->order) {
+            if (ii < 0 || ii >= inserts)
+                continue;
+            const InsertRT &t = s->inserts[size_t(ii)];
+            reverb |= t.send > 0;
+            echo |= t.echo > 0;
+            if (!t.audible)
+                continue;
+            if (!m_any[ii] && t.fx.empty())         // wtyczka gra też po końcu klipu (ogony pogłosu i echa)
+                continue;
+            open(ii);
+            float *tl = busL(ii), *tr = busR(ii);
+
+            // Efekty: autotune → korektor → de-esser → przester → kompresor → sztuczny dubel → wtyczki → głośność i panorama
+            if (t.tune.on)
+                m_tune[size_t(ii)].process(tl, tr, n, t.tune, rate);
+            for (int k = 0; k < 4; ++k) {
+                if (t.eq[k].flat())
+                    continue;
+                BiquadState &zl = m_eq[ii][k][0], &zr = m_eq[ii][k][1];
+                for (int i = 0; i < n; ++i) {
+                    tl[i] = zl.run(t.eq[k], tl[i]);
+                    tr[i] = zr.run(t.eq[k], tr[i]);
                 }
             }
+            if (t.deess > 0)
+                m_deess[ii].process(tl, tr, n, t.deessLp, t.deessHp, t.deess, rate);
+            if (t.drive > 0) {
+                // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
+                const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
+                for (int i = 0; i < n; ++i) {
+                    tl[i] = std::tanh(tl[i] * k) * norm * (1.f - 0.35f * t.drive) + tl[i] * 0.35f * t.drive;
+                    tr[i] = std::tanh(tr[i] * k) * norm * (1.f - 0.35f * t.drive) + tr[i] * 0.35f * t.drive;
+                }
+            }
+            if (t.comp.on) {
+                CompState &cs = m_comp[ii];
+                for (int i = 0; i < n; ++i) {
+                    const float g = cs.process(t.comp, std::max(std::fabs(tl[i]), std::fabs(tr[i])), rate);
+                    tl[i] *= g;
+                    tr[i] *= g;
+                }
+            }
+            if (t.dbl > 0)
+                m_dbl[size_t(ii)].process(tl, tr, n, t.dbl, rate);
+            else
+                m_dbl[size_t(ii)].idle();
+            for (Vst3::Plugin *p : t.fx)
+                p->process(tl, tr, n, nullptr, 0, tp);
+
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {
-                const float l = m_tl[i] * t.gainL, r = m_tr[i] * t.gainR;
-                m_l[i] += l;
-                m_r[i] += r;
+                const float l = tl[i] * t.gainL, r = tr[i] * t.gainR;
+                if (t.toMaster) {
+                    m_l[i] += l;
+                    m_r[i] += r;
+                }
                 if (t.send > 0) {
                     m_rl[i] += l * t.send;
                     m_rr[i] += r * t.send;
@@ -165,15 +219,25 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 pl = std::max(pl, std::fabs(l));
                 pr = std::max(pr, std::fabs(r));
             }
-            if (meters && ti < size_t(MaxTracks)) {
-                raisePeak((*meters)[ti][0], pl);
-                raisePeak((*meters)[ti][1], pr);
+            for (const SendRT &sd : t.sends) {
+                if (sd.to < 0 || sd.to >= inserts)
+                    continue;
+                open(sd.to);
+                float *dl = busL(sd.to), *dr = busR(sd.to);
+                for (int i = 0; i < n; ++i) {
+                    dl[i] += tl[i] * t.gainL * sd.gain;
+                    dr[i] += tr[i] * t.gainR * sd.gain;
+                }
+            }
+            if (meters) {
+                raisePeak((*meters)[ii][0], pl);
+                raisePeak((*meters)[ii][1], pr);
             }
         }
     }
 
     if (m_live && s)
-        m_live->dropFrom(int(s->tracks.size()));
+        m_live->dropFrom(int(s->inserts.size()));
 
     // Wspólny pogłos (gra dalej, gdy klipy się skończą — wybrzmiewanie)
     if (reverb) {

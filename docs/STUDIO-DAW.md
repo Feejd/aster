@@ -21,6 +21,7 @@ DAW: osobno kanały (co gra), wzory (kiedy gra), playlista (układ utworu) i mik
 ## Wtyczki na Linuksie: co jest pewne, a co nie
 - VST3 SDK jest na licencji MIT i w repozytoriach Fedory (`vst3sdk-devel`). Host: `apps/studio/src/vst3host.*`.
 - VST3 na Linuksie zna tylko X11, Aster działa na Waylandzie: okno wtyczki to osobne okno X11 przez XWayland.
+- Host opiera się na `PlugProvider` z SDK, który wymaga `IConnectionPoint`; rzadkie wtyczki bez niego się nie załadują.
 - Wtyczka działa w procesie Studia, więc jej awaria zamyka program. Docelowo osobny proces (dźwięk przez pamięć
   współdzieloną); do tego czasu ochroną jest zapis projektu.
 - **Wtyczki linuksowe** (natywne `.vst3`): działają bezpośrednio. CLAP (nagłówki w Fedorze) dojdzie po VST3.
@@ -33,8 +34,11 @@ Każdy etap zostawia działający program i kończy się commitem.
 
 1. [x] Wtyczki VST3 jako efekty na ścieżkach: skan, okna, stan w projekcie, eksport (zalążek slotów miksera).
        Sprawdzone na wtyczkach Zam (aarch64, Xvfb). Nie sprawdzone: instrumenty, wtyczki komercyjne, prawdziwy XWayland.
-2. [ ] Nowy model projektu i silnik: kanały, wzory grane na żywo, inserty ze slotami, wysyłki, efekty natywne
-       jako sloty, konwersja starych projektów, ten sam kod na żywo i w eksporcie.
+2. [x] Silnik i model: inserty (głośność, efekty, wtyczki, wysyłki, grupy bez wyjścia na master), kanały
+       z instrumentami (sampler, syntezator, 808, VST3), wzory grane nutami co do próbki, klipy wzorów na playliście,
+       tryb WZÓR, format projektu 2 (stare otwierają się same). Kod: `src/rack.cpp`, `src/instrument.h`.
+       Ten sam kod gra na żywo i w eksporcie. Bez interfejsu: dostęp przez API Studia, zmienia to etap 3.
+       Jeszcze nie: efekty natywne jako osobne sloty i zamiana starych ścieżek Beat Makera na kanały (etap 3).
 3. [ ] Interfejs: przeglądarka, rack kanałów, playlista z trybem WZÓR/UTWÓR, mikser z insertami, piano roll
        dla każdego kanału, instrumenty VST3 (także z klawiatury MIDI).
 4. [ ] Automatyka, kompensacja opóźnień, sidechain, zamrażanie kanałów.

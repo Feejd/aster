@@ -187,6 +187,7 @@ Window {
         else if (what === "mixer") showMixer = true;
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
+        else if (what.startsWith("js:")) { const out = new Function("Studio", "return (" + what.substring(3) + ");")(Studio); console.warn("JS", JSON.stringify(out)); }
         else if (what === "pluginSheet") pluginSheet.start();
         else if (what.startsWith("vst:")) { const a = what.split(":"); Studio.scanPlugins(); const p = Studio.plugins.find((x) => x.name === a[2]); if (p) Studio.addPlugin(Number(a[1]), p.uid); else console.warn("BRAK", a[2]); }
         else if (what.startsWith("vstbypass:")) { const t = Number(what.substring(10)); Studio.setPluginBypass(t, Studio.mix[t].plugins[0].id, true); }

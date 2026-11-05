@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "dsp.h"
+#include "instrument.h"
 #include "vst3host.h"
 #include "tune.h"
 #include "synthvoice.h"
@@ -39,11 +40,18 @@ struct ClipRT
     bool loop = false;
 };
 
-struct TrackRT
+// Insert miksera: suma tego, co do niego idzie, efekty, głośność i wysyłki
+struct SendRT
 {
-    std::vector<ClipRT> clips;
+    int to = 0;                           // numer insertu
+    float gain = 0;
+};
+
+struct InsertRT
+{
     float gainL = 1.f, gainR = 1.f;      // głośność × panorama
     bool audible = true;                  // po uwzględnieniu wycisz/solo
+    bool toMaster = true;                 // grupa bez wyjścia na master gra tylko przez wysyłki
     Biquad eq[4];                         // usuwanie dudnienia, niskie, średnie, wysokie
     CompParams comp;
     float send = 0;                       // ile do pogłosu (po suwaku głośności)
@@ -54,11 +62,42 @@ struct TrackRT
     Biquad deessLp, deessHp;              // jego zwrotnica (dół / góra)
     TuneParams tune;                      // autotune
     std::vector<Vst3::Plugin *> fx;       // wtyczki VST3 po efektach Studia (żyją w Snapshot::plugins)
+    std::vector<SendRT> sends;            // po suwaku, do insertów dalej w Snapshot::order
+};
+
+// Pas playlisty: klipy audio i insert, do którego grają
+struct LaneRT
+{
+    int insert = 0;
+    std::vector<ClipRT> clips;
+};
+
+// Nuta w czasie utworu (ramki), posortowane rosnąco
+struct SeqEvent
+{
+    long long at = 0;
+    int pitch = 60;
+    float velocity = 0.8f;
+    bool on = true;
+};
+
+// Kanał: instrument, jego nuty i insert docelowy
+struct ChannelRT
+{
+    Instrument *inst = nullptr;           // żyje w Snapshot::instruments
+    int insert = 0;
+    float gainL = 1.f, gainR = 1.f;
+    bool audible = true;
+    std::vector<SeqEvent> events;
 };
 
 struct Snapshot
 {
-    std::vector<TrackRT> tracks;
+    std::vector<LaneRT> lanes;
+    std::vector<InsertRT> inserts;
+    std::vector<ChannelRT> channels;
+    std::vector<int> order;               // inserty w kolejności liczenia: źródła wysyłek przed celami
+    std::vector<std::shared_ptr<Instrument>> instruments;
     double bpm = 120;
     int beatsPerBar = 4;
     float master = 1.f;
@@ -79,7 +118,8 @@ public:
     static constexpr int MaxTracks = 64;
     using Meters = std::atomic<float>[MaxTracks + 1][2];     // [ścieżka][kanał], ostatnia — suma
 
-    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks) {}
+    static constexpr int MaxChannels = 128;
+    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks), m_bus(size_t(MaxTracks) * 2 * MaxBlock, 0.f) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
@@ -94,7 +134,17 @@ private:
     LivePool *m_live = nullptr;           // głosy grane na żywo (tylko w silniku, nie przy eksporcie)
     const float *m_mon = nullptr;         // odsłuch wejścia: próbki, ich liczba i ile już zużyto
     int m_monTrack = -1, m_monN = 0, m_monPos = 0;
-    float m_l[MaxBlock], m_r[MaxBlock], m_tl[MaxBlock], m_tr[MaxBlock];
+    void sequence(const Snapshot *s, long long pos, int n, bool playing);
+    float *busL(int i) { return m_bus.data() + size_t(i) * 2 * MaxBlock; }
+    float *busR(int i) { return busL(i) + MaxBlock; }
+    float m_l[MaxBlock], m_r[MaxBlock], m_cl[MaxBlock], m_cr[MaxBlock];
+    std::vector<float> m_bus;             // po dwa kanały na każdy insert
+    bool m_any[MaxTracks] = {};           // ten insert ma dźwięk w tym bloku
+    size_t m_cursor[MaxChannels] = {};    // następna nuta kanału
+    long long m_nextPos = 0;              // gdzie powinien zacząć się kolejny blok (inaczej — skok głowicy)
+    const Snapshot *m_seqSnap = nullptr;
+    bool m_wasPlaying = false;
+    Vst3::Note m_ev[512];
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];

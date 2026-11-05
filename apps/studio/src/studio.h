@@ -64,6 +64,13 @@ class Studio : public QObject
     Q_PROPERTY(QVariantList progressions READ progressions CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
     Q_PROPERTY(QVariantList plugins READ plugins NOTIFY pluginsChanged)    // znalezione wtyczki VST3
+    // Rack i mikser DAW-a
+    Q_PROPERTY(QVariantList channels READ channels NOTIFY rackChanged)
+    Q_PROPERTY(QVariantList patterns READ patterns NOTIFY rackChanged)
+    Q_PROPERTY(QVariantList inserts READ inserts NOTIFY rackChanged)
+    Q_PROPERTY(int currentPattern READ currentPattern WRITE setCurrentPattern NOTIFY rackChanged)
+    Q_PROPERTY(bool patternMode READ patternMode WRITE setPatternMode NOTIFY rackChanged)   // WZÓR: gra w kółko bieżący wzór
+    Q_PROPERTY(double swing READ swing WRITE setSwing NOTIFY rackChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
     Q_PROPERTY(int selectedTrack READ selectedTrack WRITE setSelectedTrack NOTIFY selectionChanged)
@@ -155,6 +162,15 @@ public:
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
     QVariantList plugins() const;
+    QVariantList channels() const;
+    QVariantList patterns() const;
+    QVariantList inserts() const;
+    int currentPattern() const { return m_curPattern; }
+    void setCurrentPattern(int id);
+    bool patternMode() const { return m_patMode; }
+    void setPatternMode(bool on);
+    double swing() const { return m_swing; }
+    void setSwing(double v);
     QVariantList mix() const { return m_mixView; }
     int selectedTrack() const { return m_selTrack; }
     void setSelectedTrack(int i);
@@ -264,6 +280,26 @@ public:
     Q_INVOKABLE void removePlugin(int track, int slot);
     Q_INVOKABLE void setPluginBypass(int track, int slot, bool on);
     Q_INVOKABLE void openPlugin(int track, int slot);
+    // Rack. kind: drum (arg „kit:row”), sampler (plik audio/ projektu), synth (id instrumentu), bass (kit), vst (uid)
+    Q_INVOKABLE int addChannel(const QString &kind, const QString &arg, const QString &name = {});
+    Q_INVOKABLE void removeChannel(int id);
+    Q_INVOKABLE void setChannelInsert(int id, int insert);
+    Q_INVOKABLE void setChannelVolume(int id, double db);
+    Q_INVOKABLE void setChannelPan(int id, double pan);
+    Q_INVOKABLE void setChannelMute(int id, bool on);
+    Q_INVOKABLE void openChannelPlugin(int id);
+    Q_INVOKABLE int addPattern(const QString &name = {}, int bars = 1);
+    Q_INVOKABLE void removePattern(int id);
+    Q_INVOKABLE void setPatternBars(int id, int bars);
+    Q_INVOKABLE void setStep(int pattern, int channel, int step, double velocity);
+    Q_INVOKABLE void setPatternNotes(int pattern, int channel, const QVariantList &notes);   // [{ step, len, pitch, vel }]
+    Q_INVOKABLE QVariantMap patternData(int pattern, int channel) const;
+    Q_INVOKABLE int addPatternClip(int track, int pattern, double start, double length);
+    // Mikser
+    Q_INVOKABLE int addInsert(const QString &name = {});
+    Q_INVOKABLE void removeInsert(int id);
+    Q_INVOKABLE bool setInsertSend(int id, int to, double db);       // poniżej −60 dB — bez wysyłki; pętle odrzucone
+    Q_INVOKABLE void setInsertToMaster(int id, bool on);
     // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
     Q_INVOKABLE void denoiseTrack(int index, int level);
     Q_INVOKABLE int lyricAt(double seconds) const;   // wiersz tekstu, który właśnie leci (−1 — przed pierwszym)
@@ -326,6 +362,7 @@ signals:
     void sharingChanged();
     void lyricsChanged();
     void pluginsChanged();
+    void rackChanged();
     void shareReady(const QString &path, const QString &kind);
     void shareFailed(const QString &error);
     void midiNote(int pitch, int velocity, bool on);            // nuta z klawiatury MIDI (siła 1…127)
@@ -345,6 +382,7 @@ private:
         // podejścia k jest dalej w pliku niż podejścia 0 (stałe przy przesuwaniu, przycinaniu i dzieleniu klipu)
         QList<long long> takes;
         int take = 0;
+        int pattern = 0;                // klip wzoru (id): zapętlony, bez pliku; srcLen — długość wzoru
         QString origFile;               // odszumiony klip: plik przed odszumianiem (powrót i ponowne odszumianie)
     };
     struct Slot
@@ -355,14 +393,19 @@ private:
         QByteArray state;               // ostatni znany stan (także gdy wtyczki brakuje na tym komputerze)
         std::shared_ptr<Vst3::Plugin> plugin;
     };
-    struct Track
+    struct Send
+    {
+        int to = 0;                     // id insertu
+        double db = 0;
+    };
+    // Insert miksera: tu mieszka głośność, panorama, efekty i wtyczki
+    struct Insert
     {
         int id = 0;
         QString name;
         int color = 0;
         double volume = 0, pan = 0;     // dB, -1…1
-        bool mute = false, solo = false, armed = false;
-        int input = 0;
+        bool mute = false, solo = false;
         // Efekty: korektor (dB), kompresja i pogłos (0…1), usuwanie dudnienia (filtr 80 Hz)
         double eqLow = 0, eqMid = 0, eqHigh = 0, comp = 0, reverb = 0, echo = 0, drive = 0, tune = 0;
         double dbl = 0;                 // sztuczny dubel: dwie lekko przesunięte i rozstrojone kopie po bokach
@@ -370,13 +413,59 @@ private:
         int denoise = 0;                // odszumianie nagrań: 0 wył., 1 lekko, 2 średnio, 3 mocno (też nowych nagrań)
         bool lowCut = false;
         QString preset;
+        bool toMaster = true;
+        QList<Send> sends;
+        QList<Slot> slots_;             // wtyczki VST3
+    };
+    // Pas playlisty: klipy i insert, do którego gra audio
+    struct Track
+    {
+        int id = 0;
+        QString name;
+        int color = 0;
+        int insert = 0;                 // id insertu
+        bool armed = false;
+        int input = 0;
         // Rodzaj: audio (nagrania, pliki) albo wzór z Beat Makera — drums (perkusja) / bass (808)
         QString kind = QStringLiteral("audio");
         bool beat = false;              // bit z pliku (rodzaj audio) — inny podpis i ikona w nagłówku
         QString role;                   // "main" | "double" | "adlib" — ścieżki wokalu rapera (zob. vocalTrack)
         QJsonObject pattern;
         QList<Clip> clips;
-        QList<Slot> slots_;             // wtyczki VST3
+    };
+    // Kanał: co gra. kind: drum (kit, row), sampler (file, root, oneShot), synth (inst), bass (kit), vst (vst)
+    struct Channel
+    {
+        int id = 0;
+        QString name;
+        int color = 0;
+        int insert = 0;
+        double volume = 0, pan = 0;
+        bool mute = false;
+        QString kind, kit, row, file, inst;
+        int root = 60;
+        bool oneShot = true;
+        Slot vst;
+        std::shared_ptr<Instrument> instrument;
+    };
+    struct PatNote
+    {
+        double step = 0, len = 1;       // szesnastki
+        int pitch = 60;
+        double vel = 0.8;
+    };
+    struct PatData
+    {
+        QList<double> steps;            // siła na krok (0 — pusty), wysokość to podstawa kanału
+        QList<PatNote> notes;
+    };
+    // Wzór: kroki i nuty wielu kanałów
+    struct Pattern
+    {
+        int id = 0;
+        QString name;
+        int bars = 1;
+        QHash<int, PatData> data;       // id kanału → dane
     };
     struct Mastering
     {
@@ -385,7 +474,7 @@ private:
     };
     void renderPattern(int index);
     void renderKeyTracks();                         // po zmianie tonacji — akordy idą za nią                  // wzór → plik audio/_bit-N.wav → klipy ścieżki
-    void applyPresetTo(Track &t, const QString &preset);
+    void applyPresetTo(Insert &t, const QString &preset);
     void applyMasteringPreset(const QString &preset);
     static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)
     void carve(int track, long long a, long long b, int keepId);   // wytnij [a, b) z klipów ścieżki
@@ -452,6 +541,29 @@ private:
     long long m_punchIn = 0, m_punchOut = 0;          // wymiana fragmentu w trakcie nagrywania (ramki); równe — wyłączona
     void updateMonitor();                      // która ścieżka dostaje głos z mikrofonu (uzbrojona albo nagrywana)
     QList<Track> m_tracks;
+    QList<Insert> m_inserts;
+    QList<Channel> m_channels;
+    QList<Pattern> m_patterns;
+    int m_curPattern = 0;
+    bool m_patMode = false;
+    double m_swing = 0;
+    int insertIndex(int id) const;
+    Insert &ins(int track) { return m_inserts[insertIndex(m_tracks[track].insert)]; }
+    Insert &ins(const Track &t) { return m_inserts[insertIndex(t.insert)]; }
+    const Insert &ins(const Track &t) const { return m_inserts[insertIndex(t.insert)]; }
+    int newInsert(const QString &name, int color);
+    QJsonObject insertJson(const Insert &in, bool pluginStates) const;
+    Insert insertFromJson(const QJsonObject &o, const QHash<int, Slot> &oldSlots);
+    QJsonObject rackJson(bool pluginStates) const;
+    void rackFromJson(const QJsonObject &o, const QHash<int, Channel> &oldChannels);
+    std::shared_ptr<Instrument> makeInstrument(Channel &c);
+    void compileChannels(Snapshot *s, bool forExport);
+    QList<int> insertOrder() const;
+    long long patternFrames(const Pattern &p) const;
+    Pattern *findPattern(int id);
+    Channel *findChannel(int id);
+    void applyPatternLoop();
+    void clearRack();
     QVariantList m_tracksView, m_mixView;
     int m_nextId = 1;
     int m_selTrack = 0, m_selClip = 0;

@@ -82,6 +82,16 @@ void Studio::setBpm(double v)
     // Ścieżki wzorów idą za tempem: te same takty, nowe pętle
     const double ratio = m_bpm / v;
     m_bpm = v;
+    // Klipy wzorów na playliście też: te same takty
+    for (Track &t : m_tracks)
+        for (Clip &c : t.clips)
+            if (c.pattern) {
+                c.start = llround(c.start * ratio);
+                c.length = llround(c.length * ratio);
+                c.offset = llround(c.offset * ratio);
+                c.srcLen = llround(c.srcLen * ratio);
+            }
+    applyPatternLoop();
     for (int i = 0; i < m_tracks.size(); ++i) {
         if (m_tracks[i].kind == QLatin1String("audio"))
             continue;
@@ -199,7 +209,8 @@ void Studio::updateMonitor()
     for (int i = 0; i < m_tracks.size() && ti < 0; ++i)
         if (m_tracks[i].armed && m_tracks[i].kind == QLatin1String("audio"))
             ti = i;
-    m_engine.setMonitor(m_monitor && ti >= 0 && ti < m_tracks.size() ? ti : -1, ti >= 0 && ti < m_tracks.size() ? m_tracks[ti].input : 0);
+    const bool ok = ti >= 0 && ti < m_tracks.size();
+    m_engine.setMonitor(m_monitor && ok ? insertIndex(m_tracks[ti].insert) : -1, ok ? m_tracks[ti].input : 0);
 }
 
 QVariantList Studio::devices(bool input) const
@@ -263,6 +274,7 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
     emit cycleChanged();
     m_engine.setMetronome(true);
     m_tracks.clear();
+    clearRack();
     resetLyrics();
     m_undo.clear();
     m_redo.clear();
@@ -275,16 +287,16 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
     if (templ == QLatin1String("beat")) {
         // Na swoim bicie: zwrotka, dubel i ad-libsy z gotowym brzmieniem; bit dokłada importBeat
         addTrack(QStringLiteral("Wokal"));
-        applyPresetTo(m_tracks.last(), QStringLiteral("rap"));
+        applyPresetTo(ins(m_tracks.last()), QStringLiteral("rap"));
         m_tracks.last().role = QStringLiteral("main");
         addTrack(QStringLiteral("Dubel"));
-        applyPresetTo(m_tracks.last(), QStringLiteral("backing"));
-        m_tracks.last().pan = -0.25;
+        applyPresetTo(ins(m_tracks.last()), QStringLiteral("backing"));
+        ins(m_tracks.last()).pan = -0.25;
         m_tracks.last().role = QStringLiteral("double");
         addTrack(QStringLiteral("Ad-libsy"));
-        applyPresetTo(m_tracks.last(), QStringLiteral("radio"));
-        m_tracks.last().pan = 0.3;
-        m_tracks.last().volume = -3;
+        applyPresetTo(ins(m_tracks.last()), QStringLiteral("radio"));
+        ins(m_tracks.last()).pan = 0.3;
+        ins(m_tracks.last()).volume = -3;
         m_tracks.last().role = QStringLiteral("adlib");
         m_metronome = false;                      // rytm słychać w bicie
         m_engine.setMetronome(false);
@@ -298,16 +310,16 @@ bool Studio::newProject(const QString &rawName, double bpm, int beatsPerBar, con
         m_beatsPerBar = 4;
         const bool trap = templ == QLatin1String("trap") || templ == QLatin1String("drill");
         addTrack(QStringLiteral("Wokal"));
-        applyPresetTo(m_tracks.last(), trap ? QStringLiteral("trapvocal") : templ == QLatin1String("boombap") ? QStringLiteral("rap") : QStringLiteral("vocal"));
+        applyPresetTo(ins(m_tracks.last()), trap ? QStringLiteral("trapvocal") : templ == QLatin1String("boombap") ? QStringLiteral("rap") : QStringLiteral("vocal"));
         m_tracks.last().role = QStringLiteral("main");
         addTrack(QStringLiteral("Wokal 2"));
-        applyPresetTo(m_tracks.last(), QStringLiteral("backing"));
-        m_tracks.last().pan = -0.2;
+        applyPresetTo(ins(m_tracks.last()), QStringLiteral("backing"));
+        ins(m_tracks.last()).pan = -0.2;
         m_tracks.last().role = QStringLiteral("double");
         // Podkład trochę ciszej — zostaje miejsce na głos
-        m_tracks[addPatternTrack(QStringLiteral("drums"), templ)].volume = -4;
-        m_tracks[addPatternTrack(QStringLiteral("bass"), templ)].volume = -5;
-        m_tracks[addPatternTrack(QStringLiteral("keys"), templ)].volume = -7;
+        ins(addPatternTrack(QStringLiteral("drums"), templ)).volume = -4;
+        ins(addPatternTrack(QStringLiteral("bass"), templ)).volume = -5;
+        ins(addPatternTrack(QStringLiteral("keys"), templ)).volume = -7;
         applyMasteringPreset(trap ? QStringLiteral("trap") : templ == QLatin1String("boombap") ? QStringLiteral("warm")
                              : templ == QLatin1String("lofi") ? QStringLiteral("lofi") : templ == QLatin1String("house") ? QStringLiteral("loud") : QStringLiteral("pop"));
         m_echoTime = trap ? QStringLiteral("3/16") : QStringLiteral("1/4");
@@ -415,6 +427,7 @@ void Studio::closeProject()
     m_folder.clear();
     m_name.clear();
     m_tracks.clear();
+    clearRack();
     resetLyrics();
     m_sources.clear();
     m_undo.clear();
@@ -461,53 +474,22 @@ QJsonObject Studio::toJson(bool pluginStates) const
                                           return a;
                                       }()},
                                      {QStringLiteral("take"), c.take},
+                                     {QStringLiteral("pattern"), c.pattern},
                                      {QStringLiteral("origFile"), c.origFile}});
         tracks.append(QJsonObject{{QStringLiteral("id"), t.id},
                                   {QStringLiteral("name"), t.name},
                                   {QStringLiteral("color"), t.color},
-                                  {QStringLiteral("volume"), t.volume},
-                                  {QStringLiteral("pan"), t.pan},
-                                  {QStringLiteral("mute"), t.mute},
-                                  {QStringLiteral("solo"), t.solo},
+                                  {QStringLiteral("insert"), t.insert},
                                   {QStringLiteral("input"), t.input},
                                   {QStringLiteral("beat"), t.beat},
                                   {QStringLiteral("role"), t.role},
-                                  {QStringLiteral("effects"), QJsonObject{{QStringLiteral("preset"), t.preset},
-                                                                          {QStringLiteral("lowCut"), t.lowCut},
-                                                                          {QStringLiteral("eqLow"), t.eqLow},
-                                                                          {QStringLiteral("eqMid"), t.eqMid},
-                                                                          {QStringLiteral("eqHigh"), t.eqHigh},
-                                                                          {QStringLiteral("compression"), t.comp},
-                                                                          {QStringLiteral("reverb"), t.reverb},
-                                                                          {QStringLiteral("echo"), t.echo},
-                                                                          {QStringLiteral("drive"), t.drive},
-                                                                          {QStringLiteral("autotune"), t.tune},
-                                                                          {QStringLiteral("double"), t.dbl},
-                                                                          {QStringLiteral("deess"), t.deess},
-                                                                          {QStringLiteral("denoise"), t.denoise}}},
-                                  {QStringLiteral("plugins"), [&] {
-                                       QJsonArray a;
-                                       for (const Slot &s : t.slots_) {
-                                           QJsonObject o{{QStringLiteral("id"), s.id},
-                                                         {QStringLiteral("path"), s.info.path},
-                                                         {QStringLiteral("uid"), s.info.uid},
-                                                         {QStringLiteral("name"), s.info.name},
-                                                         {QStringLiteral("vendor"), s.info.vendor},
-                                                         {QStringLiteral("bypass"), s.bypass}};
-                                           if (pluginStates) {
-                                               const QByteArray st = s.plugin ? s.plugin->state() : s.state;
-                                               o.insert(QStringLiteral("state"), QString::fromLatin1(st.toBase64()));
-                                           }
-                                           a.append(o);
-                                       }
-                                       return a;
-                                   }()},
                                   {QStringLiteral("kind"), t.kind},
                                   {QStringLiteral("pattern"), t.pattern},
                                   {QStringLiteral("clips"), clips}});
     }
     return QJsonObject{{QStringLiteral("format"), QStringLiteral("aster-studio")},
-                       {QStringLiteral("version"), 1},
+                       {QStringLiteral("version"), 2},
+                       {QStringLiteral("rack"), rackJson(pluginStates)},
                        {QStringLiteral("sampleRate"), Engine::Rate},
                        {QStringLiteral("bpm"), m_bpm},
                        {QStringLiteral("beatsPerBar"), m_beatsPerBar},
@@ -575,13 +557,24 @@ void Studio::fromJson(const QJsonObject &o)
     auto fr = [scale](const QJsonValue &v) { return llround(v.toDouble() * scale); };
     QList<int> armed;
     QHash<int, Slot> oldSlots;                  // cofanie: te same wtyczki grają dalej, bez ponownego wczytywania
-    for (const Track &t : m_tracks) {
+    QHash<int, Channel> oldChannels;
+    for (const Track &t : m_tracks)
         if (t.armed)
             armed << t.id;
-        for (const Slot &s : t.slots_)
-            oldSlots.insert(s.id, s);
-    }
+    for (const Insert &in : m_inserts)
+        for (const Slot &sl : in.slots_)
+            oldSlots.insert(sl.id, sl);
+    for (const Channel &c : m_channels)
+        oldChannels.insert(c.id, c);
     m_tracks.clear();
+    clearRack();
+    QHash<int, QJsonObject> legacy;
+    const QJsonObject rack = o.value(QStringLiteral("rack")).toObject();
+    for (const QJsonValue &v : rack.value(QStringLiteral("inserts")).toArray()) {
+        Insert in = insertFromJson(v.toObject(), oldSlots);
+        m_nextId = std::max(m_nextId, in.id + 1);
+        m_inserts.append(in);
+    }
     for (const QJsonValue &tv : o.value(QStringLiteral("tracks")).toArray()) {
         const QJsonObject to = tv.toObject();
         Track t;
@@ -591,54 +584,16 @@ void Studio::fromJson(const QJsonObject &o)
         m_nextId = std::max(m_nextId, t.id + 1);
         t.name = to.value(QStringLiteral("name")).toString();
         t.color = to.value(QStringLiteral("color")).toInt() % Colors;
-        t.volume = to.value(QStringLiteral("volume")).toDouble();
-        t.pan = to.value(QStringLiteral("pan")).toDouble();
-        t.mute = to.value(QStringLiteral("mute")).toBool();
-        t.solo = to.value(QStringLiteral("solo")).toBool();
         t.input = to.value(QStringLiteral("input")).toInt();
         t.beat = to.value(QStringLiteral("beat")).toBool();
         t.role = to.value(QStringLiteral("role")).toString();
-        const QJsonObject fx = to.value(QStringLiteral("effects")).toObject();
-        t.preset = fx.value(QStringLiteral("preset")).toString();
-        t.lowCut = fx.value(QStringLiteral("lowCut")).toBool();
-        t.eqLow = std::clamp(fx.value(QStringLiteral("eqLow")).toDouble(), -12.0, 12.0);
-        t.eqMid = std::clamp(fx.value(QStringLiteral("eqMid")).toDouble(), -12.0, 12.0);
-        t.eqHigh = std::clamp(fx.value(QStringLiteral("eqHigh")).toDouble(), -12.0, 12.0);
-        t.comp = std::clamp(fx.value(QStringLiteral("compression")).toDouble(), 0.0, 1.0);
-        t.reverb = std::clamp(fx.value(QStringLiteral("reverb")).toDouble(), 0.0, 1.0);
-        t.echo = std::clamp(fx.value(QStringLiteral("echo")).toDouble(), 0.0, 1.0);
-        t.drive = std::clamp(fx.value(QStringLiteral("drive")).toDouble(), 0.0, 1.0);
-        t.tune = std::clamp(fx.value(QStringLiteral("autotune")).toDouble(), 0.0, 1.0);
-        t.dbl = std::clamp(fx.value(QStringLiteral("double")).toDouble(), 0.0, 1.0);
-        t.deess = std::clamp(fx.value(QStringLiteral("deess")).toDouble(), 0.0, 1.0);
-        t.denoise = std::clamp(fx.value(QStringLiteral("denoise")).toInt(), 0, 3);
         t.kind = to.value(QStringLiteral("kind")).toString(QStringLiteral("audio"));
         t.pattern = to.value(QStringLiteral("pattern")).toObject();
         t.armed = armed.contains(t.id);
-        for (const QJsonValue &sv : to.value(QStringLiteral("plugins")).toArray()) {
-            const QJsonObject so = sv.toObject();
-            Slot s;
-            s.id = so.value(QStringLiteral("id")).toInt();
-            s.info.path = so.value(QStringLiteral("path")).toString();
-            s.info.uid = so.value(QStringLiteral("uid")).toString();
-            s.info.name = so.value(QStringLiteral("name")).toString();
-            s.info.vendor = so.value(QStringLiteral("vendor")).toString();
-            s.bypass = so.value(QStringLiteral("bypass")).toBool();
-            const bool hasState = so.contains(QStringLiteral("state"));
-            if (hasState)
-                s.state = QByteArray::fromBase64(so.value(QStringLiteral("state")).toString().toLatin1());
-            else if (m_slotMemo.contains(s.id))
-                s.state = m_slotMemo.value(s.id);
-            if (const auto it = oldSlots.constFind(s.id); it != oldSlots.constEnd() && it->plugin && !hasState) {
-                s.plugin = it->plugin;
-            } else {
-                s.plugin = makePlugin(s, true);
-                if (!s.plugin)
-                    emit message(QStringLiteral("Nie ma wtyczki „%1” — ścieżka gra bez niej, jej ustawienia zostają w projekcie.").arg(s.info.name));
-            }
-            m_nextId = std::max(m_nextId, s.id + 1);
-            t.slots_.append(s);
-        }
+        t.insert = to.value(QStringLiteral("insert")).toInt();
+        // Projekt sprzed miksera: głośność i efekty były w ścieżce — każda dostaje własny insert
+        if (!t.insert)
+            legacy.insert(int(m_tracks.size()), to);
         for (const QJsonValue &cv : to.value(QStringLiteral("clips")).toArray()) {
             const QJsonObject co = cv.toObject();
             Clip c;
@@ -661,12 +616,22 @@ void Studio::fromJson(const QJsonObject &o)
                 c.takes.append(fr(v));
             c.take = c.takes.isEmpty() ? 0 : std::clamp(co.value(QStringLiteral("take")).toInt(), 0, int(c.takes.size()) - 1);
             c.origFile = co.value(QStringLiteral("origFile")).toString();
-            if (c.file.isEmpty() || c.length <= 0 || c.srcLen <= 0)
+            c.pattern = co.value(QStringLiteral("pattern")).toInt();
+            if ((c.file.isEmpty() && !c.pattern) || c.length <= 0 || c.srcLen <= 0)
                 continue;
             t.clips.append(c);
         }
         m_tracks.append(t);
     }
+    for (auto it = legacy.constBegin(); it != legacy.constEnd(); ++it) {
+        Insert in = insertFromJson(it.value(), oldSlots);
+        in.id = m_nextId++;
+        in.name = m_tracks[it.key()].name;
+        in.color = m_tracks[it.key()].color;
+        m_tracks[it.key()].insert = in.id;
+        m_inserts.append(in);
+    }
+    rackFromJson(rack, oldChannels);
     emit settingsChanged();
     changed();
 }
@@ -759,15 +724,18 @@ void Studio::rebuildView()
                                      {QStringLiteral("fadeIn"), c.fadeIn / R},
                                      {QStringLiteral("fadeOut"), c.fadeOut / R},
                                      {QStringLiteral("gain"), c.gain},
-                                     {QStringLiteral("missing"), !src && m_loading == 0}});
+                                     {QStringLiteral("pattern"), c.pattern},
+                                     {QStringLiteral("missing"), !src && !c.pattern && m_loading == 0}});
         }
+        const Insert &in = ins(t);
         m_tracksView.append(QVariantMap{{QStringLiteral("id"), t.id},
                                         {QStringLiteral("name"), t.name},
                                         {QStringLiteral("color"), t.color},
-                                        {QStringLiteral("volume"), t.volume},
-                                        {QStringLiteral("pan"), t.pan},
-                                        {QStringLiteral("mute"), t.mute},
-                                        {QStringLiteral("solo"), t.solo},
+                                        {QStringLiteral("volume"), in.volume},
+                                        {QStringLiteral("pan"), in.pan},
+                                        {QStringLiteral("mute"), in.mute},
+                                        {QStringLiteral("solo"), in.solo},
+                                        {QStringLiteral("insert"), t.insert},
                                         {QStringLiteral("armed"), t.armed},
                                         {QStringLiteral("input"), t.input},
                                         {QStringLiteral("kind"), t.kind},
@@ -788,7 +756,8 @@ void Studio::rebuildMix()
 {
     updateMonitor();
     m_mixView.clear();
-    for (const Track &t : m_tracks)
+    for (const Track &tr : m_tracks) {
+        const Insert &t = ins(tr);
         m_mixView.append(QVariantMap{{QStringLiteral("volume"), t.volume},
                                      {QStringLiteral("pan"), t.pan},
                                      {QStringLiteral("mute"), t.mute},
@@ -816,7 +785,9 @@ void Studio::rebuildMix()
                                           return l;
                                       }()},
                                      {QStringLiteral("preset"), t.preset}});
+    }
     emit mixChanged();
+    emit rackChanged();
 }
 
 Snapshot *Studio::buildSnapshot(bool forExport)
@@ -844,16 +815,27 @@ Snapshot *Studio::buildSnapshot(bool forExport)
         mp.width = float(m_mastering.width);
         mp.drive = float(dbToGain(m_mastering.drive));
     }
-    bool anySolo = false;
-    for (const Track &t : m_tracks)
-        anySolo |= t.solo;
-    for (const Track &t : m_tracks) {
-        TrackRT rt;
+    // Solo: to, co ma solo, i wszystko, dokąd ono wysyła dźwięk
+    QSet<int> soloed;
+    for (const Insert &in : m_inserts)
+        if (in.solo)
+            soloed.insert(in.id);
+    for (int round = 0; round < m_inserts.size(); ++round)
+        for (const Insert &in : m_inserts)
+            if (soloed.contains(in.id))
+                for (const Send &sd : in.sends)
+                    soloed.insert(sd.to);
+    const bool anySolo = !soloed.isEmpty();
+    for (const Insert &t : m_inserts) {
+        InsertRT rt;
         const float g = float(dbToGain(t.volume));
         const float p = float(std::clamp(t.pan, -1.0, 1.0));
         rt.gainL = g * (p > 0 ? 1.f - p : 1.f);
         rt.gainR = g * (p < 0 ? 1.f + p : 1.f);
-        rt.audible = anySolo ? t.solo : !t.mute;
+        rt.audible = anySolo ? soloed.contains(t.id) && !t.mute : !t.mute;
+        rt.toMaster = t.toMaster;
+        for (const Send &sd : t.sends)
+            rt.sends.push_back({insertIndex(sd.to), float(dbToGain(sd.db))});
         const double R = Engine::Rate;
         if (t.lowCut)
             rt.eq[0] = Biquad::highPass(80, R);
@@ -893,6 +875,13 @@ Snapshot *Studio::buildSnapshot(bool forExport)
             s->plugins.push_back(p);
             rt.fx.push_back(p.get());
         }
+        s->inserts.push_back(std::move(rt));
+    }
+    for (int i : insertOrder())
+        s->order.push_back(i);
+    for (const Track &t : m_tracks) {
+        LaneRT rt;
+        rt.insert = insertIndex(t.insert);
         const bool punched = m_punchOut > m_punchIn && m_recTrack >= 0 && m_recTrack < m_tracks.size() && &t == &m_tracks[m_recTrack];
         for (const Clip &c : punched ? carved(t.clips, m_punchIn, m_punchOut, -1, nullptr) : t.clips) {
             const SourcePtr src = m_sources.value(c.file);
@@ -913,14 +902,18 @@ Snapshot *Studio::buildSnapshot(bool forExport)
             r.loop = c.loop;
             rt.clips.push_back(r);
         }
-        s->tracks.push_back(std::move(rt));
+        if (!m_patMode)                         // WZÓR: gra tylko bieżący wzór
+            s->lanes.push_back(std::move(rt));
     }
+    compileChannels(s, forExport);
     return s;
 }
 
 // Wczytuje pliki z audio/ w tle; po wczytaniu klipy dostają kształt fali i grają
-void Studio::loadSources(const QStringList &files)
+void Studio::loadSources(const QStringList &all)
 {
+    QStringList files = all;
+    files.removeAll(QString());                 // klipy wzorów nie mają pliku
     if (files.isEmpty())
         return;
     ++m_loading;
@@ -1040,6 +1033,7 @@ void Studio::addTrack(const QString &name)
             t.color = c;
             break;
         }
+    t.insert = newInsert(t.name, t.color);
     m_tracks.append(t);
     m_selTrack = int(m_tracks.size()) - 1;
     emit selectionChanged();
@@ -1051,7 +1045,15 @@ void Studio::removeTrack(int index)
     if (index < 0 || index >= m_tracks.size() || (recording() && index == m_recTrack))
         return;
     checkpoint();
-    m_tracks.removeAt(index);
+    {
+        // Insert ścieżki znika z nią, chyba że gra przez niego ktoś jeszcze
+        const int id = m_tracks[index].insert;
+        m_tracks.removeAt(index);
+        bool used = std::any_of(m_tracks.begin(), m_tracks.end(), [id](const Track &t) { return t.insert == id; })
+                    || std::any_of(m_channels.begin(), m_channels.end(), [id](const Channel &c) { return c.insert == id; });
+        if (!used)
+            removeInsert(id);
+    }
     m_selTrack = std::clamp(m_selTrack, 0, std::max(0, int(m_tracks.size()) - 1));
     emit selectionChanged();
     updateCapture();
@@ -1083,7 +1085,7 @@ void Studio::setTrackVolume(int index, double db)
 {
     if (index < 0 || index >= m_tracks.size())
         return;
-    m_tracks[index].volume = std::clamp(db, -60.0, 6.0);
+    ins(index).volume = std::clamp(db, -60.0, 6.0);
     changed(false);
 }
 
@@ -1091,7 +1093,7 @@ void Studio::setTrackPan(int index, double pan)
 {
     if (index < 0 || index >= m_tracks.size())
         return;
-    m_tracks[index].pan = std::clamp(pan, -1.0, 1.0);
+    ins(index).pan = std::clamp(pan, -1.0, 1.0);
     changed(false);
 }
 
@@ -1099,7 +1101,7 @@ void Studio::setTrackMute(int index, bool on)
 {
     if (index < 0 || index >= m_tracks.size())
         return;
-    m_tracks[index].mute = on;
+    ins(index).mute = on;
     changed(false);
 }
 
@@ -1107,7 +1109,7 @@ void Studio::setTrackSolo(int index, bool on)
 {
     if (index < 0 || index >= m_tracks.size())
         return;
-    m_tracks[index].solo = on;
+    ins(index).solo = on;
     changed(false);
 }
 
@@ -1434,6 +1436,7 @@ void Studio::importFiles(const QVariantList &urls, int track, double start)
                     t.id = st->m_nextId++;
                     t.name = names[i];
                     t.color = int(st->m_tracks.size()) % Colors;
+                    t.insert = st->newInsert(t.name, t.color);
                     st->m_tracks.append(t);
                     ti = int(st->m_tracks.size()) - 1;
                 }
@@ -1524,7 +1527,6 @@ void Studio::importBeat(const QVariant &url)
             t.id = st->m_nextId++;
             t.name = QStringLiteral("Bit");
             t.beat = true;
-            t.volume = -3;                          // gotowe bity są głośne — zostaje miejsce na głos
             QList<int> used;
             for (const Track &o : st->m_tracks)
                 used << o.color;
@@ -1549,6 +1551,8 @@ void Studio::importBeat(const QVariant &url)
                     c.start = llround(st->m_beatsPerBar * 60.0 / st->m_bpm * Engine::Rate) - fb;
             }
             t.clips.append(c);
+            t.insert = st->newInsert(t.name, t.color);
+            st->m_inserts.last().volume = -3;       // gotowe bity są głośne — zostaje miejsce na głos
             st->m_tracks.append(t);
             st->m_selTrack = int(st->m_tracks.size()) - 1;
             st->m_selClip = c.id;
@@ -1769,8 +1773,8 @@ void Studio::finishRecording()
     changed();
     save();          // nagrania nie giną, nawet gdy program się zamknie
     // Ścieżka z odszumianiem: nowe nagranie też (w tle, bez osobnego kroku do cofania)
-    if (m_tracks[ti].denoise > 0)
-        startDenoise(m_tracks[ti].id, {{c.file, c.file}}, m_tracks[ti].denoise, true);
+    if (ins(ti).denoise > 0)
+        startDenoise(m_tracks[ti].id, {{c.file, c.file}}, ins(ti).denoise, true);
     if (passes > 1)
         emit message(QStringLiteral("Nagrane podejścia: %1 — wybierz najlepsze w zakładce Klip albo pod prawym przyciskiem. "
                                     "Podziel klip (S), żeby z każdego kawałka wziąć inne.").arg(passes));
@@ -1826,7 +1830,7 @@ void Studio::tick()
         }
     }
     // Wskaźniki: szczyt z opadaniem
-    std::vector<float> peaks(size_t(m_tracks.size()), 0.f);
+    std::vector<float> peaks(size_t(m_inserts.size()), 0.f);
     float master[2], in[2];
     m_engine.readMeters(peaks, master);
     m_engine.readInputLevel(in);
@@ -1837,8 +1841,10 @@ void Studio::tick()
         moving |= out != old;
         return out;
     };
-    for (int i = 0; i < m_levels.size() && i < int(peaks.size()); ++i)
-        m_levels[i] = fall(m_levels[i].toDouble(), peaks[size_t(i)]);
+    for (int i = 0; i < m_levels.size() && i < m_tracks.size(); ++i) {
+        const int at = insertIndex(m_tracks[i].insert);
+        m_levels[i] = fall(m_levels[i].toDouble(), at >= 0 && at < int(peaks.size()) ? peaks[size_t(at)] : 0.f);
+    }
     m_master[0] = fall(m_master[0], master[0]);
     m_master[1] = fall(m_master[1], master[1]);
     m_input = fall(m_input, std::max(in[0], in[1]));
@@ -1883,7 +1889,7 @@ void Studio::startExport(const QString &ext, const QString &path, ExportDone don
     emit exportChanged();
     // Na wybrzmienie: pół sekundy, a z pogłosem — tyle, ile wybrzmiewa sala
     bool reverb = false;
-    for (const Track &t : m_tracks)
+    for (const Insert &t : m_inserts)
         reverb |= t.reverb > 0 && !t.mute;
     const long long total = end + llround(Engine::Rate * (reverb ? 1.5 + 3.0 * m_reverbSize : 0.5));
     QPointer<Studio> self(this);
@@ -2016,7 +2022,7 @@ QVariantList Studio::presets() const
     return list;
 }
 
-void Studio::applyPresetTo(Track &t, const QString &preset)
+void Studio::applyPresetTo(Insert &t, const QString &preset)
 {
     for (const FxPreset &p : s_presets) {
         if (preset != QLatin1String(p.id))
@@ -2041,7 +2047,7 @@ void Studio::applyPreset(int index, const QString &preset)
     if (index < 0 || index >= m_tracks.size())
         return;
     checkpoint();
-    applyPresetTo(m_tracks[index], preset);
+    applyPresetTo(ins(index), preset);
     changed(false);
 }
 
@@ -2108,7 +2114,7 @@ void Studio::setTrackFx(int index, const QString &key, double value)
 {
     if (index < 0 || index >= m_tracks.size())
         return;
-    Track &t = m_tracks[index];
+    Insert &t = ins(index);
     if (key == QLatin1String("eqLow"))
         t.eqLow = std::clamp(value, -12.0, 12.0);
     else if (key == QLatin1String("eqMid"))
@@ -2278,7 +2284,7 @@ void Studio::addPlugin(int track, const QString &uid)
             emit message(QStringLiteral("Wtyczka „%1” nie chce się uruchomić.").arg(i.name));
             return;
         }
-        m_tracks[track].slots_.append(s);
+        ins(track).slots_.append(s);
         changed(false);
         s.plugin->openEditor();
         return;
@@ -2289,7 +2295,7 @@ void Studio::removePlugin(int track, int slot)
 {
     if (track < 0 || track >= m_tracks.size())
         return;
-    QList<Slot> &l = m_tracks[track].slots_;
+    QList<Slot> &l = ins(track).slots_;
     for (int i = 0; i < l.size(); ++i) {
         if (l[i].id != slot)
             continue;
@@ -2308,7 +2314,7 @@ void Studio::setPluginBypass(int track, int slot, bool on)
 {
     if (track < 0 || track >= m_tracks.size())
         return;
-    for (Slot &s : m_tracks[track].slots_)
+    for (Slot &s : ins(track).slots_)
         if (s.id == slot) {
             s.bypass = on;
             changed(false);
@@ -2319,7 +2325,7 @@ void Studio::openPlugin(int track, int slot)
 {
     if (track < 0 || track >= m_tracks.size())
         return;
-    for (Slot &s : m_tracks[track].slots_)
+    for (Slot &s : ins(track).slots_)
         if (s.id == slot && s.plugin && !s.plugin->openEditor())
             emit message(QStringLiteral("Okno wtyczki „%1” się nie otworzyło (wymaga XWayland).").arg(s.info.name));
 }
@@ -2344,17 +2350,18 @@ void Studio::denoiseTrack(int index, int level)
             if (!m_sources.contains(c.file) && !missing.contains(c.file))
                 missing << c.file;
         }
-        t.denoise = 0;
+        ins(t).denoise = 0;
         changed();
         loadSources(missing);
         return;
     }
     QHash<QString, QString> files;
     for (const Clip &c : std::as_const(t.clips))
-        files.insert(c.file, c.origFile.isEmpty() ? c.file : c.origFile);
+        if (!c.file.isEmpty())
+            files.insert(c.file, c.origFile.isEmpty() ? c.file : c.origFile);
     if (files.isEmpty()) {
         // Nic jeszcze nie nagrano — ustawienie zadziała na nowych nagraniach
-        t.denoise = level;
+        ins(t).denoise = level;
         changed(false);
         emit message(QStringLiteral("Nowe nagrania na tej ścieżce będą od razu odszumiane."));
         return;
@@ -2428,7 +2435,7 @@ void Studio::startDenoise(int trackId, const QHash<QString, QString> &files, int
                 c.file = made.value(it.value())->file;
                 ++n;
             }
-            t->denoise = level;
+            self->ins(*t).denoise = level;
             ++self->m_sourcesVersion;
             emit self->sourcesChanged();
             self->changed();
@@ -2649,9 +2656,10 @@ int Studio::vocalTrack(const QString &role)
             return -1;                              // za dużo ścieżek
         ti = int(m_tracks.size()) - 1;
         Track &t = m_tracks[ti];
-        applyPresetTo(t, QString::fromLatin1(r->preset));
-        t.pan = r->pan;
-        t.volume = r->volume;
+        Insert &strip = ins(t);
+        applyPresetTo(strip, QString::fromLatin1(r->preset));
+        strip.pan = r->pan;
+        strip.volume = r->volume;
         t.role = role;
         changed(false);
     }
@@ -2732,9 +2740,9 @@ int Studio::addPatternTrack(const QString &kind, const QString &genre)
     t.kind = k == BeatSynth::Bass ? QStringLiteral("bass") : k == BeatSynth::Keys ? QStringLiteral("keys")
            : k == BeatSynth::Melody ? QStringLiteral("melody") : QStringLiteral("drums");
     t.pattern = BeatSynth::genrePattern(genre.isEmpty() ? QStringLiteral("trap") : genre, k);
-    applyPresetTo(t, k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys || k == BeatSynth::Melody ? QStringLiteral("keys") : QStringLiteral("drums"));
+    applyPresetTo(ins(t), k == BeatSynth::Bass ? QStringLiteral("808") : k == BeatSynth::Keys || k == BeatSynth::Melody ? QStringLiteral("keys") : QStringLiteral("drums"));
     if (k == BeatSynth::Keys && genre == QLatin1String("trap"))
-        t.echo = 0.25;                          // dzwonki w trapie z echem
+        ins(t).echo = 0.25;                     // dzwonki w trapie z echem
     renderPattern(int(m_tracks.size()) - 1);
     changed();
     return int(m_tracks.size()) - 1;
@@ -2915,7 +2923,7 @@ void Studio::previewNote(int index, int value, double velocity)
             snd->data[size_t((snd->frames - 1 - i) * snd->channels + c)] *= float(i) / fade;
     // Siła uderzenia: cicho grane ciszej (krzywa jak w instrumentach — nie liniowo)
     const double vel = 0.25 + 0.75 * std::clamp(velocity, 0.0, 1.0);
-    m_engine.preview(snd, float(dbToGain(t.volume) * dbToGain(m_masterDb) * 0.8 * vel));
+    m_engine.preview(snd, float(dbToGain(ins(t).volume) * dbToGain(m_masterDb) * 0.8 * vel));
 }
 
 void Studio::simulateMidi(int pitch, int velocity)
@@ -2936,7 +2944,7 @@ void Studio::liveNoteOn(int index, int pitch, double velocity)
     const double vel = 0.25 + 0.75 * std::clamp(velocity, 0.0, 1.0);
     const double gain = 0.45 * vel;
     m_engine.liveNoteOff(pitch);
-    m_engine.liveNoteOn(pitch, index, BeatSynth::instrumentOf(t.pattern.value(QStringLiteral("instrument")).toString()),
+    m_engine.liveNoteOn(pitch, insertIndex(t.insert), BeatSynth::instrumentOf(t.pattern.value(QStringLiteral("instrument")).toString()),
                         440.0 * std::pow(2.0, (std::clamp(pitch, 12, 120) - 69) / 12.0), float(gain));
 }
 
@@ -2979,9 +2987,9 @@ std::vector<float> Studio::roughWave(int bins) const
     if (end <= 0)
         return wave;
     for (const Track &t : m_tracks) {
-        if (t.mute)
+        if (ins(t).mute)
             continue;
-        const float g = float(dbToGain(t.volume));
+        const float g = float(dbToGain(ins(t).volume));
         for (const Clip &c : t.clips) {
             const SourcePtr src = m_sources.value(c.file);
             if (!src || src->peaks.empty())
