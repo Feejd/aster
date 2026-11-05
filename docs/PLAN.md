@@ -31,7 +31,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Okna jak w profesjonalnych systemach: pasek boczny na lekko przezroczystym szkle, treść na głębokim,
       prawie nieprzezroczystym panelu (w ciemnym motywie niemal czerń; GlassPane), rogi 24 px, bez „zorzy”
 - [x] Okna aplikacji webowych: pasek tytułu jako szkło w kolorze serwisu
-- [ ] **Kolory i styl aplikacji Qt/KDE**: akcent, zaokrąglenia, czcionka Geist w całym systemie.
+- [x] **Kolory i czcionka programów Qt/KDE i GTK**: schematy Aster (`data/color-schemes`), Geist i JetBrains Mono w całym systemie; zaokrąglenia kontrolek wciąż z Breeze.
 - [x] Start jak w macOS: ekran Plymouth ze znakiem Aster i paskiem postępu, bez tekstu jądra i systemd, ukryte menu GRUB,
       nazwa systemu „Aster 1.0”, od razu sesja Aster (`tools/install-vm.sh` w maszynie wirtualnej, `image/` w obrazie)
 - [x] Ekran logowania Aster (motyw SDDM: rozmyta tapeta, zegar, karta użytkownika, inne osoby, zasilanie);

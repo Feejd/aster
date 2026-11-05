@@ -76,6 +76,7 @@ ControlCenter::ControlCenter(QObject *parent)
         fillPreview();
         return;
     }
+    migrateColors();
     refresh();
     m_poll.start();
 }
@@ -120,6 +121,24 @@ void ControlCenter::restartForUpdate()
     // Przez sesję KDE: programy kończą się po kolei i mogą zapisać stan
     QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(QStringLiteral("org.kde.Shutdown"), QStringLiteral("/Shutdown"),
                                                                            QStringLiteral("org.kde.Shutdown"), QStringLiteral("logoutAndReboot")));
+}
+
+// Konta założone przed schematami Aster mają kolory Breeze zapisane w kdeglobals: zmieniamy je raz, z zachowaniem trybu
+void ControlCenter::migrateColors()
+{
+    const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    const QString marker = config + QStringLiteral("/aster/kolory-aster");
+    if (QFile::exists(marker))
+        return;
+    QDir().mkpath(config + QStringLiteral("/aster"));
+    QFile(marker).open(QIODevice::WriteOnly);
+    QFile globals(config + QStringLiteral("/kdeglobals"));
+    if (!globals.open(QIODevice::ReadOnly))
+        return;
+    const QByteArray text = globals.readAll();
+    if (text.contains("Aster"))
+        return;
+    QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {text.contains("ColorScheme=BreezeDark") ? QStringLiteral("AsterDark") : QStringLiteral("AsterLight")});
 }
 
 void ControlCenter::setActive(bool active)
@@ -444,5 +463,5 @@ void ControlCenter::previous() { playerCall(QStringLiteral("Previous")); }
 void ControlCenter::setDarkMode(bool dark)
 {
     if (!m_preview)
-        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("BreezeDark") : QStringLiteral("BreezeLight")});
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("AsterDark") : QStringLiteral("AsterLight")});
 }

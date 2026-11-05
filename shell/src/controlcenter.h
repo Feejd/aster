@@ -87,6 +87,7 @@ private:
     void readBrightness();
     void readBattery();
     void readUpdate();
+    void migrateColors();
     void readPlayer();
     void playerCall(const QString &method);
     void fillPreview();
