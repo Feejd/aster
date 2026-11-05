@@ -24,6 +24,7 @@ Item {
         { id: "draw", label: "Rysuj", icon: "squiggle" },
         { id: "paint", label: "Maluj i retuszuj", icon: "brush" },
         { id: "pixels", label: "Zaznaczanie", icon: "marquee" },
+        { id: "magic", label: "Magia AI", icon: "sparkles" },
         { id: "background", label: "Tło", icon: "palette" },
         { id: "layers", label: "Warstwy", icon: "layers" }
     ]
@@ -91,7 +92,7 @@ Item {
     function setPaintSize(px) { const m = Object.assign({}, paintSizes); m[paintTool] = px / base; paintSizes = m; }
     function setPaintPower(v) { const m = Object.assign({}, paintPower); m[paintTool] = v; paintPower = m; }
     onTabChanged: {
-        if (tab !== "draw" && tab !== "paint" && tab !== "pixels") prevTab = tab; else lastTab = prevTab;
+        if (tab !== "draw" && tab !== "paint" && tab !== "pixels" && tab !== "magic") prevTab = tab; else lastTab = prevTab;
         if (tab === "photos") photos = Library.photos();
         if (tab === "layers") refreshLayers();
     }
@@ -473,7 +474,7 @@ Item {
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
                       : sp.tab === "shapes" ? elementsCol.height : sp.tab === "photos" ? photosCol.height
-                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : sp.tab === "paint" ? paintCol.height : sp.tab === "pixels" ? pixelsCol.height : bgCol.height
+                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : sp.tab === "paint" ? paintCol.height : sp.tab === "pixels" ? pixelsCol.height : sp.tab === "magic" ? magicCol.height : bgCol.height
 
                 // Szablony
                 Column {
@@ -1262,6 +1263,76 @@ Item {
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 13
                         }
                         Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.lock; size: 14; stroke: 1.8; color: Theme.text2; opacity: 0.5 }
+                    }
+                }
+
+                // Magia AI: nazwane tym, co użytkownik chce zrobić
+                Column {
+                    id: magicCol
+                    visible: sp.tab === "magic"
+                    width: parent.width
+                    spacing: 14
+                    readonly property bool ready: Magic.available && sp.editor.aiLayer !== ""
+                    readonly property var el: sp.editor.stageCurrent
+                    readonly property real level: el.bgBlurOut && el.bgBlurOut === el.src ? (el.bgBlur || 0) : 0
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: !Magic.available ? "Ta wersja Aster Pixel nie ma narzędzi AI."
+                            : sp.editor.aiLayer === "" ? "Dodaj zdjęcie, a tu pojawią się narzędzia AI."
+                            : "Kliknij rzecz na zdjęciu, żeby ją zaznaczyć, albo wybierz gotowe działanie. Wszystko liczy się na tym komputerze."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Btn {
+                        visible: Magic.available && sp.editor.aiLayer === ""
+                        width: parent.width; primary: true; icon: "image"; text: "Dodaj zdjęcie"
+                        onClicked: sp.editor.runMenu("addPhoto")
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Wyodrębnij"
+                        Btn { width: parent.width; primary: true; icon: "sparkles"; text: "Wyodrębnij główny obiekt"; tip: "Osoba albo rzecz trafia na osobną warstwę, zdjęcie zostaje"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("extract") }
+                        Btn { width: parent.width; icon: "scissors"; text: "Usuń tło"; tip: "Zostaje sam obiekt z przezroczystością"; enabled: !Magic.busy; onClicked: Magic.removeBackground(sp.project, sp.editor.aiLayer) }
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Usuń z obrazu"
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Kliknij rzecz na zdjęciu i wybierz „Usuń” na pasku pod płótnem. Drobiazgi zamaluj korektorem."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                        }
+                        Btn { width: parent.width; icon: "brush"; text: "Korektor pędzlem"; tip: "Skrót: J"; onClicked: sp.editor.usePaintTool("heal") }
+                        Btn { width: parent.width; icon: "lasso"; text: "Zaznacz ręcznie: pędzel, lasso"; enabled: !Magic.busy; onClicked: sp.editor.aiManual() }
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Zaznacz"
+                        Row {
+                            spacing: 6
+                            Btn { height: 32; text: "Obiekt"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("subject") }
+                            Btn { height: 32; text: "Tło"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("background") }
+                        }
+                    }
+                    Section {
+                        visible: magicCol.ready && magicCol.el.type === "image"
+                        title: "Rozmyj tło"
+                        Row {
+                            spacing: 6
+                            Repeater {
+                                model: [{ v: 0, label: "Ostre" }, { v: 0.35, label: "Lekko" }, { v: 0.7, label: "Mocno" }, { v: 1, label: "Bardzo" }]
+                                delegate: Chip {
+                                    required property var modelData
+                                    width: (magicCol.width - 18) / 4
+                                    height: 30
+                                    text: modelData.label
+                                    on: Math.abs(magicCol.level - modelData.v) < 0.01
+                                    enabled: !Magic.busy
+                                    onClicked: if (!on) Magic.blurBackground(sp.project, sp.editor.aiLayer, modelData.v)
+                                }
+                            }
+                        }
                     }
                 }
 

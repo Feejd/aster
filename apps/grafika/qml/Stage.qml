@@ -40,6 +40,8 @@ Item {
     property real selTolerance: 0.12
     property bool selLayerOnly: false
     readonly property bool selOn: selTool !== ""
+    property string selHint: ""
+    signal selAction(string action)
     // Malowanie i retusz po pikselach: brush | eraser | fill | pick | heal | clone | dodge | burn | smudge | blur
     property string paintTool: ""
     property color paintColor: "#16181D"
@@ -1791,9 +1793,31 @@ Item {
         }
     }
 
+    // Pasek przy zaznaczeniu: co można z nim zrobić, od razu pod ręką
+    Rectangle {
+        visible: Selection.active && !Magic.busy && !stage.paintOn && !stage.drawOn && !stage.maskOn && !stage.magicOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: Math.min(parent.width - 24, ctxRow.implicitWidth + 16); height: 48; radius: 24
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 7
+        Row {
+            id: ctxRow
+            anchors.centerIn: parent
+            spacing: 4
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; primary: true; icon: "layers"; text: "Wyodrębnij"; tip: "Na nową warstwę, zdjęcie zostaje bez zmian (Ctrl+J)"; onClicked: stage.selAction("extract") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; visible: Magic.available; icon: "sparkles"; text: "Usuń"; tip: "Znika z obrazu, a tło uzupełnia się samo"; onClicked: stage.selAction("aifill") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "circleHalf"; text: "Maska"; tip: "Zostaje tylko zaznaczone; nic się nie kasuje"; onClicked: stage.selAction("mask") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "sliders"; text: "Korekcja"; tip: "Kolory i tony tylko tutaj"; onClicked: stage.selAction("adjust") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "swap"; tip: "Odwróć zaznaczenie (Ctrl+Shift+I)"; onClicked: stage.selAction("invert") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Odznacz (Esc)"; onClicked: stage.selAction("clear") }
+        }
+    }
+
     // Zaznaczanie: podpowiedź i wyjście
     Rectangle {
-        visible: stage.selOn && !Magic.busy
+        visible: stage.selOn && !Magic.busy && !Selection.active
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
         width: selPill.implicitWidth + 16; height: 44; radius: 22
@@ -1805,7 +1829,7 @@ Item {
             anchors.centerIn: parent
             spacing: 10
             Item { width: 4; height: 1 }
-            Text { anchors.verticalCenter: parent.verticalCenter; text: "Shift dodaje · Alt odejmuje · Esc odznacza"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: stage.selHint; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
             Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
         }
     }

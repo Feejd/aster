@@ -199,7 +199,7 @@ Item {
             if (Magic.element === "" && ids.length > 0) stage.setSelection(ids);
             if (message !== "") ed.app.toast(message, "");
         }
-        function onFailed(message) { ed.app.toast(message, ""); }
+        function onFailed(message) { ed.aiPending = ""; ed.app.toast(message, ""); }
     }
     function saveElements() {
         if (many.length === 0) return;
@@ -542,6 +542,8 @@ Item {
         else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
         else if (cmd === "maskinvert") project.invertMask(sel);
         else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
+        else if (cmd === "aitool") setTool("magic");
+        else if (cmd === "airun") aiRun(arg);
         else if (cmd === "seltool") { side.selTool = arg; side.tab = "pixels"; }
         else if (cmd === "selmode") side.selMode = arg;
         else if (cmd === "selinvert") Selection.invert(project);
@@ -725,11 +727,7 @@ Item {
         { id: "templates", label: "Szablony", icon: "layout", key: "" }
     ]
     function setTool(t) {
-        if (t === "magic") {
-            if (stage.current.type === "image" && stage.current.src && Magic.available) { side.tab = "select"; startMagic(); }
-            else { side.tab = "select"; app.toast(Magic.available ? "Zaznacz zdjęcie — narzędzia AI działają na zdjęciach" : "Ta wersja Aster Pixel nie ma narzędzi AI", ""); }
-            return;
-        }
+        if (t === "magic" && aiLayer !== "" && stage.selected !== aiLayer) stage.select(aiLayer);    // działa na zaznaczonym albo najwyższym zdjęciu
         side.tab = t;
     }
     // ——— Warstwy: tryb mieszania, maska, korekcja ———
@@ -771,6 +769,30 @@ Item {
         for (let i = all.length - 1; i >= 0; --i) if (all[i].type === "image" && all[i].src && !all[i].hidden) return all[i].id;
         return "";
     }
+    readonly property var stageCurrent: stage.current
+    readonly property string aiLayer: { stage.current; project.count; return imageLayer(); }
+    property string aiPending: ""                   // działanie po tym, jak AI skończy zaznaczać
+    Connections {
+        target: Selection
+        function onChanged() {
+            if (ed.aiPending === "" || !Selection.active) return;
+            const a = ed.aiPending;
+            ed.aiPending = "";
+            if (a === "background") Selection.invert(ed.project); else ed.selAction(a);
+        }
+    }
+    // Jedno kliknięcie w panelu: AI zaznacza główny obiekt, potem wykonuje działanie
+    function aiRun(a) {
+        if (aiLayer === "") return;
+        Selection.clear();
+        aiPending = a === "subject" ? "" : a;
+        Magic.selectSubject(project, aiLayer, "new");
+    }
+    function aiManual() {
+        if (aiLayer === "") return;
+        stage.select(aiLayer);
+        startMagic();
+    }
     function selectSubject() {
         const id = imageLayer();
         if (id === "") { app.toast("Na stronie nie ma zdjęcia", ""); return; }
@@ -778,7 +800,13 @@ Item {
     }
     function selAction(a) {
         const el = stage.current, isImage = el.type === "image" && !!el.src && !el.locked;
-        if (a === "copy" || a === "cut") { const id = Selection.toLayer(project, sel, a === "cut" && sel !== ""); if (id !== "") { stage.select(id); } }
+        if (a === "extract") {
+            const id = Selection.toLayer(project, imageLayer(), false);
+            if (id !== "") { stage.select(id); app.toast("Wyodrębniono na nową warstwę — zdjęcie zostało bez zmian", ""); }
+        }
+        else if (a === "invert") Selection.invert(project);
+        else if (a === "clear") Selection.clear();
+        else if (a === "copy" || a === "cut") { const id = Selection.toLayer(project, sel, a === "cut" && sel !== ""); if (id !== "") { stage.select(id); } }
         else if (a === "delete") {
             if (sel === "") { app.toast("Wybierz warstwę, z której usunąć", ""); return; }
             if (isImage) Retouch.clearSelected(project, sel); else Selection.maskLayer(project, sel, true);
@@ -803,7 +831,7 @@ Item {
     // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
     Connections {
         target: stage
-        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint" && side.tab !== "pixels") side.tab = "select"; }
+        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint" && side.tab !== "pixels" && side.tab !== "magic") side.tab = "select"; }
     }
 
     // ——— Pasek u góry ———
@@ -1010,7 +1038,9 @@ Item {
         drawColor: side.drawColor
         drawWidth: side.drawWidth
         paintTool: side.tab === "paint" ? side.paintTool : ""
-        selTool: side.tab === "pixels" ? side.selTool : ""
+        selTool: side.tab === "pixels" ? side.selTool : side.tab === "magic" && Magic.element === "" ? "object" : ""
+        selHint: side.tab === "magic" ? "Kliknij rzecz na zdjęciu · Shift dodaje kolejną" : "Shift dodaje · Alt odejmuje · Esc odznacza"
+        onSelAction: (a) => a === "adjust" ? ed.addAdjustment() : ed.selAction(a)
         selMode: side.selMode
         selFeather: side.selFeather
         selTolerance: side.selTolerance

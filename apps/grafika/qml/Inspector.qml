@@ -788,39 +788,15 @@ Item {
                 }
                 Btn {
                     width: parent.width
-                    icon: "brush"
-                    text: "Gumka i wyodrębnianie"
+                    icon: "layers"
+                    text: "Wyodrębnij główny obiekt"
                     enabled: !Magic.busy
-                    onClicked: ins.editor.startMagic()
+                    onClicked: ins.editor.aiRun("extract")
                 }
-                // Rozmycie tła: siła zapamiętana w elemencie, dopóki zdjęcie jest wynikiem rozmycia
-                Text {
-                    text: "Rozmyj tło (jak portret w telefonie)"
-                    color: Theme.text; font.family: Theme.font; font.pixelSize: 12
-                }
-                Flow {
+                Btn {
                     width: parent.width
-                    spacing: 6
-                    readonly property real level: ins.el.bgBlurOut && ins.el.bgBlurOut === ins.el.src ? (ins.el.bgBlur || 0) : 0
-                    Repeater {
-                        model: [{ v: 0, label: "Ostre" }, { v: 0.35, label: "Lekko" }, { v: 0.7, label: "Mocno" }, { v: 1, label: "Bardzo" }]
-                        delegate: Chip {
-                            required property var modelData
-                            width: (col.width - 18) / 4
-                            text: modelData.label
-                            on: Math.abs(parent.level - modelData.v) < 0.01
-                            enabled: !Magic.busy
-                            onClicked: if (!on) Magic.blurBackground(ins.project, ins.id_, modelData.v)
-                        }
-                    }
-                }
-                Text {
-                    width: parent.width
-                    wrapMode: Text.WordWrap
-                    readonly property int mb: ins.id_ !== "" && !Magic.busy ? Magic.downloadMB("background") + Magic.downloadMB("object") + Magic.downloadMB("erase") : 0
-                    text: "Usuwa albo rozmywa tło, usuwa niechciane rzeczy ze zdjęcia albo wycina obiekt jako osobny element. Działa na tym komputerze — zdjęcia nigdzie nie wychodzą."
-                          + (mb > 0 ? " Za pierwszym razem pobierze modele (do " + mb + " MB)." : "")
-                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    text: "Wszystkie narzędzia AI…"
+                    onClicked: ins.editor.setTool("magic")
                 }
             }
             Section {
