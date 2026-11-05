@@ -43,11 +43,22 @@ modules:
         url: https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-aarch64-1.22.0.tgz
         sha256: bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702
 
+  # Nagłówki SPIR-V: tylko do budowy silnika (Vulkan), w SDK ich nie ma
+  - name: spirv-headers
+    buildsystem: cmake-ninja
+    cleanup:
+      - "*"
+    sources:
+      - type: git
+        url: https://github.com/KhronosGroup/SPIRV-Headers
+        tag: vulkan-sdk-1.4.313.0
+        commit: aa6cef192b8e693916eb713e7a9ccadf06062ceb
+
   # stable-diffusion.cpp (MIT) — silnik wypełniania z opisu; Vulkan, a bez karty procesor
   - name: aster-pixel-gen
     buildsystem: simple
     build-commands:
-      - cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DSD_WEBM=OFF -DSD_WEBP=OFF
+      - cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/app -DSD_VULKAN=ON -DSD_WEBM=OFF -DSD_WEBP=OFF
       - cmake --build out --target sd-cli
       - install -Dm755 out/bin/sd-cli /app/bin/aster-pixel-gen
     sources:
