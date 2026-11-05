@@ -415,7 +415,7 @@ Window {
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
                 z: 20
-                width: Math.min(parent.width - 60, toastText.implicitWidth + 36); height: toastText.height + 22; radius: 20
+                width: Math.min(parent.width - 60, toastText.implicitWidth + 36); height: toastText.height + 22; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -450,7 +450,7 @@ Window {
                 id: dlg
                 anchors.centerIn: parent
                 width: 430; height: dlgCol.implicitHeight + 44
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Column {

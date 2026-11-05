@@ -14,7 +14,7 @@ Item {
 
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 72; height: 72; radius: 22
+            width: 72; height: 72; radius: 12
             gradient: Gradient {
                 GradientStop { position: 0; color: "#FFB27A" }
                 GradientStop { position: 1; color: "#E5366F" }
@@ -61,7 +61,7 @@ Item {
                 delegate: Rectangle {
                     id: feat
                     required property var modelData
-                    width: 196; height: 138; radius: 16
+                    width: 196; height: 138; radius: 10
                     color: Theme.dark ? Qt.rgba(1, 1, 1, 0.035) : Qt.rgba(1, 1, 1, 0.9)
                     border.width: 1; border.color: Theme.line
                     Column {

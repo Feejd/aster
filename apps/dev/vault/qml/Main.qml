@@ -462,7 +462,7 @@ Window {
                     visible: win.page !== "query" && Vault.tableName !== ""
                     anchors.right: winButtons.left; anchors.rightMargin: 18
                     anchors.verticalCenter: parent.verticalCenter
-                    width: tabRow.implicitWidth + 6; height: 34; radius: 17
+                    width: tabRow.implicitWidth + 6; height: 34; radius: 10
                     color: Theme.fill
                     Row {
                         id: tabRow
@@ -473,7 +473,7 @@ Window {
                                 id: tb
                                 required property var modelData
                                 readonly property bool active: win.page === modelData[0]
-                                width: tbText.implicitWidth + 30; height: 28; radius: 14
+                                width: tbText.implicitWidth + 30; height: 28; radius: 10
                                 color: active ? Theme.surface : "transparent"
                                 Text { id: tbText; anchors.centerIn: parent; text: tb.modelData[1]; color: tb.active ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                                 MouseArea { anchors.fill: parent; onClicked: win.page = tb.modelData[0] }
@@ -685,7 +685,7 @@ Window {
                 y: parent.height - (shown ? height + 70 : 0)
                 opacity: shown ? 1 : 0
                 z: 20
-                width: Math.min(toastText.implicitWidth + 36, parent.width - 40); height: 40; radius: 20
+                width: Math.min(toastText.implicitWidth + 36, parent.width - 40); height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -700,7 +700,7 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom; anchors.bottomMargin: 26
             z: 30
-            width: Math.min(connMsg.implicitWidth + 60, parent.width - 60); height: Math.max(44, connMsg.implicitHeight + 24); radius: 22
+            width: Math.min(connMsg.implicitWidth + 60, parent.width - 60); height: Math.max(44, connMsg.implicitHeight + 24); radius: 12
             color: Vault.state === "connecting" ? (Theme.dark ? "#ECEEF3" : "#1E2027") : (Theme.dark ? "#4A1D1F" : "#FDECEC")
             Text {
                 id: connMsg

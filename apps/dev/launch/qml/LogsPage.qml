@@ -38,7 +38,7 @@ Item {
             spacing: 10
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
-                width: liveRow.implicitWidth + 20; height: 28; radius: 14
+                width: liveRow.implicitWidth + 20; height: 28; radius: 10
                 color: page.live ? Qt.rgba(0.18, 0.75, 0.44, 0.16) : Theme.fill
                 Row {
                     id: liveRow
@@ -99,7 +99,7 @@ Item {
         id: box
         x: 28; y: bar.y + bar.height + 12
         width: parent.width - 56; height: parent.height - y - 24
-        radius: 14
+        radius: 10
         color: Theme.dark ? Qt.rgba(0, 0, 0, 0.35) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.035)
         border.width: 1; border.color: Theme.line
         clip: true

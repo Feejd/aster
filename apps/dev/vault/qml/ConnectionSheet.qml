@@ -73,7 +73,7 @@ Sheet {
                 readonly property bool active: cs.kind === modelData.kind
                 enabled: modelData.available
                 opacity: enabled ? 1 : 0.4
-                width: kbText.implicitWidth + 28; height: 32; radius: 16
+                width: kbText.implicitWidth + 28; height: 32; radius: 10
                 baseColor: active ? Theme.accent : Theme.fill
                 color: active ? Theme.accent : (hovered ? Theme.hover : Theme.fill)
                 onClicked: { cs.kind = modelData.kind; cs.testMessage = ""; }

@@ -381,7 +381,7 @@ Window {
                     spacing: 10
                     Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 64; height: 64; radius: 20
+                        width: 64; height: 64; radius: 12
                         color: Theme.fill
                         Icon { anchors.centerIn: parent; d: Icons.warning; size: 30; color: Theme.text2 }
                     }
@@ -458,7 +458,7 @@ Window {
                 y: parent.height - (shown ? height + 22 + (logs.open ? logs.height : 0) : 0)
                 opacity: shown ? 1 : 0
                 z: 20
-                width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 40; radius: 20
+                width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }

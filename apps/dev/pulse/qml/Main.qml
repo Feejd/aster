@@ -416,7 +416,7 @@ Window {
                     anchors.right: saveButton.visible ? saveButton.left : moreButton.left
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    width: envRow.implicitWidth + 26; height: 34; radius: 17
+                    width: envRow.implicitWidth + 26; height: 34; radius: 10
                     baseColor: Theme.fill
                     tip: "Środowisko (zmienne {{…}})"
                     onClicked: win.envMenu()
@@ -517,7 +517,7 @@ Window {
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
                 z: 20
-                width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 40; radius: 20
+                width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -551,7 +551,7 @@ Window {
                 anchors.centerIn: parent
                 width: Math.min(parent.width - 60, win.sheet && (win.sheet.kind === "import" || win.sheet.kind === "export") ? 680 : 440)
                 height: dlgLoader.item ? dlgLoader.item.implicitHeight + 44 : 100
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -666,7 +666,7 @@ Window {
                         id: cc
                         required property var modelData
                         readonly property bool active: sv.target === modelData.file
-                        width: ccText.implicitWidth + 24; height: 30; radius: 15
+                        width: ccText.implicitWidth + 24; height: 30; radius: 10
                         baseColor: active ? Theme.accentSoft : Theme.fill
                         border.width: active ? 1 : 0; border.color: Theme.accentAlpha(0.5)
                         onClicked: sv.target = modelData.file
@@ -674,7 +674,7 @@ Window {
                     }
                 }
                 HoverButton {
-                    width: ncText.implicitWidth + 24; height: 30; radius: 15
+                    width: ncText.implicitWidth + 24; height: 30; radius: 10
                     baseColor: sv.target === "" ? Theme.accentSoft : Theme.fill
                     onClicked: { sv.target = ""; newCol.focusEnd(); }
                     Text { id: ncText; anchors.centerIn: parent; text: "+ Nowa kolekcja"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
