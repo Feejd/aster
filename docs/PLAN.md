@@ -125,7 +125,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       Konto i wygląd zakłada `aster-firstboot` przy pierwszym starcie. ISO: `sudo tools/build-iso.sh [skąd aktualizacje]`
 - [ ] Zbudować i przetestować ISO (Linux z ~30 GB miejsca albo GitHub Actions): rozruch, instalacja, pierwszy start
 - [ ] Instalator, dalej: szyfrowanie dysku, instalacja obok Windows, „Przesiadasz się z Windowsa?” (przeniesienie plików)
-- [ ] Aktualizacje w tle z możliwością cofnięcia (atomowa Fedora), sklep aplikacji z Flathub.
+- [x] Aktualizacje w tle bez samoczynnego restartu (`aster-update.timer`), powiadomienie i centrum sterowania, strona w Ustawieniach z powrotem do poprzedniej wersji; sklep aplikacji z Flathub.
 - [ ] Test na prawdziwym laptopie (x86_64).
 
 ## Etap 5 — własne aplikacje

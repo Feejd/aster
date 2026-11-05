@@ -41,6 +41,8 @@ class ControlCenter : public QObject
     Q_PROPERTY(int battery MEMBER m_battery NOTIFY batteryChanged)
     Q_PROPERTY(bool charging MEMBER m_charging NOTIFY batteryChanged)
 
+    Q_PROPERTY(bool updateReady MEMBER m_updateReady NOTIFY updateChanged)
+
     Q_PROPERTY(bool playerAvailable MEMBER m_playerAvailable NOTIFY playerChanged)
     Q_PROPERTY(QString playerName MEMBER m_playerName NOTIFY playerChanged)
     Q_PROPERTY(QString title MEMBER m_title NOTIFY playerChanged)
@@ -61,6 +63,7 @@ public:
     Q_INVOKABLE void toggleMute();
     Q_INVOKABLE void setBrightness(double value);
     Q_INVOKABLE void setDarkMode(bool dark);
+    Q_INVOKABLE void restartForUpdate();
     Q_INVOKABLE void playPause();
     Q_INVOKABLE void next();
     Q_INVOKABLE void previous();
@@ -73,6 +76,7 @@ Q_SIGNALS:
     void brightnessChanged();
     void batteryChanged();
     void playerChanged();
+    void updateChanged();
 
 private:
     // Uruchamia program w tle i oddaje jego wyjście (pomija, gdy poprzednie wywołanie tego samego klucza jeszcze trwa)
@@ -82,6 +86,7 @@ private:
     void readAudio();
     void readBrightness();
     void readBattery();
+    void readUpdate();
     void readPlayer();
     void playerCall(const QString &method);
     void fillPreview();
@@ -93,6 +98,7 @@ private:
     bool m_preview = false;
 
     bool m_active = false;
+    bool m_updateReady = false;
     bool m_wifiAvailable = false, m_wifiOn = false, m_wired = false;
     QString m_networkName;
     bool m_btAvailable = false, m_btOn = false;

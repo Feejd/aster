@@ -104,6 +104,8 @@ else()
     message(WARNING "Bez rsvg-convert/xcursorgen (librsvg2-tools, xcursorgen) — kursor Aster nie zostanie zbudowany")
 endif()
 install(FILES ../session/aster-shell.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
+install(FILES ../session/aster-update.service ../session/aster-update.timer DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+install(FILES ../session/50-aster-update.rules DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/rules.d)
 # Pierwszy start po instalacji: konto i ustawienia z instalatora
 install(PROGRAMS ../session/aster-firstboot DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 install(FILES ../session/aster-firstboot.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)

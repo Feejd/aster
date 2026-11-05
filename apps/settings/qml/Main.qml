@@ -38,6 +38,7 @@ Window {
         [
             { id: "general", name: "Ogólne", icon: "gear", colors: ["#A3A9B5", "#4B5262"], keys: "informacje o komputerze wersja aktualizacje dysk pamięć procesor nazwa komputera" },
             { id: "storage", name: "Pamięć", icon: "drive", colors: ["#93C5FD", "#3B82F6"], keys: "dysk miejsce magazyn pliki tymczasowe kosz porządkowanie zajęte wolne pendrive foldery" },
+            { id: "updates", name: "Aktualizacje", icon: "download", colors: ["#86EFAC", "#16A34A"], keys: "aktualizacja wersja system poprzednia wersja przywróć cofnij restart" },
             { id: "appearance", name: "Wygląd", icon: "contrast", colors: ["#52525B", "#18181B"], keys: "ciemny jasny motyw kolor akcent tryb" },
             { id: "wallpaper", name: "Tapeta", icon: "image", colors: ["#67E8F9", "#0891B2"], keys: "tło pulpit obraz" },
             { id: "desktop", name: "Pulpit i okna", icon: "desktop", colors: ["#8EA2FF", "#5B5BD6"], keys: "zegar widżety okna przyciąganie narożniki animacje pulpity minimalizowanie" },

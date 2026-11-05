@@ -44,7 +44,7 @@ mkdir -p /var/lib/sddm
 printf '[Last]\nSession=/usr/share/wayland-sessions/aster.desktop\nUser=%s\n' "$USERNAME" > /var/lib/sddm/state.conf
 
 if [ "${AUTO_UPDATES:-1}" = 0 ]; then
-    systemctl disable --now bootc-fetch-apply-updates.timer 2>/dev/null || true
+    systemctl disable --now aster-update.timer 2>/dev/null || true
 fi
 
 rm -f "$ENV"

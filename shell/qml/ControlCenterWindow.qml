@@ -134,6 +134,29 @@ Window {
             width: panel.width - 2 * cc.pad
             spacing: cc.gap
 
+            // ——— Gotowa aktualizacja systemu ———
+            Tile {
+                order: 5
+                visible: ControlCenter.updateReady
+                width: content.width; height: 60
+                Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; d: Icons.download; size: 20; stroke: 2; color: Theme.accentText }
+                Column {
+                    x: 48
+                    width: parent.width - x - updateButton.width - 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text { width: parent.width; text: "Aktualizacja gotowa"; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                    Text { width: parent.width; text: "Czeka na restart"; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+                }
+                PanelButton {
+                    id: updateButton
+                    anchors.right: parent.right; anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    label: "Uruchom ponownie"
+                    primary: true
+                    onClicked: { cc.close(); ControlCenter.restartForUpdate(); }
+                }
+            }
+
             // ——— Łączność | Nie przeszkadzać + Ciemny motyw ———
             Row {
                 spacing: cc.gap

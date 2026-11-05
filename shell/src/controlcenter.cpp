@@ -97,6 +97,29 @@ void ControlCenter::fillPreview()
     m_playerName = QStringLiteral("Spotify");
     m_title = QStringLiteral("Nocne miasto");
     m_artist = QStringLiteral("Aster Radio");
+    m_updateReady = !qEnvironmentVariableIsEmpty("ASTER_SHOT_UPDATE");
+}
+
+// Nową wersję systemu pobiera aster-update.service; ten plik oznacza, że czeka na restart
+void ControlCenter::readUpdate()
+{
+    const bool ready = QFile::exists(QStringLiteral("/run/ostree/staged-deployment"));
+    if (ready == m_updateReady)
+        return;
+    m_updateReady = ready;
+    Q_EMIT updateChanged();
+    if (ready)
+        QProcess::startDetached(QStringLiteral("notify-send"), {QStringLiteral("--app-name=Aster"), QStringLiteral("--icon=aster"), QStringLiteral("Aktualizacja gotowa"),
+                                                                QStringLiteral("Nowa wersja Astera zainstaluje się przy następnym restarcie.")});
+}
+
+void ControlCenter::restartForUpdate()
+{
+    if (m_preview)
+        return;
+    // Przez sesję KDE: programy kończą się po kolei i mogą zapisać stan
+    QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(QStringLiteral("org.kde.Shutdown"), QStringLiteral("/Shutdown"),
+                                                                           QStringLiteral("org.kde.Shutdown"), QStringLiteral("logoutAndReboot")));
 }
 
 void ControlCenter::setActive(bool active)
@@ -122,6 +145,7 @@ void ControlCenter::refresh()
     readBrightness();
     readBattery();
     readPlayer();
+    readUpdate();
 }
 
 void ControlCenter::query(const QString &key, const QString &program, const QStringList &args, std::function<void(const QString &)> done)
