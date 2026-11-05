@@ -92,37 +92,60 @@ void Button::paint(QPainter *painter, const QRectF &)
         return;
     const auto *win = decoration()->window();
     const bool closing = type() == DecorationButtonType::Close;
-    const QRectF box = geometry();
+    const QRectF box = geometry().adjusted(1, 1, -1, -1);
     const QPointF center = box.center();
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setPen(Qt::NoPen);
 
-    if (m_hover > 0) {
-        QColor back = closing ? QColor(0xD9, 0x3B, 0x40) : win->palette().windowText().color();
-        back.setAlphaF(closing ? m_hover : 0.1 * m_hover);
-        painter->setBrush(back);
-        painter->drawRoundedRect(box, 6, 6);
+    // Płytka widoczna w aktywnym oknie; po najechaniu ciemnieje, a zamknięcie czerwienieje
+    QColor back = win->palette().windowText().color();
+    back.setAlphaF(win->isActive() ? 0.07 + 0.07 * m_hover : 0.1 * m_hover);
+    if (closing && m_hover > 0) {
+        back = QColor(0xD9, 0x3B, 0x40);
+        back.setAlphaF(m_hover);
     }
+    painter->setBrush(back);
+    painter->drawRoundedRect(box, 8, 8);
 
     QColor ink = closing && m_hover > 0.5 ? QColor(Qt::white) : win->palette().windowText().color();
     if (!win->isActive() && m_hover == 0)
         ink.setAlphaF(0.5);
     painter->setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter->setBrush(Qt::NoBrush);
-    const qreal s = isPressed() ? 4 : 4.5;
-    switch (type()) {
-    case DecorationButtonType::Minimize:
-        painter->drawLine(center + QPointF(-s, 0), center + QPointF(s, 0));
-        break;
-    case DecorationButtonType::Maximize:
-        painter->drawRoundedRect(QRectF(center.x() - s, center.y() - s, 2 * s, 2 * s), 1.5, 1.5);
-        break;
-    default:
-        painter->drawLine(center + QPointF(-s, -s), center + QPointF(s, s));
-        painter->drawLine(center + QPointF(-s, s), center + QPointF(s, -s));
-        break;
+    // Te same znaki co w programach Aster (common/Icons.js), w siatce 24 × 24
+    const qreal k = 15.0 / 24.0;
+    const auto at = [&](qreal x, qreal y) { return center + QPointF((x - 12) * k, (y - 12) * k); };
+    const auto line = [&](std::initializer_list<QPointF> points) {
+        QPainterPath path;
+        bool first = true;
+        for (const QPointF &p : points) {
+            if (first)
+                path.moveTo(at(p.x(), p.y()));
+            else
+                path.lineTo(at(p.x(), p.y()));
+            first = false;
+        }
+        painter->drawPath(path);
+    };
+    if (type() == DecorationButtonType::Minimize) {
+        line({{12, 4}, {12, 15}});
+        line({{7.5, 10.5}, {12, 15}, {16.5, 10.5}});
+        line({{6, 20}, {18, 20}});
+    } else if (type() == DecorationButtonType::Maximize && win->isMaximized()) {
+        line({{9, 4}, {9, 9}, {4, 9}});
+        line({{20, 9}, {15, 9}, {15, 4}});
+        line({{15, 20}, {15, 15}, {20, 15}});
+        line({{4, 15}, {9, 15}, {9, 20}});
+    } else if (type() == DecorationButtonType::Maximize) {
+        line({{4, 9}, {4, 4}, {9, 4}});
+        line({{15, 4}, {20, 4}, {20, 9}});
+        line({{20, 15}, {20, 20}, {15, 20}});
+        line({{9, 20}, {4, 20}, {4, 15}});
+    } else {
+        line({{6, 6}, {18, 18}});
+        line({{18, 6}, {6, 18}});
     }
     painter->restore();
 }

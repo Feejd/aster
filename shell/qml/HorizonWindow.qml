@@ -6,10 +6,10 @@ import org.kde.taskmanager as TaskManager
 import Aster.Shell
 import Aster.Ui
 
-// „Horyzont”: górny pasek z trzech pływających wysp (warstwa „top”, z rezerwacją miejsca).
+// „Horyzont”: górny pasek, jedna pełna belka (warstwa „top”, z rezerwacją miejsca).
 //  lewa    — znak Aster (otwiera Start) i nazwa aktywnego programu z tytułem okna, jak menu w macOS
-//  środek  — dynamiczna wyspa: godzina; gdy gra muzyka — okładka i korektor; po najechaniu — data.
-//            Powiadomienie (od każdego programu, także aplikacji webowych) rozlewa wyspę w kartę:
+//  środek  — zegar na belce; gdy gra muzyka — okładka i korektor; po najechaniu — data.
+//            Powiadomienie (od każdego programu, także aplikacji webowych) wysuwa się spod paska jako karta:
 //            klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
 //            Aster Intelligence (Super+Spacja albo klik w wyspę): wyspa rozlewa się w pole pytania otoczone
 //            tęczową poświatą; krótka odpowiedź zostaje w wyspie i znika jak powiadomienie, dłuższa rozmowa
@@ -183,6 +183,30 @@ Window {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
     }
 
+    // Żywa linia na dolnej krawędzi paska: jedyny ruch w spoczynku. Powiadomienie odlicza nią swój czas,
+    // a gdy Aster Intelligence pracuje, przez pasek biegnie krótki odcinek
+    Rectangle {
+        id: liveLine
+        property real sweep: 0
+        readonly property bool thinking: Assistant.busy && hz.primary
+        y: hz.reserved - 2
+        height: 2
+        x: thinking ? (hz.width + width) * sweep - width : 0
+        width: thinking ? hz.width * 0.18 : hz.noting ? hz.width * lineProgress : 0
+        property real lineProgress: 0
+        color: Theme.accent
+        visible: thinking || hz.noting
+        NumberAnimation on sweep { running: liveLine.thinking; loops: Animation.Infinite; from: 0; to: 1; duration: 1500; easing.type: Easing.InOutCubic }
+        Connections {
+            target: hz
+            function onCurrentChanged() {
+                lineAnim.stop();
+                if (hz.current) { liveLine.lineProgress = 1; lineAnim.duration = showTimer.interval; lineAnim.start(); }
+            }
+        }
+        NumberAnimation { id: lineAnim; target: liveLine; property: "lineProgress"; to: 0 }
+    }
+
     // ——— Lewa strona paska ———
     Island {
         id: left
@@ -251,6 +275,8 @@ Window {
     Island {
         id: island
         solid: true
+        // Spoczynek: sam zegar na belce. Powiadomienie i pytanie wysuwają się spod paska jako karta
+        flat: !hz.asking && !hz.noting
         // Przy pytaniu cień ustępuje poświacie
         shadowStrength: hz.asking ? 0.35 : 1
         Behavior on shadowStrength { NumberAnimation { duration: 300 } }
@@ -258,11 +284,13 @@ Window {
         readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
         width: hz.asking ? hz.askW : hz.noting ? 440 : idleW
         height: hz.asking ? askCol.implicitHeight : hz.noting ? 92 : 26
-        radius: hz.asking || hz.noting ? 14 : 7
+        radius: 14
         x: Math.round((hz.width - width) / 2)
-        y: 3
+        y: hz.asking || hz.noting ? hz.reserved + 8 : 3
+        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
         onWidthChanged: hz.updateRegion()
         onHeightChanged: hz.updateRegion()
+        onYChanged: hz.updateRegion()
         // Sprężyna — wyspa „rozlewa się” jak kropla, a nie przesuwa
         Behavior on width { SpringAnimation { spring: 3.6; damping: 0.26; epsilon: 0.3 } }
         Behavior on height { SpringAnimation { spring: 3.6; damping: 0.3; epsilon: 0.3 } }
@@ -317,13 +345,13 @@ Window {
                         return s.charAt(0).toUpperCase() + s.slice(1);
                     }
                     visible: hz.peek
-                    color: Qt.rgba(1, 1, 1, 0.62)
+                    color: Theme.text2
                     font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: hz.now.toLocaleTimeString(hz.loc, "HH:mm")
-                    color: "white"
+                    color: Theme.text
                     font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
                     font.features: { "tnum": 1 }
                 }

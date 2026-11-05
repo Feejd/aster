@@ -588,6 +588,7 @@ Window {
         // ——— Pasek tytułu ———
         Item {
             id: titlebar
+            z: 1                        // pasek tytułu biegnie nad całym oknem, także nad panelem treści
             width: parent.width; height: 52
 
             DragHandler {
@@ -758,7 +759,6 @@ Window {
         // ——— Panel treści (prawa część okna: pasek narzędzi, folder, pasek stanu) ———
         GlassPane {
             id: pane
-            z: -1                       // pod paskiem tytułu, który biegnie nad całym oknem
             x: sidebar.width
             width: parent.width - sidebar.width
             height: parent.height
