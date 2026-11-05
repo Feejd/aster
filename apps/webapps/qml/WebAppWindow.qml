@@ -30,7 +30,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed || pageFullScreen ? 0 : 26
-    readonly property real r: maxed || pageFullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen || pageFullScreen ? 0 : 24
     property bool pageFullScreen: false
     readonly property bool debug: Qt.application.arguments.indexOf("--debug") >= 0
 

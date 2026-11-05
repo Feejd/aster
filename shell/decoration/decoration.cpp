@@ -192,11 +192,6 @@ bool Decoration::isDark() const
     return window()->palette().window().color().lightnessF() < 0.5;
 }
 
-bool Decoration::cornersRounded() const
-{
-    return !window()->isMaximized();
-}
-
 bool Decoration::init()
 {
     auto *win = window();
@@ -262,12 +257,11 @@ void Decoration::updateLayout()
     setResizeOnlyBorders(win->isMaximized() ? QMarginsF() : QMarginsF(ResizeMargin, 0, ResizeMargin, ResizeMargin));
     setTitleBar(QRectF(0, 0, width, TitleHeight));
 
-    const qreal radius = cornersRounded() ? CornerRadius : 0;
-    setBorderRadius(BorderRadius(radius));
+    // Rogi zostają także po powiększeniu okna; na pełnym ekranie KWin w ogóle nie rysuje ramki
+    setBorderRadius(BorderRadius(CornerRadius));
     // Delikatny rant jak w programach Aster: oddziela okno od tła tego samego koloru
-    setBorderOutline(cornersRounded() ? BorderOutline(1, isDark() ? QColor(255, 255, 255, 22) : QColor(16, 24, 40, 28), BorderRadius(radius))
-                                      : BorderOutline());
-    setOpaque(!cornersRounded());
+    setBorderOutline(BorderOutline(1, isDark() ? QColor(255, 255, 255, 22) : QColor(16, 24, 40, 28), BorderRadius(CornerRadius)));
+    setOpaque(false);
 
     qreal x = width - SideMargin;
     for (auto it = m_buttons.rbegin(); it != m_buttons.rend(); ++it) {
@@ -300,19 +294,15 @@ void Decoration::paint(QPainter *painter, const QRectF &repaintArea)
     if (!win->isActive())
         background = isDark() ? background.lighter(108) : background.darker(102);
     painter->setBrush(background);
-    if (cornersRounded()) {
-        QPainterPath path;
-        path.moveTo(0, TitleHeight);
-        path.lineTo(0, CornerRadius);
-        path.arcTo(QRectF(0, 0, 2 * CornerRadius, 2 * CornerRadius), 180, -90);
-        path.lineTo(width - CornerRadius, 0);
-        path.arcTo(QRectF(width - 2 * CornerRadius, 0, 2 * CornerRadius, 2 * CornerRadius), 90, -90);
-        path.lineTo(width, TitleHeight);
-        path.closeSubpath();
-        painter->drawPath(path);
-    } else {
-        painter->drawRect(bar);
-    }
+    QPainterPath path;
+    path.moveTo(0, TitleHeight);
+    path.lineTo(0, CornerRadius);
+    path.arcTo(QRectF(0, 0, 2 * CornerRadius, 2 * CornerRadius), 180, -90);
+    path.lineTo(width - CornerRadius, 0);
+    path.arcTo(QRectF(width - 2 * CornerRadius, 0, 2 * CornerRadius, 2 * CornerRadius), 90, -90);
+    path.lineTo(width, TitleHeight);
+    path.closeSubpath();
+    painter->drawPath(path);
 
     // Tytuł na środku; nie wchodzi na przyciski
     const qreal reserved = 3 * (ButtonSize + ButtonSpacing) + SideMargin + 12;
