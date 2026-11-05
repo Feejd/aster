@@ -8,6 +8,8 @@ qt_add_executable(aster-shell
     src/controlcenter.h
     src/connectivity.cpp
     src/connectivity.h
+    src/globalmenu.cpp
+    src/globalmenu.h
     src/polkitagent.cpp
     src/polkitagent.h
     src/assistant.cpp
@@ -30,6 +32,7 @@ set(ASTER_QML
     qml/ClockWindow.qml
     qml/ControlCenterWindow.qml
     qml/AuthWindow.qml
+    qml/MenuWindow.qml
     qml/AssistantWindow.qml
     qml/AssistantBadge.qml
     qml/IntelligenceGlow.qml

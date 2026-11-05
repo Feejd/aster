@@ -15,6 +15,7 @@ finish-args:
   - --filesystem=home                     # foldery projektów i pliki compose
   - --filesystem=xdg-config/aster:ro      # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
   - --talk-name=org.freedesktop.Flatpak   # flatpak-spawn --host: podman, toolbox, terminal
   - --own-name=org.aster.Harbor           # D-Bus dla agenta asystenta Aster (gdy okno jest otwarte)
 cleanup:

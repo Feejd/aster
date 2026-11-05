@@ -7,7 +7,7 @@ import Aster.Shell
 import Aster.Ui
 
 // „Horyzont”: górny pasek, jedna pełna belka (warstwa „top”, z rezerwacją miejsca).
-//  lewa    — znak Aster (otwiera Start) i nazwa aktywnego programu z tytułem okna, jak menu w macOS
+//  lewa    — znak Aster (otwiera Start), nazwa aktywnego programu i jego menu (MenuWindow)
 //  środek  — zegar na belce; gdy gra muzyka — okładka i korektor; po najechaniu — data.
 //            Powiadomienie (od każdego programu, także aplikacji webowych) wysuwa się spod paska jako karta:
 //            klik otwiera program, krzyżyk zamyka, kursor nad kartą wstrzymuje jej zniknięcie.
@@ -36,6 +36,7 @@ Window {
     signal assistantPanelRequested(bool show)
     signal chatsRequested()                    // przycisk Aster Intelligence na pasku: panel z rozmowami
     signal askOpened()
+    signal menuRequested(int index)
 
     Component.onCompleted: {
         Platform.makeLayer(hz, "top", 1 | 4 | 8, hz.reserved, "none", "aster-horizon");
@@ -60,6 +61,46 @@ Window {
                                      : hasActive ? (tasks.data(tasks.activeTask, TaskManager.AbstractTasksModel.AppName) || "") : "Aster"
     readonly property string windowTitle: Platform.preview ? "Nowa karta"
                                          : hasActive ? (tasks.data(tasks.activeTask, Qt.DisplayRole) || "") : ""
+
+    // ——— Menu programu ———
+    readonly property string activeAppId: {
+        if (!hasActive) return "";
+        const url = String(tasks.data(tasks.activeTask, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon) || "");
+        return url.replace(/^.*[\/:]/, "").replace(/\.desktop$/, "");
+    }
+    // Otwarte menu samo przejmuje fokus, więc pamiętamy program, którego dotyczy
+    property bool menuOpen: false
+    property string heldAppName: ""
+    Connections {
+        target: hz
+        function onAppNameChanged() { if (hz.hasActive && !hz.menuOpen) hz.heldAppName = hz.appName; }
+    }
+    Binding { target: GlobalMenu; property: "appId"; value: hz.activeAppId; when: hz.primary && hz.hasActive && !hz.menuOpen }
+    function windowAction(a) {
+        if (!hz.hasActive) return;
+        if (a === "min") tasks.requestToggleMinimized(tasks.activeTask);
+        else if (a === "max") tasks.requestToggleMaximized(tasks.activeTask);
+        else if (a === "close") tasks.requestClose(tasks.activeTask);
+    }
+    // Każdy program ma swoje menu i wspólne „Okno”; programy bez menu dostają samo „Okno”
+    readonly property var menuList: {
+        if (!hasActive) return [];
+        return GlobalMenu.menus.concat([{ title: "Okno", items: [
+            { text: "Schowaj do doku", action: "min", key: "Super+Dół" },
+            { text: "Rozwiń", action: "max", key: "Super+Góra" },
+            { separator: true },
+            { text: "Zamknij", action: "close", key: "Alt+F4" }
+        ] }]);
+    }
+    function menuEntries() {
+        const out = [];
+        const x = menuRow.mapToItem(hz.contentItem, 0, 0).x;
+        for (let i = 0; i < menuRepeater.count; ++i) {
+            const it = menuRepeater.itemAt(i);
+            if (it) out.push({ title: it.modelData.title, x: x + it.x, width: it.width, items: it.modelData.items });
+        }
+        return out;
+    }
 
     // ——— Kolejka powiadomień: na raz widać jedno, kolejne czekają ———
     property var queue: []
@@ -237,19 +278,39 @@ Window {
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: hz.appName
+                text: hz.menuOpen ? hz.heldAppName : hz.appName
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; font.letterSpacing: -0.1
             }
-            Text {
+            Row {
+                id: menuRow
                 anchors.verticalCenter: parent.verticalCenter
-                visible: text !== "" && text !== hz.appName
-                width: Math.min(implicitWidth, 320)
-                elide: Text.ElideRight
-                text: hz.windowTitle
-                color: Theme.text2
-                font.family: Theme.font; font.pixelSize: 13
-                rightPadding: 4
+                leftPadding: 6
+                Repeater {
+                    id: menuRepeater
+                    model: hz.primary ? hz.menuList : []
+                    delegate: Rectangle {
+                        id: menuTitle
+                        required property var modelData
+                        required property int index
+                        width: menuLabel.implicitWidth + 18; height: 24; radius: 6
+                        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+                        color: menuArea.containsMouse ? Theme.hover : "transparent"
+                        Text {
+                            id: menuLabel
+                            anchors.centerIn: parent
+                            text: menuTitle.modelData.title
+                            color: Theme.text
+                            font.family: Theme.font; font.pixelSize: 13
+                        }
+                        MouseArea {
+                            id: menuArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: hz.menuRequested(menuTitle.index)
+                        }
+                    }
+                }
             }
         }
     }

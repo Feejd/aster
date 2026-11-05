@@ -115,6 +115,8 @@ static const QStringList kShortcutId{QStringLiteral("aster-shell"), QStringLiter
                                      QStringLiteral("Aster Intelligence")};
 static const QStringList kControlId{QStringLiteral("aster-shell"), QStringLiteral("control-center"), QStringLiteral("Powłoka Aster"),
                                     QStringLiteral("Centrum sterowania")};
+static const QStringList kMenuId{QStringLiteral("aster-shell"), QStringLiteral("menu-search"), QStringLiteral("Powłoka Aster"),
+                                 QStringLiteral("Szukaj polecenia w programie")};
 
 void Assistant::registerShortcut()
 {
@@ -135,6 +137,7 @@ void Assistant::registerShortcut()
     };
     bind(kShortcutId, Qt::Key_Space);
     bind(kControlId, Qt::Key_A);
+    bind(kMenuId, Qt::Key_Slash);
     const bool ok = bus.connect(kAccel, QStringLiteral("/component/aster_shell"), QStringLiteral("org.kde.kglobalaccel.Component"),
                                 QStringLiteral("globalShortcutPressed"), this, SLOT(onShortcut(QString, QString, qlonglong)));
     qInfo("asystent: skrót Meta+Space zarejestrowany, nasłuch %s", ok ? "działa" : "NIE działa");
@@ -148,6 +151,8 @@ void Assistant::onShortcut(const QString &component, const QString &action, qlon
         Q_EMIT toggleRequested();
     else if (action == kControlId.at(1))
         Q_EMIT controlRequested();
+    else if (action == kMenuId.at(1))
+        Q_EMIT menuSearchRequested();
 }
 
 // ——— Usługa ———

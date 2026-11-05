@@ -18,6 +18,7 @@ finish-args:
   - --filesystem=xdg-download:ro
   - --filesystem=xdg-config/aster:ro  # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
 cleanup:
   - /include
   - /lib/cmake

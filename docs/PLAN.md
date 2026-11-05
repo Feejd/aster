@@ -23,7 +23,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Nowe okna na środku ekranu, kolejne schodkowo (`shell/kwinscripts/asteruklad`), Super+góra/dół jak w Windowsie
 - [x] Żywy pasek zamiast dynamicznej wyspy: zegar na belce, powiadomienia i pytania jako karta spod paska, linia postępu na dolnej krawędzi
 - [ ] Żywy pasek: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
-- [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
+- [x] Menu aktywnego programu na górnym pasku (`AppMenu` w Aster.Ui, `MenuWindow`): przełączanie najechaniem, wspólne „Okno”, szukanie poleceń przez Super+/ albo pisanie w otwartym menu; na razie Pliki i Terminal
+- [ ] Menu na pasku: pozostałe programy Aster, programy KDE/Qt przez DBusMenu
 - [x] Super = Start
 - [x] Super+A = centrum sterowania
 

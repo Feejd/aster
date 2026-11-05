@@ -41,6 +41,26 @@ Window {
     readonly property var cur: { tabsRevision; return pages.count > 0 ? pages.itemAt(Math.max(0, Math.min(current, pages.count - 1))) : null; }
     property var confirm: null                         // { text, detail, action }
     property bool settingsOpen: false
+    // Menu na górnym pasku
+    onActiveChanged: if (active) AppMenu.menus = win.menuBar
+    readonly property var menuBar: [
+        { title: "Plik", items: [
+            { text: "Nowa karta", key: "Ctrl+Shift+T", run: () => win.newTab() },
+            { text: "Nowe okno", key: "Ctrl+Shift+N", run: () => Terminal.openWindow(win.cur ? win.cur.view.currentDirectory : "") },
+            { separator: true },
+            { text: "Zamknij kartę", key: "Ctrl+Shift+W", run: () => win.closeTab(win.current) },
+            { text: "Zamknij okno", key: "Ctrl+Shift+Q", run: () => win.close() }
+        ] },
+        { title: "Widok", items: [
+            { text: "Szukaj w terminalu", key: "Ctrl+Shift+F", run: () => findBar.openBar() },
+            { separator: true },
+            { text: "Powiększ", key: "Ctrl+=", run: () => win.zoom(1) },
+            { text: "Pomniejsz", key: "Ctrl+-", run: () => win.zoom(-1) },
+            { text: "Pełny ekran", key: "F11", run: () => win.toggleFullScreen() },
+            { separator: true },
+            { text: "Ustawienia terminala", key: "Ctrl+Shift+P", run: () => { win.settingsOpen = true; } }
+        ] }
+    ]
 
     function tabAt(i) { return pages.itemAt(i); }
     function activate(i) {

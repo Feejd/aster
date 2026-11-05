@@ -20,6 +20,8 @@ QtObject {
             required property var modelData
             screen: modelData
             primary: modelData === Qt.application.screens[0]
+            menuOpen: menuWin.visible
+            onMenuRequested: index => { menuWin.entries = menuEntries(); menuWin.openAt(index); }
             controlOpen: controlWin.open
             assistantOpen: assistWin.open
             onStartRequested: { controlWin.close(); assistWin.close(); startWin.toggle(); }
@@ -45,6 +47,10 @@ QtObject {
         Component.onCompleted: Windows.model = this
     }
     property var clock: ClockWindow {}
+    property var appMenu: MenuWindow {
+        id: menuWin
+        onWindowAction: action => { const h = shell.horizons.objectAt(0); if (h) h.windowAction(action); }
+    }
     property var start: StartWindow { id: startWin }
     property var control: ControlCenterWindow { id: controlWin }
     property var assistant: AssistantWindow { id: assistWin }   // panel Aster Intelligence z prawej
@@ -70,6 +76,10 @@ QtObject {
         target: Assistant
         function onControlRequested() {
             startWin.close(); assistWin.close(); controlWin.toggle();
+        }
+        function onMenuSearchRequested() {
+            const h = shell.horizons.objectAt(0);
+            if (h) { menuWin.entries = h.menuEntries(); menuWin.openSearch(); }
         }
         function onToggleRequested() {
             const h = shell.horizons.objectAt(0);
