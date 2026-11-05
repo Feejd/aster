@@ -7,10 +7,9 @@ import org.kde.milou as Milou
 import Aster.Shell
 import Aster.Ui
 
-// Start w dwóch panelach (jak szuflada Smart Launchera) na ciekłym szkle doku:
-//  lewy  — pływający pasek: logo Aster z powitaniem, kolorowe kategorie, na dole konto, blokada i wyłączanie
-//  prawy — wyszukiwarka i programy wybranej kategorii („Ulubione” mają też ostatnie pliki).
-// Po wpisaniu tekstu prawy panel pokazuje wyniki z KRunnera (programy, pliki, ustawienia, kalkulator…).
+// Start: jeden spokojny panel nad dokiem. U góry wyszukiwarka, niżej przypięte programy i ostatnie pliki,
+// a „Wszystkie programy” pokazują całą listę z filtrami kategorii. Na dole konto, blokada i zasilanie.
+// Po wpisaniu tekstu panel pokazuje wyniki z KRunnera (programy, pliki, ustawienia, kalkulator…).
 // Okno-warstwa przykrywa cały ekran nad dokiem: klik obok panelu zamyka Start.
 Window {
     id: start
@@ -32,15 +31,7 @@ Window {
     ]
     readonly property var pinnedApps: pinned.map(id => Object.assign({ id: id }, Platform.appInfo(id))).filter(a => a.valid)
     property var recents: []
-    property string greeting: ""
-
-    // „Dzień dobry, Ania” / „Dobry wieczór, Ania”
-    function makeGreeting() {
-        const h = new Date().getHours();
-        const first = Platform.userName.split(" ")[0];
-        return (h >= 5 && h < 18 ? "Dzień dobry" : "Dobry wieczór") + (first ? ", " + first : "");
-    }
-
+    
     // Kategorie; puste (poza Ulubionymi i Wszystkimi) są ukrywane
     readonly property var allCategories: [
         { id: "ulubione", name: "Ulubione", icon: "star", colors: ["#FFD166", "#F59E0B"] },
@@ -68,7 +59,6 @@ Window {
     function toggle() { if (open) close(); else show(); }
     function show() {
         recents = Platform.recentFiles(4);
-        greeting = makeGreeting();
         category = "ulubione";
         field.text = "";
         hideTimer.stop();
@@ -123,9 +113,9 @@ Window {
     Item {
         id: panel
         x: Math.round((start.width - width) / 2)
-        y: start.height - height - 10
-        width: Math.min(880, start.width - 36)
-        height: Math.min(640, start.height - 40)
+        y: start.height - height - 94           // warstwa zajmuje cały ekran, a panel stoi nad dokiem
+        width: Math.min(720, start.width - 36)
+        height: Math.min(590, start.height - 140)
 
         // Wejście: sprężyste wyrośnięcie znad środka doku (spod przycisku Start), wyjście: szybkie zgaśnięcie
         property real s: 0.92
@@ -164,183 +154,22 @@ Window {
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają Startu
 
-        // To samo ciekłe szkło co wyspy doku
         Island { anchors.fill: parent; radius: 16 }
-        // Gęstsze szkło niż w doku: Start leży na oknach, tekst musi być czytelny
-        Rectangle {
-            anchors.fill: parent
-            radius: 16
-            color: "transparent"
-        }
 
-        // ——— Lewy panel: pływający pasek boczny z logo, kategoriami i kontem ———
-        Rectangle {
-            id: side
-            x: 10; y: 10
-            width: 236; height: parent.height - 20
-            radius: 10
-            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.45)
-            border.width: 1
-            border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.8)
-
-            // Logo i powitanie
-            Row {
-                x: 16; y: 18
-                spacing: 12
-                opacity: panel.stagger(0)
-                AppIcon { desktopId: "aster-start"; size: 44 }
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 1
-                    Text {
-                        text: "Aster"
-                        color: Theme.text
-                        font.family: Theme.font; font.pixelSize: 20; font.weight: Font.Bold
-                        font.letterSpacing: -0.4
-                    }
-                    Text {
-                        text: start.greeting
-                        color: Theme.text2
-                        font.family: Theme.font; font.pixelSize: 12
-                    }
-                }
-            }
-
-            // Kategorie: podświetlenie przesuwa się płynnie między wierszami
-            ListView {
-                id: catList
-                x: 8; y: 84
-                width: parent.width - 16
-                height: sideFooter.y - y - 6
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                spacing: 2
-                model: start.categories
-                currentIndex: start.categories.findIndex(c => c.id === start.category)
-                highlightFollowsCurrentItem: true
-                highlightMoveDuration: 180
-                highlightMoveVelocity: -1
-                highlightResizeDuration: 0
-                highlight: Item {
-                    RectangularShadow {
-                        anchors.fill: parent
-                        radius: 11; blur: 8; offset.y: 1
-                        color: Qt.rgba(0, 0, 0, Theme.dark ? 0.3 : 0.08)
-                    }
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 11
-                        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.13) : "white"
-                    }
-                }
-                delegate: Item {
-                    id: cat
-                    required property var modelData
-                    required property int index
-                    readonly property bool active: start.category === modelData.id
-                    readonly property real k: panel.stagger(1 + index)
-                    width: catList.width; height: 38
-                    opacity: k
-                    transform: Translate { x: (1 - cat.k) * -10 }
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 11
-                        color: Theme.hover
-                        opacity: catArea.containsMouse && !cat.active ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: 120 } }
-                    }
-                    // Kolorowa plakietka kategorii (jak w Ustawieniach macOS)
-                    Rectangle {
-                        id: badge
-                        x: 8; anchors.verticalCenter: parent.verticalCenter
-                        width: 26; height: 26; radius: 8
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: cat.modelData.colors[0] }
-                            GradientStop { position: 1; color: cat.modelData.colors[1] }
-                        }
-                        Icon { anchors.centerIn: parent; d: Icons[cat.modelData.icon] || ""; size: 15; stroke: 2; color: "white" }
-                    }
-                    Text {
-                        anchors.left: badge.right; anchors.leftMargin: 11
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: cat.modelData.name
-                        color: Theme.text
-                        font.family: Theme.font; font.pixelSize: 14
-                        font.weight: cat.active ? Font.Medium : Font.Normal
-                    }
-                    MouseArea {
-                        id: catArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: { start.selectCategory(cat.modelData.id); field.text = ""; field.forceActiveFocus(); }
-                    }
-                }
-            }
-
-            // Konto, blokada, wyłączanie
-            Item {
-                id: sideFooter
-                width: parent.width; height: 62
-                y: parent.height - height
-                opacity: panel.stagger(4)
-                Rectangle { x: 14; width: parent.width - 28; height: 1; color: Theme.line }
-                Rectangle {
-                    id: avatar
-                    x: 14; anchors.verticalCenter: parent.verticalCenter
-                    width: 34; height: 34; radius: 17
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: "#7C9BFF" }
-                        GradientStop { position: 1; color: "#8B5CF6" }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        text: Platform.userName.charAt(0).toUpperCase()
-                        color: "white"
-                        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
-                    }
-                }
-                Text {
-                    anchors.left: avatar.right; anchors.leftMargin: 10
-                    anchors.right: footerButtons.left; anchors.rightMargin: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Platform.userName
-                    elide: Text.ElideRight
-                    color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
-                }
-                Row {
-                    id: footerButtons
-                    anchors.right: parent.right; anchors.rightMargin: 8
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-                    FooterButton { icon: "lock"; tip: "Zablokuj"; onClicked: { start.close(); Platform.lockScreen(); } }
-                    FooterButton { icon: "power"; tip: "Wyłącz"; onClicked: { start.close(); Platform.shutdownPrompt(); } }
-                }
-            }
-        }
-
-        // ——— Prawy panel ———
         Item {
             id: main
-            x: side.x + side.width; width: parent.width - x; height: parent.height
+            width: parent.width; height: parent.height - footer.height
 
-            // Pole wyszukiwania — pigułka, przy pisaniu jaśnieje i dostaje niebieską obwódkę
+            // Pole wyszukiwania
             Rectangle {
                 id: searchBox
-                x: 24; y: 20
-                width: main.width - 48; height: 44
-                radius: 10
+                x: 20; y: 18
+                width: main.width - 40; height: 42
+                radius: 9
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
-                border.color: field.activeFocus ? Theme.accentAlpha(0.55) : "transparent"
+                border.color: field.activeFocus ? Theme.accent : "transparent"
                 Behavior on color { ColorAnimation { duration: 140 } }
-                Rectangle {
-                    anchors.fill: parent; anchors.margins: -4
-                    radius: 12
-                    color: "transparent"
-                    border.width: 4; border.color: Theme.accentAlpha(0.12)
-                    visible: field.activeFocus
-                }
                 Icon {
                     x: 16; anchors.verticalCenter: parent.verticalCenter
                     d: Icons.search; size: 18
@@ -376,7 +205,7 @@ Window {
             // ——— Programy wybranej kategorii ———
             Item {
                 id: browse
-                x: 0; y: searchBox.y + searchBox.height + 18
+                x: 0; y: searchBox.y + searchBox.height + 12
                 width: main.width; height: main.height - y
                 visible: field.text.trim() === ""
                 clip: true
@@ -391,9 +220,9 @@ Window {
 
                 Flickable {
                     id: catContent
-                    x: 16 + browse.shift
-                    width: browse.width - 32; height: browse.height
-                    contentHeight: catColumn.height + 20
+                    x: 20 + browse.shift
+                    width: browse.width - 40; height: browse.height
+                    contentHeight: catColumn.height + 16
                     boundsBehavior: Flickable.StopAtBounds
                     clip: true
 
@@ -402,60 +231,100 @@ Window {
                         width: parent.width
                         spacing: 8
 
-                        Row {
-                            x: 8
-                            spacing: 10
+                        Item {
+                            width: parent.width; height: 30
                             Text {
-                                id: catTitle
-                                text: start.currentCategory.name
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: start.category === "ulubione" ? "Przypięte" : "Wszystkie programy"
                                 color: Theme.text
-                                font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold
-                                font.letterSpacing: -0.4
+                                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
                             }
-                            Text {
-                                anchors.baseline: catTitle.baseline
-                                text: start.category === "ulubione" ? "Przypięte" : start.categoryApps.length + (start.categoryApps.length === 1 ? " program" : " programów")
-                                color: Theme.text2
-                                font.family: Theme.font; font.pixelSize: 13
+                            Rectangle {
+                                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                width: allText.implicitWidth + 20; height: 28; radius: 7
+                                color: allArea.containsMouse ? Theme.hover : "transparent"
+                                Text {
+                                    id: allText
+                                    anchors.centerIn: parent
+                                    text: start.category === "ulubione" ? "Wszystkie programy" : "Przypięte"
+                                    color: Theme.text2
+                                    font.family: Theme.font; font.pixelSize: 13
+                                }
+                                MouseArea {
+                                    id: allArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: { start.selectCategory(start.category === "ulubione" ? "wszystkie" : "ulubione"); field.forceActiveFocus(); }
+                                }
+                            }
+                        }
+
+                        // Filtry kategorii
+                        Flow {
+                            width: parent.width
+                            spacing: 6
+                            visible: start.category !== "ulubione"
+                            Repeater {
+                                model: start.categories.filter(c => c.id !== "ulubione")
+                                delegate: Rectangle {
+                                    id: chip
+                                    required property var modelData
+                                    readonly property bool active: start.category === modelData.id
+                                    width: chipText.implicitWidth + 20; height: 28; radius: 7
+                                    color: active ? Theme.accent : chipArea.containsMouse ? Theme.hover : Theme.fill
+                                    Text {
+                                        id: chipText
+                                        anchors.centerIn: parent
+                                        text: chip.modelData.name
+                                        color: chip.active ? "white" : Theme.text
+                                        font.family: Theme.font; font.pixelSize: 12
+                                    }
+                                    MouseArea {
+                                        id: chipArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: { start.selectCategory(chip.modelData.id); field.forceActiveFocus(); }
+                                    }
+                                }
                             }
                         }
 
                         Grid {
                             columns: 6
                             Repeater {
-                                model: start.categoryApps
+                                model: start.category === "ulubione" ? start.categoryApps.slice(0, 12) : start.categoryApps
                                 delegate: Item {
                                     id: tile
                                     required property var modelData
                                     required property int index
                                     readonly property real k: panel.stagger(3 + Math.min(index, 14))
-                                    width: catColumn.width / 6; height: 104
+                                    width: catColumn.width / 6; height: 88
                                     opacity: k
-                                    transform: Translate { y: (1 - tile.k) * 12 }
+                                    transform: Translate { y: (1 - tile.k) * 10 }
                                     Rectangle {
                                         anchors.fill: parent; anchors.margins: 2
-                                        radius: 16
+                                        radius: 9
                                         color: Theme.hover
                                         opacity: tileArea.containsMouse ? 1 : 0
                                         Behavior on opacity { NumberAnimation { duration: 120 } }
                                     }
                                     AppIcon {
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        y: 12
-                                        size: 56
+                                        y: 9
+                                        size: 46
                                         desktopId: tile.modelData.id
                                         source: tile.modelData.icon
-                                        scale: tileArea.pressed ? 0.9 : (tileArea.containsMouse ? 1.05 : 1)
-                                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                        scale: tileArea.pressed ? 0.92 : 1
+                                        Behavior on scale { NumberAnimation { duration: 120 } }
                                     }
                                     Text {
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        y: 76
-                                        width: parent.width - 10
+                                        y: 62
+                                        width: parent.width - 8
                                         horizontalAlignment: Text.AlignHCenter
                                         text: tile.modelData.name
                                         color: Theme.text
-                                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                                        font.family: Theme.font; font.pixelSize: 12
                                         elide: Text.ElideRight
                                     }
                                     MouseArea { id: tileArea; anchors.fill: parent; hoverEnabled: true; onClicked: start.launch(tile.modelData.id) }
@@ -463,41 +332,46 @@ Window {
                             }
                         }
 
-                        // Ulubione: ostatnie pliki pod programami
-                        Item { width: 1; height: 6; visible: recentsTitle.visible }
+                        // Ostatnie pliki
+                        Rectangle { width: parent.width; height: 1; color: Theme.line; visible: recentsTitle.visible }
                         Text {
                             id: recentsTitle
-                            x: 8
+                            topPadding: 4
                             visible: start.category === "ulubione" && start.recents.length > 0
-                            text: "Ostatnie pliki"
-                            color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.Bold
+                            text: "Ostatnie"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
                         }
-                        Grid {
-                            x: 4
-                            columns: 2
-                            spacing: 8
+                        Column {
+                            width: parent.width
                             visible: recentsTitle.visible
                             Repeater {
                                 model: start.category === "ulubione" ? start.recents : []
                                 delegate: Rectangle {
                                     id: rec
                                     required property var modelData
-                                    required property int index
-                                    width: (catColumn.width - 16) / 2; height: 56
-                                    radius: 14
-                                    color: recArea.containsMouse ? Theme.hover : Theme.fill
-                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    width: catColumn.width; height: 40
+                                    radius: 8
+                                    color: recArea.containsMouse ? Theme.hover : "transparent"
                                     Kirigami.Icon {
-                                        x: 12; anchors.verticalCenter: parent.verticalCenter
-                                        width: 32; height: 32
+                                        x: 8; anchors.verticalCenter: parent.verticalCenter
+                                        width: 24; height: 24
                                         source: rec.modelData.icon
                                     }
-                                    Column {
-                                        x: 54; anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - 66
-                                        spacing: 1
-                                        Text { width: parent.width; text: rec.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; elide: Text.ElideMiddle }
-                                        Text { text: start.when(rec.modelData.modified); color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
+                                    Text {
+                                        x: 42; anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - x - dateLabel.implicitWidth - 20
+                                        text: rec.modelData.name
+                                        elide: Text.ElideMiddle
+                                        color: Theme.text
+                                        font.family: Theme.font; font.pixelSize: 13
+                                    }
+                                    Text {
+                                        id: dateLabel
+                                        anchors.right: parent.right; anchors.rightMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: start.when(rec.modelData.modified)
+                                        color: Theme.text2
+                                        font.family: Theme.font; font.pixelSize: 12
                                     }
                                     MouseArea {
                                         id: recArea; anchors.fill: parent; hoverEnabled: true
@@ -527,17 +401,17 @@ Window {
                 section.delegate: Text {
                     required property string section
                     leftPadding: 12; topPadding: 12; bottomPadding: 4
-                    text: section.toUpperCase()
+                    text: section
                     color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.6
+                    font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                 }
                 delegate: Rectangle {
                     id: res
                     required property int index
                     required property var model
                     readonly property bool current: ListView.isCurrentItem
-                    width: list.width; height: 54
-                    radius: 14
+                    width: list.width; height: 48
+                    radius: 8
                     color: current ? Theme.accent : (resArea.containsMouse ? Theme.hover : "transparent")
                     Kirigami.Icon {
                         x: 12; anchors.verticalCenter: parent.verticalCenter
@@ -565,6 +439,45 @@ Window {
                 }
             }
         }
+
+        // Konto, blokada, wyłączanie
+        Rectangle {
+            id: footer
+            anchors.bottom: parent.bottom
+            width: parent.width; height: 54
+            bottomLeftRadius: 16; bottomRightRadius: 16
+            color: Theme.windowGlass
+            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            Rectangle {
+                id: avatar
+                x: 20; anchors.verticalCenter: parent.verticalCenter
+                width: 30; height: 30; radius: 15
+                color: Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: Platform.userName.charAt(0).toUpperCase()
+                    color: "white"
+                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                }
+            }
+            Text {
+                anchors.left: avatar.right; anchors.leftMargin: 10
+                anchors.right: footerButtons.left; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                text: Platform.userName
+                elide: Text.ElideRight
+                color: Theme.text
+                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+            }
+            Row {
+                id: footerButtons
+                anchors.right: parent.right; anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                FooterButton { icon: "lock"; tip: "Zablokuj"; onClicked: { start.close(); Platform.lockScreen(); } }
+                FooterButton { icon: "power"; tip: "Wyłącz"; onClicked: { start.close(); Platform.shutdownPrompt(); } }
+            }
+        }
     }
 
     component FooterButton: Rectangle {
@@ -572,8 +485,8 @@ Window {
         property string icon
         property string tip
         signal clicked()
-        width: 34; height: 34; radius: 17
-        color: fbArea.containsMouse ? Theme.hover : "transparent"
+        width: 32; height: 32; radius: 8
+        color: fbArea.containsMouse ? Theme.hover : Theme.fill
         scale: fbArea.pressed ? 0.9 : 1
         Behavior on scale { NumberAnimation { duration: 100 } }
         Icon { anchors.centerIn: parent; d: Icons[fb.icon] || ""; size: 17; color: Theme.text2 }
@@ -593,6 +506,6 @@ Window {
     Timer {
         id: blurTimer
         interval: 20
-        onTriggered: Platform.setBlur(start, [{ x: panel.x, y: panel.y, w: panel.width, h: panel.height, r: 30 }])
+        onTriggered: Platform.setBlur(start, [{ x: panel.x, y: panel.y, w: panel.width, h: panel.height, r: 16 }])
     }
 }
