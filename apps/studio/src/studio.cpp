@@ -891,11 +891,11 @@ Snapshot *Studio::buildSnapshot(bool forExport)
         for (const Slot &sl : t.slots_) {
             if (sl.bypass || !sl.plugin)
                 continue;
-            std::shared_ptr<Vst3::Plugin> p = sl.plugin;
+            std::shared_ptr<Plug::Plugin> p = sl.plugin;
             if (forExport) {
                 Slot copy = sl;
                 copy.state = sl.plugin->state();
-                p = makePlugin(copy, true);
+                p = makePlugin(copy, true, true);
                 if (!p)
                     continue;
             }
@@ -1871,10 +1871,30 @@ void Studio::tick()
     {
         // Wtyczka może zmienić opóźnienie (np. tryb wysokiej jakości) — wyrównanie liczy się od nowa
         int sum = 0;
-        for (const Insert &in : std::as_const(m_inserts))
-            for (const Slot &sl : in.slots_)
-                if (sl.plugin && !sl.bypass)
+        for (Insert &in : m_inserts)
+            for (Slot &sl : in.slots_)
+                if (sl.plugin && !sl.bypass) {
                     sum += sl.plugin->latency();
+                    if (sl.plugin->crashed()) {
+                        // Ścieżka gra dalej bez wtyczki, a ustawienia z ostatniego zapisu czekają na restart
+                        emit message(QStringLiteral("Wtyczka „%1” przestała działać — gramy bez niej. Uruchom ją ponownie w mikserze.").arg(sl.info.name));
+                        sl.state = m_lastState.value(sl.id, sl.state);
+                        sl.plugin.reset();
+                        m_rebuild = true;
+                    }
+                }
+        for (Channel &c : m_channels)
+            if (c.vst.plugin && c.vst.plugin->crashed()) {
+                emit message(QStringLiteral("Instrument „%1” przestał działać. Uruchom go ponownie w racku.").arg(c.name));
+                c.vst.state = m_lastState.value(c.id, c.vst.state);
+                c.vst.plugin.reset();
+                c.instrument.reset();
+                m_rebuild = true;
+            }
+        if (m_rebuild) {
+            m_rebuild = false;
+            changed(false);
+        }
         if (sum != m_lastLatency) {
             m_lastLatency = sum;
             m_engine.setSnapshot(buildSnapshot());
@@ -2315,8 +2335,9 @@ void Studio::cycleClip(int id)
 QVariantList Studio::plugins() const
 {
     QVariantList l;
-    for (const Vst3::Info &i : m_pluginList)
+    for (const Plug::Info &i : m_pluginList)
         l.append(QVariantMap{{QStringLiteral("uid"), i.uid},
+                             {QStringLiteral("format"), i.format},
                              {QStringLiteral("name"), i.name},
                              {QStringLiteral("vendor"), i.vendor},
                              {QStringLiteral("category"), i.category},
@@ -2324,17 +2345,87 @@ QVariantList Studio::plugins() const
     return l;
 }
 
+// Skan w procesach pomocniczych: wtyczka, która pada przy ładowaniu, nie zamyka Studia. Wynik zapamiętany
+// dla każdego pliku (po dacie zmiany), więc kolejne skany trwają chwilę
 void Studio::scanPlugins()
 {
-    m_pluginList = Vst3::scan();
-    m_pluginsScanned = true;
-    emit pluginsChanged();
+    if (m_scanning)
+        return;
+    m_scanning = true;
+    QString helper = QCoreApplication::applicationDirPath() + QStringLiteral("/aster-plugin-host");
+    if (!QFile::exists(helper))
+        helper = QStringLiteral("/usr/libexec/aster-plugin-host");
+    const QString cachePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/wtyczki.json");
+    QPointer<Studio> self(this);
+    QThreadPool::globalInstance()->start([self, helper, cachePath] {
+        QJsonObject cache;
+        {
+            QFile f(cachePath);
+            if (f.open(QIODevice::ReadOnly))
+                cache = QJsonDocument::fromJson(f.readAll()).object();
+        }
+        QJsonObject fresh;
+        QList<Plug::Info> list;
+        QStringList bad;
+        for (const QString &file : Plug::pluginFiles()) {
+            const QString stamp = QString::number(QFileInfo(file).lastModified().toSecsSinceEpoch());
+            QJsonObject entry = cache.value(file).toObject();
+            if (entry.value(QStringLiteral("stamp")).toString() != stamp) {
+                QProcess p;
+                p.setProcessChannelMode(QProcess::SeparateChannels);
+                p.start(helper, {QStringLiteral("--scan"), file});
+                entry = QJsonObject{{QStringLiteral("stamp"), stamp}};
+                if (p.waitForFinished(30000) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0) {
+                    const QByteArray out = p.readAllStandardOutput();
+                    const qsizetype at = out.lastIndexOf("\n@@");
+                    if (at >= 0)
+                        entry.insert(QStringLiteral("plugins"), QJsonDocument::fromJson(out.mid(at + 3)).array());
+                } else {
+                    p.kill();
+                    p.waitForFinished(1000);
+                    entry.insert(QStringLiteral("bad"), true);
+                }
+            }
+            fresh.insert(file, entry);
+            if (entry.value(QStringLiteral("bad")).toBool())
+                bad << QFileInfo(file).fileName();
+            for (const QJsonValue &v : entry.value(QStringLiteral("plugins")).toArray()) {
+                const QJsonObject o = v.toObject();
+                Plug::Info i;
+                i.format = o.value(QStringLiteral("format")).toString();
+                i.path = o.value(QStringLiteral("path")).toString();
+                i.uid = o.value(QStringLiteral("uid")).toString();
+                i.name = o.value(QStringLiteral("name")).toString();
+                i.vendor = o.value(QStringLiteral("vendor")).toString();
+                i.category = o.value(QStringLiteral("category")).toString();
+                i.instrument = o.value(QStringLiteral("instrument")).toBool();
+                list << i;
+            }
+        }
+        QDir().mkpath(QFileInfo(cachePath).absolutePath());
+        QFile f(cachePath);
+        if (f.open(QIODevice::WriteOnly))
+            f.write(QJsonDocument(fresh).toJson(QJsonDocument::Compact));
+        std::sort(list.begin(), list.end(), [](const Plug::Info &a, const Plug::Info &b) { return a.name.compare(b.name, Qt::CaseInsensitive) < 0; });
+        QMetaObject::invokeMethod(qApp, [self, list, bad] {
+            if (!self)
+                return;
+            self->m_scanning = false;
+            self->m_pluginList = list;
+            emit self->pluginsChanged();
+            if (!bad.isEmpty())
+                emit self->message(QStringLiteral("Te wtyczki padają przy wczytywaniu i zostały pominięte: %1").arg(bad.join(QStringLiteral(", "))));
+        });
+    });
 }
 
-std::shared_ptr<Vst3::Plugin> Studio::makePlugin(const Slot &s, bool applyState)
+std::shared_ptr<Plug::Plugin> Studio::makePlugin(const Slot &s, bool applyState, bool offline)
 {
     QString err;
-    std::shared_ptr<Vst3::Plugin> p = Vst3::Plugin::load(s.info, Engine::Rate, Renderer::MaxBlock, &err);
+    Plug::Info info = s.info;
+    if (info.format.isEmpty())
+        info.format = info.path.endsWith(QLatin1String(".clap")) ? QStringLiteral("clap") : QStringLiteral("vst3");
+    std::shared_ptr<Plug::Plugin> p = Plug::loadRemote(info, Engine::Rate, Renderer::MaxBlock, offline, &err);
     if (p && applyState && !s.state.isEmpty())
         p->setState(s.state);
     return p;
@@ -2345,7 +2436,7 @@ void Studio::addPlugin(int insert, const QString &uid)
     Insert *in = findInsert(insert);
     if (!in)
         return;
-    for (const Vst3::Info &i : std::as_const(m_pluginList)) {
+    for (const Plug::Info &i : std::as_const(m_pluginList)) {
         if (i.uid != uid)
             continue;
         if (i.instrument) {

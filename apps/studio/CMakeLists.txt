@@ -17,8 +17,7 @@ find_library(VST3_COMMON vst3sdk_common HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIR
 find_library(RUBBERBAND rubberband HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)    # rozciąganie w czasie
 
 qt_add_executable(aster-studio src/main.cpp)
-target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk ${STUDIO_VST3_PREFIX}/include)
-target_compile_definitions(aster-studio PRIVATE RELEASE=1)
+target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include)
 
 set(STUDIO_QML
     qml/Main.qml
@@ -49,7 +48,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
-        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/vst3host.cpp src/vst3host.h src/rack.cpp src/instrument.h src/stretch.cpp src/stretch.h src/library.cpp
+        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/remote.cpp src/remote.h src/plugin.h src/rack.cpp src/instrument.h src/stretch.cpp src/stretch.h src/library.cpp
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
@@ -69,15 +68,20 @@ qt_add_qml_module(aster-studio
         src/waveform.h
 )
 
+# Proces pomocniczy: jedna wtyczka, własny kod VST3 i CLAP, bez Qt Quick
+add_executable(aster-plugin-host src/pluginhost_main.cpp src/remote.cpp src/plugincommon.cpp src/vst3host.cpp src/claphost.cpp src/pluginwindow.cpp)
+target_include_directories(aster-plugin-host PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk ${STUDIO_VST3_PREFIX}/include)
+target_compile_definitions(aster-plugin-host PRIVATE RELEASE=1)
+target_link_libraries(aster-plugin-host PRIVATE Qt6::Core PkgConfig::X11 ${VST3_HOSTING} ${VST3_COMMON} ${CMAKE_DL_LIBS})
+add_dependencies(aster-studio aster-plugin-host)
+install(TARGETS aster-plugin-host DESTINATION libexec)
+
 target_link_libraries(aster-studio PRIVATE
     Qt6::Gui
     Qt6::Quick
     Qt6::Qml
     Qt6::DBus
     PkgConfig::PIPEWIRE
-    PkgConfig::X11
-    ${VST3_HOSTING}
-    ${VST3_COMMON}
     ${RUBBERBAND}
     ${CMAKE_DL_LIBS}
     PkgConfig::SNDFILE

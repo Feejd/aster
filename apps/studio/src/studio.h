@@ -3,7 +3,7 @@
 #include "audiosource.h"
 #include "engine.h"
 #include <QPointF>
-#include "vst3host.h"
+#include "plugin.h"
 #include "midiinput.h"
 
 #include <QDateTime>
@@ -282,6 +282,8 @@ public:
     Q_INVOKABLE void removePlugin(int insert, int slot);
     Q_INVOKABLE void setPluginBypass(int insert, int slot, bool on);
     Q_INVOKABLE void openPlugin(int insert, int slot);
+    Q_INVOKABLE void restartPlugin(int insert, int slot);      // po awarii albo gdy jej brakowało
+    Q_INVOKABLE void restartChannel(int id);
     // Rack. kind: drum (arg „kit:row”), sampler (plik audio/ projektu), synth (id instrumentu), bass (kit), vst (uid)
     Q_INVOKABLE int addChannel(const QString &kind, const QString &arg, const QString &name = {});
     Q_INVOKABLE void removeChannel(int id);
@@ -430,10 +432,10 @@ private:
     struct Slot
     {
         int id = 0;
-        Vst3::Info info;
+        Plug::Info info;
         bool bypass = false;
         QByteArray state;               // ostatni znany stan (także gdy wtyczki brakuje na tym komputerze)
-        std::shared_ptr<Vst3::Plugin> plugin;
+        std::shared_ptr<Plug::Plugin> plugin;
         int side = 0;                   // insert na wejściu bocznym (0 — brak)
     };
     struct Send
@@ -533,7 +535,7 @@ private:
     static QList<Clip> carved(const QList<Clip> &clips, long long a, long long b, int keepId, int *nextId);
 
     QJsonObject toJson(bool pluginStates = true) const;     // false — do cofania: stan wtyczek zostaje w nich samych
-    std::shared_ptr<Vst3::Plugin> makePlugin(const Slot &s, bool applyState);
+    std::shared_ptr<Plug::Plugin> makePlugin(const Slot &s, bool applyState, bool offline = false);
     void fromJson(const QJsonObject &o);
     void checkpoint();                         // stan przed zmianą → cofanie
     void changed(bool structure = true);       // po zmianie: widok QML, migawka dla silnika, „niezapisany”
@@ -584,9 +586,10 @@ private:
     int m_lyricsStart = 1, m_lyricsBars = 1;
     QVariantList m_lyricView;
     void rebuildLyrics();
-    QList<Vst3::Info> m_pluginList;
+    QList<Plug::Info> m_pluginList;
     QHash<int, QByteArray> m_slotMemo;                     // stan usuniętych wtyczek — na wypadek cofnięcia
-    bool m_pluginsScanned = false;
+    bool m_scanning = false, m_rebuild = false;
+    mutable QHash<int, QByteArray> m_lastState;            // ostatni zapisany stan wtyczek — po awarii wracają z nim
     // Odszumia pliki (obecny plik klipu → oryginał) i podmienia je w klipach ścieżki o numerze id
     void startDenoise(int trackId, const QHash<QString, QString> &files, int level, bool quiet);
     void resetLyrics();
@@ -619,7 +622,7 @@ private:
     void rebuildInstrument(Channel &c);
     void compileChannels(Snapshot *s, bool forExport);
     void compileAutos(Snapshot *s);
-    QHash<int, Vst3::Plugin *> m_snapPlugins;   // slot → instancja w budowanej migawce (eksport ma własne)
+    QHash<int, Plug::Plugin *> m_snapPlugins;   // slot → instancja w budowanej migawce (eksport ma własne)
     QList<int> insertOrder() const;
     bool wouldLoop(int source, int target) const;      // dźwięk z target dochodzi już do source
     void compileLatency(Snapshot *s);

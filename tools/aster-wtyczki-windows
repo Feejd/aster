@@ -1,0 +1,49 @@
+#!/bin/bash
+# Wtyczki VST z Windowsa w Studiu Aster: Wine + yabridge. Tylko x86_64.
+# NIESPRAWDZONE na prawdziwym sprzęcie — pierwszy test ma być na komputerze z procesorem x86.
+# Użycie:
+#   aster-wtyczki-windows instaluj     Wine (warstwa systemu, wymaga restartu) i yabridge w katalogu domowym
+#   aster-wtyczki-windows dodaj KATALOG    katalog z wtyczkami zainstalowanymi przez Wine
+#   aster-wtyczki-windows odswiez      po doinstalowaniu wtyczek
+set -euo pipefail
+
+WERSJA=5.1.1
+CEL="$HOME/.local/share/yabridge"
+PACZKA="https://github.com/robbert-vdh/yabridge/releases/download/$WERSJA/yabridge-$WERSJA.tar.gz"
+VST3_WINE="$HOME/.wine/drive_c/Program Files/Common Files/VST3"
+
+if [ "$(uname -m)" != x86_64 ]; then
+    echo "Wtyczki z Windowsa działają tylko na procesorach x86_64 (ten komputer: $(uname -m))." >&2
+    exit 1
+fi
+
+case "${1:-}" in
+instaluj)
+    if ! command -v wine >/dev/null; then
+        echo "Instaluję Wine jako warstwę systemu. Po restarcie uruchom to polecenie jeszcze raz."
+        sudo rpm-ostree install --idempotent wine
+        exit 0
+    fi
+    mkdir -p "$CEL"
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "${tmp:?}"' EXIT
+    curl -fL "$PACZKA" -o "$tmp/yabridge.tar.gz"
+    tar -xzf "$tmp/yabridge.tar.gz" -C "$tmp"
+    cp -r "$tmp"/yabridge/. "$CEL"/
+    mkdir -p "$VST3_WINE"
+    "$CEL/yabridgectl" add "$VST3_WINE"
+    "$CEL/yabridgectl" sync
+    echo "Gotowe. Instalatory wtyczek uruchamiaj przez: wine instalator.exe"
+    echo "Potem: aster-wtyczki-windows odswiez — wtyczki pojawią się w przeglądarce Studia."
+    ;;
+dodaj)
+    "$CEL/yabridgectl" add "$2"
+    "$CEL/yabridgectl" sync
+    ;;
+odswiez)
+    "$CEL/yabridgectl" sync
+    ;;
+*)
+    sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+esac

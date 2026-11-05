@@ -112,9 +112,8 @@ Item {
                         }
                         HoverButton {
                             x: 2; width: parent.width - 54 - (sideBtn.visible ? 26 : 0); height: parent.height; radius: 6
-                            enabled: !!plug.p && !plug.p.missing
-                            onClicked: Studio.openPlugin(side.sel.id, plug.p.id)
-                            Text { x: 6; width: parent.width - 10; anchors.verticalCenter: parent.verticalCenter; text: plug.p ? plug.p.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                            onClicked: { if (plug.p.missing) Studio.restartPlugin(side.sel.id, plug.p.id); else Studio.openPlugin(side.sel.id, plug.p.id); }
+                            Text { x: 6; width: parent.width - 10; anchors.verticalCenter: parent.verticalCenter; text: plug.p ? plug.p.name + (plug.p.missing ? " — uruchom" : "") : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
                         }
                         HoverButton {
                             x: parent.width - 50; anchors.verticalCenter: parent.verticalCenter

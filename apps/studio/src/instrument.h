@@ -3,7 +3,7 @@
 #include "audiosource.h"
 #include "dsp.h"
 #include "synthvoice.h"
-#include "vst3host.h"
+#include "plugin.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,7 +16,7 @@ class Instrument
 {
 public:
     virtual ~Instrument() = default;
-    virtual void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &t) = 0;
+    virtual void process(float *l, float *r, int n, const Plug::Note *ev, int count, const Plug::Transport &t) = 0;
     virtual void silence() = 0;                 // zatrzymanie, skok głowicy, zawrócenie pętli
 };
 
@@ -42,7 +42,7 @@ public:
         if (m_filter)
             m_lp = Biquad::lowPassQ(p.cutoff, p.resonance, rate);
     }
-    void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &) override
+    void process(float *l, float *r, int n, const Plug::Note *ev, int count, const Plug::Transport &) override
     {
         int done = 0;
         for (int e = 0; e <= count; ++e) {
@@ -204,7 +204,7 @@ class SynthInstrument : public Instrument
 {
 public:
     SynthInstrument(SynthVoice::Inst inst, int rate) : m_inst(inst), m_rate(rate), m_v(Voices), m_pitch(Voices, -1), m_age(Voices, 0) {}
-    void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &) override
+    void process(float *l, float *r, int n, const Plug::Note *ev, int count, const Plug::Transport &) override
     {
         int done = 0;
         for (int e = 0; e <= count; ++e) {
@@ -267,7 +267,7 @@ class Bass808 : public Instrument
 public:
     struct Params { double decay = 1.5, glide = 0.06, drive = 0.3; };
     Bass808(const Params &p, int rate) : m_p(p), m_rate(rate), m_decayK(std::exp(-3.0 / (p.decay * rate))) {}
-    void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &t) override
+    void process(float *l, float *r, int n, const Plug::Note *ev, int count, const Plug::Transport &t) override
     {
         const double slideWithin = 3 * 60.0 / std::max(t.bpm, 30.0) / 4 * m_rate;     // do 3 szesnastek
         const double drive = 1 + 4 * m_p.drive, norm = 1 / std::tanh(drive);
@@ -331,16 +331,16 @@ private:
 class VstInstrument : public Instrument
 {
 public:
-    explicit VstInstrument(std::shared_ptr<Vst3::Plugin> p) : m_plugin(std::move(p)) {}
-    Vst3::Plugin *plugin() const { return m_plugin.get(); }
-    void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &t) override
+    explicit VstInstrument(std::shared_ptr<Plug::Plugin> p) : m_plugin(std::move(p)) {}
+    Plug::Plugin *plugin() const { return m_plugin.get(); }
+    void process(float *l, float *r, int n, const Plug::Note *ev, int count, const Plug::Transport &t) override
     {
-        Vst3::Note all[MaxEvents];
+        Plug::Note all[MaxEvents];
         int k = 0;
         if (m_clear) {
             for (int p = 0; p < 128 && k < MaxEvents / 2; ++p)
                 if (m_held[p]) {
-                    all[k++] = Vst3::Note{0, false, p, 0};
+                    all[k++] = Plug::Note{0, false, p, 0};
                     m_held[p] = false;
                 }
             m_clear = false;
@@ -355,7 +355,7 @@ public:
 
 private:
     static constexpr int MaxEvents = 512;
-    std::shared_ptr<Vst3::Plugin> m_plugin;
+    std::shared_ptr<Plug::Plugin> m_plugin;
     bool m_held[128] = {};
     bool m_clear = false;
 };

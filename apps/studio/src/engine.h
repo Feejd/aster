@@ -3,7 +3,7 @@
 #include "audiosource.h"
 #include "dsp.h"
 #include "instrument.h"
-#include "vst3host.h"
+#include "plugin.h"
 #include "tune.h"
 #include "synthvoice.h"
 
@@ -51,7 +51,7 @@ struct SendRT
 
 struct PluginRT
 {
-    Vst3::Plugin *plugin = nullptr;       // żyje w Snapshot::plugins
+    Plug::Plugin *plugin = nullptr;       // żyje w Snapshot::plugins
     int side = -1;                        // insert podany na wejście boczne
 };
 
@@ -82,7 +82,7 @@ struct AutoRT
     enum Kind { Volume, Pan, Reverb, Echo, Drive, Double, Deess, Kinds, ChannelVolume, Master, Param };
     Kind kind = Volume;
     int index = 0;                        // insert albo kanał
-    Vst3::Plugin *plugin = nullptr;       // Param
+    Plug::Plugin *plugin = nullptr;       // Param
     unsigned param = 0;
     long long start = 0, end = 0;
     std::vector<std::pair<long long, float>> points;   // ramki od początku utworu, wartość 0…1
@@ -156,7 +156,7 @@ struct Snapshot
     float echoFeedback = 0.35f;
     MasterParams mastering;
     std::vector<SourcePtr> keep;          // trzyma pliki przy życiu, dopóki migawka jest w użyciu
-    std::vector<std::shared_ptr<Vst3::Plugin>> plugins;   // i wtyczki (zwalnia je wątek interfejsu)
+    std::vector<std::shared_ptr<Plug::Plugin>> plugins;   // i wtyczki (zwalnia je wątek interfejsu)
 };
 
 // Mikser: ten sam kod gra na żywo i eksportuje (eksport brzmi dokładnie tak jak odsłuch)
@@ -208,7 +208,7 @@ private:
     long long m_nextPos = 0;              // gdzie powinien zacząć się kolejny blok (inaczej — skok głowicy)
     const Snapshot *m_seqSnap = nullptr;
     bool m_wasPlaying = false;
-    Vst3::Note m_ev[512];
+    Plug::Note m_ev[512];
     struct Choke { int channel, group, offset; };
     Choke m_chokes[64];
     float m_autoVal[MaxTracks][AutoRT::Kinds];

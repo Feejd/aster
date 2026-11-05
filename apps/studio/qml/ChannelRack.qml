@@ -135,7 +135,7 @@ Item {
                                 else Studio.channelNoteOn(row.ch.id, row.ch.kind === "bass" ? 36 : 60, 0.85);
                             }
                             onReleased: Studio.channelNoteOff(row.ch.id, row.ch.kind === "bass" ? 36 : 60)
-                            onDoubleClicked: { if (row.ch.kind === "vst") Studio.openChannelPlugin(row.ch.id); else rk.settingsRequested(row.ch.id); }
+                            onDoubleClicked: { if (row.ch.kind === "vst") { if (row.ch.missing) Studio.restartChannel(row.ch.id); else Studio.openChannelPlugin(row.ch.id); } else rk.settingsRequested(row.ch.id); }
                         }
                     }
                     // Głośność kanału

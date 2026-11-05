@@ -326,9 +326,12 @@ QJsonObject Studio::insertJson(const Insert &t, bool pluginStates) const
     for (const Slot &s : t.slots_) {
         QJsonObject o{{QStringLiteral("id"), s.id}, {QStringLiteral("path"), s.info.path}, {QStringLiteral("uid"), s.info.uid},
                       {QStringLiteral("name"), s.info.name}, {QStringLiteral("vendor"), s.info.vendor}, {QStringLiteral("bypass"), s.bypass},
-                      {QStringLiteral("side"), s.side}};
-        if (pluginStates)
-            o.insert(QStringLiteral("state"), QString::fromLatin1((s.plugin ? s.plugin->state() : s.state).toBase64()));
+                      {QStringLiteral("side"), s.side}, {QStringLiteral("format"), s.info.format}};
+        if (pluginStates) {
+            const QByteArray st = s.plugin ? s.plugin->state() : s.state;
+            m_lastState.insert(s.id, st);
+            o.insert(QStringLiteral("state"), QString::fromLatin1(st.toBase64()));
+        }
         plugs.append(o);
     }
     for (const Send &s : t.sends)
@@ -347,13 +350,14 @@ QJsonObject Studio::insertJson(const Insert &t, bool pluginStates) const
                                                                {QStringLiteral("denoise"), t.denoise}}}};
 }
 
-static Vst3::Info infoFrom(const QJsonObject &o)
+static Plug::Info infoFrom(const QJsonObject &o)
 {
-    Vst3::Info i;
+    Plug::Info i;
     i.path = o.value(QStringLiteral("path")).toString();
     i.uid = o.value(QStringLiteral("uid")).toString();
     i.name = o.value(QStringLiteral("name")).toString();
     i.vendor = o.value(QStringLiteral("vendor")).toString();
+    i.format = o.value(QStringLiteral("format")).toString();
     return i;
 }
 
@@ -514,7 +518,7 @@ int Studio::addChannel(const QString &kind, const QString &arg, const QString &n
         c.name = QStringLiteral("808");
         c.root = 36;
     } else if (kind == QLatin1String("vst")) {
-        for (const Vst3::Info &i : std::as_const(m_pluginList))
+        for (const Plug::Info &i : std::as_const(m_pluginList))
             if (i.uid == arg)
                 c.vst.info = i;
         if (c.vst.info.uid.isEmpty() || !c.vst.info.instrument) {
@@ -598,6 +602,29 @@ void Studio::setChannelMute(int id, bool on)
         c->mute = on;
         changed(false);
     }
+}
+
+void Studio::restartPlugin(int insert, int slot)
+{
+    if (Insert *in = findInsert(insert))
+        for (Slot &s : in->slots_)
+            if (s.id == slot && !s.plugin) {
+                s.plugin = makePlugin(s, true);
+                if (!s.plugin)
+                    emit message(QStringLiteral("Wtyczka „%1” nadal nie chce się uruchomić.").arg(s.info.name));
+                changed(false);
+            }
+}
+
+void Studio::restartChannel(int id)
+{
+    Channel *c = findChannel(id);
+    if (!c || c->kind != QLatin1String("vst") || c->vst.plugin)
+        return;
+    c->instrument = makeInstrument(*c);
+    if (!c->instrument)
+        emit message(QStringLiteral("Instrument „%1” nadal nie chce się uruchomić.").arg(c->name));
+    changed(false);
 }
 
 void Studio::openChannelPlugin(int id)
@@ -991,7 +1018,7 @@ void Studio::compileChannels(Snapshot *s, bool forExport)
             Channel copy = c;
             if (c.vst.plugin) {
                 copy.vst.state = c.vst.plugin->state();
-                copy.vst.plugin.reset();
+                copy.vst.plugin = makePlugin(copy.vst, true, true);
             }
             inst = makeInstrument(copy);
             if (copy.vst.plugin) {
@@ -1062,7 +1089,7 @@ QVariantList Studio::autoTargets(int insert) const
         add(QStringLiteral("double:") + id, in.name + QStringLiteral(" — dubel"));
         for (const Slot &s : in.slots_)
             if (s.plugin)
-                for (const Vst3::Param &p : s.plugin->params())
+                for (const Plug::Param &p : s.plugin->params())
                     if (p.automatable)
                         add(QStringLiteral("plug:%1:%2").arg(s.id).arg(p.id), s.info.name + QStringLiteral(" — ") + p.name);
     }
@@ -1078,7 +1105,7 @@ QVariantList Studio::channelAutoTargets(int channel) const
             continue;
         add(QStringLiteral("chvol:%1").arg(c.id), c.name + QStringLiteral(" — głośność kanału"));
         if (c.vst.plugin)
-            for (const Vst3::Param &p : c.vst.plugin->params())
+            for (const Plug::Param &p : c.vst.plugin->params())
                 if (p.automatable)
                     add(QStringLiteral("chplug:%1:%2").arg(c.id).arg(p.id), c.name + QStringLiteral(" — ") + p.name);
     }
@@ -1522,9 +1549,13 @@ QJsonObject Studio::rackJson(bool pluginStates) const
                        }()}};
         if (c.kind == QLatin1String("vst")) {
             QJsonObject v{{QStringLiteral("path"), c.vst.info.path}, {QStringLiteral("uid"), c.vst.info.uid},
-                          {QStringLiteral("name"), c.vst.info.name}, {QStringLiteral("vendor"), c.vst.info.vendor}};
-            if (pluginStates)
-                v.insert(QStringLiteral("state"), QString::fromLatin1((c.vst.plugin ? c.vst.plugin->state() : c.vst.state).toBase64()));
+                          {QStringLiteral("name"), c.vst.info.name}, {QStringLiteral("vendor"), c.vst.info.vendor},
+                          {QStringLiteral("format"), c.vst.info.format}};
+            if (pluginStates) {
+                const QByteArray st = c.vst.plugin ? c.vst.plugin->state() : c.vst.state;
+                m_lastState.insert(c.id, st);
+                v.insert(QStringLiteral("state"), QString::fromLatin1(st.toBase64()));
+            }
             o.insert(QStringLiteral("vst"), v);
         }
         channels.append(o);

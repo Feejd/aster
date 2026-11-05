@@ -1,4 +1,5 @@
-#include "vst3host.h"
+#include "plugin.h"
+#include "pluginwindow.h"
 
 #include "base/source/fstring.h"
 #include "pluginterfaces/base/funknownimpl.h"
@@ -27,19 +28,14 @@
 #include <algorithm>
 #include <cstring>
 
-#include <X11/Xatom.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-// Xlib definiuje makra, które gryzą się z Qt i SDK
-#undef Bool
-#undef None
-#undef Status
-#undef Success
-
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 namespace Vst3 {
+
+using namespace Plug;
+
+class Instance;
 
 namespace {
 
@@ -96,19 +92,19 @@ constexpr unsigned QueueSize = 1024;
 class Handler : public U::Implements<U::Directly<IComponentHandler>>
 {
 public:
-    explicit Handler(Plugin::Impl *i) : impl(i) {}
+    explicit Handler(struct Impl *i) : impl(i) {}
     tresult PLUGIN_API beginEdit(ParamID) override { return kResultOk; }
     tresult PLUGIN_API performEdit(ParamID id, ParamValue value) override;
     tresult PLUGIN_API endEdit(ParamID) override { return kResultOk; }
     tresult PLUGIN_API restartComponent(int32 flags) override;
-    Plugin::Impl *impl;
+    Impl *impl;
 };
 
 // Ramka okna wtyczki: zmiana rozmiaru i pętla zdarzeń, której wtyczki X11 potrzebują od gospodarza
 class Frame : public U::Implements<U::Directly<IPlugFrame, Linux::IRunLoop>>
 {
 public:
-    Frame(Display *d, ::Window w) : dpy(d), win(w) {}
+    explicit Frame(PluginWindow *w) : window(w) {}
     ~Frame() override
     {
         qDeleteAll(notifiers);
@@ -116,8 +112,7 @@ public:
     }
     tresult PLUGIN_API resizeView(IPlugView *view, ViewRect *r) override
     {
-        XResizeWindow(dpy, win, unsigned(r->getWidth()), unsigned(r->getHeight()));
-        XFlush(dpy);
+        window->resize(r->getWidth(), r->getHeight());
         view->onSize(r);
         return kResultOk;
     }
@@ -151,15 +146,13 @@ public:
         timers.remove(h);
         return kResultOk;
     }
-    Display *dpy;
-    ::Window win;
+    PluginWindow *window;
     QMultiHash<Linux::IEventHandler *, QSocketNotifier *> notifiers;
     QMultiHash<Linux::ITimerHandler *, QTimer *> timers;
 };
 
-struct Plugin::Impl
+struct Impl
 {
-    Plugin *self = nullptr;
     std::atomic<int> *latency = nullptr;
     VST3::Hosting::Module::Ptr mod;
     IPtr<PlugProvider> provider;
@@ -183,10 +176,7 @@ struct Plugin::Impl
     // Okno
     IPtr<IPlugView> view;
     IPtr<Frame> frame;
-    Display *dpy = nullptr;
-    ::Window win = 0;
-    Atom wmDelete = 0;
-    std::unique_ptr<QSocketNotifier> xNotifier;
+    std::unique_ptr<PluginWindow> window;
 
     void push(ParamID id, ParamValue v)
     {
@@ -196,7 +186,27 @@ struct Plugin::Impl
         queue[w % QueueSize] = {id, v};
         qw.store(w + 1, std::memory_order_release);
     }
-    void pumpX();
+};
+
+class Instance : public Plugin
+{
+public:
+    static std::unique_ptr<Plugin> load(const Info &info, double rate, int maxBlock, QString *error);
+    Instance();
+    ~Instance() override;
+    void process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t, const float *sideL, const float *sideR) override;
+    void automate(unsigned id, double value) override;
+    bool hasSidechain() const override;
+    QList<Param> params() const override;
+    void setParam(unsigned id, double value) override;
+    QByteArray state() const override;
+    bool setState(const QByteArray &data) override;
+    bool hasEditor() const override;
+    bool openEditor() override;
+    void closeEditor() override;
+
+private:
+    std::unique_ptr<Impl> d;
 };
 
 tresult PLUGIN_API Handler::performEdit(ParamID id, ParamValue value)
@@ -212,13 +222,12 @@ tresult PLUGIN_API Handler::restartComponent(int32 flags)
     return kResultOk;
 }
 
-Plugin::Plugin() : d(std::make_unique<Impl>())
+Instance::Instance() : d(std::make_unique<Impl>())
 {
-    d->self = this;
     d->latency = &m_latency;
 }
 
-Plugin::~Plugin()
+Instance::~Instance()
 {
     closeEditor();
     if (d->processor) {
@@ -230,63 +239,45 @@ Plugin::~Plugin()
     d->data.unprepare();
 }
 
-QList<Info> scan()
+QList<Info> scanFile(const QString &file)
 {
-    QStringList paths{QDir::homePath() + QStringLiteral("/.vst3"), QStringLiteral("/usr/lib64/vst3"),
-                      QStringLiteral("/usr/lib/vst3"), QStringLiteral("/usr/local/lib/vst3")};
-    paths = qEnvironmentVariable("VST3_PATH").split(QLatin1Char(':'), Qt::SkipEmptyParts) + paths;
     QList<Info> out;
-    QStringList seen;
-    std::function<void(const QString &, int)> walk = [&](const QString &dir, int depth) {
-        for (const QFileInfo &fi : QDir(dir).entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot)) {
-            if (fi.suffix() != QLatin1String("vst3")) {
-                if (fi.isDir() && depth < 4)
-                    walk(fi.filePath(), depth + 1);
-                continue;
-            }
-            const QString path = fi.canonicalFilePath();
-            if (seen.contains(path))
-                continue;
-            seen << path;
-            QString err;
-            const auto m = module(path, &err);
-            if (!m)
-                continue;
-            for (const auto &c : m->getFactory().classInfos()) {
-                if (c.category() != kVstAudioEffectClass)
-                    continue;
-                Info i;
-                i.path = path;
-                i.uid = QString::fromStdString(c.ID().toString());
-                i.name = QString::fromStdString(c.name());
-                i.vendor = QString::fromStdString(c.vendor());
-                i.category = QString::fromStdString(c.subCategoriesString());
-                i.instrument = i.category.contains(QLatin1String("Instrument"));
-                out << i;
-            }
-        }
-    };
-    for (const QString &p : std::as_const(paths))
-        walk(p, 0);
-    std::sort(out.begin(), out.end(), [](const Info &a, const Info &b) { return a.name.compare(b.name, Qt::CaseInsensitive) < 0; });
+    QString err;
+    const QString path = QFileInfo(file).canonicalFilePath();
+    const auto m = module(path, &err);
+    if (!m)
+        return out;
+    for (const auto &c : m->getFactory().classInfos()) {
+        if (c.category() != kVstAudioEffectClass)
+            continue;
+        Info i;
+        i.format = QStringLiteral("vst3");
+        i.path = path;
+        i.uid = QString::fromStdString(c.ID().toString());
+        i.name = QString::fromStdString(c.name());
+        i.vendor = QString::fromStdString(c.vendor());
+        i.category = QString::fromStdString(c.subCategoriesString());
+        i.instrument = i.category.contains(QLatin1String("Instrument"));
+        out << i;
+    }
     return out;
 }
 
-std::unique_ptr<Plugin> Plugin::load(const Info &info, double rate, int maxBlock, QString *error)
+std::unique_ptr<Plugin> Instance::load(const Info &info, double rate, int maxBlock, QString *error)
 {
     auto fail = [error](const QString &e) {
         if (error)
             *error = e;
-        return nullptr;
+        return std::unique_ptr<Plugin>();
     };
     auto mod = module(info.path, error);
     if (!mod)
-        return nullptr;
+        return {};
     const auto factory = mod->getFactory();
     for (const auto &c : factory.classInfos()) {
         if (QString::fromStdString(c.ID().toString()) != info.uid)
             continue;
-        std::unique_ptr<Plugin> p(new Plugin);
+        std::unique_ptr<Instance> p(new Instance);
         Impl *d = p->d.get();
         p->m_info = info;
         d->mod = mod;
@@ -333,14 +324,14 @@ std::unique_ptr<Plugin> Plugin::load(const Info &info, double rate, int maxBlock
         d->component->setActive(true);
         d->processor->setProcessing(true);
         p->m_latency.store(int(d->processor->getLatencySamples()));
-        return p;
+        return std::unique_ptr<Plugin>(p.release());
     }
     return fail(QStringLiteral("Nie ma już tej wtyczki: %1").arg(info.name));
 }
 
-bool Plugin::hasSidechain() const { return d->auxBus >= 0; }
+bool Instance::hasSidechain() const { return d->auxBus >= 0; }
 
-void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t, const float *sideL, const float *sideR)
+void Instance::process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t, const float *sideL, const float *sideR)
 {
     Impl *i = d.get();
     if (i->busy.test_and_set(std::memory_order_acquire))
@@ -428,13 +419,13 @@ void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount
     i->busy.clear(std::memory_order_release);
 }
 
-void Plugin::automate(unsigned id, double value)
+void Instance::automate(unsigned id, double value)
 {
     if (d->rtCount < 64)
         d->rtParams[d->rtCount++] = {id, std::clamp(value, 0.0, 1.0)};
 }
 
-QList<Param> Plugin::params() const
+QList<Param> Instance::params() const
 {
     QList<Param> out;
     if (!d->controller)
@@ -448,7 +439,7 @@ QList<Param> Plugin::params() const
     return out;
 }
 
-void Plugin::setParam(unsigned id, double value)
+void Instance::setParam(unsigned id, double value)
 {
     value = std::clamp(value, 0.0, 1.0);
     if (d->controller)
@@ -457,7 +448,7 @@ void Plugin::setParam(unsigned id, double value)
 }
 
 // Stan: długość + stan procesora, potem stan kontrolera
-QByteArray Plugin::state() const
+QByteArray Instance::state() const
 {
     auto grab = [](auto *obj) {
         QByteArray b;
@@ -477,7 +468,7 @@ QByteArray Plugin::state() const
     return out;
 }
 
-bool Plugin::setState(const QByteArray &data)
+bool Instance::setState(const QByteArray &data)
 {
     qint64 la = 0;
     if (data.size() < qsizetype(sizeof la))
@@ -506,7 +497,7 @@ bool Plugin::setState(const QByteArray &data)
     return ok;
 }
 
-bool Plugin::hasEditor() const
+bool Instance::hasEditor() const
 {
     if (!d->controller)
         return false;
@@ -514,24 +505,11 @@ bool Plugin::hasEditor() const
     return v && v->isPlatformTypeSupported(kPlatformTypeX11EmbedWindowID) == kResultTrue;
 }
 
-void Plugin::Impl::pumpX()
-{
-    while (dpy && XPending(dpy)) {
-        XEvent e;
-        XNextEvent(dpy, &e);
-        if (e.type == ClientMessage && Atom(e.xclient.data.l[0]) == wmDelete) {
-            self->closeEditor();
-            return;
-        }
-    }
-}
-
-bool Plugin::openEditor()
+bool Instance::openEditor()
 {
     Impl *i = d.get();
     if (i->view) {
-        XRaiseWindow(i->dpy, i->win);
-        XFlush(i->dpy);
+        i->window->raise();
         return true;
     }
     if (!i->controller)
@@ -541,53 +519,38 @@ bool Plugin::openEditor()
         i->view = nullptr;
         return false;
     }
-    i->dpy = XOpenDisplay(nullptr);            // XWayland albo X11; bez niego okna wtyczki się nie otworzą
-    if (!i->dpy) {
+    ViewRect r{};
+    i->view->getSize(&r);
+    i->window = std::make_unique<PluginWindow>(m_info.name, r.getWidth(), r.getHeight(), [this] { closeEditor(); });
+    if (!i->window->ok()) {
+        i->window.reset();
         i->view = nullptr;
         return false;
     }
-    ViewRect r{};
-    i->view->getSize(&r);
-    const int screen = DefaultScreen(i->dpy);
-    i->win = XCreateSimpleWindow(i->dpy, RootWindow(i->dpy, screen), 0, 0, unsigned(std::max(r.getWidth(), 100)), unsigned(std::max(r.getHeight(), 60)), 0,
-                                 BlackPixel(i->dpy, screen), BlackPixel(i->dpy, screen));
-    const QByteArray title = m_info.name.toUtf8();
-    XChangeProperty(i->dpy, i->win, XInternAtom(i->dpy, "_NET_WM_NAME", False), XInternAtom(i->dpy, "UTF8_STRING", False), 8, PropModeReplace,
-                    reinterpret_cast<const unsigned char *>(title.constData()), int(title.size()));
-    i->wmDelete = XInternAtom(i->dpy, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(i->dpy, i->win, &i->wmDelete, 1);
-    // Okno wtyczki nad Studiem, jak pływające okna w innych programach
-    Atom above = XInternAtom(i->dpy, "_NET_WM_STATE_ABOVE", False);
-    XChangeProperty(i->dpy, i->win, XInternAtom(i->dpy, "_NET_WM_STATE", False), XA_ATOM, 32, PropModeReplace, reinterpret_cast<const unsigned char *>(&above), 1);
-    XMapWindow(i->dpy, i->win);
-    XFlush(i->dpy);
-    i->frame = owned(new Frame(i->dpy, i->win));
+    i->frame = owned(new Frame(i->window.get()));
     i->view->setFrame(i->frame.get());
-    if (i->view->attached(reinterpret_cast<void *>(i->win), kPlatformTypeX11EmbedWindowID) != kResultOk) {
+    if (i->view->attached(reinterpret_cast<void *>(i->window->id()), kPlatformTypeX11EmbedWindowID) != kResultOk) {
         closeEditor();
         return false;
     }
-    i->xNotifier = std::make_unique<QSocketNotifier>(ConnectionNumber(i->dpy), QSocketNotifier::Read);
-    QObject::connect(i->xNotifier.get(), &QSocketNotifier::activated, i->xNotifier.get(), [i] { i->pumpX(); });
     return true;
 }
 
-void Plugin::closeEditor()
+void Instance::closeEditor()
 {
     Impl *i = d.get();
-    i->xNotifier.reset();
     if (i->view) {
         i->view->setFrame(nullptr);
         i->view->removed();
         i->view = nullptr;
     }
     i->frame = nullptr;
-    if (i->dpy) {
-        XDestroyWindow(i->dpy, i->win);
-        XCloseDisplay(i->dpy);
-        i->dpy = nullptr;
-        i->win = 0;
-    }
+    i->window.reset();
+}
+
+std::unique_ptr<Plugin> load(const Info &info, double rate, int maxBlock, QString *error)
+{
+    return Instance::load(info, rate, maxBlock, error);
 }
 
 }
