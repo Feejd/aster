@@ -110,8 +110,11 @@ Programy:
   - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej
   - [ ] pliki: import i eksport PSD, zapis WebP, TIFF, profile kolorów, 16 bitów
   - [x] AI po ludzku: karta Magia AI (wyodrębnij, usuń, zaznacz, rozmyj), kliknięcie w rzecz, pasek działań przy zaznaczeniu
-  - [ ] wypełnianie z opisu: kandydat stable-diffusion.cpp (Vulkan, CPU) z SD 1.5 inpainting; do sprawdzenia jakość i błędy
-        z maskami (issues 1309, 1406), czasy na Ryzenie 5600X + RX 6500 XT i na Acerze, ewentualnie opcja w chmurze
+  - [x] wypełnianie z opisu: stable-diffusion.cpp (`aster-pixel-gen`) z DreamShaper 8 Inpainting (GGUF, 1,9 GB). Przy częściowej
+        masce oba sprawdzone modele ignorują opis, więc: obiekt powstaje na czystym tle i wycina go ISNet, duży obszar to cały kadr
+        z opisu, a pusty opis to uzupełnienie z otoczenia (cfg 2)
+  - [ ] wypełnianie z opisu, dalej: model w wydaniu „modele”, próba Vulkana na RX 6500 XT i czas na Acerze, tłumaczenie opisów
+        przez Aster Intelligence (dziś słownik najczęstszych słów), dopasowanie światła obiektu do zdjęcia, opcja w chmurze
   - [ ] AI: powiększanie zdjęć
 - [ ] Stare pomysły: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
       i grafik do pobrania ze Sklepu Aster, wiele stron w projekcie (karuzela, prezentacja), zaznaczanie kilku elementów

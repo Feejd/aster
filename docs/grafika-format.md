@@ -88,6 +88,7 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   zmiana siły liczy od ostrego zdjęcia zamiast rozmywać drugi raz.
   `pixel: true` — warstwa pikselowa: przezroczysty PNG na całą stronę, po którym się maluje. Malowanie i retusz
   nie dodają pól, wynik każdej kreski to nowe zdjęcie w `images/` (cofanie wraca do poprzedniego).
+  `generated: true` z `prompt` (opis) — warstwa z wypełniania z opisu; `cutout: true` — obiekt wycięty z tła maską `layerMask`.
   `stroke` i `strokeWidth` — obramowanie wzdłuż kształtu zdjęcia (w całości wewnątrz ramki).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.

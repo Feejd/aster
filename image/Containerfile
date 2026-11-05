@@ -17,8 +17,18 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
  && cmake --build /build \
  && DESTDIR=/out cmake --install /build
 
+# Silnik wypełniania z opisu w Aster Pixel: stable-diffusion.cpp (MIT), przypięty do sprawdzonej wersji; Vulkan, a bez karty procesor
+FROM registry.fedoraproject.org/fedora:${FEDORA} AS sdcpp
+RUN dnf install -y cmake ninja-build gcc-c++ git glslc spirv-headers-devel vulkan-headers vulkan-loader-devel \
+ && git clone https://github.com/leejet/stable-diffusion.cpp /sd \
+ && git -C /sd checkout 58bb3c1b1cd4749e94e39f537e9adfce295dcaee \
+ && git -C /sd submodule update --init --recursive --depth 1 \
+ && cmake -S /sd -B /sd/out -G Ninja -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DSD_WEBM=OFF -DSD_WEBP=OFF \
+ && cmake --build /sd/out --target sd-cli
+
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
+COPY --from=sdcpp /sd/out/bin/sd-cli /usr/bin/aster-pixel-gen
 RUN dnf install -y onnxruntime google-roboto-fonts layer-shell-qt libvterm git jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd mlt mlt-qt6 openh264 whisper-cpp libsndfile libsamplerate alsa-lib \
         glibc-langpack-pl glibc-langpack-en glibc-langpack-de glibc-langpack-uk glibc-langpack-cs glibc-langpack-fr glibc-langpack-es glibc-langpack-it \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \

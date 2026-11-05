@@ -542,6 +542,7 @@ Item {
         else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
         else if (cmd === "maskinvert") project.invertMask(sel);
         else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
+        else if (cmd === "generate") Magic.generate(project, arg);
         else if (cmd === "aitool") setTool("magic");
         else if (cmd === "airun") aiRun(arg);
         else if (cmd === "seltool") { side.selTool = arg; side.tab = "pixels"; }
@@ -1041,6 +1042,7 @@ Item {
         selTool: side.tab === "pixels" ? side.selTool : side.tab === "magic" && Magic.element === "" ? "object" : ""
         selHint: side.tab === "magic" ? "Kliknij rzecz na zdjęciu · Shift dodaje kolejną" : "Shift dodaje · Alt odejmuje · Esc odznacza"
         onSelAction: (a) => a === "adjust" ? ed.addAdjustment() : ed.selAction(a)
+        onGenerate: (t) => Magic.generate(ed.project, t)
         selMode: side.selMode
         selFeather: side.selFeather
         selTolerance: side.selTolerance

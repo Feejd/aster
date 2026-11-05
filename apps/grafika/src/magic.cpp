@@ -12,6 +12,10 @@
 #include <QNetworkReply>
 #include <QPainter>
 #include <QPainterPath>
+#include <QProcess>
+#include <QRandomGenerator>
+#include <QRegularExpression>
+#include <QTemporaryDir>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QThread>
@@ -22,6 +26,8 @@
 #ifdef GRAFIKA_ONNX
 #include <onnxruntime_cxx_api.h>
 #endif
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -37,6 +43,8 @@ const ModelInfo Models[] = {
     {"sam-encoder", "mobile-sam-encoder.onnx", "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx", 28157093},
     {"sam-decoder", "mobile-sam-decoder.onnx", "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_single.onnx", 16501323},
     {"migan", "migan-pipeline-v2.onnx", "https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx", 28079181},
+    // Wypełnianie z opisu: DreamShaper 8 Inpainting w jednym pliku GGUF (CreativeML OpenRAIL-M)
+    {"sd-inpaint", "sd-inpaint.gguf", "https://github.com/Feejd/aster/releases/download/modele/sd-inpaint.gguf", 1881276000},
 };
 
 const ModelInfo *modelInfo(const QString &id)
@@ -66,6 +74,8 @@ bool haveModel(const QString &id)
 
 QStringList featureModels(const QString &feature)
 {
+    if (feature == QLatin1String("generate"))
+        return {QStringLiteral("sd-inpaint")};
     if (feature == QLatin1String("background"))
         return {QStringLiteral("isnet")};
     if (feature == QLatin1String("object"))
@@ -699,6 +709,323 @@ void Magic::fillSelection(Project *project, const QString &id)
     Q_UNUSED(id);
     Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
 #endif
+}
+
+// ——— Wypełnianie z opisu ———
+
+// Model rozumie opisy po angielsku. Słownik tematów najczęstszych w grafice: rdzeń polskiego słowa → angielskie.
+// Reszta zostaje bez zmian, więc można pisać po angielsku albo mieszać.
+static QString englishPrompt(const QString &text)
+{
+    static const QList<std::pair<QString, QString>> stems = {
+        {u"czerwon"_s, u"red"_s}, {u"niebiesk"_s, u"blue"_s}, {u"zielon"_s, u"green"_s}, {u"żółt"_s, u"yellow"_s}, {u"czarn"_s, u"black"_s},
+        {u"biał"_s, u"white"_s}, {u"różow"_s, u"pink"_s}, {u"fiolet"_s, u"purple"_s}, {u"pomarańcz"_s, u"orange"_s}, {u"złot"_s, u"golden"_s},
+        {u"srebrn"_s, u"silver"_s}, {u"brązow"_s, u"brown"_s}, {u"szar"_s, u"gray"_s}, {u"mał"_s, u"small"_s}, {u"duż"_s, u"big"_s},
+        {u"star"_s, u"old"_s}, {u"drewnian"_s, u"wooden"_s}, {u"kamienn"_s, u"stone"_s},
+        {u"pies"_s, u"dog"_s}, {u"psa"_s, u"dog"_s}, {u"kot"_s, u"cat"_s}, {u"koń"_s, u"horse"_s}, {u"konia"_s, u"horse"_s}, {u"ptak"_s, u"bird"_s},
+        {u"motyl"_s, u"butterfly"_s}, {u"ryb"_s, u"fish"_s}, {u"drzew"_s, u"tree"_s}, {u"kwiat"_s, u"flowers"_s}, {u"krzew"_s, u"bush"_s},
+        {u"krzak"_s, u"bush"_s}, {u"traw"_s, u"grass"_s}, {u"lasu"_s, u"forest"_s}, {u"las"_s, u"forest"_s}, {u"nieb"_s, u"sky"_s}, {u"chmur"_s, u"clouds"_s},
+        {u"słońc"_s, u"sun"_s}, {u"księżyc"_s, u"moon"_s}, {u"gwiazd"_s, u"stars"_s}, {u"tęcz"_s, u"rainbow"_s}, {u"śnieg"_s, u"snow"_s},
+        {u"deszcz"_s, u"rain"_s}, {u"mgł"_s, u"fog"_s}, {u"gór"_s, u"mountains"_s}, {u"morz"_s, u"sea"_s}, {u"jezior"_s, u"lake"_s},
+        {u"rzek"_s, u"river"_s}, {u"plaż"_s, u"beach"_s}, {u"zamek"_s, u"castle"_s}, {u"zamk"_s, u"castle"_s}, {u"dom"_s, u"house"_s}, {u"most"_s, u"bridge"_s},
+        {u"wież"_s, u"tower"_s}, {u"kości"_s, u"church"_s}, {u"ulic"_s, u"street"_s}, {u"drog"_s, u"road"_s},
+        {u"samoch"_s, u"car"_s}, {u"rower"_s, u"bicycle"_s}, {u"motocykl"_s, u"motorcycle"_s},
+        {u"samolot"_s, u"airplane"_s}, {u"statek"_s, u"ship"_s}, {u"łód"_s, u"boat"_s}, {u"balon"_s, u"balloon"_s}, {u"ławk"_s, u"bench"_s},
+        {u"krzesł"_s, u"chair"_s}, {u"stół"_s, u"table"_s}, {u"stoł"_s, u"table"_s}, {u"kobiet"_s, u"woman"_s}, {u"mężczyzn"_s, u"man"_s}, {u"dziec"_s, u"child"_s},
+        {u"osob"_s, u"person"_s}, {u"człowiek"_s, u"person"_s}, {u"ludzi"_s, u"people"_s}, {u"okular"_s, u"glasses"_s}, {u"kapelusz"_s, u"hat"_s},
+        {u"czapk"_s, u"cap"_s}, {u"kurtk"_s, u"jacket"_s}, {u"sukienk"_s, u"dress"_s}, {u"ognisk"_s, u"campfire"_s}, {u"ogień"_s, u"fire"_s},
+    };
+    static const QHash<QString, QString> words = {
+        {u"na"_s, u"on"_s}, {u"w"_s, u"in"_s}, {u"z"_s, u"with"_s}, {u"ze"_s, u"with"_s}, {u"pod"_s, u"under"_s}, {u"nad"_s, u"above"_s}, {u"i"_s, u"and"_s}, {u"obok"_s, u"next to"_s},
+    };
+    QStringList out;
+    const QStringList parts = text.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    for (const QString &raw : parts) {
+        const QString w = raw.toLower();
+        if (words.contains(w)) {
+            out.append(words.value(w));
+            continue;
+        }
+        QString hit;
+        for (const auto &[stem, en] : stems)
+            if (hit.isEmpty() && w.startsWith(stem))
+                hit = en;
+        out.append(hit.isEmpty() ? raw : hit);
+    }
+    return out.join(QLatin1Char(' '));
+}
+
+static QString generatorPath()
+{
+    return QStandardPaths::findExecutable(QStringLiteral("aster-pixel-gen"));
+}
+
+bool Magic::canGenerate() const
+{
+    return !generatorPath().isEmpty();
+}
+
+// Karta (Vulkan), jeśli jest prawdziwa; programowy Vulkan w maszynie wirtualnej byłby wolniejszy od procesora
+static bool realGpu(const QString &engine)
+{
+    QProcess p;
+    p.start(engine, {QStringLiteral("--list-devices")});
+    if (!p.waitForFinished(15000))
+        return false;
+    const QString text = QString::fromUtf8(p.readAllStandardOutput() + p.readAllStandardError()).toLower();
+    return text.contains(QLatin1String("vulkan")) && !text.contains(QLatin1String("llvmpipe")) && !text.contains(QLatin1String("lavapipe"));
+}
+
+// Biały, czarny albo jednolity obraz to objaw przepełnienia obliczeń na karcie
+static bool looksBroken(const QImage &img)
+{
+    if (img.isNull())
+        return true;
+    const QImage s = img.scaled(32, 32).convertToFormat(QImage::Format_RGB32);
+    const QRgb first = s.pixel(0, 0);
+    for (int y = 0; y < 32; ++y)
+        for (int x = 0; x < 32; ++x) {
+            const QRgb c = s.pixel(x, y);
+            if (std::abs(qRed(c) - qRed(first)) + std::abs(qGreen(c) - qGreen(first)) + std::abs(qBlue(c) - qBlue(first)) > 12)
+                return false;
+        }
+    return true;
+}
+
+void Magic::generate(Project *project, const QString &prompt)
+{
+    Selection *sel = Selection::instance();
+    if (!project || !sel->active())
+        return;
+    // Ramka wokół zaznaczenia z zapasem: model musi widzieć otoczenie, żeby dopasować światło i styl
+    const QImage &m = sel->mask();
+    int x0 = m.width(), y0 = m.height(), x1 = -1, y1 = -1;
+    for (int y = 0; y < m.height(); ++y) {
+        const uchar *row = m.constScanLine(y);
+        for (int x = 0; x < m.width(); ++x)
+            if (row[x] > 8) {
+                x0 = qMin(x0, x);
+                x1 = qMax(x1, x);
+                y0 = qMin(y0, y);
+                y1 = qMax(y1, y);
+            }
+    }
+    if (x1 < 0)
+        return;
+    const qreal k = sel->scale();
+    const QRectF box(x0 / k, y0 / k, (x1 - x0 + 1) / k, (y1 - y0 + 1) / k);
+    const qreal pad = prompt.trimmed().isEmpty() ? qMax(qMax(box.width(), box.height()) * 0.35, 24.0) : 0;
+    const QRectF page(0, 0, project->pageWidth(), project->pageHeight());
+    startGenerate(project, box.adjusted(-pad, -pad, pad, pad) & page, QImage(), prompt, QString());
+}
+
+void Magic::regenerate(Project *project, const QString &id, const QString &prompt)
+{
+    if (!project)
+        return;
+    const QVariantMap el = project->get(id);
+    const QRectF area(num(el, "x"), num(el, "y"), num(el, "w"), num(el, "h"));
+    const QImage mask = project->fullImage(el.value(QStringLiteral("layerMask")).toString());
+    if (!mask.isNull())
+        startGenerate(project, area, mask, prompt, id);
+}
+
+void Magic::startGenerate(Project *project, const QRectF &area, const QImage &oldMask, const QString &prompt, const QString &replace)
+{
+    if (generatorPath().isEmpty()) {
+        Q_EMIT failed(QStringLiteral("Tej wersji Aster Pixel brakuje silnika wypełniania."));
+        return;
+    }
+    // Trzy przepisy, sprawdzone na zdjęciach. Model trzyma się opisu tylko wtedy, gdy tworzy cały kadr od zera, więc:
+    // - obiekt: powstaje na czystym tle, wycina go ISNet, a warstwa ląduje w zaznaczeniu z miękkim cieniem,
+    // - duży obszar (nowe tło, niebo): cały kadr z opisu, wtopiony miękką maską,
+    // - bez opisu: uzupełnienie z otoczenia, z maską i niską skalą prowadzenia.
+    const bool fill = prompt.trimmed().isEmpty();
+    const bool scene = !fill && (replace.isEmpty() ? area.width() * area.height() > project->pageWidth() * project->pageHeight() * 0.35
+                                                   : !project->get(replace).value(QStringLiteral("cutout")).toBool());
+    const bool object = !fill && !scene;
+
+    // Rozmiar pracy: dłuższy bok 512 px, wielokrotności 64 — tak model działa najlepiej
+    const qreal scale = 512 / qMax(area.width(), area.height());
+    auto snap = [](qreal v) { return qMax(256, int(std::round(v / 64)) * 64); };
+    const QSize work(snap(area.width() * scale), snap(area.height() * scale));
+    const QTransform toWork = QTransform::fromTranslate(-area.x(), -area.y()) * QTransform::fromScale(work.width() / area.width(), work.height() / area.height());
+
+    // Obraz wejściowy: wszystko, co widać na stronie w tym miejscu, bez warstwy, którą zastępujemy
+    QVariantMap doc = project->pageDocument(project->currentPage());
+    if (!replace.isEmpty()) {
+        QVariantList kept;
+        for (const QVariant &v : doc.value(QStringLiteral("elements")).toList())
+            if (v.toMap().value(QStringLiteral("id")).toString() != replace)
+                kept.append(v);
+        doc[QStringLiteral("elements")] = kept;
+    }
+    QImage input(work, QImage::Format_RGB32);
+    input.fill(Qt::white);
+    {
+        QPainter p(&input);
+        p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+        p.setTransform(toWork);
+        Art::paintPage(&p, doc, project);
+    }
+    // Maska: białe powstaje od nowa. Osobno miękka maska warstwy, żeby wynik wtopił się w zdjęcie.
+    const QImage alpha = oldMask.isNull() ? Selection::instance()->mapped(toWork, work)
+                                          : oldMask.convertToFormat(QImage::Format_Grayscale8).scaled(work);
+    QImage engineMask(work, QImage::Format_Grayscale8);
+    for (int y = 0; y < work.height(); ++y) {
+        const uchar *a = alpha.constScanLine(y);
+        uchar *o = engineMask.scanLine(y);
+        for (int x = 0; x < work.width(); ++x)
+            o[x] = !fill || a[x] > 8 ? 255 : 0;
+    }
+    QImage gray(work, QImage::Format_Grayscale8);
+    for (int y = 0; y < work.height(); ++y)
+        memcpy(gray.scanLine(y), alpha.constScanLine(y), size_t(work.width()));
+    if (oldMask.isNull()) {
+        // Lekkie zmiękczenie krawędzi
+        QImage soft = gray.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        Art::blur(soft, 3);
+        gray = soft.convertToFormat(QImage::Format_Grayscale8);
+    }
+
+    const QString english = englishPrompt(prompt);
+    const QString full = fill ? QStringLiteral("background, seamless, photo, high detail")
+                       : object ? english + QStringLiteral(", full view, centered, product photo, plain white background, high detail")
+                                : english + QStringLiteral(", realistic photo, natural light, high detail");
+    QPointer<Project> pr(project);
+    auto cancel = std::make_shared<std::atomic_bool>(false);
+    m_cancel = cancel;
+    const QString models = modelsDir();
+    const bool forceCpu = m_genCpu;
+    auto engineModels = m_models;
+    QStringList need = featureModels(QStringLiteral("generate"));
+    if (object)
+        need += featureModels(QStringLiteral("background"));
+    run(QStringLiteral("Generuję…"), need, [=, this]() -> std::function<void()> {
+        QMetaObject::invokeMethod(this, [this] {
+            m_generating = true;
+            m_progress = 0;
+            Q_EMIT busyChanged();
+            Q_EMIT progressChanged();
+        }, Qt::QueuedConnection);
+        QTemporaryDir tmp;
+        input.save(tmp.filePath(QStringLiteral("in.png")));
+        engineMask.save(tmp.filePath(QStringLiteral("mask.png")));
+        const QString out = tmp.filePath(QStringLiteral("out.png"));
+        const qint64 seed = QRandomGenerator::global()->bounded(1 << 30);
+        auto attempt = [&](bool cpu) {
+            QFile::remove(out);
+            QStringList args{QStringLiteral("-m"), models + QStringLiteral("/sd-inpaint.gguf"),
+                             QStringLiteral("-i"), tmp.filePath(QStringLiteral("in.png")), QStringLiteral("--mask"), tmp.filePath(QStringLiteral("mask.png")),
+                             QStringLiteral("-p"), full, QStringLiteral("-n"), QStringLiteral("blurry, lowres, deformed, cartoon, text, watermark, cropped"),
+                             QStringLiteral("--strength"), QStringLiteral("1"), QStringLiteral("--steps"), QStringLiteral("20"),
+                             QStringLiteral("--cfg-scale"), fill ? QStringLiteral("2") : QStringLiteral("7.5"),
+                             QStringLiteral("--sampling-method"), fill ? QStringLiteral("euler") : QStringLiteral("euler_a"),
+                             QStringLiteral("-W"), QString::number(work.width()), QStringLiteral("-H"), QString::number(work.height()),
+                             QStringLiteral("--seed"), QString::number(seed), QStringLiteral("-o"), out};
+            if (cpu)
+                args << QStringLiteral("--backend") << QStringLiteral("cpu");
+            QProcess p;
+            p.setProcessChannelMode(QProcess::MergedChannels);
+            p.start(generatorPath(), args);
+            static const QRegularExpression step(QStringLiteral("(\\d+)/(\\d+)"));
+            while (p.state() != QProcess::NotRunning) {
+                if (cancel->load()) {
+                    p.kill();
+                    p.waitForFinished(3000);
+                    return QImage();
+                }
+                p.waitForReadyRead(300);
+                const QString text = QString::fromUtf8(p.readAll());
+                auto it = step.globalMatch(text);
+                int done = -1, total = 0;
+                while (it.hasNext()) {
+                    const auto hit = it.next();
+                    done = hit.captured(1).toInt();
+                    total = hit.captured(2).toInt();
+                }
+                if (done >= 0 && total == 20)
+                    QMetaObject::invokeMethod(this, [this, done, total] {
+                        m_progress = qreal(done) / total;
+                        setStatus(QStringLiteral("Generuję… %1 z %2").arg(done).arg(total));
+                        Q_EMIT progressChanged();
+                    }, Qt::QueuedConnection);
+            }
+            return QImage(out).convertToFormat(QImage::Format_ARGB32);
+        };
+        const bool cpu = forceCpu || !realGpu(generatorPath());
+        QImage result = attempt(cpu);
+        bool fellBack = false;
+        if (!cancel->load() && !cpu && looksBroken(result)) {
+            result = attempt(true);
+            fellBack = true;
+        }
+        const bool stopped = cancel->load();
+        // Obiekt: tło wycina ISNet; gdyby nic nie znalazł, zostaje maska zaznaczenia
+        QImage finalMask = gray;
+        bool cut = false;
+#ifdef GRAFIKA_ONNX
+        if (object && !stopped && !looksBroken(result)) {
+            const QImage fg = engineModels->foreground(result).convertToFormat(QImage::Format_ARGB32_Premultiplied).scaled(work, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            QImage cutMask(work, QImage::Format_Grayscale8);
+            qint64 sum = 0;
+            for (int y = 0; y < work.height(); ++y) {
+                const QRgb *row = reinterpret_cast<const QRgb *>(fg.constScanLine(y));
+                uchar *o = cutMask.scanLine(y);
+                for (int x = 0; x < work.width(); ++x) {
+                    o[x] = uchar(qAlpha(row[x]));
+                    sum += o[x];
+                }
+            }
+            cut = sum > qint64(work.width()) * work.height() * 255 / 50;
+            if (cut)
+                finalMask = cutMask;
+        }
+#endif
+        return [=, this] {
+            m_generating = false;
+            m_progress = -1;
+            Q_EMIT busyChanged();
+            Q_EMIT progressChanged();
+            if (fellBack)
+                m_genCpu = true;
+            if (stopped || !pr)
+                return;
+            if (looksBroken(result)) {
+                Q_EMIT failed(QStringLiteral("Nie udało się wygenerować obrazu. Spróbuj jeszcze raz albo zmień opis."));
+                return;
+            }
+            const QString key = pr->addImage(result);
+            QString id = replace;
+            if (id.isEmpty()) {
+                QVariantMap n{{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("src"), key}, {QStringLiteral("x"), area.x()},
+                              {QStringLiteral("y"), area.y()}, {QStringLiteral("w"), area.width()}, {QStringLiteral("h"), area.height()},
+                              {QStringLiteral("prompt"), prompt}, {QStringLiteral("generated"), true}};
+                if (cut) {
+                    // Miękki cień osadza obiekt na zdjęciu
+                    const qreal side = qMin(area.width(), area.height());
+                    n[QStringLiteral("cutout")] = true;
+                    n[QStringLiteral("shadow")] = true;
+                    n[QStringLiteral("shadowBlur")] = std::round(side * 0.05);
+                    n[QStringLiteral("shadowDist")] = std::round(side * 0.03);
+                    n[QStringLiteral("shadowAngle")] = 180.0;
+                    n[QStringLiteral("shadowOpacity")] = 0.35;
+                }
+                id = pr->add(n);
+                Selection::instance()->clear();
+            } else {
+                pr->change(id, {{QStringLiteral("src"), key}, {QStringLiteral("prompt"), prompt}}, false);
+            }
+            pr->setMaskImage(id, finalMask);
+            Q_EMIT finished(QStringLiteral("Gotowe — wynik jest osobną warstwą z maską, a „Nowa wersja” da inny wariant."), {id});
+        };
+    });
+}
+
+void Magic::cancelGenerate()
+{
+    if (m_cancel)
+        m_cancel->store(true);
 }
 
 void Magic::heal(Project *project, const QString &id, const QVariantList &points, qreal width)

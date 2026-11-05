@@ -665,6 +665,22 @@ Item {
                 }
             }
 
+            // ——— Warstwa z wypełniania z opisu ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "image" && !!ins.el.generated
+                title: "Wygenerowane z opisu"
+                TextBox { id: genPrompt; text: ins.el.prompt || ""; placeholder: "Opis" }
+                Btn {
+                    width: parent.width
+                    primary: true
+                    icon: "sparkles"
+                    text: "Nowa wersja"
+                    enabled: !Magic.busy
+                    onClicked: Magic.regenerate(ins.project, ins.id_, genPrompt.text)
+                }
+            }
+
             // ——— Rysunek ———
             Section {
                 collapsible: true; divider: true

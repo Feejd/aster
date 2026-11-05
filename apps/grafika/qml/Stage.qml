@@ -42,6 +42,7 @@ Item {
     readonly property bool selOn: selTool !== ""
     property string selHint: ""
     signal selAction(string action)
+    signal generate(string prompt)
     // Malowanie i retusz po pikselach: brush | eraser | fill | pick | heal | clone | dodge | burn | smudge | blur
     property string paintTool: ""
     property color paintColor: "#16181D"
@@ -1793,18 +1794,59 @@ Item {
         }
     }
 
-    // Pasek przy zaznaczeniu: co można z nim zrobić, od razu pod ręką
+    // Pasek przy zaznaczeniu: opis tego, co ma się tu pojawić, i działania od razu pod ręką
     Rectangle {
         visible: Selection.active && !Magic.busy && !stage.paintOn && !stage.drawOn && !stage.maskOn && !stage.magicOn
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: Math.min(parent.width - 24, ctxRow.implicitWidth + 16); height: 48; radius: 24
+        width: Math.min(parent.width - 24, ctxCol.implicitWidth + 20); height: ctxCol.implicitHeight + 16; radius: 22
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 7
-        Row {
+        function fill() {
+            const t = promptInput.text.trim();
+            stage.generate(t);
+        }
+        Column {
+          id: ctxCol
+          anchors.centerIn: parent
+          spacing: 6
+          Rectangle {
+            visible: Magic.available && Magic.canGenerate()
+            width: ctxRow.implicitWidth; height: 38; radius: 19
+            color: Theme.fill
+            border.width: promptInput.activeFocus ? 1.5 : 0; border.color: Theme.accent
+            Icon { x: 13; anchors.verticalCenter: parent.verticalCenter; d: Icons.sparkles; size: 16; stroke: 1.9; color: Theme.accentText }
+            TextInput {
+                id: promptInput
+                x: 38; width: parent.width - 38 - genBtn.width - 10
+                anchors.verticalCenter: parent.verticalCenter
+                clip: true
+                color: Theme.text
+                selectionColor: Theme.accent
+                selectByMouse: true
+                font.family: Theme.font; font.pixelSize: 13
+                Keys.onReturnPressed: parent.parent.parent.fill()
+                Keys.onEnterPressed: parent.parent.parent.fill()
+                Keys.onEscapePressed: { focus = false; stage.forceActiveFocus(); }
+                Text {
+                    visible: !promptInput.text
+                    text: "Opisz, co ma się tu pojawić, np. drewniana ławka"
+                    color: Theme.text2; font: promptInput.font
+                }
+            }
+            Btn {
+                id: genBtn
+                anchors.right: parent.right; anchors.rightMargin: 3
+                anchors.verticalCenter: parent.verticalCenter
+                height: 32; primary: true
+                text: "Generuj"
+                tip: Magic.downloadMB("generate") > 0 ? "Za pierwszym razem pobierze model AI (" + (Magic.downloadMB("generate") / 1000).toFixed(1).replace(".", ",") + " GB)" : "Wynik trafi na osobną warstwę"
+                onClicked: parent.parent.parent.fill()
+            }
+          }
+          Row {
             id: ctxRow
-            anchors.centerIn: parent
             spacing: 4
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; primary: true; icon: "layers"; text: "Wyodrębnij"; tip: "Na nową warstwę, zdjęcie zostaje bez zmian (Ctrl+J)"; onClicked: stage.selAction("extract") }
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; visible: Magic.available; icon: "sparkles"; text: "Usuń"; tip: "Znika z obrazu, a tło uzupełnia się samo"; onClicked: stage.selAction("aifill") }
@@ -1812,6 +1854,7 @@ Item {
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "sliders"; text: "Korekcja"; tip: "Kolory i tony tylko tutaj"; onClicked: stage.selAction("adjust") }
             ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "swap"; tip: "Odwróć zaznaczenie (Ctrl+Shift+I)"; onClicked: stage.selAction("invert") }
             ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Odznacz (Esc)"; onClicked: stage.selAction("clear") }
+          }
         }
     }
 
@@ -1982,6 +2025,13 @@ Item {
                 width: parent.width; height: 4; radius: 2
                 color: Qt.rgba(1, 1, 1, 0.25)
                 Rectangle { width: parent.width * Math.max(0, Magic.progress); height: parent.height; radius: 2; color: "white" }
+            }
+            Text {
+                visible: Magic.generating
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Anuluj"
+                color: "white"; font.family: Theme.font; font.pixelSize: 12; font.underline: true
+                MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: Magic.cancelGenerate() }
             }
         }
     }

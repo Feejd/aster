@@ -1295,6 +1295,16 @@ Item {
                         Btn { width: parent.width; icon: "scissors"; text: "Usuń tło"; tip: "Zostaje sam obiekt z przezroczystością"; enabled: !Magic.busy; onClicked: Magic.removeBackground(sp.project, sp.editor.aiLayer) }
                     }
                     Section {
+                        visible: magicCol.ready && Magic.canGenerate()
+                        title: "Dodaj lub zamień z opisu"
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Kliknij rzecz albo zaznacz obszar, wpisz na pasku pod płótnem, co ma się tam pojawić, i naciśnij Enter. Wynik to osobna warstwa."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                        }
+                    }
+                    Section {
                         visible: magicCol.ready
                         title: "Usuń z obrazu"
                         Text {
