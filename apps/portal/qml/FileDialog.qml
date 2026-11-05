@@ -335,7 +335,7 @@ Window {
                     spacing: 6
                     ToolBtn { icon: "folderPlus"; visible: dlg.saving || dlg.directory; onClicked: dlg.creatingFolder = true }
                     Rectangle {
-                        width: 200; height: 32; radius: 16
+                        width: 200; height: 32; radius: 10
                         color: Theme.fill
                         border.width: search.activeFocus ? 1.5 : 0
                         border.color: Theme.accent
@@ -519,7 +519,7 @@ Window {
                     y: 14; x: 20; width: parent.width - 40; height: 38
                     Text { anchors.verticalCenter: parent.verticalCenter; text: "Nazwa"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
                     Rectangle {
-                        x: 64; width: parent.width - 64; height: 38; radius: 19
+                        x: 64; width: parent.width - 64; height: 38; radius: 10
                         color: Theme.fill
                         border.width: nameField.activeFocus ? 1.5 : 0
                         border.color: Theme.accent
@@ -560,7 +560,7 @@ Window {
                         id: filterButton
                         visible: dlg.filters.length > 1 && !dlg.directory
                         x: 20; anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(260, filterText.implicitWidth + 44); height: 36; radius: 18
+                        width: Math.min(260, filterText.implicitWidth + 44); height: 36; radius: 10
                         baseColor: Theme.fill
                         onClicked: {
                             const p = filterButton.mapToItem(frame, 0, -8 - dlg.filters.length * 34 - 12);
@@ -610,7 +610,7 @@ Window {
         property string text
         property bool primary: false
         property bool danger: false
-        width: Math.max(104, pillText.implicitWidth + 36); height: 38; radius: 19
+        width: Math.max(104, pillText.implicitWidth + 36); height: 38; radius: 10
         baseColor: danger ? "#E5484D" : primary ? Theme.accent : Theme.fill
         color: hovered && enabled ? (primary || danger ? Qt.darker(baseColor, 1.1) : Theme.hover) : baseColor
         opacity: enabled ? 1 : 0.45

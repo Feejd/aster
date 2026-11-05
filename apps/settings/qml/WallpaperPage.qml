@@ -43,7 +43,7 @@ Page {
                 }
             }
         }
-        Rectangle { id: heroMask; anchors.fill: parent; radius: 18; visible: false; layer.enabled: true }
+        Rectangle { id: heroMask; anchors.fill: parent; radius: 10; visible: false; layer.enabled: true }
         MultiEffect {
             anchors.fill: parent
             source: pair
@@ -78,7 +78,7 @@ Page {
                             width: (grid.parent.width - 32 - 3 * 14) / 4; height: Math.round(width * 0.625)
                             Rectangle {
                                 anchors.fill: parent; anchors.margins: -4
-                                radius: 14
+                                radius: 10
                                 color: "transparent"
                                 border.width: 3; border.color: Theme.accent
                                 opacity: w.chosen ? 1 : 0

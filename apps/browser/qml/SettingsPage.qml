@@ -120,7 +120,7 @@ Item {
                                 id: rangeBtn
                                 required property var modelData
                                 readonly property bool on: clear.range === modelData[1]
-                                width: rangeText.implicitWidth + 24; height: 32; radius: 16
+                                width: rangeText.implicitWidth + 24; height: 32; radius: 10
                                 color: on ? Theme.accent : (rangeArea.containsMouse ? Theme.hover : Theme.fill)
                                 Text { id: rangeText; anchors.centerIn: parent; text: rangeBtn.modelData[0]; color: rangeBtn.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
                                 MouseArea { id: rangeArea; anchors.fill: parent; hoverEnabled: true; onClicked: clear.range = rangeBtn.modelData[1] }
@@ -192,7 +192,7 @@ Item {
     // ——— Elementy ———
     component Card: Rectangle {
         width: parent ? parent.width : 0
-        radius: 16
+        radius: 10
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.03)
         border.width: 1; border.color: Theme.line
     }

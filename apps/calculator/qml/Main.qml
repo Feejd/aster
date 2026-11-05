@@ -418,7 +418,7 @@ Window {
             y: parent.height - (shown ? height + 18 : 0)
             opacity: shown ? 1 : 0
             z: 300
-            width: toastText.implicitWidth + 32; height: 34; radius: 17
+            width: toastText.implicitWidth + 32; height: 34; radius: 10
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }

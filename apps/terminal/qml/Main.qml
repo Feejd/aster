@@ -287,7 +287,7 @@ Window {
                 visible: shown || y > -height
                 Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
                 z: 10
-                width: 360; height: 44; radius: 22
+                width: 360; height: 44; radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Icon { x: 15; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 15; color: Theme.text2 }
@@ -338,7 +338,7 @@ Window {
                 Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
                 visible: y < parent.height
                 z: 10
-                width: toastText.implicitWidth + 36; height: 38; radius: 19
+                width: toastText.implicitWidth + 36; height: 38; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Text { id: toastText; anchors.centerIn: parent; text: toast.text; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
@@ -365,7 +365,7 @@ Window {
             Rectangle {
                 anchors.centerIn: parent
                 width: 380; height: dlgCol.implicitHeight + 40
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -509,7 +509,7 @@ Window {
         Rectangle {
             anchors.right: parent.right; anchors.rightMargin: 24
             anchors.bottom: parent.bottom; anchors.bottomMargin: 16
-            width: downRow.implicitWidth + 26; height: 34; radius: 17
+            width: downRow.implicitWidth + 26; height: 34; radius: 10
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             opacity: term.scrollValue > 0 ? 1 : 0
@@ -530,7 +530,7 @@ Window {
             visible: term.hoveredLink !== "" && term.scrollValue === 0 && !page.exited
             anchors.left: parent.left; anchors.leftMargin: 12
             anchors.bottom: parent.bottom; anchors.bottomMargin: 10
-            width: Math.min(parent.width - 24, linkText.implicitWidth + 24); height: 28; radius: 14
+            width: Math.min(parent.width - 24, linkText.implicitWidth + 24); height: 28; radius: 10
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             Text {
@@ -548,7 +548,7 @@ Window {
             visible: page.exited
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom; anchors.bottomMargin: 18
-            width: exitRow.implicitWidth + 32; height: 52; radius: 26
+            width: exitRow.implicitWidth + 32; height: 52; radius: 12
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             Row {
@@ -677,7 +677,7 @@ Window {
         id: pill
         property string text
         property bool danger: false
-        width: pillText.implicitWidth + 30; height: 34; radius: 17
+        width: pillText.implicitWidth + 30; height: 34; radius: 10
         baseColor: danger ? "#E5484D" : Theme.fill
         color: hovered ? (danger ? "#D93B40" : Theme.hover) : baseColor
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: pill.danger ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }

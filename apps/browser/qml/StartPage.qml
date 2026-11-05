@@ -37,7 +37,7 @@ Item {
             // Duże pole wyszukiwania
             Rectangle {
                 width: parent.width; height: 54
-                radius: 27
+                radius: 12
                 color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.045)
                 border.width: query.activeFocus ? 2 : 1
                 border.color: query.activeFocus ? Theme.accent : Theme.line
@@ -102,7 +102,7 @@ Item {
                 visible: sp.privateMode
                 width: parent.width
                 height: privCol.implicitHeight + 40
-                radius: 20
+                radius: 12
                 color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.04)
                 border.width: 1; border.color: Theme.line
                 Column {
@@ -137,7 +137,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            radius: 16
+            radius: 10
             color: area.containsMouse ? Theme.hover : "transparent"
             Behavior on color { ColorAnimation { duration: 120 } }
         }
@@ -145,7 +145,7 @@ Item {
             id: box
             anchors.horizontalCenter: parent.horizontalCenter
             y: 12
-            width: 58; height: 58; radius: 18
+            width: 58; height: 58; radius: 10
             color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : "white"
             border.width: 1; border.color: Theme.line
             scale: area.pressed ? 0.94 : 1

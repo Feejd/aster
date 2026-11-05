@@ -520,7 +520,7 @@ Window {
             Rectangle {
                 visible: win.needPassword
                 anchors.centerIn: parent
-                width: 360; height: passCol.implicitHeight + 44; radius: 20
+                width: 360; height: passCol.implicitHeight + 44; radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Column {
@@ -528,7 +528,7 @@ Window {
                     x: 24; y: 22; width: parent.width - 48
                     spacing: 10
                     Rectangle {
-                        width: 48; height: 48; radius: 14
+                        width: 48; height: 48; radius: 10
                         gradient: Gradient {
                             GradientStop { position: 0; color: "#FF9AAE" }
                             GradientStop { position: 1; color: "#DC2550" }
@@ -538,7 +538,7 @@ Window {
                     Text { text: "Dokument jest chroniony hasłem"; color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold }
                     Text { width: parent.width; wrapMode: Text.Wrap; text: "Wpisz hasło do tego pliku — np. podane przez bank albo urząd."; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
                     Rectangle {
-                        width: parent.width; height: 38; radius: 19
+                        width: parent.width; height: 38; radius: 10
                         color: Theme.fill
                         border.width: passField.activeFocus ? 1.5 : 0; border.color: Theme.accent
                         TextInput {
@@ -568,7 +568,7 @@ Window {
                 spacing: 0
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 72; height: 72; radius: 22
+                    width: 72; height: 72; radius: 12
                     gradient: Gradient {
                         GradientStop { position: 0; color: "#FF9AAE" }
                         GradientStop { position: 1; color: "#DC2550" }
@@ -582,7 +582,7 @@ Window {
                 Item { width: 1; height: 18 }
                 HoverButton {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: openRow.implicitWidth + 36; height: 38; radius: 19
+                    width: openRow.implicitWidth + 36; height: 38; radius: 10
                     baseColor: Theme.accent
                     color: hovered ? Qt.darker(Theme.accent, 1.1) : baseColor
                     onClicked: fileDialog.open()
@@ -650,7 +650,7 @@ Window {
                 }
                 function when(d) { return d && !isNaN(d) ? Pdf.date(d) : ""; }
                 anchors.centerIn: parent
-                width: 460; height: propsCol.implicitHeight + 44; radius: 22
+                width: 460; height: propsCol.implicitHeight + 44; radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -688,13 +688,13 @@ Window {
                         anchors.right: parent.right
                         spacing: 8
                         HoverButton {
-                            width: showText.implicitWidth + 30; height: 34; radius: 17
+                            width: showText.implicitWidth + 30; height: 34; radius: 10
                             baseColor: Theme.fill
                             onClicked: Pdf.showInFolder(win.path)
                             Text { id: showText; anchors.centerIn: parent; text: "Pokaż w folderze"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                         }
                         HoverButton {
-                            width: okText.implicitWidth + 30; height: 34; radius: 17
+                            width: okText.implicitWidth + 30; height: 34; radius: 10
                             baseColor: Theme.accent
                             color: hovered ? Qt.darker(Theme.accent, 1.1) : baseColor
                             onClicked: win.propsOpen = false
@@ -714,7 +714,7 @@ Window {
             y: parent.height - (shown ? height + 22 : 0)
             opacity: shown ? 1 : 0
             z: 300
-            width: toastText.implicitWidth + 36; height: 40; radius: 20
+            width: toastText.implicitWidth + 36; height: 40; radius: 12
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }

@@ -190,7 +190,7 @@ Window {
 
                 Rectangle {
                     width: parent.width; height: 56
-                    radius: 14
+                    radius: 10
                     color: Theme.surface
                     border.width: addField.activeFocus ? 1.5 : 1
                     border.color: addField.activeFocus ? Theme.accent : Theme.line
@@ -233,7 +233,7 @@ Window {
                     visible: !!win.preview
                     width: parent.width
                     height: visible ? 196 : 0
-                    radius: 18
+                    radius: 10
                     color: Theme.surface
                     border.width: 1; border.color: Theme.line
                     opacity: visible ? 1 : 0
@@ -308,7 +308,7 @@ Window {
                                     id: chip
                                     required property var modelData
                                     readonly property bool on: !!win.preview && win.preview.category === modelData.id
-                                    width: chipText.implicitWidth + 22; height: 28; radius: 14
+                                    width: chipText.implicitWidth + 22; height: 28; radius: 10
                                     color: on ? Theme.accentSoft : Theme.fill
                                     border.width: on ? 1 : 0; border.color: Theme.accent
                                     Text { id: chipText; anchors.centerIn: parent; text: chip.modelData.name; color: chip.on ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 12 }
@@ -349,7 +349,7 @@ Window {
                                 required property var modelData
                                 width: 112; height: 120
                                 Rectangle {
-                                    anchors.fill: parent; radius: 16
+                                    anchors.fill: parent; radius: 10
                                     color: instHover.containsMouse ? Theme.hover : "transparent"
                                 }
                                 Image {
@@ -405,7 +405,7 @@ Window {
                                 readonly property bool busy: win.busyUrl === modelData.url
                                 width: (col.width - (recGrid.columns - 1) * 10) / recGrid.columns
                                 height: 76
-                                radius: 14
+                                radius: 10
                                 color: recArea.containsMouse ? Theme.surface : Qt.alpha(Theme.surface, Theme.dark ? 0.5 : 0.7)
                                 border.width: 1; border.color: Theme.line
                                 opacity: 0
@@ -443,7 +443,7 @@ Window {
                                     anchors.right: parent.right; anchors.rightMargin: 14
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: rec.busy ? 30 : getText.implicitWidth + 26
-                                    height: 30; radius: 15
+                                    height: 30; radius: 10
                                     color: rec.installed ? Theme.fill : Theme.accentSoft
                                     Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
                                     Text {
@@ -474,7 +474,7 @@ Window {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: toastTimer.running ? 22 : -height
             Behavior on anchors.bottomMargin { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
-            width: Math.min(parent.width - 40, toastRow.implicitWidth + 36); height: 44; radius: 22
+            width: Math.min(parent.width - 40, toastRow.implicitWidth + 36); height: 44; radius: 12
             color: Theme.text
             Row {
                 id: toastRow

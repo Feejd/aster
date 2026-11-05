@@ -103,7 +103,7 @@ Item {
         source: ai.source
     }
 
-    // Aplikacja webowa: jej kafelek przycięty do squircle
+    // Aplikacja webowa: jej kafelek przycięty do tego samego kwadratu
     Item {
         id: webTile
         anchors.fill: parent
@@ -117,7 +117,7 @@ Item {
                 strokeColor: Qt.rgba(0, 0, 0, 0.08)
                 strokeWidth: 1
                 fillItem: webImage
-                PathPolyline { path: ai.outline }
+                PathRectangle { width: ai.size; height: ai.size; radius: ai.corner }
             }
         }
         Kirigami.Icon {

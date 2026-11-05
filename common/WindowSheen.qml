@@ -2,8 +2,6 @@ import QtQuick
 import QtQuick.Shapes
 
 // Wykończenie okna Aster, kładzione na wierzch ramki (nie łapie kliknięć):
-//  • jasny rant od środka i świetlna linia na górnej krawędzi — szkło ma grubość,
-//  • miękka poświata u góry okna (światło pada z góry, jak na kartach nowoczesnych stron),
 //  • „zorza”: dwie bardzo delikatne plamy koloru akcentu w przeciwległych rogach (siatka gradientów),
 //  • sprężyste pojawienie się okna przy otwarciu (lekkie powiększenie i rozjaśnienie).
 Item {
@@ -47,42 +45,6 @@ Item {
             PathRectangle { width: sh.width; height: sh.height; radius: sh.radius }
         }
     }
-    // Poświata u góry
-    Rectangle {
-        anchors.left: parent.left; anchors.right: parent.right
-        height: 120
-        radius: sh.radius
-        opacity: sh.active ? 1 : 0.5
-        gradient: Gradient {
-            GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Theme.dark ? 0.045 : 0.16) }
-            GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
-        }
-    }
-    // Rant od środka
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: !sh.maxed
-        radius: Math.max(0, sh.radius - 1)
-        color: "transparent"
-        border.width: 1
-        border.color: Qt.rgba(1, 1, 1, (Theme.dark ? 0.09 : 0.5) * (sh.active ? 1 : 0.6))
-    }
-    // Świetlna linia na górnej krawędzi
-    Rectangle {
-        x: sh.radius; y: 1
-        visible: !sh.maxed
-        width: parent.width - 2 * x
-        height: 1
-        opacity: sh.active ? 1 : 0.4
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 0) }
-            GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, Theme.dark ? 0.28 : 0.95) }
-            GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
-        }
-    }
-
     // Otwarcie okna: zawartość wyrasta z 94% i rozjaśnia się
     Component.onCompleted: if (animateOpen) intro.start()
     ParallelAnimation {

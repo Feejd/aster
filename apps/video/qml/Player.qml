@@ -249,7 +249,7 @@ Item {
         function show() { opacity = 1; volumeTimer.restart(); }
         anchors.horizontalCenter: parent.horizontalCenter
         y: 70
-        width: 190; height: 40; radius: 20
+        width: 190; height: 40; radius: 12
         color: Qt.rgba(0, 0, 0, 0.55)
         opacity: 0
         Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -438,7 +438,7 @@ Item {
     Rectangle {
         anchors.centerIn: parent
         visible: player.ended
-        width: endCol.implicitWidth + 56; height: endCol.implicitHeight + 44; radius: 20
+        width: endCol.implicitWidth + 56; height: endCol.implicitHeight + 44; radius: 12
         color: Qt.rgba(0, 0, 0, 0.62)
         border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.12)
         Column {
@@ -519,7 +519,7 @@ Item {
         property bool big: false
         property bool active: false
         property string tip
-        width: labelBeside && label ? 44 + labelText.implicitWidth : (big ? 44 : 40); height: 40; radius: 20
+        width: labelBeside && label ? 44 + labelText.implicitWidth : (big ? 44 : 40); height: 40; radius: 12
         color: hovered ? Qt.rgba(1, 1, 1, 0.16) : "transparent"
         opacity: enabled ? 1 : 0.35
         Icon {
@@ -559,7 +559,7 @@ Item {
         property string text
         property string icon
         property bool primary: false
-        width: pbRow.implicitWidth + 32; height: 38; radius: 19
+        width: pbRow.implicitWidth + 32; height: 38; radius: 10
         baseColor: primary ? "white" : Qt.rgba(1, 1, 1, 0.14)
         color: primary ? (hovered ? Qt.rgba(1, 1, 1, 0.85) : baseColor) : (hovered ? Qt.rgba(1, 1, 1, 0.24) : baseColor)
         Row {

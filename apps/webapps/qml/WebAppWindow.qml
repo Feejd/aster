@@ -640,7 +640,7 @@ Window {
                         visible: false
                         sourceSize: Qt.size(56, 56)
                     }
-                    Rectangle { id: avatarMask; anchors.fill: parent; radius: 14; visible: false; layer.enabled: true }
+                    Rectangle { id: avatarMask; anchors.fill: parent; radius: 10; visible: false; layer.enabled: true }
                     MultiEffect {
                         anchors.fill: parent
                         visible: !!win.avatarSrc
@@ -649,7 +649,7 @@ Window {
                         maskSource: avatarMask
                     }
                     Rectangle {
-                        anchors.fill: parent; radius: 14
+                        anchors.fill: parent; radius: 10
                         visible: !win.avatarSrc
                         color: Qt.alpha(win.brand, 0.15)
                         Icon { anchors.centerIn: parent; d: Icons.webapp; size: 14; color: win.sideActiveText }
@@ -811,7 +811,7 @@ Window {
                 visible: !!win.adapter && !!win.adapter.search
                 anchors.centerIn: parent
                 width: Math.min(560, bar.width - 400)
-                height: 40; radius: 20
+                height: 40; radius: 12
                 color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.75)
                 border.width: 1
                 border.color: adField.activeFocus ? "#1C62B9" : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14))
@@ -1123,7 +1123,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom; anchors.bottomMargin: toastTimer.running ? 18 : -height
                 Behavior on anchors.bottomMargin { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
-                width: toastText.implicitWidth + 32; height: 40; radius: 20
+                width: toastText.implicitWidth + 32; height: 40; radius: 12
                 color: Theme.text
                 Text { id: toastText; anchors.centerIn: parent; color: Theme.surface; font.family: win.uiFont; font.pixelSize: 13 }
             }
@@ -1182,7 +1182,7 @@ Window {
             y: adapterSearch.mapToItem(frame, 0, 0).y + adapterSearch.height + 6
             width: adapterSearch.width
             height: sugCol.implicitHeight + 12
-            radius: 14
+            radius: 10
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
@@ -1252,7 +1252,7 @@ Window {
                 anchors.centerIn: parent
                 width: 420
                 height: dlgCol.implicitHeight + 48
-                radius: 16
+                radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Column {
