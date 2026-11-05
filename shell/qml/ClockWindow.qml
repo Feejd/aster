@@ -34,7 +34,7 @@ Window {
 
     Item {
         id: hero
-        x: 48; y: 64
+        x: 44; y: 60
         width: Math.max(timeText.implicitWidth, bento.width)
         height: bento.y + bento.height
         opacity: cw.shown ? 1 : 0
@@ -48,30 +48,30 @@ Window {
                 return t.charAt(0).toUpperCase() + t.slice(1);
             }
             color: cw.ink
-            font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Normal
+            font.family: Theme.font; font.pixelSize: 16; font.weight: Font.Medium
         }
         Text {
             id: timeText
-            y: dateText.height
+            y: dateText.height + 2
             text: cw.now.toLocaleTimeString(cw.loc, "HH:mm")
             color: cw.ink
             font.family: Theme.font
-            font.pixelSize: 112
-            font.weight: Font.Light
-            font.letterSpacing: -3
+            font.pixelSize: 148
+            font.weight: Font.ExtraLight
+            font.letterSpacing: -6
             font.features: { "tnum": 1 }
         }
 
         // ——— Widżety ———
         Row {
             id: bento
-            y: timeText.y + timeText.height + 12
+            y: timeText.y + timeText.height + 18
             spacing: 12
 
             // Kalendarz miesiąca
             Card {
                 id: calendar
-                width: 240; height: 240
+                width: 256; height: 254
                 readonly property int year: cw.now.getFullYear()
                 readonly property int month: cw.now.getMonth()
                 readonly property int today: cw.now.getDate()
@@ -80,33 +80,35 @@ Window {
                 readonly property int days: new Date(year, month + 1, 0).getDate()
 
                 Row {
-                    x: 18; y: 16
+                    x: 20; y: 16
                     spacing: 6
                     Text {
-                        text: cw.loc.standaloneMonthName(calendar.month, Locale.LongFormat).toUpperCase()
-                        color: Theme.accentText
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 1.4
+                        text: {
+                            const m = cw.loc.standaloneMonthName(calendar.month, Locale.LongFormat);
+                            return m.charAt(0).toUpperCase() + m.slice(1);
+                        }
+                        color: Theme.text
+                        font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
                     }
                     Text {
                         text: calendar.year
                         color: Theme.text2
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; font.letterSpacing: 1.4
+                        font.family: Theme.font; font.pixelSize: 16
                     }
                 }
                 Grid {
-                    x: 12; y: 40
+                    x: 12; y: 48
                     columns: 7
                     Repeater {
                         model: ["P", "W", "Ś", "C", "P", "S", "N"]
                         delegate: Text {
                             required property string modelData
                             required property int index
-                            width: 30.8; height: 22
+                            width: 33; height: 22
                             horizontalAlignment: Text.AlignHCenter
                             text: modelData
-                            color: index >= 5 ? Theme.text2 : Theme.text
-                            opacity: 0.6
-                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                            color: Theme.text2
+                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
                         }
                     }
                     Repeater {
@@ -118,20 +120,19 @@ Window {
                             readonly property bool inMonth: day >= 1 && day <= calendar.days
                             readonly property bool isToday: day === calendar.today
                             visible: index < Math.ceil((calendar.lead + calendar.days) / 7) * 7
-                            width: 30.8; height: 26
+                            width: 33; height: 28
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 26; height: 26; radius: 6
+                                width: 28; height: 28; radius: 7
                                 visible: cell.isToday
                                 color: Theme.accent
                             }
                             Text {
                                 anchors.centerIn: parent
                                 text: cell.inMonth ? cell.day : ""
-                                color: cell.isToday ? "white" : Theme.text
-                                opacity: cell.isToday ? 1 : (cell.index % 7 >= 5 ? 0.55 : 0.9)
-                                font.family: Theme.font; font.pixelSize: 12
-                                font.weight: cell.isToday ? Font.Bold : Font.Medium
+                                color: cell.isToday ? "white" : cell.index % 7 >= 5 ? Theme.text2 : Theme.text
+                                font.family: Theme.font; font.pixelSize: 13
+                                font.weight: cell.isToday ? Font.DemiBold : Font.Normal
                                 font.features: { "tnum": 1 }
                             }
                         }
@@ -139,12 +140,13 @@ Window {
                 }
             }
 
+            // Obok kalendarza tylko to, co teraz coś znaczy: bateria i grająca muzyka
             Column {
-                spacing: 14
+                spacing: 12
 
                 // Bateria: pierścień naładowania
                 Card {
-                    width: 240; height: 113
+                    width: 236; height: 121
                     visible: ControlCenter.batteryAvailable
                     Item {
                         id: ring
@@ -183,7 +185,7 @@ Window {
                         Text {
                             text: ControlCenter.battery + "%"
                             color: Theme.text
-                            font.family: Theme.font; font.pixelSize: 30; font.weight: Font.DemiBold; font.letterSpacing: -0.8
+                            font.family: Theme.font; font.pixelSize: 28; font.weight: Font.Medium; font.letterSpacing: -0.8
                             font.features: { "tnum": 1 }
                         }
                         Text {
@@ -196,13 +198,13 @@ Window {
 
                 // Teraz gra
                 Card {
-                    width: 240; height: ControlCenter.batteryAvailable ? 113 : 240
+                    width: 236; height: 121
+                    visible: ControlCenter.playerAvailable
                     Rectangle {
                         id: cover
                         x: 14; anchors.verticalCenter: parent.verticalCenter
-                        width: 60; height: 60; radius: 10
+                        width: 72; height: 72; radius: 8
                         color: Theme.accent
-                        opacity: ControlCenter.playerAvailable ? 1 : 0.4
                         Image {
                             anchors.fill: parent
                             source: ControlCenter.artUrl
@@ -227,14 +229,13 @@ Window {
                         Text {
                             width: parent.width
                             elide: Text.ElideRight
-                            text: ControlCenter.playerAvailable ? ControlCenter.artist : "Muzyka i podcasty"
+                            text: ControlCenter.artist
                             color: Theme.text2
                             font.family: Theme.font; font.pixelSize: 12
                         }
                         Row {
                             topPadding: 6
                             spacing: 4
-                            opacity: ControlCenter.playerAvailable ? 1 : 0.35
                             MediaButton { glyph: Icons.prev; onClicked: ControlCenter.previous() }
                             MediaButton { glyph: ControlCenter.playing ? Icons.pause : Icons.play; filled: true; onClicked: ControlCenter.playPause() }
                             MediaButton { glyph: Icons.next; onClicked: ControlCenter.next() }
@@ -251,7 +252,7 @@ Window {
         readonly property bool isCard: true
         onVisibleChanged: regionTimer.restart()
         radius: 12
-        shadowStrength: 0.7
+        shadowStrength: 0.55
     }
 
     component MediaButton: Rectangle {
