@@ -20,6 +20,9 @@ Item {
     signal openLocation(string path, int line, int col)
     signal openFrame(int index)
     signal openPreview(string url)
+    signal fixProblem(string path, int line, int col, string message)
+    signal explainFailure(string title, string output)
+    signal installTool(var packages)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -118,6 +121,8 @@ Item {
         anchors.topMargin: header.height + 1
         onOpenLocation: (path, line, col) => tp.openLocation(path, line, col)
         onOpenPreview: (url) => tp.openPreview(url)
+        onExplainFailure: (title, output) => tp.explainFailure(title, output)
+        onInstallTool: (packages) => tp.installTool(packages)
     }
 
     ReferencesView {
@@ -134,6 +139,7 @@ Item {
         anchors.fill: parent
         anchors.topMargin: header.height + 1
         onOpenProblem: (path, line, col) => tp.openProblem(path, line, col)
+        onFixProblem: (path, line, col, message) => tp.fixProblem(path, line, col, message)
     }
 
     Loader {

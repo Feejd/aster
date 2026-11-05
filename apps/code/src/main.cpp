@@ -91,6 +91,14 @@ int main(int argc, char *argv[])
                 QCoreApplication::sendEvent(window, &ev);
                 return;
             }
+            // hover:X,Y — ruch myszy bez przycisku (podpisy przycisków)
+            if (step.startsWith(QLatin1String("hover:"))) {
+                const QStringList a = step.mid(6).split(QLatin1Char(','));
+                const QPointF p(a.value(0).toDouble(), a.value(1).toDouble());
+                QMouseEvent ev(QEvent::MouseMove, p, window->mapToGlobal(p), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &ev);
+                return;
+            }
             if (step.startsWith(QLatin1String("key:"))) {
                 const QKeySequence seq(step.mid(4));
                 const int k = seq.isEmpty() ? 0 : seq[0].key();

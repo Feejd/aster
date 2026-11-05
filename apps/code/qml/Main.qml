@@ -51,6 +51,7 @@ Window {
         property bool previewOnSave: true
         property bool previewAuto: true
         property bool diffSideBySide: false
+        property string prepareLater: "[]"       // projekty, w których użytkownik wybrał „Później”
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
     Binding { target: ProjectEnv; property: "root"; value: Project.root }
@@ -439,11 +440,7 @@ Window {
         function onWorkspaceEditReady(files) { if (files.length) win.applyWorkspace(files); }
         function onCodeActionsReady(seq, path, actions) {
             if (seq !== win.quickFixSeq || !win.cur) return;
-            if (!actions.length) { win.toast("Brak szybkich poprawek w tym miejscu"); return; }
-            const r = win.cur.edit.cursorRectangle;
-            const p = win.cur.edit.mapToItem(frame, r.x, r.y + r.height + 4);
-            menu.openAt(p.x, p.y, actions.slice(0, 14).map(a => ({ label: a.title.length > 34 ? a.title.slice(0, 33) + "…" : a.title,
-                                                                 icon: a.preferred ? "bolt" : "", action: "qa:" + a.index })));
+            win.showFixMenu(actions);
         }
         function onSymbolsReady(seq, path, symbols) {
             if (palette.shown && palette.mode === "symbols") palette.setSymbols(symbols.map(s => Object.assign({}, s, { path: path })));
@@ -453,7 +450,7 @@ Window {
     property int quickFixSeq: -1
     function quickFix() {
         if (!cur) return;
-        if (!cur.lspOn) { lspHint(); return; }
+        if (!cur.lspOn) { showFixMenu([]); return; }
         quickFixSeq = cur.requestCodeActions();
     }
     function symbolQuery(mode, q) {
@@ -517,11 +514,33 @@ Window {
     }
     function definitionFeedback(seq) { if (seq === -1) lspHint(); }
     // Bez serwera języka — co doinstalować (polecenie trafia do schowka)
+    // ——— Przygotowanie projektu: języki, serwery języków, zależności — jeden przycisk ———
+    readonly property bool prepareDismissed: { try { return JSON.parse(prefs.prepareLater).indexOf(Project.root) >= 0; } catch (e) { return false; } }
+    function dismissPrepare() {
+        let l = [];
+        try { l = JSON.parse(prefs.prepareLater); } catch (e) {}
+        l.push(Project.root);
+        prefs.prepareLater = JSON.stringify(l.slice(-50));
+    }
+    function installPackages(pk) {
+        if (ProjectEnv.state === "ready") envTask("Kontener: pakiety", ProjectEnv.installCommand(pk));
+        else if (ProjectEnv.toolAvailable()) { ProjectEnv.useContainer(true); envTask("Kontener: przygotowanie", ProjectEnv.createCommand(pk)); }
+        else toast("W systemie nie ma toolbox — programu nie da się zainstalować z Aster Code");
+    }
+    function prepareProject() {
+        const r = ProjectEnv.readiness;
+        pendingSetup = r.setup || [];
+        // Instalacja z sudo (pakiety, serwery języków) idzie zawsze do kontenera — /usr w systemie jest tylko do odczytu
+        const needsContainer = (r.packages || []).length || pendingSetup.some(s => s.command.startsWith("sudo "));
+        if (needsContainer && ProjectEnv.toolAvailable() && ((r.packages || []).length || ProjectEnv.state !== "ready")) installPackages(r.packages || []);
+        else runPendingSetup();
+    }
     function lspHint() {
         const s = cur ? Lsp.serverFor(curPath) : {};
         if (!s.id) { toast("Dla tego rodzaju pliku nie ma serwera języka"); return; }
         if (s.failed) { toast("Serwer języka " + s.name + " przestał działać — otwórz folder ponownie"); return; }
         if (s.available) { toast("Serwer języka " + s.name + " się uruchamia…"); return; }
+        if (ProjectEnv.toolAvailable() && (ProjectEnv.readiness.items || []).length) { prepareProject(); return; }
         Project.copyText(s.package);
         toast("Brak serwera języka " + s.name + " — polecenie w schowku: " + s.package);
     }
@@ -771,15 +790,22 @@ Window {
         const steps = pendingSetup;
         pendingSetup = [];
         for (const s of steps) Tasks.run(s.label, s.command, s.cwd, {});
-        if (steps.length) { terminalShown = true; terminalPanel.tab = 3; setupLeft = steps.length; }
+        if (steps.length) { terminalShown = true; terminalPanel.tab = 3; setupLabels = steps.map(s => s.label); setupFailed = false; }
     }
-    property int setupLeft: 0
+    property var setupLabels: []
+    property bool setupFailed: false
     Connections {
         target: Tasks
         function onFinished(title, code) {
-            if (title === "Kontener: przygotowanie" && code === 0 && win.pendingSetup.length) Qt.callLater(win.runPendingSetup);
-            else if (win.setupLeft > 0 && (title.indexOf("install") >= 0 || title.indexOf("zależności") >= 0)) {
-                if (--win.setupLeft === 0) win.toast(code === 0 ? "Gotowe — ▶ Uruchom (Ctrl+F5) startuje aplikację" : "Instalacja zależności nie powiodła się — szczegóły w karcie Zadania");
+            if (title.startsWith("Kontener: p") && code === 0 && win.pendingSetup.length) Qt.callLater(win.runPendingSetup);
+            else if (win.setupLabels.indexOf(title) >= 0) {
+                win.setupLabels = win.setupLabels.filter(l => l !== title);
+                if (code !== 0) win.setupFailed = true;
+                if (!win.setupLabels.length) {
+                    ProjectEnv.refresh();
+                    Lsp.restartServers();
+                    win.toast(win.setupFailed ? "Przygotowanie nie powiodło się — szczegóły w karcie Zadania" : "Gotowe — ▶ Uruchom (Ctrl+F5) startuje aplikację");
+                }
             }
         }
     }
@@ -849,6 +875,21 @@ Window {
         save(i, null, true);
     }
     function askAgent(prompt) { agentPanel.ask(prompt); }
+    function fixWithAgent(path, line, message) {
+        openFile(path, { line: line, col: 0, length: 0 });
+        askAgent("Napraw problem w " + Project.relative(path) + ", wiersz " + (line + 1) + ": " + message);
+    }
+    // Menu żarówki: poprawki z serwera języka, zawsze też agent
+    function showFixMenu(actions) {
+        if (!cur) return;
+        const r = cur.edit.cursorRectangle;
+        const p = cur.edit.mapToItem(frame, r.x, r.y + r.height + 4);
+        const items = actions.slice(0, 12).map(a => ({ label: a.title.length > 34 ? a.title.slice(0, 33) + "…" : a.title, icon: a.preferred ? "bolt" : "", action: "qa:" + a.index }));
+        const d = cur.diagnostics.find(x => x.line === cur.lineCol.y && x.severity <= 2);
+        if (d) { if (items.length) items.push({ separator: true }); items.push({ label: "Napraw z agentem", icon: "sparkles", action: "agent:line" }); }
+        if (items.length) menu.openAt(p.x, p.y, items);
+        else toast("Brak poprawek w tym miejscu");
+    }
     // ——— Wdrożenie ———
     function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
     function deployCommand(c) {
@@ -1259,6 +1300,11 @@ Window {
         else if (a === "secrets") secretsView.open();
         else if (a === "newApp") newAppView.open();
         else if (a === "deploy") quickDeploy();
+        else if (a.startsWith("ask:")) askAgent(a.slice(4));
+        else if (a.startsWith("searchtext:")) { showView(1); searchView.focusField(a.slice(11)); searchView.run(); }
+        else if (a.startsWith("gotoline:")) { if (cur) cur.goToLine(Number(a.slice(9))); }
+        else if (a.startsWith("setting:")) { settingsView.open(); Qt.callLater(() => settingsView.searchFor(a.slice(8))); }
+        else if (a === "agent:line") { const d = cur.diagnostics.find(x => x.line === cur.lineCol.y && x.severity <= 2); if (d) fixWithAgent(curPath, d.line, d.message); }
         else if (a === "deploySettings") deployView.open();
         else if (a === "agent") agentPanel.shown ? agentPanel.close() : agentPanel.open();
         else if (a === "agent:fix") askAgent("Napraw błędy z panelu Problemy w tym pliku.");
@@ -1398,6 +1444,9 @@ Window {
         else if (what === "agent") agentPanel.open();
         else if (what.startsWith("ask:")) askAgent(arg);
         else if (what === "acceptall") agentPanel.acceptAll();
+        else if (what === "prepare") prepareProject();
+        else if (what === "tab3") { terminalShown = true; terminalPanel.tab = 3; }
+        else if (what === "tab1") { terminalShown = true; terminalPanel.tab = 1; }
         else if (what.startsWith("replaceline:")) { if (cur) { const kv = arg.split("=>"); const t = cur.edit.text.replace(kv[0], kv[1]); TextOps.multiEdit(cur.edit.textDocument, [{ a: 0, b: cur.edit.length }], [t], 0); } }
         else if (what === "sidebyside") prefs.diffSideBySide = true;
         else if (what === "deployview") deployView.open();
@@ -1620,6 +1669,7 @@ Window {
                         id: runBtn
                         visible: win.hasProject
                         icon: "play"
+                        tip: Tasks.runningCount ? "Działa — zatrzymaj albo uruchom inne" : "Uruchom aplikację (Ctrl+F5)"
                         opacity: 1
                         onClicked: Tasks.runningCount ? win.showRunMenu() : win.runApp()
                         Rectangle {
@@ -1629,14 +1679,22 @@ Window {
                             color: Theme.dark ? "#3FB950" : "#1A7F37"
                         }
                     }
-                    ToolBtn { icon: "chevronDown"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
-                    ToolBtn { icon: "globe"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
-                    ToolBtn { icon: "upload"; visible: win.hasProject; onClicked: win.quickDeploy() }
-                    ToolBtn { icon: "sparkles"; visible: win.hasProject; opacity: agentPanel.shown ? 1 : 0.7; onClicked: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
-                    ToolBtn { icon: "search"; onClicked: palette.open("") }
-                    ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
-                    ToolBtn { icon: "panelBottom"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
-                    ToolBtn { id: moreBtn; icon: "more"; onClicked: win.showMenu() }
+                    ToolBtn { icon: "chevronDown"; tip: "Co uruchomić"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
+                    ToolBtn { icon: "globe"; tip: "Podgląd strony"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
+                    ToolBtn { icon: "upload"; tip: "Wdróż aplikację"; visible: win.hasProject; onClicked: win.quickDeploy() }
+                    ToolBtn { icon: "sparkles"; tip: "Agent (Ctrl+Shift+I)"; visible: win.hasProject; opacity: agentPanel.shown ? 1 : 0.7; onClicked: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
+                    // Jedno pole na wszystko: pliki, polecenia, ustawienia, pytanie do agenta
+                    HoverButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.max(150, Math.min(240, tabBar.width * 0.2)); height: 30; radius: 9
+                        baseColor: Theme.fill
+                        onClicked: palette.open("")
+                        Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 14; color: Theme.text2 }
+                        Text { x: 31; width: parent.width - 40; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight; text: "Co chcesz zrobić?"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
+                    }
+                    ToolBtn { icon: "columns"; tip: "Podziel edytor (Ctrl+\\)"; enabled: !!win.cur; onClicked: win.splitEditor() }
+                    ToolBtn { icon: "panelBottom"; tip: "Terminal (Ctrl+`)"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
+                    ToolBtn { id: moreBtn; icon: "more"; tip: "Menu"; onClicked: win.showMenu() }
                 }
                 WindowButtons {
                     id: winButtons
@@ -1837,26 +1895,69 @@ Window {
                     onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
                 }
 
-                // Bez otwartych plików — znak programu i skróty
+                // Bez otwartych plików — pole „Co chcesz zrobić?” i działania do kliknięcia (skrót tylko jako dopisek)
                 Column {
                     visible: tabs.count === 0
                     anchors.centerIn: parent
-                    spacing: 10
-                    Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.code; size: 64; stroke: 1.2; color: Theme.text2; opacity: 0.35 }
+                    width: Math.min(420, parent.width - 40)
+                    spacing: 6
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; bottomPadding: 10; text: Project.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 22; font.weight: Font.DemiBold }
+                    HoverButton {
+                        width: parent.width; height: 44; radius: 12
+                        baseColor: Theme.fill
+                        onClicked: palette.open("")
+                        Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 16; color: Theme.text2 }
+                        Text { x: 40; anchors.verticalCenter: parent.verticalCenter; text: "Co chcesz zrobić?"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 14 }
+                    }
                     Item { width: 1; height: 8 }
                     Repeater {
-                        model: [["Szybkie otwieranie pliku", "Ctrl+P"], ["Wszystkie polecenia", "Ctrl+Shift+P"], ["Szukaj w projekcie", "Ctrl+Shift+F"],
-                                ["Nowy plik", "Ctrl+N"], ["Terminal", "Ctrl+`"]]
-                        delegate: Item {
+                        model: [["play", "Uruchom aplikację", "Ctrl+F5", "run:all"], ["sparkles", "Zapytaj agenta", "Ctrl+Shift+I", "agent"],
+                                ["doc", "Otwórz plik", "Ctrl+P", "quickOpen"], ["filePlus", "Nowy plik", "Ctrl+N", "newFile"], ["panelBottom", "Terminal", "Ctrl+`", "terminal"]]
+                        delegate: HoverButton {
                             id: hint
                             required property var modelData
-                            width: 340; height: 24
-                            Text { anchors.right: parent.horizontalCenter; anchors.rightMargin: 10; text: hint.modelData[0]; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
-                            Rectangle {
-                                anchors.left: parent.horizontalCenter; anchors.leftMargin: 4
-                                width: keyT.implicitWidth + 14; height: 22; radius: 6
-                                color: Theme.fill
-                                Text { id: keyT; anchors.centerIn: parent; text: hint.modelData[1]; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
+                            width: parent.width; height: 36; radius: 9
+                            onClicked: hint.modelData[3] === "quickOpen" ? palette.open("") : win.run(hint.modelData[3])
+                            Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; d: Icons[hint.modelData[0]] || ""; size: 16; color: Theme.accentText }
+                            Text { x: 40; anchors.verticalCenter: parent.verticalCenter; text: hint.modelData[1]; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+                            Text { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: hint.modelData[2]; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                        }
+                    }
+                }
+
+                // Projekt nie jest gotowy: co brakuje i jeden przycisk
+                Rectangle {
+                    id: prepareCard
+                    readonly property var items: ProjectEnv.readiness.items || []
+                    visible: items.length > 0 && !win.prepareDismissed
+                    anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 14
+                    width: Math.min(400, parent.width - 28); height: prepCol.implicitHeight + 24
+                    radius: 14; z: 7
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.edge
+                    Column {
+                        id: prepCol
+                        x: 14; y: 12; width: parent.width - 28
+                        spacing: 8
+                        Text { text: "Przygotować projekt?"; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                        Text {
+                            width: parent.width; wrapMode: Text.Wrap
+                            text: "Brakuje: " + prepareCard.items.join(", ") + (ProjectEnv.toolAvailable() ? ". Wszystko trafi do kontenera projektu, w systemie nic nie przybędzie." : ".")
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.15
+                        }
+                        Row {
+                            spacing: 6
+                            HoverButton {
+                                width: prepT.implicitWidth + 24; height: 30; radius: 8
+                                baseColor: Theme.accent
+                                onClicked: win.prepareProject()
+                                Text { id: prepT; anchors.centerIn: parent; text: "Przygotuj"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                            }
+                            HoverButton {
+                                width: laterT.implicitWidth + 24; height: 30; radius: 8
+                                baseColor: Theme.fill
+                                onClicked: win.dismissPrepare()
+                                Text { id: laterT; anchors.centerIn: parent; text: "Później"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
                             }
                         }
                     }
@@ -2000,6 +2101,9 @@ Window {
                 onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
                 onOpenLocation: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 onOpenFrame: (i) => Debugger.selectFrame(i)
+                onFixProblem: (path, line, col, message) => win.fixWithAgent(path, line, message)
+                onExplainFailure: (title, output) => win.askAgent("Zadanie „" + title + "” nie powiodło się. Wyjaśnij prosto dlaczego i napraw to.\n\nKoniec wyjścia:\n```\n" + Secrets.redact(output) + "\n```")
+                onInstallTool: (packages) => win.installPackages(packages)
                 onOpenPreview: (url) => preview.open(url)
                 MouseArea {
                     width: parent.width; height: 6; y: -3
@@ -2124,6 +2228,8 @@ Window {
             Palette {
                 id: palette
                 commands: win.commands
+                settings: settingsView.items
+                currentLine: win.cur ? win.cur.lineCol.y + 1 : 0
                 recentPaths: { win.revision; return win.openPaths(); }
                 onFileChosen: (path) => win.openFile(path)
                 onCommandChosen: (action) => win.run(action)
@@ -2156,10 +2262,10 @@ Window {
                 Row {
                     x: 12; anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
-                    ViewBtn { icon: "files"; view: 0 }
-                    ViewBtn { icon: "search"; view: 1 }
-                    ViewBtn { icon: "gitBranch"; view: 2; badge: Project.changes.length }
-                    ViewBtn { icon: "clock"; view: 3; visible: Project.isGit }
+                    ViewBtn { icon: "files"; view: 0; tip: "Pliki" }
+                    ViewBtn { icon: "search"; view: 1; tip: "Szukaj w projekcie" }
+                    ViewBtn { icon: "gitBranch"; view: 2; tip: "Zmiany i zatwierdzanie (git)"; badge: Project.changes.length }
+                    ViewBtn { icon: "clock"; view: 3; tip: "Historia pliku"; visible: Project.isGit }
                 }
             }
 

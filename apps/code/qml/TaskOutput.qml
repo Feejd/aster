@@ -10,6 +10,21 @@ Item {
     id: to
     signal openLocation(string path, int line, int col)
     signal openPreview(string url)
+    signal explainFailure(string title, string output)
+    signal installTool(var packages)
+    // Nieudane zadanie: brakujący program (command not found) — od razu do zainstalowania
+    readonly property bool failed: !Tasks.running && Tasks.exitCode > 0 && Tasks.exitCode !== 143 && Tasks.lines.length > 0
+    readonly property string missingTool: {
+        if (!failed) return "";
+        for (const l of Tasks.lines.slice(-20)) {
+            const m = l.match(/(?:^|: )([\w.+-]+): (?:command )?not found\s*$/);
+            if (m) return m[1];
+        }
+        return "";
+    }
+    readonly property var toolPackages: ({ npm: ["nodejs", "npm"], npx: ["nodejs", "npm"], node: ["nodejs", "npm"], python3: ["python3", "python3-pip"], python: ["python3", "python3-pip"],
+                                           pip: ["python3-pip"], pip3: ["python3-pip"], cargo: ["cargo"], go: ["golang"], make: ["make"], cmake: ["cmake"], gcc: ["gcc"], "g++": ["gcc-c++"],
+                                           gdb: ["gdb"], rsync: ["rsync"], gh: ["gh"], meson: ["meson"], ninja: ["ninja-build"], java: ["java-latest-openjdk"], ruby: ["ruby"], php: ["php"] })
     property bool follow: true
 
     function kind(l) {
@@ -77,10 +92,45 @@ Item {
         Icon { anchors.centerIn: parent; d: Icons[sb.icon] || ""; size: 11; stroke: 2; color: Theme.text2 }
     }
 
+    // Nieudane zadanie: co dalej, zamiast samego kodu błędu
+    Rectangle {
+        id: failBar
+        visible: to.failed
+        x: procs.width + 8; y: 6
+        width: parent.width - x - 8; height: visible ? 36 : 0; radius: 9
+        color: Qt.rgba(0.9, 0.28, 0.3, Theme.dark ? 0.14 : 0.08)
+        Text {
+            x: 12; anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - 24 - failBtns.width
+            elide: Text.ElideRight
+            text: to.missingTool ? "Brakuje programu " + to.missingTool : "Zadanie nie powiodło się"
+            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+        }
+        Row {
+            id: failBtns
+            anchors.right: parent.right; anchors.rightMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+            HoverButton {
+                visible: !!to.toolPackages[to.missingTool]
+                width: instT.implicitWidth + 20; height: 26; radius: 7
+                baseColor: Theme.accent
+                onClicked: to.installTool(to.toolPackages[to.missingTool])
+                Text { id: instT; anchors.centerIn: parent; text: "Zainstaluj"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            }
+            HoverButton {
+                width: fixT.implicitWidth + 20; height: 26; radius: 7
+                baseColor: to.toolPackages[to.missingTool] ? Theme.fill : Theme.accent
+                onClicked: to.explainFailure(Tasks.title, Tasks.lines.slice(-80).join("\n"))
+                Text { id: fixT; anchors.centerIn: parent; text: "Wyjaśnij i napraw"; color: to.toolPackages[to.missingTool] ? Theme.text : "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            }
+        }
+    }
+
     ListView {
         id: list
         anchors.fill: parent
-        anchors.leftMargin: procs.width + 14; anchors.topMargin: 6
+        anchors.leftMargin: procs.width + 14; anchors.topMargin: 6 + (failBar.height ? failBar.height + 6 : 0)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: Tasks.lines

@@ -794,7 +794,7 @@ Item {
         // Żarówka przy wierszu z problemem — szybkie poprawki (Ctrl+.)
         HoverButton {
             readonly property rect endRect: { te.length; page.lineCol; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, page.lineCol.y) + TextOps.lineText(te.textDocument, page.lineCol.y).length); }
-            visible: page.lspOn && page.lineHasProblem && te.activeFocus
+            visible: page.lineHasProblem && te.activeFocus
             z: 3
             x: te.x + endRect.x + 12; y: te.y + endRect.y + (endRect.height - height) / 2
             width: 22; height: 20; radius: 6
