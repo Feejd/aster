@@ -443,7 +443,7 @@ Item {
         signal actionClicked()
         default property alias content: body.data
         width: col.width; height: cardCol.height + 26; radius: 12
-        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(1, 1, 1, 0.55)
+        color: Theme.pane
         border.width: 1; border.color: Theme.line
         Column {
             id: cardCol
@@ -477,7 +477,7 @@ Item {
         property string label
         property string hint
         property bool on
-        width: chipText.implicitWidth + 22; height: 28; radius: 14
+        width: chipText.implicitWidth + 22; height: 28; radius: 8
         baseColor: on ? Theme.accent : Theme.fill
         color: on ? baseColor : (hovered ? Theme.hover : baseColor)
         Text { id: chipText; anchors.centerIn: parent; text: chip.label; color: chip.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }

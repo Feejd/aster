@@ -23,7 +23,7 @@ Item {
     readonly property real stepW: Math.max(18, Math.min(34, (width - 296) / steps))
     readonly property int playStep: Studio.playing && Studio.patternMode ? Math.floor(Math.max(0, Studio.position) / stepSec) % steps : -1
 
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
 
     // Pasek: wzór, długość, rozstaw

@@ -22,7 +22,7 @@ Item {
     function dbText(db) { return db <= -60 ? "−∞" : (db > 0 ? "+" : db < 0 ? "−" : "") + Math.abs(db).toFixed(1); }
 
     // Pełne tło: pasy osi czasu nie prześwitują (ikony wektorowe nie zawsze są przycinane)
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
 
     Flickable {
@@ -71,7 +71,7 @@ Item {
         readonly property var sel: Studio.inserts.find((i) => i.id === Studio.selectedInsert) || null
         anchors.right: parent.right; anchors.rightMargin: master.width + 34
         y: 10; width: 230; height: parent.height - 20; radius: 12
-        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(1, 1, 1, 0.55)
+        color: Theme.pane
         border.width: 1; border.color: Theme.line
         Flickable {
             anchors.fill: parent; anchors.margins: 10

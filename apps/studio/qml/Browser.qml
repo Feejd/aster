@@ -26,7 +26,7 @@ Item {
     Connections { target: Studio; function onPresetsChanged() { br.reload(); } }
     Component.onCompleted: { reload(); Qt.callLater(Studio.scanPlugins); }
 
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#14151A" : "#EDEEF3" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
     Field {
         id: search

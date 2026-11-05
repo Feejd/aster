@@ -189,7 +189,7 @@ Item {
         x: 12; width: parent.width - 24
         y: parent.height - height - 12
         height: timingCol.height + 24; radius: 12
-        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(1, 1, 1, 0.55)
+        color: Theme.pane
         border.width: 1; border.color: Theme.line
         Column {
             id: timingCol

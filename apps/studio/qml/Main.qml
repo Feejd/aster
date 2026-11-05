@@ -20,7 +20,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     // Kolory ścieżek (indeks zapisany w projekcie)
     readonly property var trackColors: ["#FF6B6B", "#FFA94D", "#F5C542", "#51CF66", "#22B8CF", "#4D8BF7", "#9775FA", "#F06595"]
     property string dock: ""                    // panel pod playlistą: rack | piano | mixer
@@ -720,8 +720,8 @@ Window {
                 y: toolbar.height
                 width: timeline.x + timeline.width - x
                 height: timeline.height + statusBar.height
-                topLeftRadius: 14
-                topRightRadius: inspector.width > 0 ? 14 : 0
+                topLeftRadius: 12
+                topRightRadius: inspector.width > 0 ? 12 : 0
                 leftLine: false
                 bottomRightRadius: win.dock !== "" || inspector.width > 0 ? 0 : win.r
             }
@@ -895,7 +895,7 @@ Window {
                             id: tplChip
                             required property var modelData
                             readonly property bool on: newSheet.template === modelData.id
-                            width: tplText.implicitWidth + 24; height: 30; radius: 15
+                            width: tplText.implicitWidth + 24; height: 30; radius: 8
                             baseColor: on ? Theme.accent : Theme.fill
                             color: on ? baseColor : (hovered ? Theme.hover : baseColor)
                             onClicked: { newSheet.template = modelData.id; if (modelData.bpm) newSheet.bpm = modelData.bpm; }
@@ -1070,7 +1070,7 @@ Window {
                 width: parent.width
                 spacing: 22
                 Rectangle {
-                    width: 260; height: 260; radius: 14
+                    width: 260; height: 260; radius: 12
                     color: Theme.fill
                     clip: true
                     Image {
@@ -1351,8 +1351,8 @@ Window {
             y: parent.height - (shown ? height + 24 : 0)
             opacity: shown ? 1 : 0
             z: 450
-            width: toastRow.implicitWidth + 36; height: 40; radius: 20
-            color: Theme.dark ? "#ECEEF3" : "#1E2027"
+            width: toastRow.implicitWidth + 36; height: 40; radius: 12
+            color: Theme.text
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
             Row {
@@ -1421,7 +1421,7 @@ Window {
     component ToolGroup: Rectangle {
         default property alias content: groupRow.data
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
-        width: groupRow.width + 6; height: 40; radius: 20
+        width: groupRow.width + 6; height: 40; radius: 10
         color: Theme.fill
         Row { id: groupRow; x: 3; anchors.verticalCenter: parent.verticalCenter; spacing: 0 }
     }

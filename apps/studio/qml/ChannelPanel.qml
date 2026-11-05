@@ -16,7 +16,7 @@ Item {
     readonly property color tint: ch && colors.length ? colors[ch.color % colors.length] : Theme.accent
     function setP(k, v) { Studio.setChannelParam(cid, k, v); }
 
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
     Text {
         x: 16; y: 14

@@ -20,8 +20,8 @@ Rectangle {
     readonly property var next2: content[k + 2] || null
     readonly property real beatNow: Studio.position / spb
     readonly property int countdown: k < 0 && content.length > 0 ? Math.ceil(content[0].beat - beatNow) : 0
-    height: 132; radius: 16
-    color: Theme.dark ? Qt.rgba(0.08, 0.09, 0.11, 0.92) : Qt.rgba(1, 1, 1, 0.94)
+    height: 132; radius: 12
+    color: Theme.pane
     border.width: 1; border.color: Theme.edge
 
     Column {

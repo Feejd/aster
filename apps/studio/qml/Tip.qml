@@ -11,7 +11,7 @@ Rectangle {
     y: below ? parent.height + 8 : -height - 8
     z: 100
     width: tipText.implicitWidth + 18; height: 26; radius: 7
-    color: Theme.dark ? "#ECEEF3" : "#1E2027"
+    color: Theme.text
     visible: opacity > 0
     opacity: shown && delay.done ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 100 } }

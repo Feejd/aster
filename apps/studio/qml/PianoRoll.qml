@@ -111,7 +111,7 @@ Item {
     onPatChanged: if (pat && pat.notes.length && !centered.done) { centered.done = true; Qt.callLater(center); }
     QtObject { id: centered; property bool done: false }
 
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
 
     // ——— Pasek ———
