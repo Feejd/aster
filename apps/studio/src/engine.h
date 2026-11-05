@@ -124,6 +124,9 @@ public:
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
     void setLive(LivePool *live) { m_live = live; }
+    // Nuty grane teraz (klawiatura, MIDI): wchodzą na początek najbliższego bloku
+    struct LiveNote { int channel; bool on; int pitch; float velocity; };
+    void setLiveNotes(const LiveNote *notes, int count) { m_liveNotes = notes; m_liveCount = count; }
     // Odsłuch wejścia (mono) na ścieżce `track` w tym wywołaniu process() — przed efektami, jak klipy
     void setMonitor(int track, const float *buf, int count) { m_monTrack = track; m_mon = buf; m_monN = count; m_monPos = 0; }
     // Pułap ogranicznika sumy (liniowo). Dla MP3/OGG niżej — koder dokłada własne szczyty.
@@ -132,6 +135,8 @@ public:
 private:
     void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips);
     LivePool *m_live = nullptr;           // głosy grane na żywo (tylko w silniku, nie przy eksporcie)
+    const LiveNote *m_liveNotes = nullptr;
+    int m_liveCount = 0;
     const float *m_mon = nullptr;         // odsłuch wejścia: próbki, ich liczba i ile już zużyto
     int m_monTrack = -1, m_monN = 0, m_monPos = 0;
     void sequence(const Snapshot *s, long long pos, int n, bool playing);
@@ -229,6 +234,7 @@ public:
 
     // Granie na żywo (klawiatura komputera, MIDI): nuta brzmi, dopóki nie przyjdzie liveNoteOff z tym samym id
     void liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain);
+    void channelNote(int channel, bool on, int pitch, float velocity);   // nuta na kanał (numer w migawce)
     void liveNoteOff(int id);
 
     // Odsłuch: głos z mikrofonu słychać na ścieżce `track` z jej efektami (autotune, pogłos…); -1 — wyłączony.
@@ -340,6 +346,9 @@ private:
     LiveCmd m_liveCmds[LiveQueue];
     std::atomic<unsigned> m_liveW{0}, m_liveR{0};
     LivePool m_live;                              // tylko wątek audio
+    static constexpr unsigned NoteQueue = 256;
+    Renderer::LiveNote m_noteQueue[NoteQueue], m_noteBlock[NoteQueue];
+    std::atomic<unsigned> m_noteW{0}, m_noteR{0};
     void pushLive(const LiveCmd &c);
     void takeLiveCommands();                      // wątek audio
     int m_previewNext = 0;

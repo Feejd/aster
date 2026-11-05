@@ -9,9 +9,11 @@ import Aster.Studio
 Item {
     id: insp
     property var colors: []
-    readonly property int ti: Studio.selectedTrack
-    readonly property var track: Studio.tracks[ti] || null
-    readonly property var mx: Studio.mix[ti] || ({})
+    // Efekty należą do insertu: zaznaczonego w mikserze, racku albo na ścieżce playlisty
+    readonly property int iid: Studio.selectedInsert
+    readonly property var mx: Studio.inserts.find((i) => i.id === iid) || ({})
+    readonly property var track: mx.id ? ({ name: mx.name, color: mx.color, kind: "audio", beat: false }) : null
+    readonly property int ti: mx.track !== undefined ? mx.track : -1
     // Zależność od listy ścieżek musi być użyta, inaczej kompilator QML ją pomija i klip się nie odświeża
     readonly property var cl: Studio.tracks.length >= 0 && Studio.selectedClip > 0 ? Studio.clip(Studio.selectedClip) : null
     readonly property bool hasClip: !!cl && cl.id !== undefined
@@ -110,7 +112,7 @@ Item {
                     visible: !!insp.track
                     title: "Gotowe brzmienie"
                     action: "Bez efektów"
-                    onActionClicked: Studio.applyPreset(insp.ti, "none")
+                    onActionClicked: Studio.applyInsertPreset(insp.iid, "none")
                     Repeater {
                         // Najpierw grupa pasująca do ścieżki: wokal przy nagraniu, instrumenty przy bicie i syntezatorach
                         model: insp.track && insp.track.kind !== "audio" ? ["Instrumenty", "Efekty", "Wokal"] : ["Wokal", "Instrumenty", "Efekty"]
@@ -130,7 +132,7 @@ Item {
                                         label: modelData.label
                                         hint: modelData.hint
                                         on: (insp.mx.preset || "") === modelData.id
-                                        onClicked: Studio.applyPreset(insp.ti, modelData.id)
+                                        onClicked: Studio.applyInsertPreset(insp.iid, modelData.id)
                                     }
                                 }
                             }
@@ -140,9 +142,10 @@ Item {
 
                 // Czystość głosu: szum tła (odszumianie nagrań w tle) i syczenie (de-esser na żywo)
                 Card {
-                    visible: !!insp.track && insp.track.kind === "audio" && !insp.track.beat
+                    visible: !!insp.track
                     title: "Czystość głosu"
                     Column {
+                        visible: insp.ti >= 0            // nagrania są na ścieżkach playlisty
                         width: parent.width
                         spacing: 6
                         Text { text: "Odszumianie"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -167,19 +170,19 @@ Item {
                             }
                         }
                     }
-                    FxSlider { label: "De-esser"; hint: "Ścisza syczenie „s”, „sz”, „c”"; from: 0; to: 1; value: insp.mx.deess || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "deess", v) }
+                    FxSlider { label: "De-esser"; hint: "Ścisza syczenie „s”, „sz”, „c”"; from: 0; to: 1; value: insp.mx.deess || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "deess", v) }
                 }
 
                 Card {
                     visible: !!insp.track
                     title: "Korektor"
-                    FxSlider { label: "Niskie (bas)"; from: -12; to: 12; centered: true; value: insp.mx.eqLow || 0; shown: insp.db(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "eqLow", v) }
-                    FxSlider { label: "Średnie (głos)"; from: -12; to: 12; centered: true; value: insp.mx.eqMid || 0; shown: insp.db(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "eqMid", v) }
-                    FxSlider { label: "Wysokie (blask)"; from: -12; to: 12; centered: true; value: insp.mx.eqHigh || 0; shown: insp.db(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "eqHigh", v) }
+                    FxSlider { label: "Niskie (bas)"; from: -12; to: 12; centered: true; value: insp.mx.eqLow || 0; shown: insp.db(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "eqLow", v) }
+                    FxSlider { label: "Średnie (głos)"; from: -12; to: 12; centered: true; value: insp.mx.eqMid || 0; shown: insp.db(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "eqMid", v) }
+                    FxSlider { label: "Wysokie (blask)"; from: -12; to: 12; centered: true; value: insp.mx.eqHigh || 0; shown: insp.db(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "eqHigh", v) }
                     Check {
                         text: "Usuń dudnienie (poniżej 80 Hz)"
                         on: !!insp.mx.lowCut
-                        onToggled: { Studio.remember(); Studio.setTrackFx(insp.ti, "lowCut", insp.mx.lowCut ? 0 : 1); }
+                        onToggled: { Studio.remember(); Studio.setInsertFx(insp.iid, "lowCut", insp.mx.lowCut ? 0 : 1); }
                     }
                 }
 
@@ -193,7 +196,7 @@ Item {
                         from: 0; to: 1
                         value: insp.mx.tune || 0
                         shown: value < 0.01 ? "wył." : value < 0.4 ? "naturalnie" : value < 0.75 ? "wyraźnie" : "efekt trap"
-                        onMoved: (v) => Studio.setTrackFx(insp.ti, "tune", v)
+                        onMoved: (v) => Studio.setInsertFx(insp.iid, "tune", v)
                     }
                     Text {
                         width: parent ? parent.width : 0
@@ -206,16 +209,16 @@ Item {
                 Card {
                     visible: !!insp.track
                     title: "Dynamika"
-                    FxSlider { label: "Kompresja"; hint: "Wyrównuje ciche i głośne fragmenty"; from: 0; to: 1; value: insp.mx.comp || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "comp", v) }
-                    FxSlider { label: "Ciepło / przester"; hint: "Nasycenie — słychać nawet w telefonie"; from: 0; to: 1; value: insp.mx.drive || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "drive", v) }
+                    FxSlider { label: "Kompresja"; hint: "Wyrównuje ciche i głośne fragmenty"; from: 0; to: 1; value: insp.mx.comp || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "comp", v) }
+                    FxSlider { label: "Ciepło / przester"; hint: "Nasycenie — słychać nawet w telefonie"; from: 0; to: 1; value: insp.mx.drive || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "drive", v) }
                 }
 
                 Card {
                     visible: !!insp.track
                     title: "Przestrzeń"
-                    FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "reverb", v) }
-                    FxSlider { label: "Echo"; hint: "Powtórzenia co " + Studio.echoTime.replace("3/16", "1/8 z kropką"); from: 0; to: 1; value: insp.mx.echo || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "echo", v) }
-                    FxSlider { label: "Sztuczny dubel"; hint: "Dwie kopie głosu po bokach, jak nagrane drugi raz — szerzej i grubiej"; from: 0; to: 1; value: insp.mx["double"] || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "double", v) }
+                    FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "reverb", v) }
+                    FxSlider { label: "Echo"; hint: "Powtórzenia co " + Studio.echoTime.replace("3/16", "1/8 z kropką"); from: 0; to: 1; value: insp.mx.echo || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "echo", v) }
+                    FxSlider { label: "Sztuczny dubel"; hint: "Dwie kopie głosu po bokach, jak nagrane drugi raz — szerzej i grubiej"; from: 0; to: 1; value: insp.mx["double"] || 0; shown: insp.pct(value); onMoved: (v) => Studio.setInsertFx(insp.iid, "double", v) }
                 }
 
                 // Wtyczki VST3: po efektach Studia, w kolejności od góry
@@ -242,7 +245,7 @@ Item {
                             HoverButton {
                                 x: 2; width: parent.width - 66; height: parent.height; radius: 8
                                 enabled: !slotRow.modelData.missing
-                                onClicked: Studio.openPlugin(insp.ti, slotRow.modelData.id)
+                                onClicked: Studio.openPlugin(insp.iid, slotRow.modelData.id)
                                 Text {
                                     x: 8; width: parent.width - 12
                                     anchors.verticalCenter: parent.verticalCenter
@@ -255,14 +258,14 @@ Item {
                             HoverButton {
                                 x: parent.width - 62; anchors.verticalCenter: parent.verticalCenter
                                 width: 28; height: 28; radius: 7
-                                onClicked: Studio.setPluginBypass(insp.ti, slotRow.modelData.id, !slotRow.modelData.bypass)
+                                onClicked: Studio.setPluginBypass(insp.iid, slotRow.modelData.id, !slotRow.modelData.bypass)
                                 Icon { anchors.centerIn: parent; d: Icons.power; size: 14; stroke: 2; color: slotRow.modelData.bypass ? Theme.text2 : Theme.accentText }
                                 Tip { shown: parent.hovered; text: slotRow.modelData.bypass ? "Włącz wtyczkę" : "Pomiń wtyczkę" }
                             }
                             HoverButton {
                                 x: parent.width - 32; anchors.verticalCenter: parent.verticalCenter
                                 width: 28; height: 28; radius: 7
-                                onClicked: Studio.removePlugin(insp.ti, slotRow.modelData.id)
+                                onClicked: Studio.removePlugin(insp.iid, slotRow.modelData.id)
                                 Icon { anchors.centerIn: parent; d: Icons.close; size: 14; stroke: 2; color: Theme.text2 }
                                 Tip { shown: parent.hovered; text: "Usuń wtyczkę ze ścieżki" }
                             }
@@ -395,12 +398,6 @@ Item {
                             Text { anchors.verticalCenter: parent.verticalCenter; width: 64; horizontalAlignment: Text.AlignHCenter; text: Studio.keyName; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
                             Pill { height: 28; icon: "plus"; onClicked: { Studio.remember(); Studio.keyRoot = (Studio.keyRoot + 1) % 12; } }
                         }
-                    }
-                    Pill {
-                        height: 30; text: "Ustaw jak w basie 808"; icon: "music"
-                        visible: Studio.tracks.some(t => t.kind === "bass")
-                        tip: "Tonacja autotune taka jak basu 808"
-                        onClicked: { Studio.remember(); Studio.keyFrom808(); }
                     }
                 }
 

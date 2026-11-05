@@ -23,9 +23,10 @@ Window {
     readonly property real r: maxed ? 0 : 24
     // Kolory ścieżek (indeks zapisany w projekcie)
     readonly property var trackColors: ["#FF6B6B", "#FFA94D", "#F5C542", "#51CF66", "#22B8CF", "#4D8BF7", "#9775FA", "#F06595"]
-    property bool showMixer: false
+    property string dock: ""                    // panel pod playlistą: rack | piano | mixer
+    property bool showBrowser: true
+    function toggleDock(name) { dock = dock === name ? "" : name; }
     property bool showInspector: true
-    property int editTrack: -1                  // ścieżka otwarta w Beat Makerze (-1 — zamknięty)
     readonly property bool textTyping: activeFocusItem instanceof TextInput || activeFocusItem instanceof TextEdit
     // Litery są zajęte przez wpisywanie tekstu albo granie na klawiaturze w piano rollu
     readonly property bool typing: textTyping || (pianoRoll.visible && pianoRoll.keysActive)
@@ -46,10 +47,9 @@ Window {
         function onMidiNote(pitch, velocity, on) {
             if (!Studio.open) return;
             if (pianoRoll.visible) { if (on) pianoRoll.midiDown(pitch, velocity); else pianoRoll.midiUp(pitch); return; }
-            if (!on) { Studio.liveNoteOff(pitch); return; }
-            const i = win.midiTrack();
-            if (i >= 0) Studio.liveNoteOn(i, pitch, velocity / 127);
-            else if (!win.midiHintShown) { win.midiHintShown = true; win.toast("Dodaj ścieżkę Melodia, żeby grać i nagrywać z klawiatury MIDI"); }
+            if (!Studio.selectedChannel) return;
+            if (on) Studio.channelNoteOn(Studio.selectedChannel, pitch, velocity / 127);
+            else Studio.channelNoteOff(Studio.selectedChannel, pitch);
         }
         function onMidiDevicesChanged() { if (Studio.midiDevices.length) win.toast("Podłączono klawiaturę MIDI: " + Studio.midiDevices.join(", ")); }
     }
@@ -95,7 +95,12 @@ Window {
     Shortcut { sequences: ["R"]; enabled: Studio.open && !win.typing; onActivated: Studio.record() }
     Shortcut { sequences: ["Return", "Home"]; enabled: Studio.open && !win.typing; onActivated: Studio.seek(0) }
     Shortcut { sequences: ["K"]; enabled: Studio.open && !win.typing; onActivated: Studio.metronome = !Studio.metronome }
-    Shortcut { sequences: ["X"]; enabled: Studio.open && !win.typing; onActivated: win.showMixer = !win.showMixer }
+    Shortcut { sequences: ["X", "F9"]; enabled: Studio.open && !win.typing; onActivated: win.toggleDock("mixer") }
+    Shortcut { sequences: ["F5"]; enabled: Studio.open; onActivated: win.dock = "" }
+    Shortcut { sequences: ["F6"]; enabled: Studio.open; onActivated: win.toggleDock("rack") }
+    Shortcut { sequences: ["F7"]; enabled: Studio.open; onActivated: win.toggleDock("piano") }
+    Shortcut { sequences: ["F8"]; enabled: Studio.open; onActivated: win.showBrowser = !win.showBrowser }
+    Shortcut { sequences: ["Tab"]; enabled: Studio.open && !win.typing; onActivated: Studio.patternMode = !Studio.patternMode }
     Shortcut { sequences: ["E"]; enabled: Studio.open && !win.typing; onActivated: win.showInspector = !win.showInspector }
     Shortcut { sequences: ["T"]; enabled: Studio.open && !win.typing; onActivated: win.toggleLyrics() }
     Shortcut { sequences: ["Down"]; enabled: Studio.open && !win.typing && inspector.lyrics.syncing; onActivated: inspector.lyrics.tap() }
@@ -140,8 +145,6 @@ Window {
         else if (what.startsWith("newp:")) Studio.newProject(what.substring(5), 96, 4);
         else if (what.startsWith("fx:")) { const a = what.split(":"); Studio.setTrackFx(Number(a[1]), a[2], Number(a[3])); }
         else if (what.startsWith("import:")) { const a = what.split(":"); Studio.importFiles([a[2]], Number(a[1]), 0); }
-        else if (what.startsWith("add:")) Studio.addPatternTrack(what.substring(4), "trap");
-        else if (what.startsWith("pv:")) { const a = what.split(":"); Studio.previewNote(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("kd:")) pianoRoll.keyDown(what.substring(3));
         else if (what.startsWith("ku:")) pianoRoll.keyUp(what.substring(3));
         else if (what === "recNotes") pianoRoll.recNotes = true;
@@ -149,8 +152,6 @@ Window {
         else if (what === "shareSong") Studio.shareSong("Nocna jazda", "Dominik");
         else if (what === "shareProject") { shareSheet.kind = "project"; Studio.shareProject(); }
         else if (what.startsWith("midi:")) { const a = what.split(":"); Studio.simulateMidi(Number(a[1]), Number(a[2])); }
-        else if (what.startsWith("toNotes:")) Studio.chordsToNotes(Number(what.substring(8)));
-        else if (what.startsWith("edit:")) editTrack = Number(what.substring(5));
         else if (what.startsWith("tpl:")) Studio.newProject("Szablon " + what.substring(4), 100, 4, what.substring(4));
         else if (what === "demo") {
             const dir = "/root/Muzyka/";
@@ -184,14 +185,28 @@ Window {
             Studio.selectedClip = c.id;
         }
         else if (what === "split") { const c = clips(0)[0]; Studio.splitClip(c.id, c.start + timeline.barSec * 6); }
-        else if (what === "mixer") showMixer = true;
+        else if (what === "mixer") dock = "mixer";
+        else if (what === "rack") dock = "rack";
+        else if (what === "piano") dock = "piano";
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
         else if (what.startsWith("js:")) { const out = new Function("Studio", "return (" + what.substring(3) + ");")(Studio); console.warn("JS", JSON.stringify(out)); }
+        else if (what.startsWith("at:")) {
+            const a = what.split(":");
+            let it = win.contentItem, x = Number(a[1]), y = Number(a[2]), out = [];
+            for (let n = 0; n < 40 && it; ++n) {
+                const c = it.childAt(x, y);
+                if (!c) break;
+                const p = it.mapToItem(c, x, y);
+                x = p.x; y = p.y; it = c;
+                out.push(String(c).split("(")[0].replace("_QMLTYPE", "").slice(0, 26) + (c.objectName ? "#" + c.objectName : ""));
+            }
+            console.warn("AT", out.join(" > "));
+        }
         else if (what === "pluginSheet") pluginSheet.start();
-        else if (what.startsWith("vst:")) { const a = what.split(":"); Studio.scanPlugins(); const p = Studio.plugins.find((x) => x.name === a[2]); if (p) Studio.addPlugin(Number(a[1]), p.uid); else console.warn("BRAK", a[2]); }
-        else if (what.startsWith("vstbypass:")) { const t = Number(what.substring(10)); Studio.setPluginBypass(t, Studio.mix[t].plugins[0].id, true); }
-        else if (what.startsWith("vstopen:")) { const t = Number(what.substring(8)); Studio.openPlugin(t, Studio.mix[t].plugins[0].id); }
+        else if (what.startsWith("vst:")) { const a = what.split(":"); Studio.scanPlugins(); const p = Studio.plugins.find((x) => x.name === a[2]); if (p) Studio.addPlugin(Studio.tracks[Number(a[1])].insert, p.uid); else console.warn("BRAK", a[2]); }
+        else if (what.startsWith("vstbypass:")) { const t = Number(what.substring(10)); Studio.setPluginBypass(Studio.tracks[t].insert, Studio.mix[t].plugins[0].id, true); }
+        else if (what.startsWith("vstopen:")) { const t = Number(what.substring(8)); Studio.openPlugin(Studio.tracks[t].insert, Studio.mix[t].plugins[0].id); }
         else if (what.startsWith("denoise:")) { const a = what.split(":"); Studio.denoiseTrack(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("lyrics:")) Studio.lyrics = what.substring(7).replace(/\|/g, "\n");
         else if (what.startsWith("lyricsMode:")) inspector.lyrics.mode = what.substring(11);
@@ -331,15 +346,29 @@ Window {
             { label: "Usuń ścieżkę", icon: "trash", action: "removeTrack", danger: true }
         ]);
     }
+    function channelMenu(id, item, x, y) {
+        menu.channel = id;
+        const c = Studio.channels.find((k) => k.id === id);
+        const p = item.mapToItem(frame, x, y);
+        menu.openAt(p.x, p.y, [
+            { label: "Piano roll", icon: "keyboard", shortcut: "F7", action: "chPiano" }
+        ].concat(c.kind === "vst" ? [{ label: "Okno wtyczki", icon: "sliders", action: "chPlugin" }] : []).concat([
+            { label: "Zmień nazwę…", icon: "pencil", action: "chRename" },
+            { separator: true }
+        ]).concat(Studio.inserts.map((i) => ({ label: "Gra na: " + i.name, icon: i.id === c.insert ? "check" : "", action: "chIns:" + i.id }))).concat([
+            { separator: true },
+            { label: "Usuń kanał", icon: "trash", action: "chRemove", danger: true }
+        ]));
+    }
+    function patternMenu(item) {
+        const p = item.mapToItem(frame, 0, item.height + 6);
+        menu.openAt(p.x, p.y, Studio.patterns.map((q) => ({ label: q.name, icon: q.id === Studio.currentPattern ? "check" : "", action: "pat:" + q.id })));
+    }
     function addTrackMenu(item, x, y) {
         const p = item.mapToItem(frame, x, y);
         menu.openAt(p.x, p.y, [
-            { label: "Nagranie — głos, gitara", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
+            { label: "Ścieżka playlisty", icon: "mic", shortcut: "Ctrl+T", action: "addAudio" },
             { label: "Bit z pliku — tempo i tonacja same", icon: "audioTrack", action: "addBeat" },
-            { label: "Bit — Beat Maker", icon: "grid", action: "addDrums" },
-            { label: "Bas 808", icon: "music", action: "addBass" },
-            { label: "Akordy", icon: "music", action: "addKeys" },
-            { label: "Melodia — piano roll", icon: "music", action: "addMelody" }
         ]);
     }
     function projectMenu(project, item, x, y) {
@@ -364,6 +393,12 @@ Window {
         else if (a === "over:here") { Studio.cycleClip(menu.clipId); Studio.cycle = false; Studio.punch = true; Studio.setTrackArmed(menu.track, true); Studio.seek(Studio.cycleStart); Studio.record(); }
         else if (a.startsWith("over:")) Studio.recordOver(menu.clipId, a.substring(5));
         else if (a.startsWith("role:")) recordOn(a.substring(5));
+        else if (a.startsWith("pat:")) { Studio.currentPattern = Number(a.substring(4)); }
+        else if (a === "chPiano") { Studio.selectedChannel = menu.channel; dock = "piano"; }
+        else if (a === "chPlugin") Studio.openChannelPlugin(menu.channel);
+        else if (a === "chRemove") Studio.removeChannel(menu.channel);
+        else if (a === "chRename") { renameSheet.clipId = 0; renameSheet.channelId = menu.channel; renameField.text = Studio.channels.find((c) => c.id === menu.channel).name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
+        else if (a.startsWith("chIns:")) Studio.setChannelInsert(menu.channel, Number(a.substring(6)));
         else if (a.startsWith("armTrack:")) Studio.setTrackArmed(Number(a.substring(9)), true);
         else if (a === "rename") { renameSheet.clipId = 0; renameField.text = Studio.tracks[menu.track].name; renameSheet.open(); renameField.input.forceActiveFocus(); renameField.input.selectAll(); }
         else if (a === "arm") Studio.setTrackArmed(menu.track, !Studio.tracks[menu.track].armed);
@@ -377,16 +412,6 @@ Window {
         else if (a === "forget") Studio.forgetRecent(menu.folder);
         else if (a === "addAudio") Studio.addTrack();
         else if (a === "addBeat") beatDialog.open();
-        else if (a === "addDrums") { const i = Studio.addPatternTrack("drums", "trap"); if (i >= 0) editTrack = i; }
-        else if (a === "addMelody") { const i = Studio.addPatternTrack("melody", ""); if (i >= 0) editTrack = i; }
-        else if (a === "addKeys") { const i = Studio.addPatternTrack("keys", "trap"); if (i >= 0) editTrack = i; }
-        else if (a === "addBass") { const i = Studio.addPatternTrack("bass", "trap"); if (i >= 0) editTrack = i; }
-        else if (a.startsWith("chord:") && editTrack >= 0) {
-            const p = JSON.parse(JSON.stringify(Studio.tracks[editTrack].pattern));
-            p.chords[menu.chordIndex] = Number(a.substring(6));
-            Studio.setPattern(editTrack, p);
-        }
-        else if (a.startsWith("genre:") && editTrack >= 0) Studio.setPattern(editTrack, Studio.genrePattern(Studio.tracks[editTrack].kind, a.substring(6)));
     }
 
     function toast(text, action, callback) {
@@ -482,7 +507,6 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     x: Math.max(titleRow.x + titleRow.width + 20, Math.min((parent.width - width) / 2, rightTools.x - width - 20))
                     spacing: 8
-                    RoundBtn { icon: "prev"; tip: "Na początek (Enter)"; onClicked: Studio.seek(0) }
                     HoverButton {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 42; height: 42; radius: 21
@@ -543,6 +567,21 @@ Window {
                         }
                         Icon { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
                         Tip { shown: parent.hovered; text: "Wokal (1), dubel (2), ad-libsy (3) — brakującą ścieżkę Studio założy samo"; below: true }
+                    }
+                    // WZÓR — gra w kółko bieżący wzór, UTWÓR — całą playlistę (Tab)
+                    HoverButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: modeCol.width + 20; height: 42; radius: 12
+                        baseColor: Studio.patternMode ? Theme.accentSoft : Theme.fill
+                        color: hovered ? Theme.hover : baseColor
+                        onClicked: Studio.patternMode = !Studio.patternMode
+                        Column {
+                            id: modeCol
+                            anchors.centerIn: parent
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: Studio.patternMode ? "WZÓR" : "UTWÓR"; color: Studio.patternMode ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 0.4 }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; width: Math.min(implicitWidth, 62); elide: Text.ElideRight; text: (Studio.patterns.find((p) => p.id === Studio.currentPattern) || { name: "—" }).name; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10 }
+                        }
+                        Tip { shown: parent.hovered; text: "Gra bieżący wzór albo cały utwór (Tab)"; below: true }
                     }
                     Item { width: 6; height: 1 }
                     // Licznik: takt.miara, czas, tempo, metrum
@@ -632,42 +671,53 @@ Window {
             }
 
             // Treść: nagłówki ścieżek na szkle okna, pasy na panelu
+            Browser {
+                id: browser
+                x: 0; y: toolbar.height
+                width: win.showBrowser ? 220 : 0
+                height: timeline.height
+                visible: width > 0
+                clip: true
+                onEffectAdded: if (win.dock !== "mixer") win.dock = "mixer"
+            }
             GlassPane {
-                x: timeline.headerW
+                x: timeline.x + timeline.headerW
                 y: toolbar.height
-                width: timeline.width - x
+                width: timeline.x + timeline.width - x
                 height: timeline.height + statusBar.height
                 topLeftRadius: 14
                 topRightRadius: inspector.width > 0 ? 14 : 0
                 leftLine: false
-                bottomRightRadius: win.showMixer || inspector.width > 0 ? 0 : win.r
+                bottomRightRadius: win.dock !== "" || inspector.width > 0 ? 0 : win.r
             }
             Rectangle { y: toolbar.height; width: parent.width; height: 1; color: Theme.line; opacity: 0.6 }
             Timeline {
                 id: timeline
+                x: browser.width
                 y: toolbar.height
-                width: parent.width - inspector.width
-                height: parent.height - y - statusBar.height - mixer.height - beatMaker.height - pianoRoll.height
+                width: parent.width - inspector.width - x
+                height: parent.height - y - statusBar.height - dockHost.height
                 colors: win.trackColors
                 onClipMenu: (c, track, item, x, y, at) => win.clipMenu(c, track, item, x, y, at)
                 onTrackMenu: (track, item, x, y) => win.trackMenu(track, item, x, y)
                 onAddTrackRequested: (item, x, y) => win.addTrackMenu(item, x, y)
-                onEditPattern: (track) => { win.editTrack = track; Studio.selectedTrack = track; }
+                onOpenPattern: (id) => { Studio.currentPattern = id; win.dock = "rack"; }
             }
 
             // Prompter tekstu w trakcie nagrywania — u dołu osi czasu, nad paskiem
             Prompter {
                 visible: inspector.lyrics.prompter && Studio.recording && Studio.lyrics.trim() !== ""
-                x: timeline.headerW + 16
-                width: timeline.width - x - 16
+                x: timeline.x + timeline.headerW + 16
+                width: timeline.x + timeline.width - x - 16
                 y: timeline.y + timeline.height - height - 14
             }
 
             // Pasek pod osią: dodawanie dźwięku, siatka, powiększenie, panele (mikser, efekty)
             Item {
                 id: statusBar
+                x: 0
                 y: timeline.y + timeline.height
-                width: timeline.width; height: 44
+                width: parent.width - inspector.width; height: 44
                 Row {
                     x: 12; anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
@@ -675,10 +725,9 @@ Window {
                 }
                 Row {
                     id: snapRow
-                    x: timeline.headerW + 14
+                    x: 168
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 10
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: "Przyciągaj do"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                     Segmented {
                         anchors.verticalCenter: parent.verticalCenter
                         model: [{ label: "taktu", value: 0 }, { label: "miary", value: 1 }, { label: "1/8", value: 2 }, { label: "1/16", value: 4 }, { label: "wył.", value: -1 }]
@@ -689,7 +738,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         leftPadding: 6
                         // Tylko gdy starcza miejsca przed przyciskami z prawej
-                        visible: snapRow.x + 470 + implicitWidth < viewTools.x
+                        visible: snapRow.x + 310 + implicitWidth < viewTools.x
                         text: "Shift — bez przyciągania"
                         color: Theme.text2
                         opacity: 0.8
@@ -716,7 +765,10 @@ Window {
                             id: viewRow
                             x: 3; anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
-                            ViewBtn { icon: "sliders"; label: "Mikser"; active: win.showMixer; tip: "Głośność i panorama wszystkich ścieżek (X)"; onClicked: win.showMixer = !win.showMixer }
+                            ViewBtn { icon: "folder"; label: ""; active: win.showBrowser; tip: "Przeglądarka dźwięków (F8)"; onClicked: win.showBrowser = !win.showBrowser }
+                            ViewBtn { icon: "grid"; label: "Rack"; active: win.dock === "rack"; tip: "Kanały i kroki (F6)"; onClicked: win.toggleDock("rack") }
+                            ViewBtn { icon: "keyboard"; label: "Nuty"; active: win.dock === "piano"; tip: "Piano roll kanału (F7)"; onClicked: win.toggleDock("piano") }
+                            ViewBtn { icon: "sliders"; label: "Mikser"; active: win.dock === "mixer"; tip: "Inserty, wtyczki, wysyłki (F9)"; onClicked: win.toggleDock("mixer") }
                             ViewBtn { icon: "sparkle"; label: "Efekty"; active: win.showInspector && inspector.page !== "lyrics"; tip: "Brzmienie ścieżki, klip i mastering (E)"; onClicked: { if (win.showInspector && inspector.page === "lyrics") inspector.page = "track"; else win.showInspector = !win.showInspector; } }
                             ViewBtn { icon: "doc"; label: "Tekst"; active: win.showInspector && inspector.page === "lyrics"; tip: "Tekst piosenki z rymami i prompterem (T)"; onClicked: win.toggleLyrics() }
                         }
@@ -730,69 +782,49 @@ Window {
                 x: parent.width - width
                 y: toolbar.height
                 width: win.showInspector ? 300 : 0
-                height: timeline.height + statusBar.height
+                height: parent.height - y
                 visible: width > 0
                 clip: true
                 colors: win.trackColors
                 Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
             }
 
-            Mixer {
-                id: mixer
+            // Dół okna: rack, piano roll albo mikser
+            Item {
+                id: dockHost
                 z: 20
                 anchors.bottom: parent.bottom
-                width: parent.width
-                height: win.showMixer && win.editTrack < 0 ? Math.min(300, parent.height * 0.42) : 0
+                width: parent.width - inspector.width
+                height: win.dock === "" ? 0 : Math.min(win.dock === "mixer" ? 320 : 360, parent.height * 0.5)
                 visible: height > 0
                 clip: true
-                colors: win.trackColors
                 Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
+                ChannelRack {
+                    anchors.fill: parent
+                    visible: win.dock === "rack"
+                    colors: win.trackColors
+                    onChannelMenu: (id, item, x, y) => win.channelMenu(id, item, x, y)
+                    onPianoRequested: (id) => { Studio.selectedChannel = id; win.dock = "piano"; }
+                    onAddRequested: win.showBrowser = true
+                    onPatternMenu: (item) => win.patternMenu(item)
+                    onCloseRequested: win.dock = ""
+                }
+                PianoRoll {
+                    id: pianoRoll
+                    anchors.fill: parent
+                    visible: win.dock === "piano"
+                    channel: Studio.selectedChannel
+                    colors: win.trackColors
+                    onCloseRequested: win.dock = "rack"
+                }
+                Mixer {
+                    id: mixer
+                    anchors.fill: parent
+                    visible: win.dock === "mixer"
+                    colors: win.trackColors
+                    onAddPluginRequested: pluginSheet.start()
+                }
             }
-        }
-
-        // Beat Maker (zamiast miksera, gdy otwarty)
-        PatternEditor {
-            id: beatMaker
-            parent: project
-            z: 20
-            anchors.bottom: parent ? parent.bottom : undefined
-            width: project.width
-            track: win.editTrack
-            colors: win.trackColors
-            readonly property bool bassMode: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "bass"
-            readonly property bool melody: !!Studio.tracks[win.editTrack] && Studio.tracks[win.editTrack].kind === "melody"
-            height: win.editTrack >= 0 && !!Studio.tracks[win.editTrack] && !melody ? Math.min(bassMode ? 450 : 330, project.height * 0.55) : 0
-            // Akordy: niższy panel
-            visible: height > 0
-            clip: true
-            onCloseRequested: win.editTrack = -1
-            onChordMenuRequested: (index, x, y) => {
-                const p = beatMaker.mapToItem(frame, x, y);
-                const seventh = !!Studio.tracks[win.editTrack].pattern.seventh;
-                menu.chordIndex = index;
-                menu.openAt(p.x, Math.min(p.y, frame.height - 300), [0, 1, 2, 3, 4, 5, 6].map(d => ({ label: Studio.chordName(d, seventh), shortcut: ["I", "II", "III", "IV", "V", "VI", "VII"][d], action: "chord:" + d })));
-            }
-            onGenreMenuRequested: (x, y) => {
-                const p = beatMaker.mapToItem(frame, x, y);
-                menu.openAt(p.x, Math.min(p.y, frame.height - 320), Studio.genres.map(g => ({ label: g.label + " · " + g.bpm + " BPM", icon: "sparkle", action: "genre:" + g.id })));
-            }
-            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
-        }
-
-        // Piano roll (ścieżka Melodia)
-        PianoRoll {
-            id: pianoRoll
-            parent: project
-            z: 20
-            anchors.bottom: parent ? parent.bottom : undefined
-            width: project.width
-            track: beatMaker.melody ? win.editTrack : -1
-            colors: win.trackColors
-            height: beatMaker.melody ? Math.min(460, project.height * 0.6) : 0
-            visible: height > 0
-            clip: true
-            onCloseRequested: win.editTrack = -1
-            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
         }
 
         // ——— Arkusze ———
@@ -899,7 +931,7 @@ Window {
                         id: pluginRow
                         required property var modelData
                         width: ListView.view.width; height: 44; radius: 9
-                        onClicked: { Studio.addPlugin(Studio.selectedTrack, modelData.uid); pluginSheet.close(); }
+                        onClicked: { Studio.addPlugin(Studio.selectedInsert, modelData.uid); pluginSheet.close(); }
                         Column {
                             x: 10; anchors.verticalCenter: parent.verticalCenter
                             Text { text: pluginRow.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
@@ -1243,6 +1275,8 @@ Window {
             id: renameSheet
             radius: win.r
             property int clipId: 0              // 0 — zmiana nazwy ścieżki
+            property int channelId: 0           // kanał racka
+            onClosed: channelId = 0
             title: clipId ? "Nazwa klipu" : "Nazwa ścieżki"
             cardWidth: 380
             Column {
@@ -1253,7 +1287,7 @@ Window {
                     anchors.right: parent.right
                     spacing: 8
                     Pill { text: "Anuluj"; onClicked: renameSheet.close() }
-                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { if (renameSheet.clipId) Studio.renameClip(renameSheet.clipId, renameField.text); else Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
+                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { if (renameSheet.channelId) Studio.renameChannel(renameSheet.channelId, renameField.text); else if (renameSheet.clipId) Studio.renameClip(renameSheet.clipId, renameField.text); else Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
                 }
             }
         }
@@ -1296,7 +1330,7 @@ Window {
             property real at
             property int track
             property string folder
-            property int chordIndex
+            property int channel
             onTriggered: (a) => win.runMenu(a)
         }
     }

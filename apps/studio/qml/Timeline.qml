@@ -29,7 +29,7 @@ Item {
     signal clipMenu(var clip, int track, Item item, real x, real y, real at)
     signal trackMenu(int track, Item item, real x, real y)
     signal addTrackRequested(Item item, real x, real y)
-    signal editPattern(int track)
+    signal openPattern(int id)
 
     onScrollXChanged: if (scrollX > maxScroll || scrollX < 0) scrollX = Math.max(0, Math.min(maxScroll, scrollX))
 
@@ -246,6 +246,18 @@ Item {
                         y: index * tl.trackH
                         width: lanes.width; height: tl.trackH
                         z: 2
+                        // Dwuklik w puste miejsce: bieżący wzór na playlistę
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton
+                            propagateComposedEvents: true
+                            onPressed: (e) => e.accepted = false
+                            onDoubleClicked: (e) => {
+                                if (!Studio.patterns.length) return;
+                                Studio.patternMode = false;
+                                Studio.addPatternClip(lane.index, Studio.currentPattern, tl.snapAbs(e.x / tl.pps, e.modifiers), 0);
+                            }
+                        }
                         Repeater {
                             model: lane.modelData.clips
                             delegate: ClipItem {
@@ -537,23 +549,6 @@ Item {
                 Text { anchors.verticalCenter: parent.verticalCenter; text: "Nagrywaj"; color: th.track.armed ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
             }
         }
-        HoverButton {
-            visible: th.track.kind !== "audio"
-            anchors.right: parent.right; anchors.rightMargin: 14
-            y: 48
-            width: editRow.implicitWidth + 16; height: 24; radius: 7
-            baseColor: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.3)
-            color: hovered ? Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.45) : baseColor
-            onClicked: tl.editPattern(th.trackIndex)
-            Row {
-                id: editRow
-                anchors.centerIn: parent
-                spacing: 5
-                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.pencil; size: 12; stroke: 2; color: Theme.text }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : th.track.kind === "keys" ? "Akordy" : th.track.kind === "melody" ? "Piano roll" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
-            }
-            Tip { shown: parent.hovered; text: "Otwórz edytor (albo dwuklik na klipie)" }
-        }
 
         // Poziom: wejście, gdy ścieżka czeka na nagranie, inaczej to, co gra
         Rectangle {
@@ -706,6 +701,27 @@ Item {
             }
         }
 
+        // Klip wzoru: nuty w każdym powtórzeniu
+        Canvas {
+            visible: !!ci.cl.pattern
+            x: 0; y: 20
+            width: Math.min(ci.width, 4000); height: ci.height - 24
+            readonly property var notes: ci.cl.pattern && Studio.channels ? Studio.patternPreview(ci.cl.pattern) : []
+            readonly property real loopPx: ci.cl.srcLength * tl.pps
+            onNotesChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onLoopPxChanged: requestPaint()
+            onPaint: {
+                const c = getContext("2d");
+                c.reset();
+                c.fillStyle = Theme.dark ? "rgba(255,255,255,0.75)" : "rgba(20,24,30,0.6)";
+                if (loopPx <= 1) return;
+                for (let k = -1; k * loopPx < width; ++k)
+                    for (const n of notes)
+                        c.fillRect((k + n.x) * loopPx - ci.cl.loopOffset * tl.pps, n.y * (height - 3), Math.max(1.5, n.w * loopPx), 3);
+            }
+        }
+
         // Granice powtórzeń pętli
         Repeater {
             model: ci.cl.loop && ci.cl.srcLength * tl.pps > 6 ? Math.min(128, Math.floor((ci.len + ci.cl.loopOffset) / ci.cl.srcLength)) : 0
@@ -742,7 +758,7 @@ Item {
                 if (ci.dragging) Studio.moveClip(ci.cl.id, ci.trackIndex + ci.dTrack, ci.cl.start + ci.dx);
                 ci.dragging = false; ci.dx = 0; ci.dTrack = 0;
             }
-            onDoubleClicked: { if (Studio.tracks[ci.trackIndex] && Studio.tracks[ci.trackIndex].kind !== "audio") tl.editPattern(ci.trackIndex); }
+            onDoubleClicked: { if (ci.cl.pattern) tl.openPattern(ci.cl.pattern); }
             onClicked: (e) => {
                 if (e.button === Qt.RightButton)
                     tl.clipMenu(ci.cl, ci.trackIndex, ci, e.x + 8, e.y, ci.cl.start + (e.x + 8) / tl.pps);

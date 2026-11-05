@@ -3,11 +3,13 @@ import QtQuick
 import Aster.Ui
 import Aster.Studio
 
-// Mikser: dla każdej ścieżki panorama, suwak głośności ze wskaźnikiem poziomu, wycisz i solo; z prawej — suma.
+// Mikser: każdy insert to pas z panoramą, suwakiem, wskaźnikiem, wycisz i solo; z prawej wtyczki i wysyłki
+// zaznaczonego insertu oraz suma.
 // Dwuklik na suwaku wraca do 0 dB (panoramę — do środka).
 Item {
     id: mx
     property var colors: []
+    signal addPluginRequested()
     function color(i) { return colors.length ? colors[i % colors.length] : Theme.accent; }
 
     // Suwak: pozycja 0…1 ↔ decybele (0 dB przy ~71%, +6 dB na górze)
@@ -23,7 +25,7 @@ Item {
     Flickable {
         id: strips
         x: 12; y: 10
-        width: parent.width - master.width - 36; height: parent.height - 20
+        width: parent.width - master.width - 278; height: parent.height - 20
         contentWidth: row.width
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -32,29 +34,126 @@ Item {
             id: row
             spacing: 8
             Repeater {
-                model: Studio.tracks
+                model: Studio.inserts.length
                 delegate: Strip {
-                    required property var modelData
                     required property int index
-                    label: modelData.name
-                    tint: mx.color(modelData.color)
-                    readonly property var m: Studio.mix[index] || {}
+                    readonly property var m: Studio.inserts[index] || ({})
+                    label: m.name || ""
+                    tint: mx.color(m.color || 0)
                     volume: m.volume || 0
                     pan: m.pan || 0
                     mute: !!m.mute
                     solo: !!m.solo
-                    level: Studio.levels[index] || 0
-                    selected: Studio.selectedTrack === index
-                    onVolumeMoved: (db) => Studio.setTrackVolume(index, db)
-                    onPanMoved: (p) => Studio.setTrackPan(index, p)
-                    onMuteToggled: Studio.setTrackMute(index, !mute)
-                    onSoloToggled: Studio.setTrackSolo(index, !solo)
-                    onPicked: Studio.selectedTrack = index
+                    level: Studio.insertLevels[index] || 0
+                    selected: Studio.selectedInsert === m.id
+                    onVolumeMoved: (db) => Studio.setInsertVolume(m.id, db)
+                    onPanMoved: (p) => Studio.setInsertPan(m.id, p)
+                    onMuteToggled: Studio.setInsertMute(m.id, !mute)
+                    onSoloToggled: Studio.setInsertSolo(m.id, !solo)
+                    onPicked: Studio.selectedInsert = m.id
+                }
+            }
+            HoverButton {
+                width: 44; height: strips.height; radius: 12
+                onClicked: Studio.selectedInsert = Studio.addInsert()
+                Icon { anchors.centerIn: parent; d: Icons.plus; size: 16; stroke: 2; color: Theme.text2 }
+                Tip { shown: parent.hovered; text: "Nowy insert — szyna na pogłos, grupa wokali, sidechain" }
+            }
+        }
+    }
+    // Zaznaczony insert: wtyczki i wysyłki
+    Rectangle {
+        id: side
+        readonly property var sel: Studio.inserts.find((i) => i.id === Studio.selectedInsert) || null
+        anchors.right: parent.right; anchors.rightMargin: master.width + 34
+        y: 10; width: 230; height: parent.height - 20; radius: 12
+        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(1, 1, 1, 0.55)
+        border.width: 1; border.color: Theme.line
+        Flickable {
+            anchors.fill: parent; anchors.margins: 10
+            contentHeight: sideCol.height
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Column {
+                id: sideCol
+                width: parent.width
+                spacing: 6
+                Item {
+                    width: parent.width; height: 22
+                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 62; text: side.sel ? side.sel.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Bold }
+                    HoverButton {
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        width: 58; height: 22; radius: 7
+                        onClicked: mx.addPluginRequested()
+                        Text { anchors.centerIn: parent; text: "+ Efekt"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                    }
+                }
+                Repeater {
+                    model: side.sel ? side.sel.plugins.length : 0
+                    delegate: Rectangle {
+                        id: plug
+                        required property int index
+                        readonly property var p: side.sel ? side.sel.plugins[index] : null
+                        width: sideCol.width; height: 30; radius: 7
+                        color: Theme.fill
+                        opacity: plug.p && (plug.p.bypass || plug.p.missing) ? 0.55 : 1
+                        HoverButton {
+                            x: 2; width: parent.width - 54; height: parent.height; radius: 6
+                            enabled: !!plug.p && !plug.p.missing
+                            onClicked: Studio.openPlugin(side.sel.id, plug.p.id)
+                            Text { x: 6; width: parent.width - 10; anchors.verticalCenter: parent.verticalCenter; text: plug.p ? plug.p.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                        }
+                        HoverButton {
+                            x: parent.width - 50; anchors.verticalCenter: parent.verticalCenter
+                            width: 24; height: 24; radius: 6
+                            onClicked: Studio.setPluginBypass(side.sel.id, plug.p.id, !plug.p.bypass)
+                            Icon { anchors.centerIn: parent; d: Icons.power; size: 12; stroke: 2; color: plug.p && plug.p.bypass ? Theme.text2 : Theme.accentText }
+                        }
+                        HoverButton {
+                            x: parent.width - 26; anchors.verticalCenter: parent.verticalCenter
+                            width: 24; height: 24; radius: 6
+                            onClicked: Studio.removePlugin(side.sel.id, plug.p.id)
+                            Icon { anchors.centerIn: parent; d: Icons.close; size: 12; stroke: 2; color: Theme.text2 }
+                        }
+                    }
+                }
+                Text { visible: !!side.sel && side.sel.plugins.length === 0; width: parent.width; wrapMode: Text.WordWrap; text: "Brak wtyczek. Efekty Studia są w panelu Efekty (E)."; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                Text { text: "Wysyłki"; topPadding: 6; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                Repeater {
+                    model: Studio.inserts.length
+                    delegate: HoverButton {
+                        id: snd
+                        required property int index
+                        readonly property var target: Studio.inserts[index] || null
+                        readonly property var send: side.sel && target ? side.sel.sends.find((x) => x.to === target.id) : null
+                        visible: !!target && !!side.sel && target.id !== side.sel.id
+                        width: sideCol.width; height: visible ? 24 : 0; radius: 6
+                        onClicked: Studio.setInsertSend(side.sel.id, target.id, send ? -100 : 0)
+                        Rectangle {
+                            x: 4; anchors.verticalCenter: parent.verticalCenter
+                            width: 14; height: 14; radius: 4
+                            color: snd.send ? Theme.accent : "transparent"
+                            border.width: snd.send ? 0 : 1.5; border.color: Theme.text2
+                        }
+                        Text { x: 24; width: parent.width - 28; anchors.verticalCenter: parent.verticalCenter; text: snd.target ? snd.target.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                    }
+                }
+                HoverButton {
+                    visible: !!side.sel
+                    width: sideCol.width; height: 24; radius: 6
+                    onClicked: Studio.setInsertToMaster(side.sel.id, !side.sel.toMaster)
+                    Rectangle {
+                        x: 4; anchors.verticalCenter: parent.verticalCenter
+                        width: 14; height: 14; radius: 4
+                        color: side.sel && side.sel.toMaster ? Theme.accent : "transparent"
+                        border.width: side.sel && side.sel.toMaster ? 0 : 1.5; border.color: Theme.text2
+                    }
+                    Text { x: 24; anchors.verticalCenter: parent.verticalCenter; text: "Na sumę"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
                 }
             }
         }
     }
-    Rectangle { x: master.x - 12; y: 14; width: 1; height: parent.height - 28; color: Theme.line }
+    Rectangle { visible: false; x: master.x - 12; y: 14; width: 1; height: parent.height - 28; color: Theme.line }
     Strip {
         id: master
         anchors.right: parent.right; anchors.rightMargin: 12

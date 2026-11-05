@@ -71,6 +71,9 @@ class Studio : public QObject
     Q_PROPERTY(int currentPattern READ currentPattern WRITE setCurrentPattern NOTIFY rackChanged)
     Q_PROPERTY(bool patternMode READ patternMode WRITE setPatternMode NOTIFY rackChanged)   // WZÓR: gra w kółko bieżący wzór
     Q_PROPERTY(double swing READ swing WRITE setSwing NOTIFY rackChanged)
+    Q_PROPERTY(int selectedChannel READ selectedChannel WRITE setSelectedChannel NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedInsert READ selectedInsert WRITE setSelectedInsert NOTIFY selectionChanged)
+    Q_PROPERTY(QVariantList insertLevels READ insertLevels NOTIFY levelsChanged)
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
     Q_PROPERTY(int selectedTrack READ selectedTrack WRITE setSelectedTrack NOTIFY selectionChanged)
@@ -170,6 +173,11 @@ public:
     bool patternMode() const { return m_patMode; }
     void setPatternMode(bool on);
     double swing() const { return m_swing; }
+    int selectedChannel() const { return m_selChannel; }
+    void setSelectedChannel(int id);
+    int selectedInsert() const { return m_selInsert; }
+    void setSelectedInsert(int id);
+    QVariantList insertLevels() const { return m_insLevels; }
     void setSwing(double v);
     QVariantList mix() const { return m_mixView; }
     int selectedTrack() const { return m_selTrack; }
@@ -234,21 +242,14 @@ public:
     Q_INVOKABLE void remember() { checkpoint(); }
     // Beat Maker: kind = drums | bass; genre — wzór startowy
     Q_INVOKABLE int addPatternTrack(const QString &kind, const QString &genre);
-    Q_INVOKABLE void setPattern(int index, const QVariantMap &pattern);
-    Q_INVOKABLE QVariantMap genrePattern(const QString &kind, const QString &genre) const;
     Q_INVOKABLE QString noteName(int root, int degree) const;     // „Fis1”
     Q_INVOKABLE QString chordName(int degree, bool seventh) const; // w tonacji projektu: „a-moll”
-    Q_INVOKABLE void chordsToNotes(int index);
     // Odsłuch: Melodia/Akordy — value = nuta MIDI, 808 — stopień skali, Bit — numer wiersza (stopa, werbel…)
-    Q_INVOKABLE void previewNote(int index, int value, double velocity = 1.0);
     Q_INVOKABLE void simulateMidi(int pitch, int velocity);
     // Granie na żywo instrumentem ścieżki Melodia/Akordy — brzmi, dopóki nie przyjdzie liveNoteOff
-    Q_INVOKABLE void liveNoteOn(int index, int pitch, double velocity = 1.0);
-    Q_INVOKABLE void liveNoteOff(int pitch);     // do testów: jak nuta z klawiatury (0 = puszczenie)                    // ścieżka Akordy → Melodia (piano roll)
     Q_INVOKABLE bool inKey(int midi) const;                         // nuta należy do tonacji projektu
     Q_INVOKABLE void setMastering(const QString &key, double value);
     Q_INVOKABLE void applyMastering(const QString &preset);
-    Q_INVOKABLE bool keyFrom808();                              // tonacja jak w pierwszej ścieżce 808               // zapamiętaj stan do cofnięcia (np. przed ruchem suwaka)
 
     // Klipy (id)
     Q_INVOKABLE void moveClip(int id, int track, double start);
@@ -276,10 +277,10 @@ public:
     Q_INVOKABLE void clearLyricMarks();
     // Wtyczki VST3 na ścieżce (po efektach Studia). slot — numer z mix[ścieżka].plugins[…].id
     Q_INVOKABLE void scanPlugins();
-    Q_INVOKABLE void addPlugin(int track, const QString &uid);
-    Q_INVOKABLE void removePlugin(int track, int slot);
-    Q_INVOKABLE void setPluginBypass(int track, int slot, bool on);
-    Q_INVOKABLE void openPlugin(int track, int slot);
+    Q_INVOKABLE void addPlugin(int insert, const QString &uid);
+    Q_INVOKABLE void removePlugin(int insert, int slot);
+    Q_INVOKABLE void setPluginBypass(int insert, int slot, bool on);
+    Q_INVOKABLE void openPlugin(int insert, int slot);
     // Rack. kind: drum (arg „kit:row”), sampler (plik audio/ projektu), synth (id instrumentu), bass (kit), vst (uid)
     Q_INVOKABLE int addChannel(const QString &kind, const QString &arg, const QString &name = {});
     Q_INVOKABLE void removeChannel(int id);
@@ -300,6 +301,20 @@ public:
     Q_INVOKABLE void removeInsert(int id);
     Q_INVOKABLE bool setInsertSend(int id, int to, double db);       // poniżej −60 dB — bez wysyłki; pętle odrzucone
     Q_INVOKABLE void setInsertToMaster(int id, bool on);
+    Q_INVOKABLE void setInsertVolume(int id, double db);
+    Q_INVOKABLE void setInsertPan(int id, double pan);
+    Q_INVOKABLE void setInsertMute(int id, bool on);
+    Q_INVOKABLE void setInsertSolo(int id, bool on);
+    Q_INVOKABLE void setInsertFx(int id, const QString &key, double value);
+    Q_INVOKABLE void applyInsertPreset(int id, const QString &preset);
+    Q_INVOKABLE void renameInsert(int id, const QString &name);
+    Q_INVOKABLE void renameChannel(int id, const QString &name);
+    Q_INVOKABLE void renamePattern(int id, const QString &name);
+    Q_INVOKABLE int duplicatePattern(int id);
+    Q_INVOKABLE void channelNoteOn(int id, int pitch, double velocity = 0.85);    // gra teraz (klawiatura, MIDI, podgląd)
+    Q_INVOKABLE void channelNoteOff(int id, int pitch);
+    Q_INVOKABLE QVariantList patternPreview(int id) const;       // nuty wzoru dla klipu: [{ x, w, y }] w 0…1
+    Q_INVOKABLE QStringList projectSounds() const;               // pliki z audio/ do samplera
     // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
     Q_INVOKABLE void denoiseTrack(int index, int level);
     Q_INVOKABLE int lyricAt(double seconds) const;   // wiersz tekstu, który właśnie leci (−1 — przed pierwszym)
@@ -472,8 +487,6 @@ private:
         double eqLow = 0, eqHigh = 0, comp = 0, width = 1, drive = 0;   // dB, dB, 0…1, ×, dB
         QString preset;
     };
-    void renderPattern(int index);
-    void renderKeyTracks();                         // po zmianie tonacji — akordy idą za nią                  // wzór → plik audio/_bit-N.wav → klipy ścieżki
     void applyPresetTo(Insert &t, const QString &preset);
     void applyMasteringPreset(const QString &preset);
     static void cutStart(Clip &c, long long d);     // przytnij początek o d ramek (pętla: przesuwa fazę)
@@ -545,6 +558,12 @@ private:
     QList<Channel> m_channels;
     QList<Pattern> m_patterns;
     int m_curPattern = 0;
+    int m_selChannel = 0, m_selInsert = 0;
+    QVariantList m_insLevels;
+    void convertPatternTrack(int index);        // ścieżka Beat Makera → kanały, wzór i klipy wzoru
+    int rackChannel(const QString &kind, const QString &kit, const QString &row, const QString &inst, const QString &name, int insert, double volume);
+    void defaultRack();                         // pusty projekt: zestaw perkusyjny i pierwszy wzór
+    Insert *findInsert(int id);
     bool m_patMode = false;
     double m_swing = 0;
     int insertIndex(int id) const;

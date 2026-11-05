@@ -1,4 +1,4 @@
-// aster-studio — Studio Aster: proste studio nagrań (ścieżki, nagrywanie, pętle, mikser, eksport).
+// aster-studio — Studio Aster: DAW (rack kanałów, wzory, playlista, piano roll, mikser z wtyczkami VST3, nagrywanie).
 //   aster-studio                 ekran startowy z ostatnimi projektami
 //   aster-studio FOLDER|projekt.json   otwiera projekt
 
@@ -8,6 +8,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
+#include <QMouseEvent>
 #include <QTimer>
 #include <QtQml/qqmlextensionplugin.h>
 #include "typography.h"
@@ -45,7 +46,28 @@ int main(int argc, char *argv[])
     // Do testów: ASTER_OPEN=kroki po „;” (testOpen w Main.qml, co 1,2 s), ASTER_SHOT=plik.png (ASTER_SHOT_DELAY ms)
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
-        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] { QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step)); });
+        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] {
+            // click:x:y[:r] — kliknięcie myszą jak człowiek (r: prawy przycisk)
+            if (step.startsWith(QLatin1String("click:"))) {
+                const QStringList a = step.split(QLatin1Char(':'));
+                const QPointF at(a.value(1).toDouble(), a.value(2).toDouble());
+                const Qt::MouseButton b = a.value(3) == QLatin1String("r") ? Qt::RightButton : Qt::LeftButton;
+                // Bez ekranu nic nie rysuje okna, więc układ (Column, Row) nie jest policzony — zrzut go wymusza
+                static_cast<QQuickWindow *>(window)->grabWindow();
+                // Każde zdarzenie tworzone tuż przed wysłaniem: Qt trzyma stan punktu wspólnie dla urządzenia
+                static quint64 clock = 1000;
+                auto send = [&](QEvent::Type type, Qt::MouseButton button, Qt::MouseButtons held, quint64 step) {
+                    QMouseEvent e(type, at, at, button, held, Qt::NoModifier);
+                    e.setTimestamp(clock += step);
+                    QCoreApplication::sendEvent(window, &e);
+                };
+                send(QEvent::MouseMove, Qt::NoButton, Qt::NoButton, 1000);
+                send(QEvent::MouseButtonPress, b, b, 50);
+                send(QEvent::MouseButtonRelease, b, Qt::NoButton, 50);
+                return;
+            }
+            QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step));
+        });
     const QString shot = qEnvironmentVariable("ASTER_SHOT");
     if (!shot.isEmpty()) {
         const int delay = qEnvironmentVariableIntValue("ASTER_SHOT_DELAY");

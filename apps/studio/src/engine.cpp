@@ -84,6 +84,9 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             if (!ch.inst || ch.insert < 0 || ch.insert >= inserts)
                 continue;
             int count = 0;
+            for (int k = 0; k < m_liveCount && count < 256; ++k)
+                if (m_liveNotes[k].channel == c)
+                    m_ev[count++] = Vst3::Note{0, m_liveNotes[k].on, m_liveNotes[k].pitch, m_liveNotes[k].velocity};
             if (clips) {
                 size_t &cur = m_cursor[c];
                 while (cur < ch.events.size() && ch.events[cur].at < pos + n && count < 512) {
@@ -104,6 +107,8 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 br[i] += m_cr[i] * ch.gainR;
             }
         }
+
+        m_liveCount = 0;
 
         // Granie na żywo i odsłuch mikrofonu — wchodzą przed efekty, jak klipy
         for (int i = 0; i < inserts; ++i)
@@ -629,6 +634,16 @@ void Engine::onPlayback()
         m_rtPos = seek;
 
     takeLiveCommands();
+    {
+        // Nuty z klawiatury do kanałów
+        unsigned rd = m_noteR.load(std::memory_order_relaxed);
+        const unsigned wr = m_noteW.load(std::memory_order_acquire);
+        int k = 0;
+        for (; rd != wr && k < int(NoteQueue); ++rd)
+            m_noteBlock[k++] = m_noteQueue[rd % NoteQueue];
+        m_noteR.store(rd, std::memory_order_release);
+        m_renderer.setLiveNotes(m_noteBlock, k);
+    }
     // Odsłuch: to, co przyszło z mikrofonu. Nadmiar ponad jeden blok i trochę zapasu — odrzucony,
     // żeby opóźnienie nie rosło; brak — cisza (wejście jeszcze nie ruszyło)
     const int monTrack = m_monTrack.load(std::memory_order_relaxed);
@@ -769,6 +784,15 @@ void Engine::pushLive(const LiveCmd &c)
         return;                                 // kolejka pełna (nie powinno się zdarzyć) — nutę pomijamy
     m_liveCmds[w % LiveQueue] = c;
     m_liveW.store(w + 1, std::memory_order_release);
+}
+
+void Engine::channelNote(int channel, bool on, int pitch, float velocity)
+{
+    const unsigned w = m_noteW.load(std::memory_order_relaxed);
+    if (w - m_noteR.load(std::memory_order_acquire) >= NoteQueue)
+        return;
+    m_noteQueue[w % NoteQueue] = {channel, on, pitch, velocity};
+    m_noteW.store(w + 1, std::memory_order_release);
 }
 
 void Engine::liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain)

@@ -39,8 +39,10 @@ Każdy etap zostawia działający program i kończy się commitem.
        tryb WZÓR, format projektu 2 (stare otwierają się same). Kod: `src/rack.cpp`, `src/instrument.h`.
        Ten sam kod gra na żywo i w eksporcie. Bez interfejsu: dostęp przez API Studia, zmienia to etap 3.
        Jeszcze nie: efekty natywne jako osobne sloty i zamiana starych ścieżek Beat Makera na kanały (etap 3).
-3. [ ] Interfejs: przeglądarka, rack kanałów, playlista z trybem WZÓR/UTWÓR, mikser z insertami, piano roll
-       dla każdego kanału, instrumenty VST3 (także z klawiatury MIDI).
+3. [~] Interfejs: przeglądarka, rack z krokami i wzorami, playlista z klipami wzorów i trybem WZÓR/UTWÓR,
+       mikser na insertach z wtyczkami i wysyłkami, piano roll kanału, instrumenty VST3 także z klawiatury MIDI.
+       Beat Maker zastąpiony: stare wzory i szablony gatunków zamieniają się na kanały i wzory.
+       Zostało: efekty natywne jako osobne sloty, przeciąganie z przeglądarki na playlistę.
 4. [ ] Automatyka, kompensacja opóźnień, sidechain, zamrażanie kanałów.
 5. [ ] Sampler pełny (obwiednie, ucinanie, rozciąganie w czasie: rubberband), biblioteka brzmień, presety.
 6. [ ] Wtyczki w osobnym procesie, CLAP, yabridge w obrazie i wtyczki z Windowsa (test na x86_64).

@@ -31,9 +31,10 @@ set(STUDIO_QML
     qml/Segmented.qml
     qml/Inspector.qml
     qml/Lyrics.qml
+    qml/ChannelRack.qml
+    qml/Browser.qml
     qml/LyricText.qml
     qml/Prompter.qml
-    qml/PatternEditor.qml
     qml/PianoRoll.qml
 )
 foreach(f ${STUDIO_QML})

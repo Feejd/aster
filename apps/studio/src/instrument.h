@@ -163,7 +163,8 @@ private:
                 slot = i;
         }
         m_seed = m_seed * 1664525u + 1013904223u;
-        m_v[slot].start(m_inst, 440.0 * std::pow(2.0, (pitch - 69) / 12.0), m_rate, m_seed, vel);
+        // Poziom jak w dawnych pętlach Beat Makera: akord nie przesterowuje sumy
+        m_v[slot].start(m_inst, 440.0 * std::pow(2.0, (pitch - 69) / 12.0), m_rate, m_seed, 0.45f * vel);
         m_pitch[slot] = pitch;
         m_age[slot] = ++m_clock;
     }
