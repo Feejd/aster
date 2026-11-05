@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QImage>
 #include <QSizeF>
+#include <QTransform>
 #include <QVariantMap>
 
 class QPainter;
@@ -21,7 +22,7 @@ public:
 // Rysowanie projektu — jedno dla płótna na ekranie, miniatur i eksportu (PNG, JPG, PDF),
 // więc to, co widać w edytorze, wychodzi w pliku co do piksela.
 //
-// Element to mapa: id, type ("text" | "shape" | "image" | "vector"), x, y, w, h (piksele strony), rotation (stopnie,
+// Element to mapa: id, type ("text" | "shape" | "image" | "vector" | … | "adjust"), x, y, w, h (piksele strony), rotation (stopnie,
 // wokół środka), opacity (0..1) oraz pola rodzaju (opis w docs/grafika-format.md).
 namespace Art {
 
@@ -38,6 +39,16 @@ void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
 void paintBackground(QPainter *p, const QVariantMap &bg, const QSizeF &page, const ImageSource *images);
 // Cała strona: { width, height, background, elements: [...] } w układzie strony (piksele projektu)
 void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images, qreal bleed = 0);
+// Czy strona wymaga składania na obrazie: warstwa korekcyjna albo tryb mieszania inny niż zwykły
+bool compositing(const QVariantMap &doc);
+// Wartości krzywej (punkty [x, y] 0..1) w `size` równych krokach — do rysowania krzywej w panelu
+QVariantList curveSamples(const QVariantList &points, int size);
+// Rozmycie obrazu z premultiplikowaną alfą
+void blur(QImage &premultiplied, int radius);
+// Ramka elementu ← piksele zdjęcia (kadr jak przy rysowaniu: „cover”, focusX/focusY, powiększenie, odbicie)
+QTransform frameTransform(const QVariantMap &el, const QSize &image);
+// Piksele strony → układ elementu (bez obrotu, początek w lewym górnym rogu)
+QTransform pageToFrame(const QVariantMap &el);
 // Strona jako obraz o podanym rozmiarze (miniatury, PNG, JPG)
 QImage renderPage(const QVariantMap &doc, const QSize &size, const ImageSource *images, const QColor &under = Qt::transparent);
 

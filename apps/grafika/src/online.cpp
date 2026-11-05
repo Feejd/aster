@@ -22,7 +22,7 @@
 
 namespace {
 
-const char *UserAgent = "AsterGrafika/1.0 (+https://github.com/Feejd/aster)";
+const char *UserAgent = "AsterPixel/1.0 (+https://github.com/Feejd/aster)";
 
 // Zestawy z Iconify na licencjach bez obowiązku podpisu
 const char *IconSets = "tabler,lucide,ph,mdi,material-symbols,mingcute,ri,iconoir,heroicons,fluent";

@@ -98,7 +98,30 @@ Programy:
       tło (kolor, przejście, zdjęcie); przeciąganie z przyciąganiem do środka i krawędzi, uchwyty, obrót, warstwy,
       cofnij/ponów, skróty; zapis sam (Dokumenty/Grafiki, `.grafika` = ZIP z JSON), eksport PNG/JPG (1×, 2×) i PDF
       (wektorowy, w formacie do druku); jedno rysowanie (QPainter) dla ekranu i eksportu
-- [ ] Grafika, dalej: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
+- [x] Aster Pixel: układ programu graficznego, warstwy z trybami mieszania, krycie, maski warstw (pędzel, wygaszanie,
+      zaznaczenie AI), warstwy korekcyjne, krzywe, tony i kolor na zdjęciach
+- [ ] Aster Pixel, kierunek Photoshop z prostszym interfejsem. Zasada: proste działa od razu (gotowe wyglądy, „Popraw
+      automatycznie”, AI), a pełna kontrola czeka w zwijanych sekcjach i panelu warstw, nigdy na drodze. Kolejność:
+  - [x] malowanie po pikselach: warstwa pikselowa, pędzel z twardością i kryciem, gumka, wypełnianie, pipeta
+  - [x] retusz: Korektor AI, stempel, rozjaśnianie i ściemnianie, rozmazywanie, rozmywanie
+  - [ ] pędzle: nacisk tabletu, kształty pędzla, malowanie w trybach mieszania
+  - [x] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, główny obiekt i obiekt kliknięciem (AI), dodawanie,
+        odejmowanie, część wspólna, wtapianie, powiększanie, przesuwanie; kopia i wycięcie na warstwę, wypełnianie,
+        wypełnienie AI, maska z zaznaczenia; zaznaczenie obowiązuje przy malowaniu, retuszu i korekcjach
+  - [ ] zaznaczenia, dalej: tryb podglądu maski, zapisywanie zaznaczeń, przekształcanie zaznaczonych pikseli, wielokąt
+  - [x] przekształcenia: perspektywa i zniekształcenie czterema rogami (Ctrl+T), przycinanie strony do zaznaczenia
+  - [ ] przekształcenia, dalej: siatka wypaczania, narzędzie kadrowania płótna, obrót i skala w jednym trybie
+  - [ ] warstwy: foldery, maski przycinające, style warstw (obrys, poświata, faza), inteligentne filtry
+  - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej
+  - [ ] pliki: import i eksport PSD, zapis WebP, TIFF, profile kolorów, 16 bitów
+  - [x] AI po ludzku: karta Magia AI (wyodrębnij, usuń, zaznacz, rozmyj), kliknięcie w rzecz, pasek działań przy zaznaczeniu
+  - [x] wypełnianie z opisu: stable-diffusion.cpp (`aster-pixel-gen`) z DreamShaper 8 Inpainting (GGUF, 1,9 GB). Przy częściowej
+        masce oba sprawdzone modele ignorują opis, więc: obiekt powstaje na czystym tle i wycina go ISNet, duży obszar to cały kadr
+        z opisu, a pusty opis to uzupełnienie z otoczenia (cfg 2)
+  - [ ] wypełnianie z opisu, dalej: model w wydaniu „modele”, próba Vulkana na RX 6500 XT i czas na Acerze, tłumaczenie opisów
+        przez Aster Intelligence (dziś słownik najczęstszych słów), dopasowanie światła obiektu do zdjęcia, opcja w chmurze
+  - [ ] AI: powiększanie zdjęć
+- [ ] Stare pomysły: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
       i grafik do pobrania ze Sklepu Aster, wiele stron w projekcie (karuzela, prezentacja), zaznaczanie kilku elementów
       i grupy, przycinanie zdjęć i filtry, przyciąganie przy zmianie rozmiaru, własne kolory marki, Flatpak w Sklepie Aster
 - [x] Telefon (okna KDE Connect) — `apps/phone`, jak „Łącze z telefonem” w Windows, przez D-Bus z kdeconnectd:

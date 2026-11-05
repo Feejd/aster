@@ -12,6 +12,7 @@ Item {
     required property Project project
     property var editor                      // EditorPage (dodawanie elementów, okna wyboru plików)
     property string tab: "templates"
+    property bool showRail: true             // pasek kart z lewej (w układzie z narzędziami po prawej — ukryty)
     property var photos: []
 
     readonly property real base: Math.min(project.pageWidth, project.pageHeight)
@@ -20,10 +21,78 @@ Item {
         { id: "text", label: "Tekst", icon: "textT" },
         { id: "shapes", label: "Elementy", icon: "shapes" },
         { id: "photos", label: "Zdjęcia", icon: "image" },
+        { id: "draw", label: "Rysuj", icon: "squiggle" },
+        { id: "paint", label: "Maluj i retuszuj", icon: "brush" },
+        { id: "pixels", label: "Zaznaczanie", icon: "marquee" },
+        { id: "magic", label: "Magia AI", icon: "sparkles" },
         { id: "background", label: "Tło", icon: "palette" },
         { id: "layers", label: "Warstwy", icon: "layers" }
     ]
+    // ——— Rysowanie: narzędzie, kolor i grubość (część krótszego boku strony, osobno dla każdego pisaka) ———
+    property string drawTool: "pen"
+    property color drawColor: "#16181D"
+    property var drawSizes: ({ pen: 0.006, marker: 0.016, highlighter: 0.03, neon: 0.01 })
+    readonly property real drawWidth: Math.max(1, Math.round(base * (drawSizes[drawTool] || 0.01) * 10) / 10)
+    property string lastTab: "select"       // karta sprzed rysowania (Gotowe / Esc wraca do niej)
+    readonly property var pens: [
+        { id: "pen", label: "Pisak" }, { id: "marker", label: "Marker" },
+        { id: "highlighter", label: "Zakreślacz" }, { id: "neon", label: "Neon" }
+    ]
+    readonly property var drawColors: ["#16181D", "#FFFFFF", "#E53935", "#FF7A00", "#FFD400", "#22B07D", "#1E88E5", "#5B3BE8", "#E040FB", "#8D6E63",
+                                       "#00E5FF", "#76FF03"]
+    readonly property var sample: [0.04, 0.7, 0.16, 0.38, 0.3, 0.22, 0.44, 0.42, 0.56, 0.7, 0.7, 0.62, 0.82, 0.3, 0.96, 0.36]
+    function setDrawSize(px) {
+        const m = Object.assign({}, drawSizes);
+        m[drawTool] = px / base;
+        drawSizes = m;
+    }
+    property string prevTab: "select"
+
+    // ——— Zaznaczanie pikseli ———
+    property string selTool: "rect"
+    property string selMode: "new"
+    property real selFeather: 0
+    property real selTolerance: 0.12
+    property bool selLayerOnly: false
+    property real selAmount: Math.max(2, Math.round(base * 0.01))     // o ile zmienić zaznaczenie
+    readonly property var selTools: [
+        { id: "rect", label: "Prostokąt", icon: "selRect", key: "M", hint: "Przeciągnij po stronie. Przeciągnięcie wewnątrz przesuwa zaznaczenie." },
+        { id: "ellipse", label: "Elipsa", icon: "selCircle", key: "", hint: "Przeciągnij po stronie." },
+        { id: "lasso", label: "Lasso", icon: "lasso", key: "L", hint: "Obrysuj fragment myszą, koniec łączy się z początkiem." },
+        { id: "wand", label: "Różdżka", icon: "wand", key: "W", hint: "Klik zaznacza połączony obszar podobnego koloru." },
+        { id: "color", label: "Kolor", icon: "palette", key: "", hint: "Klik zaznacza ten kolor na całej stronie." },
+        { id: "object", label: "Obiekt AI", icon: "target", key: "", hint: "Klik w rzecz na zdjęciu zaznacza ją całą." }
+    ]
+    readonly property string selHint: { for (const t of selTools) if (t.id === selTool) return t.hint; return ""; }
+
+    // ——— Malowanie i retusz: ustawienia osobno dla każdego narzędzia, rozmiar w częściach krótszego boku strony ———
+    property string paintTool: "brush"
+    property color paintColor: "#16181D"
+    property var paintSizes: ({ brush: 0.03, eraser: 0.05, heal: 0.03, clone: 0.04, dodge: 0.08, burn: 0.08, smudge: 0.05, blur: 0.06 })
+    property var paintPower: ({ brush: 1, eraser: 1, clone: 1, dodge: 0.5, burn: 0.5, smudge: 0.7, blur: 1 })
+    property real paintHardness: 0.7
+    property real fillTolerance: 0.15
+    readonly property real paintSize: Math.max(1, Math.round(base * (paintSizes[paintTool] || 0.04)))
+    readonly property real paintStrength: paintPower[paintTool] === undefined ? 1 : paintPower[paintTool]
+    readonly property bool paintHasSize: paintTool !== "fill" && paintTool !== "pick"
+    readonly property bool paintHasColor: paintTool === "brush" || paintTool === "fill"
+    readonly property var paintTools: [
+        { id: "brush", label: "Pędzel", icon: "brush", key: "B", hint: "Maluje kolorem. Bez zaznaczonego zdjęcia tworzy nową warstwę do malowania." },
+        { id: "eraser", label: "Gumka", icon: "eraser", key: "E", hint: "Ściera piksele warstwy do przezroczystości." },
+        { id: "fill", label: "Wypełnij", icon: "droplet", key: "G", hint: "Klik wypełnia kolorem podobny obszar." },
+        { id: "pick", label: "Pipeta", icon: "pipette", key: "I", hint: "Klik pobiera kolor ze strony do pędzla." },
+        { id: "heal", label: "Korektor AI", icon: "sparkles", key: "J", hint: "Zamaluj plamkę, kabel albo przechodnia — zniknie, a tło uzupełni się samo." },
+        { id: "clone", label: "Stempel", icon: "stamp", key: "S", hint: "Alt+klik wskazuje źródło, potem pędzel kopiuje stamtąd piksele." },
+        { id: "dodge", label: "Rozjaśnij", icon: "neon", key: "", hint: "Rozjaśnia malowane miejsca." },
+        { id: "burn", label: "Ściemnij", icon: "moon", key: "", hint: "Ściemnia malowane miejsca." },
+        { id: "smudge", label: "Rozmaż", icon: "squiggle", key: "", hint: "Ciągnie piksele jak palec po mokrej farbie." },
+        { id: "blur", label: "Rozmyj", icon: "circleHalf", key: "", hint: "Zmiękcza malowane miejsca." }
+    ]
+    readonly property string paintHint: { for (const t of paintTools) if (t.id === paintTool) return t.hint; return ""; }
+    function setPaintSize(px) { const m = Object.assign({}, paintSizes); m[paintTool] = px / base; paintSizes = m; }
+    function setPaintPower(v) { const m = Object.assign({}, paintPower); m[paintTool] = v; paintPower = m; }
     onTabChanged: {
+        if (tab !== "draw" && tab !== "paint" && tab !== "pixels" && tab !== "magic") prevTab = tab; else lastTab = prevTab;
         if (tab === "photos") photos = Library.photos();
         if (tab === "layers") refreshLayers();
     }
@@ -105,11 +174,11 @@ Item {
     readonly property var tplList: Library.templates.filter(t => tplCategory === "" ? true
         : tplCategory === "fit" ? Math.abs(t.width / t.height - project.pageWidth / project.pageHeight) < 0.02
         : t.category === tplCategory)
-    onTplListChanged: if (tplCategory === "fit" && tplList.length === 0) tplCategory = ""
+    onTplListChanged: if (tplCategory === "fit" && tplList.length === 0) Qt.callLater(() => tplCategory = "")
 
     // ——— Warstwy ———
     property var layers: []                  // od wierzchu
-    function refreshLayers() { layers = project.document().elements.slice().reverse(); }
+    function refreshLayers() { if (!project) return; layers = project.document().elements.slice().reverse(); }
     Timer { id: layersLater; interval: 0; onTriggered: sp.refreshLayers() }
     Connections {
         target: sp.project
@@ -121,7 +190,13 @@ Item {
     readonly property var shapeNames: ({ rect: "Prostokąt", ellipse: "Koło", triangle: "Trójkąt", star: "Gwiazda", heart: "Serce", line: "Linia", arrow: "Strzałka" })
     function layerName(o) {
         if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
-        if (o.type === "image") return o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        if (o.type === "image") return o.pixel ? "Warstwa pikselowa" : o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        if (o.type === "adjust") return "Korekcja";
+        if (o.type === "draw") return o.pen === "highlighter" ? "Zakreślenie" : "Rysunek";
+        if (o.type === "vector") return "Grafika";
+        if (o.type === "code") return o.kind === "qr" ? "Kod QR" : "Kod kreskowy";
+        if (o.type === "chart") return "Wykres";
+        if (o.type === "table") return "Tabela";
         return shapeNames[o.shape] || "Kształt";
     }
 
@@ -237,7 +312,7 @@ Item {
     // Moje elementy — pliki w ~/.local/share/aster-grafika/elements
     property var saved: []
     Connections { target: sp.project; function onSavedElementsChanged() { sp.saved = sp.project.savedElements(); } }
-    Component.onCompleted: saved = project.savedElements()
+    Component.onCompleted: { saved = project.savedElements(); if (tab === "layers") refreshLayers(); }
 
     // Moje style tekstu — zapisane w ustawieniach programu, wspólne dla wszystkich projektów.
     // Wielkość pamiętana względem krótszego boku strony, żeby pasowała też do innego formatu.
@@ -301,7 +376,16 @@ Item {
         { label: "Koło", preview: { type: "chart", chart: "donut", data: sp.sampleData.slice(0, 3), values: false, size: 0.1 },
           el: { type: "chart", chart: "donut", data: [{ label: "Tak", value: 62 }, { label: "Nie", value: 25 }, { label: "Nie wiem", value: 13 }], side: 0.6, ratio: 0.55 } },
         { label: "Linia", preview: { type: "chart", chart: "line", data: sp.sampleData, values: false },
-          el: { type: "chart", chart: "line", data: sp.sampleData, side: 0.6, ratio: 0.55 } }
+          el: { type: "chart", chart: "line", data: sp.sampleData, side: 0.6, ratio: 0.55 } },
+        { label: "Tabela", preview: { type: "table", cells: [["", "", ""], ["", "", ""], ["", "", ""], ["", "", ""]], headerFill: "#3D4048", fill: "#FFFFFF", stroke: "#C9CDD6", strokeWidth: 1.5 },
+          el: { type: "table", cells: [["Nazwa", "Ilość", "Uwagi"], ["", "", ""], ["", "", ""], ["", "", ""]], headerFill: "#16181D", headerColor: "#FFFFFF",
+                fill: "#FFFFFF", stroke: "#D9DCE3", color: "#3D4048", lines: "rows", side: 0.7, ratio: 0.42 } },
+        { label: "Cennik", preview: { type: "table", cells: [["", ""], ["", ""], ["", ""], ["", ""]], headerFill: "#5B7CFA", fill: "#FFFFFF", stripe: "#E4EAFF", lines: "none", radius: 8 },
+          el: { type: "table", cells: [["Usługa", "Cena"], ["Strzyżenie", "60 zł"], ["Koloryzacja", "180 zł"], ["Modelowanie", "50 zł"]],
+                headerFill: "#5B7CFA", headerColor: "#FFFFFF", fill: "#FFFFFF", stripe: "#EEF2FF", color: "#16181D", lines: "none", radius: 0.02, side: 0.6, ratio: 0.5 } },
+        { label: "Plan", preview: { type: "table", cells: [["", "", "", ""], ["", "", "", ""], ["", "", "", ""], ["", "", "", ""]], headerFill: "#22B07D", fill: "#FFFFFF", stroke: "#B9DDCB", strokeWidth: 1.5, lines: "grid" },
+          el: { type: "table", cells: [["Godzina", "Poniedziałek", "Wtorek", "Środa"], ["8:00", "", "", ""], ["9:00", "", "", ""], ["10:00", "", "", ""], ["11:00", "", "", ""]],
+                headerFill: "#22B07D", headerColor: "#FFFFFF", fill: "#FFFFFF", stroke: "#B9DDCB", color: "#16181D", lines: "grid", align: "center", side: 0.8, ratio: 0.5 } }
     ]
     function addExtra(x) {
         const el = Object.assign({}, x.el);
@@ -309,6 +393,12 @@ Item {
         el.w = side;
         el.h = Math.round(side * (el.ratio || 1));
         if (el.type === "chart") { el.size = Math.round(base * 0.026); el.color = "#3D4048"; }
+        if (el.type === "table") {
+            el.size = Math.round(base * 0.024);
+            el.strokeWidth = Math.max(1, Math.round(base * 0.002));
+            el.radius = Math.round(base * (el.radius || 0));
+            el.cells = el.cells.map(r => r.slice());
+        }
         delete el.side; delete el.ratio;
         editor.addElement(el);
     }
@@ -327,7 +417,8 @@ Item {
     // ——— Pasek kart ———
     Column {
         id: rail
-        width: 72
+        visible: sp.showRail
+        width: sp.showRail ? 72 : 0
         y: 8
         spacing: 4
         Repeater {
@@ -366,7 +457,7 @@ Item {
             x: 12; y: 14
             text: { for (const t of sp.tabs) if (t.id === sp.tab) return t.label; return ""; }
             color: Theme.text
-            font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
+            font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
         }
 
         Flickable {
@@ -383,7 +474,7 @@ Item {
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
                       : sp.tab === "shapes" ? elementsCol.height : sp.tab === "photos" ? photosCol.height
-                      : sp.tab === "layers" ? layersCol.height : bgCol.height
+                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : sp.tab === "paint" ? paintCol.height : sp.tab === "pixels" ? pixelsCol.height : sp.tab === "magic" ? magicCol.height : bgCol.height
 
                 // Szablony
                 Column {
@@ -746,7 +837,7 @@ Item {
                     }
                     Text {
                         topPadding: 4
-                        text: "Kody i wykresy"
+                        text: "Kody, wykresy i tabele"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
                     }
                     Grid {
@@ -1014,7 +1105,7 @@ Item {
                     Text {
                         width: parent.width
                         wrapMode: Text.WordWrap
-                        text: sp.layers.length === 0 ? "Na stronie nie ma jeszcze elementów." : "Na górze listy jest to, co leży na wierzchu. Przeciągnij wiersz, żeby zmienić kolejność."
+                        text: sp.layers.length === 0 ? "Na stronie nie ma jeszcze elementów." : "Na górze to, co na wierzchu · przeciągnij, żeby zmienić kolejność"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
                     }
                     Item {
@@ -1055,8 +1146,10 @@ Item {
                                     color: sp.project.background.color || "#ffffff"     // biały tekst widać na tle strony
                                     border.width: 1; border.color: Theme.line
                                     clip: true
+                                    Icon { visible: row.modelData.type === "adjust"; anchors.centerIn: parent; d: Icons.sliders; size: 18; stroke: 1.9; color: "#5B6270" }
                                     ArtView {
                                         readonly property real k: Math.min(30 / Math.max(1, row.modelData.w), 30 / Math.max(1, row.modelData.h))
+                                        visible: row.modelData.type !== "adjust"
                                         anchors.centerIn: parent
                                         width: Math.max(2, row.modelData.w * k); height: Math.max(2, row.modelData.h * k)
                                         rotation: row.modelData.rotation || 0
@@ -1064,8 +1157,26 @@ Item {
                                         element: row.modelData
                                     }
                                 }
+                                // Maska warstwy: klik — malowanie po masce
+                                Rectangle {
+                                    id: maskThumb
+                                    visible: !!row.modelData.layerMask
+                                    anchors.left: thumb.right; anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: visible ? 34 : 0; height: 34; radius: 7
+                                    color: "#000000"
+                                    border.width: sp.editor.maskEditing === row.modelData.id ? 2 : 1
+                                    border.color: sp.editor.maskEditing === row.modelData.id ? Theme.accent : Theme.line
+                                    clip: true
+                                    opacity: row.modelData.layerMaskOff ? 0.4 : 1
+                                    ArtView {
+                                        anchors.fill: parent; anchors.margins: 1
+                                        project: sp.project
+                                        element: ({ type: "image", src: row.modelData.layerMask, w: 32, h: 32 })
+                                    }
+                                }
                                 Text {
-                                    anchors.left: thumb.right; anchors.leftMargin: 10
+                                    anchors.left: maskThumb.visible ? maskThumb.right : thumb.right; anchors.leftMargin: 10
                                     anchors.right: tools.left; anchors.rightMargin: 4
                                     anchors.verticalCenter: parent.verticalCenter
                                     elide: Text.ElideRight
@@ -1101,6 +1212,8 @@ Item {
                                             sp.refreshLayers();
                                         } else {
                                             sp.editor.selectLayer(row.modelData.id, e.modifiers & Qt.ShiftModifier);
+                                            if (maskThumb.visible && e.x >= maskThumb.x && e.x <= maskThumb.x + maskThumb.width)
+                                                sp.editor.editMask(row.modelData.id);
                                         }
                                     }
                                 }
@@ -1124,6 +1237,469 @@ Item {
                                 }
                             }
                         }
+                    }
+                    // Tło strony — zawsze na samym spodzie; kliknięcie otwiera narzędzie Tło
+                    HoverButton {
+                        id: bgRow
+                        width: parent.width; height: layersCol.rowH - 4
+                        radius: 10
+                        baseColor: sp.editor && sp.editor.side && sp.editor.side.tab === "background" ? Theme.accentSoft : "transparent"
+                        onClicked: sp.editor.setTool("background")
+                        Rectangle {
+                            x: 6; anchors.verticalCenter: parent.verticalCenter
+                            width: 32; height: 32; radius: 7
+                            clip: true
+                            color: "transparent"
+                            border.width: 1; border.color: Theme.line
+                            ArtView {
+                                anchors.fill: parent; anchors.margins: 1
+                                project: sp.project
+                                element: Object.assign({ kind: "background", w: 100, h: 100 }, sp.project.background)
+                            }
+                        }
+                        Text {
+                            x: 50; anchors.verticalCenter: parent.verticalCenter
+                            text: "Tło"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+                        }
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.lock; size: 14; stroke: 1.8; color: Theme.text2; opacity: 0.5 }
+                    }
+                }
+
+                // Magia AI: nazwane tym, co użytkownik chce zrobić
+                Column {
+                    id: magicCol
+                    visible: sp.tab === "magic"
+                    width: parent.width
+                    spacing: 14
+                    readonly property bool ready: Magic.available && sp.editor.aiLayer !== ""
+                    readonly property var el: sp.editor.stageCurrent
+                    readonly property real level: el.bgBlurOut && el.bgBlurOut === el.src ? (el.bgBlur || 0) : 0
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: !Magic.available ? "Ta wersja Aster Pixel nie ma narzędzi AI."
+                            : sp.editor.aiLayer === "" ? "Dodaj zdjęcie, a tu pojawią się narzędzia AI."
+                            : "Kliknij rzecz na zdjęciu, żeby ją zaznaczyć, albo wybierz gotowe działanie. Wszystko liczy się na tym komputerze."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Btn {
+                        visible: Magic.available && sp.editor.aiLayer === ""
+                        width: parent.width; primary: true; icon: "image"; text: "Dodaj zdjęcie"
+                        onClicked: sp.editor.runMenu("addPhoto")
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Wyodrębnij"
+                        Btn { width: parent.width; primary: true; icon: "sparkles"; text: "Wyodrębnij główny obiekt"; tip: "Osoba albo rzecz trafia na osobną warstwę, zdjęcie zostaje"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("extract") }
+                        Btn { width: parent.width; icon: "scissors"; text: "Usuń tło"; tip: "Zostaje sam obiekt z przezroczystością"; enabled: !Magic.busy; onClicked: Magic.removeBackground(sp.project, sp.editor.aiLayer) }
+                    }
+                    Section {
+                        visible: magicCol.ready && Magic.canGenerate()
+                        title: "Dodaj lub zamień z opisu"
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Kliknij rzecz albo zaznacz obszar, wpisz na pasku pod płótnem, co ma się tam pojawić, i naciśnij Enter. Wynik to osobna warstwa."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                        }
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Usuń z obrazu"
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Kliknij rzecz na zdjęciu i wybierz „Usuń” na pasku pod płótnem. Drobiazgi zamaluj korektorem."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                        }
+                        Btn { width: parent.width; icon: "brush"; text: "Korektor pędzlem"; tip: "Skrót: J"; onClicked: sp.editor.usePaintTool("heal") }
+                        Btn { width: parent.width; icon: "lasso"; text: "Zaznacz ręcznie: pędzel, lasso"; enabled: !Magic.busy; onClicked: sp.editor.aiManual() }
+                    }
+                    Section {
+                        visible: magicCol.ready
+                        title: "Zaznacz"
+                        Row {
+                            spacing: 6
+                            Btn { height: 32; text: "Obiekt"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("subject") }
+                            Btn { height: 32; text: "Tło"; enabled: !Magic.busy; onClicked: sp.editor.aiRun("background") }
+                        }
+                    }
+                    Section {
+                        visible: magicCol.ready && magicCol.el.type === "image"
+                        title: "Rozmyj tło"
+                        Row {
+                            spacing: 6
+                            Repeater {
+                                model: [{ v: 0, label: "Ostre" }, { v: 0.35, label: "Lekko" }, { v: 0.7, label: "Mocno" }, { v: 1, label: "Bardzo" }]
+                                delegate: Chip {
+                                    required property var modelData
+                                    width: (magicCol.width - 18) / 4
+                                    height: 30
+                                    text: modelData.label
+                                    on: Math.abs(magicCol.level - modelData.v) < 0.01
+                                    enabled: !Magic.busy
+                                    onClicked: if (!on) Magic.blurBackground(sp.project, sp.editor.aiLayer, modelData.v)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Zaznaczanie pikseli
+                Column {
+                    id: pixelsCol
+                    visible: sp.tab === "pixels"
+                    width: parent.width
+                    spacing: 12
+                    Btn {
+                        visible: Magic.available
+                        width: parent.width
+                        primary: true
+                        icon: "sparkles"
+                        text: "Zaznacz główny obiekt"
+                        tip: "AI znajduje osobę albo rzecz na zdjęciu; Odwróć daje tło"
+                        enabled: !Magic.busy
+                        onClicked: sp.editor.selectSubject()
+                    }
+                    Grid {
+                        columns: 2
+                        spacing: 6
+                        Repeater {
+                            model: sp.selTools
+                            delegate: HoverButton {
+                                id: st
+                                required property var modelData
+                                readonly property bool on: sp.selTool === modelData.id
+                                width: (pages.width - 6) / 2; height: 36; radius: 9
+                                baseColor: on ? Theme.accent : Theme.fill
+                                color: on ? baseColor : hovered ? Theme.hover : baseColor
+                                tip: modelData.key !== "" ? "Skrót: " + modelData.key : ""
+                                onClicked: sp.selTool = modelData.id
+                                Row {
+                                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[st.modelData.icon]; size: 16; stroke: 1.9; color: st.on ? "white" : Theme.text }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; text: st.modelData.label; color: st.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: st.on ? Font.DemiBold : Font.Medium }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.selHint
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Section {
+                        title: "Łączenie"
+                        Flow {
+                            width: parent.width
+                            spacing: 4
+                            Repeater {
+                                model: [{ id: "new", label: "Nowe", tip: "" }, { id: "add", label: "Dodaj", tip: "Albo trzymaj Shift" },
+                                        { id: "subtract", label: "Odejmij", tip: "Albo trzymaj Alt" }, { id: "intersect", label: "Wspólne", tip: "Albo trzymaj Shift+Alt" }]
+                                delegate: Chip {
+                                    required property var modelData
+                                    height: 28
+                                    text: modelData.label
+                                    tip: modelData.tip
+                                    on: sp.selMode === modelData.id
+                                    onClicked: sp.selMode = modelData.id
+                                }
+                            }
+                        }
+                    }
+                    Column {
+                        width: parent.width
+                        spacing: 2
+                        ValueSlider {
+                            visible: sp.selTool === "rect" || sp.selTool === "ellipse" || sp.selTool === "lasso"
+                            label: "Wtapianie krawędzi"
+                            from: 0; to: Math.max(20, Math.round(sp.base * 0.05)); step: 1
+                            value: sp.selFeather
+                            suffix: " px"
+                            onMoved: (v) => sp.selFeather = v
+                        }
+                        ValueSlider {
+                            visible: sp.selTool === "wand" || sp.selTool === "color"
+                            label: "Tolerancja"
+                            from: 0; to: 1; step: 0.01
+                            value: sp.selTolerance
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.selTolerance = v
+                        }
+                        Chip {
+                            visible: sp.selTool === "wand" || sp.selTool === "color"
+                            text: "Tylko zaznaczona warstwa"
+                            on: sp.selLayerOnly
+                            onClicked: sp.selLayerOnly = !sp.selLayerOnly
+                        }
+                    }
+                    Row {
+                        spacing: 6
+                        Btn { height: 32; text: "Wszystko"; onClicked: Selection.all(sp.project) }
+                        Btn { height: 32; text: "Odwróć"; tip: "Ctrl+Shift+I"; onClicked: Selection.invert(sp.project) }
+                        Btn { height: 32; text: "Odznacz"; tip: "Ctrl+Shift+A"; enabled: Selection.active; onClicked: Selection.clear() }
+                    }
+                    Section {
+                        visible: Selection.active
+                        title: "Popraw zaznaczenie"
+                        ValueSlider {
+                            label: "O ile"
+                            from: 1; to: Math.max(20, Math.round(sp.base * 0.05)); step: 1
+                            value: sp.selAmount
+                            suffix: " px"
+                            onMoved: (v) => sp.selAmount = v
+                        }
+                        Row {
+                            spacing: 6
+                            Btn { height: 32; text: "Powiększ"; onClicked: Selection.grow(sp.selAmount) }
+                            Btn { height: 32; text: "Zmniejsz"; onClicked: Selection.grow(-sp.selAmount) }
+                            Btn { height: 32; text: "Zmiękcz"; onClicked: Selection.feather(sp.selAmount) }
+                        }
+                    }
+                    Section {
+                        visible: Selection.active
+                        title: "Zrób z zaznaczeniem"
+                        Text {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            text: "Malowanie i korekcje działają teraz tylko w zaznaczeniu."
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                        }
+                        Btn { width: parent.width; icon: "copy"; text: "Skopiuj na nową warstwę"; tip: "Ctrl+J"; onClicked: sp.editor.selAction("copy") }
+                        Btn { width: parent.width; icon: "scissors"; text: "Wytnij na nową warstwę"; tip: "Ctrl+Shift+J"; onClicked: sp.editor.selAction("cut") }
+                        Btn {
+                            visible: Magic.available
+                            width: parent.width
+                            icon: "sparkles"
+                            text: "Usuń i uzupełnij tło (AI)"
+                            enabled: !Magic.busy
+                            onClicked: sp.editor.selAction("aifill")
+                        }
+                        Btn { width: parent.width; icon: "trash"; text: "Usuń zaznaczone"; tip: "Delete"; onClicked: sp.editor.selAction("delete") }
+                        Row {
+                            spacing: 6
+                            ColorWell {
+                                id: selWell
+                                value: String(sp.paintColor)
+                                onClicked: sp.editor.pickColor(selWell, value, false, (c) => sp.paintColor = c)
+                            }
+                            Btn { height: 34; icon: "droplet"; text: "Wypełnij kolorem"; onClicked: sp.editor.selAction("fill") }
+                        }
+                        Btn { width: parent.width; icon: "circleHalf"; text: "Maska warstwy z zaznaczenia"; onClicked: sp.editor.selAction("mask") }
+                        Btn { width: parent.width; icon: "sliders"; text: "Korekcja tylko tutaj"; onClicked: sp.editor.addAdjustment() }
+                    }
+                }
+
+                // Malowanie i retusz
+                Column {
+                    id: paintCol
+                    visible: sp.tab === "paint"
+                    width: parent.width
+                    spacing: 14
+                    Grid {
+                        columns: 2
+                        spacing: 6
+                        Repeater {
+                            model: sp.paintTools
+                            delegate: HoverButton {
+                                id: pt
+                                required property var modelData
+                                readonly property bool on: sp.paintTool === modelData.id
+                                width: (pages.width - 6) / 2; height: 36; radius: 9
+                                baseColor: on ? Theme.accent : Theme.fill
+                                color: on ? baseColor : hovered ? Theme.hover : baseColor
+                                tip: modelData.key !== "" ? "Skrót: " + modelData.key : ""
+                                onClicked: sp.paintTool = modelData.id
+                                Row {
+                                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[pt.modelData.icon]; size: 16; stroke: 1.9; color: pt.on ? "white" : Theme.text }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; text: pt.modelData.label; color: pt.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: pt.on ? Font.DemiBold : Font.Medium }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.paintHint
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Section {
+                        visible: sp.paintHasColor
+                        title: "Kolor"
+                        Grid {
+                            columns: 6
+                            spacing: 8
+                            Repeater {
+                                model: sp.drawColors
+                                delegate: Rectangle {
+                                    id: pc
+                                    required property string modelData
+                                    readonly property bool on: String(sp.paintColor).toUpperCase() === modelData.toUpperCase()
+                                    width: (pages.width - 40) / 6; height: width; radius: width / 2
+                                    color: modelData
+                                    border.width: on ? 3 : 1; border.color: on ? Theme.accent : Qt.rgba(0, 0, 0, 0.14)
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sp.paintColor = pc.modelData }
+                                }
+                            }
+                        }
+                        ColorWell {
+                            id: paintWell
+                            label: "Inny kolor"
+                            value: String(sp.paintColor)
+                            onClicked: sp.editor.pickColor(paintWell, value, false, (c) => sp.paintColor = c)
+                        }
+                    }
+                    Column {
+                        width: parent.width
+                        spacing: 2
+                        ValueSlider {
+                            visible: sp.paintHasSize
+                            label: "Rozmiar"
+                            from: 1; to: Math.max(40, Math.round(sp.base * 0.3)); step: 1
+                            value: sp.paintSize
+                            suffix: " px"
+                            onMoved: (v) => sp.setPaintSize(v)
+                        }
+                        ValueSlider {
+                            visible: sp.paintHasSize && sp.paintTool !== "heal"
+                            label: "Twardość"
+                            from: 0; to: 1; step: 0.01
+                            value: sp.paintHardness
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.paintHardness = v
+                        }
+                        ValueSlider {
+                            visible: sp.paintTool !== "heal" && sp.paintTool !== "pick" && sp.paintTool !== "fill"
+                            label: sp.paintTool === "brush" || sp.paintTool === "eraser" || sp.paintTool === "clone" ? "Krycie" : "Siła"
+                            from: 0.02; to: 1; step: 0.01
+                            value: sp.paintStrength
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.setPaintPower(v)
+                        }
+                        ValueSlider {
+                            visible: sp.paintTool === "fill"
+                            label: "Tolerancja"
+                            from: 0; to: 1; step: 0.01
+                            value: sp.fillTolerance
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.fillTolerance = v
+                        }
+                    }
+                    Btn {
+                        width: parent.width
+                        icon: "plus"
+                        text: "Nowa warstwa do malowania"
+                        onClicked: sp.editor.addPixelLayer()
+                    }
+                }
+
+                // Rysowanie
+                Column {
+                    id: drawCol
+                    visible: sp.tab === "draw"
+                    width: parent.width
+                    spacing: 14
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Rysuj myszą albo piórem tabletu prosto na stronie. Każda kreska to osobny element — można ją potem przesunąć, zmienić kolor albo usunąć."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Grid {
+                        columns: 2
+                        spacing: 8
+                        Repeater {
+                            model: sp.pens
+                            delegate: HoverButton {
+                                id: penBtn
+                                required property var modelData
+                                readonly property bool on: sp.drawTool === modelData.id
+                                width: (pages.width - 8) / 2; height: 78; radius: 12
+                                baseColor: on ? Theme.accentSoft : Theme.fill
+                                color: on ? baseColor : hovered ? Theme.hover : baseColor
+                                border.width: on ? 1.5 : 0; border.color: Theme.accent
+                                tip: modelData.label
+                                onClicked: sp.drawTool = modelData.id
+                                Rectangle {
+                                    // Ciemne tło pod neonem i jasnymi kolorami, żeby było widać kreskę
+                                    readonly property bool darkBg: penBtn.modelData.id === "neon"
+                                    visible: darkBg
+                                    x: 8; y: 8; width: parent.width - 16; height: 40; radius: 8
+                                    color: "#1B1D24"
+                                }
+                                ArtView {
+                                    x: 14; y: 12
+                                    width: parent.width - 28; height: 32
+                                    element: ({ type: "draw", pen: penBtn.modelData.id, stroke: String(sp.drawColor), w: 100, h: 32, points: sp.sample,
+                                                strokeWidth: penBtn.modelData.id === "pen" ? 2.5 : penBtn.modelData.id === "marker" ? 6 : penBtn.modelData.id === "highlighter" ? 10 : 3.5 })
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    y: 54
+                                    text: penBtn.modelData.label
+                                    color: penBtn.on ? Theme.accentText : Theme.text
+                                    font.family: Theme.font; font.pixelSize: 12; font.weight: penBtn.on ? Font.DemiBold : Font.Medium
+                                }
+                            }
+                        }
+                    }
+                    HoverButton {
+                        id: eraserBtn
+                        readonly property bool on: sp.drawTool === "eraser"
+                        width: parent.width; height: 40; radius: 12
+                        baseColor: on ? Theme.accentSoft : Theme.fill
+                        color: on ? baseColor : hovered ? Theme.hover : baseColor
+                        border.width: on ? 1.5 : 0; border.color: Theme.accent
+                        onClicked: sp.drawTool = "eraser"
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 8
+                            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.eraser; size: 17; stroke: 1.8; color: eraserBtn.on ? Theme.accentText : Theme.text }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: "Gumka do rysunków"; color: eraserBtn.on ? Theme.accentText : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: eraserBtn.on ? Font.DemiBold : Font.Medium }
+                        }
+                    }
+                    Section {
+                        visible: sp.drawTool !== "eraser"
+                        title: "Kolor"
+                        Grid {
+                            columns: 6
+                            spacing: 8
+                            Repeater {
+                                model: sp.drawColors
+                                delegate: Rectangle {
+                                    id: dc
+                                    required property string modelData
+                                    readonly property bool on: String(sp.drawColor).toUpperCase() === modelData.toUpperCase()
+                                    width: (pages.width - 40) / 6; height: width; radius: width / 2
+                                    color: modelData
+                                    border.width: on ? 3 : 1; border.color: on ? Theme.accent : Qt.rgba(0, 0, 0, 0.14)
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: sp.drawColor = dc.modelData
+                                    }
+                                }
+                            }
+                        }
+                        ColorWell {
+                            id: drawWell
+                            label: "Inny kolor"
+                            value: String(sp.drawColor)
+                            onClicked: sp.editor.pickColor(drawWell, value, false, (c) => sp.drawColor = c)
+                        }
+                    }
+                    ValueSlider {
+                        visible: sp.drawTool !== "eraser"
+                        label: "Grubość"
+                        from: 1; to: Math.max(20, Math.round(sp.base * 0.08)); step: 1
+                        value: sp.drawWidth
+                        suffix: " px"
+                        onMoved: (v) => sp.setDrawSize(v)
                     }
                 }
 

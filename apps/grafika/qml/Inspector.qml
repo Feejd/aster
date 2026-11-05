@@ -15,6 +15,7 @@ Item {
     readonly property int count: stage.selection.length
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
+    readonly property bool placed: type !== "page" && type !== "many" && type !== "locked" && type !== "adjust"     // leży na stronie
     readonly property var bg: project.background
     property var projectColors: []
     Connections { target: ins.project; function onColorsChanged() { colorsTimer.restart(); } }
@@ -25,6 +26,38 @@ Item {
         { id: "", label: "Brak" }, { id: "gray", label: "Czarno-białe" }, { id: "sepia", label: "Sepia" }, { id: "warm", label: "Ciepłe" },
         { id: "cool", label: "Chłodne" }, { id: "fade", label: "Wyblakłe" }, { id: "vivid", label: "Żywe" }, { id: "duotone", label: "Dwa kolory" }
     ]
+
+    // ——— Tabela ———
+    readonly property var cells: type === "table" ? (el.cells || []) : []
+    readonly property int rows: cells.length
+    readonly property int cols: { let n = 0; for (const r of cells) n = Math.max(n, r.length); return n; }
+    function grid() { return cells.map(r => { const o = r.slice(); while (o.length < cols) o.push(""); return o; }); }
+    // Zmiana liczby wierszy/kolumn — wysokość rośnie razem z wierszami, żeby nie ścisnąć tekstu
+    function resizeTable(dr, dc) {
+        const g = grid();
+        const R = Math.max(1, rows + dr), C = Math.max(1, cols + dc);
+        while (g.length < R) g.push(new Array(C).fill(""));
+        g.length = R;
+        for (const r of g) { while (r.length < C) r.push(""); r.length = C; }
+        const p = { cells: g };
+        if (dr !== 0) p.h = Math.round(el.h / rows * R);
+        if (dc !== 0) p.w = Math.round(el.w / cols * C);
+        set(p);
+    }
+    function putCell(r, c, t, done) {
+        const g = grid();
+        g[r][c] = t;
+        set({ cells: g }, done);
+    }
+    // Komórki z arkusza (Calc, Excel, Arkusze Google): tabulatory między kolumnami, nowe wiersze — wiersze tabeli
+    function pasteSheet() {
+        const t = project.clipboardText().replace(/\r/g, "").replace(/\n+$/, "");
+        if (t === "") { editor.app.toast("Schowek jest pusty — skopiuj komórki z arkusza", ""); return; }
+        const g = t.split("\n").map(l => l.split("\t").map(c => c.trim()));
+        const C = Math.max(...g.map(r => r.length));
+        for (const r of g) while (r.length < C) r.push("");
+        set({ cells: g, h: Math.round(el.h / Math.max(1, rows) * g.length) });
+    }
 
     function set(patch, done) { project.change(id_, patch, done === undefined ? true : done); }
     function setBg(patch, done) { project.setBackground(Object.assign({}, bg, patch), done === undefined ? true : done); }
@@ -45,18 +78,18 @@ Item {
     }
 
     Text {
-        x: 18; y: 16
+        x: 16; y: 12
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
-            : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+            : ins.type === "adjust" ? "Warstwa korekcyjna" : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
-        font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
+        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
     }
 
     Flickable {
         id: scroll
-        x: 18; y: 50
-        width: parent.width - 36
+        x: 16; y: 36
+        width: parent.width - 32
         height: parent.height - y
         contentHeight: col.height + 24
         clip: true
@@ -65,10 +98,11 @@ Item {
         Column {
             id: col
             width: scroll.width
-            spacing: 18
+            spacing: 6
 
             // ——— Strona ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page"
                 title: "Rozmiar"
                 Row {
@@ -82,6 +116,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page"
                 title: "Tło"
                 Flow {
@@ -131,6 +166,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "page" && ins.projectColors.length > 1
                 title: "Kolory projektu"
                 Text {
@@ -170,6 +206,7 @@ Item {
 
             // ——— Kilka elementów ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "many"
                 title: "Wyrównaj do siebie"
                 Row {
@@ -194,6 +231,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "many"
                 title: "Zaznaczone"
                 Row {
@@ -235,6 +273,7 @@ Item {
 
             // ——— Tekst ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Czcionka"
                 HoverButton {
@@ -310,6 +349,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Odstępy"
                 ValueSlider {
@@ -328,6 +368,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "text"
                 title: "Efekty"
                 Row {
@@ -389,6 +430,7 @@ Item {
 
             // ——— Kształt ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "shape"
                 title: ins.line ? "Linia" : "Kolory"
                 Flow {
@@ -461,8 +503,220 @@ Item {
                 }
             }
 
+            // ——— Warstwa korekcyjna ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "adjust"
+                title: "Korekcja wszystkiego pod spodem"
+                CorrectionPanel {
+                    project: ins.project
+                    el: ins.el
+                    wholePage: true
+                    apply: (p, done) => ins.set(p, done)
+                }
+            }
+
+            // ——— Tabela ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "table"
+                title: "Treść"
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Dwuklik w komórkę na stronie — pisanie (Tab przechodzi dalej). Można też wkleić komórki skopiowane z arkusza."
+                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                }
+                Grid {
+                    id: cellGrid
+                    columns: Math.max(1, ins.cols)
+                    spacing: 4
+                    Repeater {
+                        model: ins.type === "table" && ins.cols <= 5 && ins.rows <= 12 ? ins.rows * ins.cols : 0
+                        delegate: TextBox {
+                            required property int index
+                            readonly property int r: Math.floor(index / ins.cols)
+                            readonly property int c: index % ins.cols
+                            width: (col.width - (ins.cols - 1) * 4) / ins.cols
+                            text: (ins.cells[r] || [])[c] || ""
+                            onEdited: (t, done) => ins.putCell(r, c, t, done)
+                        }
+                    }
+                }
+                Btn { text: "Wklej z arkusza"; icon: "copy"; onClicked: ins.pasteSheet() }
+                Row {
+                    spacing: 6
+                    Text { width: 70; anchors.verticalCenter: parent.verticalCenter; text: "Wiersze"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                    IconToggle { icon: "minus"; enabled: ins.rows > 1; tip: "Usuń ostatni wiersz"; onClicked: ins.resizeTable(-1, 0) }
+                    Text { width: 24; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; text: ins.rows; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    IconToggle { icon: "plus"; tip: "Dodaj wiersz"; onClicked: ins.resizeTable(1, 0) }
+                }
+                Row {
+                    spacing: 6
+                    Text { width: 70; anchors.verticalCenter: parent.verticalCenter; text: "Kolumny"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
+                    IconToggle { icon: "minus"; enabled: ins.cols > 1; tip: "Usuń ostatnią kolumnę"; onClicked: ins.resizeTable(0, -1) }
+                    Text { width: 24; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; text: ins.cols; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    IconToggle { icon: "plus"; tip: "Dodaj kolumnę"; onClicked: ins.resizeTable(0, 1) }
+                }
+            }
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "table"
+                title: "Wygląd tabeli"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Chip { text: "Nagłówek"; on: ins.el.header !== false; onClicked: ins.set({ header: on ? false : null }) }
+                    Chip {
+                        text: "Paski"; on: !!ins.el.stripe
+                        onClicked: ins.set({ stripe: on ? null : "#F2F4F7" })
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "rows", label: "Linie" }, { id: "grid", label: "Siatka" }, { id: "none", label: "Bez linii" }]
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.label
+                            on: (ins.el.lines || "rows") === modelData.id
+                            onClicked: ins.set({ lines: modelData.id })
+                        }
+                    }
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 8
+                    ColorWell {
+                        id: thFill
+                        visible: ins.el.header !== false
+                        label: "Nagłówek"
+                        value: ins.el.headerFill || "#16181D"
+                        onClicked: ins.editor.pickColor(thFill, value, true, (c, done) => ins.set({ headerFill: c }, done))
+                    }
+                    ColorWell {
+                        id: thInk
+                        visible: ins.el.header !== false
+                        label: "Napis nagłówka"
+                        value: ins.el.headerColor || "#FFFFFF"
+                        onClicked: ins.editor.pickColor(thInk, value, false, (c, done) => ins.set({ headerColor: c }, done))
+                    }
+                    ColorWell {
+                        id: tdFill
+                        label: "Tło"
+                        value: ins.el.fill || ""
+                        onClicked: ins.editor.pickColor(tdFill, value, true, (c, done) => ins.set({ fill: c }, done))
+                    }
+                    ColorWell {
+                        id: tdStripe
+                        visible: !!ins.el.stripe
+                        label: "Paski"
+                        value: ins.el.stripe || ""
+                        onClicked: ins.editor.pickColor(tdStripe, value, true, (c, done) => ins.set({ stripe: c === "" ? null : c }, done))
+                    }
+                    ColorWell {
+                        id: tdInk
+                        label: "Tekst"
+                        value: ins.el.color || "#3D4048"
+                        onClicked: ins.editor.pickColor(tdInk, value, false, (c, done) => ins.set({ color: c }, done))
+                    }
+                    ColorWell {
+                        id: tdLine
+                        visible: (ins.el.lines || "rows") !== "none"
+                        label: "Linie"
+                        value: ins.el.stroke || "#D9DCE3"
+                        onClicked: ins.editor.pickColor(tdLine, value, false, (c, done) => ins.set({ stroke: c }, done))
+                    }
+                }
+                Btn {
+                    id: tblFont
+                    text: ins.el.font || "Geist"
+                    icon: "textT"
+                    onClicked: ins.editor.pickFont(tblFont, ins.el.font || "Geist", (f) => ins.set({ font: f }))
+                }
+                Row {
+                    spacing: 2
+                    IconToggle { icon: "alignLeft"; on: (ins.el.align || "left") === "left"; tip: "Do lewej"; onClicked: ins.set({ align: null }) }
+                    IconToggle { icon: "alignCenter"; on: ins.el.align === "center"; tip: "Do środka"; onClicked: ins.set({ align: "center" }) }
+                    IconToggle { icon: "alignRight"; on: ins.el.align === "right"; tip: "Do prawej"; onClicked: ins.set({ align: "right" }) }
+                }
+                ValueSlider {
+                    label: "Wielkość tekstu"
+                    from: 6; to: Math.max(40, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.06)); step: 1
+                    value: ins.el.size || 24
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ size: v }, done)
+                }
+                ValueSlider {
+                    visible: (ins.el.lines || "rows") !== "none"
+                    label: "Grubość linii"
+                    from: 0; to: 12; step: 0.5; decimals: 1
+                    value: ins.el.strokeWidth === undefined ? 2 : ins.el.strokeWidth
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
+                }
+                ValueSlider {
+                    label: "Zaokrąglenie rogów"
+                    from: 0; to: Math.round(Math.min(ins.el.w || 0, ins.el.h || 0) / 4); step: 1
+                    value: ins.el.radius || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ radius: v }, done)
+                }
+            }
+
+            // ——— Warstwa z wypełniania z opisu ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "image" && !!ins.el.generated
+                title: "Wygenerowane z opisu"
+                TextBox { id: genPrompt; text: ins.el.prompt || ""; placeholder: "Opis" }
+                Btn {
+                    width: parent.width
+                    primary: true
+                    icon: "sparkles"
+                    text: "Nowa wersja"
+                    enabled: !Magic.busy
+                    onClicked: Magic.regenerate(ins.project, ins.id_, genPrompt.text)
+                }
+            }
+
+            // ——— Rysunek ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "draw"
+                title: "Pisak"
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: [{ id: "pen", label: "Pisak" }, { id: "marker", label: "Marker" }, { id: "highlighter", label: "Zakreślacz" }, { id: "neon", label: "Neon" }]
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.label
+                            on: (ins.el.pen || "pen") === modelData.id
+                            onClicked: ins.set({ pen: modelData.id })
+                        }
+                    }
+                }
+                ColorWell {
+                    id: drawStroke
+                    label: "Kolor"
+                    value: ins.el.stroke || "#16181D"
+                    onClicked: ins.editor.pickColor(drawStroke, value, false, (c, done) => ins.set({ stroke: c }, done))
+                }
+                ValueSlider {
+                    label: "Grubość"
+                    from: 1; to: Math.max(20, Math.round(Math.min(ins.project.pageWidth, ins.project.pageHeight) * 0.08)); step: 1
+                    value: ins.el.strokeWidth || 8
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
+                }
+            }
+
             // ——— Zdjęcie ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image"
                 title: "Kształt zdjęcia"
                 Grid {
@@ -481,8 +735,7 @@ Item {
                             ArtView {
                                 anchors.centerIn: parent
                                 width: parent.width * 0.56; height: width
-                                element: mk.modelData.shape ? { type: "shape", shape: mk.modelData.shape, w: 100, h: 100, fill: Theme.dark ? "#C9CDD6" : "#5C6170", radius: 0 }
-                                                            : { type: "image", src: "", mask: mk.modelData.mask, w: 100, h: 100 }
+                                element: ({ type: "shape", shape: mk.modelData.shape || mk.modelData.mask, w: 100, h: 100, fill: Theme.dark ? "#C9CDD6" : "#5C6170", radius: 0 })
                                 opacity: mk.on ? 1 : 0.75
                             }
                         }
@@ -495,6 +748,27 @@ Item {
                     value: ins.el.radius || 0
                     suffix: " px"
                     onMoved: (v, done) => ins.set({ radius: v }, done)
+                }
+                Row {
+                    spacing: 8
+                    ColorWell {
+                        id: frameWell
+                        label: ins.el.stroke ? "Obramowanie" : "+ obramowanie"
+                        value: ins.el.stroke || ""
+                        onClicked: ins.editor.pickColor(frameWell, value, true, (c, done) => {
+                            const p = { stroke: c === "" ? null : c };
+                            if (c !== "" && !(ins.el.strokeWidth > 0)) p.strokeWidth = Math.max(2, Math.round(Math.min(ins.el.w, ins.el.h) * 0.03));
+                            ins.set(p, done);
+                        })
+                    }
+                }
+                ValueSlider {
+                    visible: !!ins.el.stroke
+                    label: "Grubość obramowania"
+                    from: 1; to: Math.max(10, Math.round(Math.min(ins.el.w || 0, ins.el.h || 0) * 0.15)); step: 1
+                    value: ins.el.strokeWidth || 0
+                    suffix: " px"
+                    onMoved: (v, done) => ins.set({ strokeWidth: v }, done)
                 }
                 Text {
                     visible: !!ins.el.credit
@@ -517,6 +791,7 @@ Item {
             }
             // Narzędzia AI — małe modele na komputerze, pobierane przy pierwszym użyciu
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src && Magic.available
                 title: "Magia AI"
                 Btn {
@@ -529,21 +804,19 @@ Item {
                 }
                 Btn {
                     width: parent.width
-                    icon: "brush"
-                    text: "Gumka i wyodrębnianie"
+                    icon: "layers"
+                    text: "Wyodrębnij główny obiekt"
                     enabled: !Magic.busy
-                    onClicked: ins.editor.startMagic()
+                    onClicked: ins.editor.aiRun("extract")
                 }
-                Text {
+                Btn {
                     width: parent.width
-                    wrapMode: Text.WordWrap
-                    readonly property int mb: ins.id_ !== "" && !Magic.busy ? Magic.downloadMB("background") + Magic.downloadMB("object") + Magic.downloadMB("erase") : 0
-                    text: "Usuwa tło, niechciane rzeczy ze zdjęcia albo wycina obiekt jako osobny element. Działa na tym komputerze — zdjęcia nigdzie nie wychodzą."
-                          + (mb > 0 ? " Za pierwszym razem pobierze modele (do " + mb + " MB)." : "")
-                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; lineHeight: 1.2
+                    text: "Wszystkie narzędzia AI…"
+                    onClicked: ins.editor.setTool("magic")
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Kadr"
                 Row {
@@ -565,6 +838,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Filtr"
                 Grid {
@@ -602,6 +876,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: "Poprawki"
                 Row {
@@ -618,6 +893,17 @@ Item {
                         label: "Światła"
                         value: ins.el.duo2 || "#FFB3C7"
                         onClicked: ins.editor.pickColor(duoWell2, value, false, (c, done) => ins.set({ duo2: c }, done))
+                    }
+                }
+                Btn {
+                    width: parent.width
+                    icon: "sparkles"
+                    text: "Popraw automatycznie"
+                    tip: "Dobiera jasność, kontrast i nasycenie do tego zdjęcia"
+                    onClicked: {
+                        const p = ins.project.autoEnhance(ins.el.src || "");
+                        for (const k in p) if (Math.abs(p[k]) < 0.01) p[k] = null;
+                        ins.set(p);
                     }
                 }
                 ValueSlider {
@@ -655,6 +941,16 @@ Item {
                     shown: value * 100
                     onMoved: (v, done) => ins.set({ vignette: v < 0.01 ? null : v }, done)
                 }
+                Section {
+                    collapsible: true
+                    collapsed: true
+                    title: "Zaawansowane: tony, kolor, krzywa"
+                    CorrectionPanel {
+                        project: ins.project
+                        el: ins.el
+                        apply: (p, done) => ins.set(p, done)
+                    }
+                }
                 Btn {
                     visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter || ins.el.blur || ins.el.vignette)
                     text: "Przywróć oryginał"
@@ -662,6 +958,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "image" && !!ins.el.src
                 title: Magic.available ? "Jednolite tło (bez AI)" : "Tło zdjęcia"
                 Chip {
@@ -687,6 +984,7 @@ Item {
 
             // ——— Kod QR i kreskowy ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "code"
                 title: "Rodzaj"
                 Flow {
@@ -749,6 +1047,7 @@ Item {
 
             // ——— Wykres ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "chart"
                 title: "Rodzaj wykresu"
                 Flow {
@@ -766,6 +1065,7 @@ Item {
                 }
             }
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "chart"
                 title: "Dane"
                 Repeater {
@@ -822,6 +1122,7 @@ Item {
 
             // ——— Ikona, naklejka ———
             Section {
+                collapsible: true; divider: true
                 visible: ins.type === "vector"
                 title: ins.recolor ? "Kolor" : "Naklejka"
                 Row {
@@ -846,7 +1147,8 @@ Item {
 
             // ——— Wspólne ———
             Section {
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked" && !ins.line
+                collapsible: true; divider: true
+                visible: ins.placed && !ins.line
                 title: "Cień"
                 Row {
                     spacing: 8
@@ -898,7 +1200,8 @@ Item {
                 }
             }
             Section {
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
+                collapsible: true; divider: true
+                visible: ins.placed
                 title: "Wygląd"
                 ValueSlider {
                     label: "Przezroczystość"
@@ -914,9 +1217,11 @@ Item {
                     suffix: "°"
                     onMoved: (v, done) => ins.set({ rotation: v }, done)
                 }
+                Btn { width: parent.width; icon: "crop"; text: "Przekształć rogami"; tip: "Perspektywa i zniekształcenie (Ctrl+T)"; onClicked: ins.editor.startWarp() }
             }
             Section {
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
+                collapsible: true; divider: true
+                visible: ins.placed
                 title: "Na stronie"
                 Row {
                     spacing: 2

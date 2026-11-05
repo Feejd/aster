@@ -20,6 +20,62 @@ Item {
     property string magicTool: "object"
     property real brushSize: 36                 // piksele ekranu
     property bool magicSubtract: false
+    // Rysowanie odręczne: pen | marker | highlighter | neon | eraser ("" — wyłączone); grubość w pikselach strony
+    property string drawTool: ""
+    property color drawColor: "#16181D"
+    property real drawWidth: 8
+    readonly property bool drawOn: drawTool !== ""
+    // Warstwy: tryby mieszania i korekcje wymagają składania całej strony
+    property bool composite: false
+    // Malowanie po masce warstwy
+    property string maskEdit: ""
+    property bool maskReveal: false             // false — pędzel ukrywa, true — przywraca
+    property real maskSize: 60                  // piksele ekranu
+    property real maskSoft: 0.5
+    readonly property bool maskOn: maskEdit !== "" && maskEdit === selected
+    // Zaznaczanie pikseli: rect | ellipse | lasso | wand | color | object ("" — inne narzędzie)
+    property string selTool: ""
+    property string selMode: "new"
+    property real selFeather: 0
+    property real selTolerance: 0.12
+    property bool selLayerOnly: false
+    readonly property bool selOn: selTool !== ""
+    property string selHint: ""
+    signal selAction(string action)
+    signal generate(string prompt)
+    // Malowanie i retusz po pikselach: brush | eraser | fill | pick | heal | clone | dodge | burn | smudge | blur
+    property string paintTool: ""
+    property color paintColor: "#16181D"
+    property real paintSize: 40                 // piksele strony
+    property real paintHardness: 0.7
+    property real paintStrength: 1
+    property real fillTolerance: 0.15
+    readonly property bool paintOn: paintTool !== ""
+    signal colorPicked(string color)
+    signal paintMessage(string text)
+    // Warstwa, po której malujemy: zaznaczone zdjęcie; bez niego pędzel i wypełnianie zakładają nową warstwę pikselową
+    function paintTarget() {
+        const o = current;
+        if (selected !== "" && o.type === "image" && o.src && !o.locked && !o.hidden) return selected;
+        if (paintTool === "brush" || paintTool === "fill") {
+            const id = project.newPixelLayer();
+            select(id);
+            return id;
+        }
+        paintMessage("Zaznacz zdjęcie albo warstwę pikselową, na której chcesz pracować");
+        return "";
+    }
+    onPaintOnChanged: if (paintOn && Magic.element !== "") Magic.end()
+    // Swobodne przekształcenie: przeciąganie czterech rogów warstwy
+    property string warpEdit: ""
+    readonly property bool warpOn: warpEdit !== "" && warpEdit === selected
+    function warpPoints() {
+        const o = current;
+        return o.warp && o.warp.length === 8 ? o.warp.slice() : [0, 0, o.w, 0, o.w, o.h, 0, o.h];
+    }
+    property var cellEdit: null                 // pisanie w komórce tabeli: { id, r, c }
+    signal drawFinished()
+    onDrawOnChanged: if (drawOn) { if (Magic.element !== "") Magic.end(); clearSelection(); }
     property rect marquee: Qt.rect(0, 0, 0, 0)  // ramka zaznaczania (piksele strony)
     property bool marqueeOn: false
     property var marqueeBase: []
@@ -50,6 +106,7 @@ Item {
     Keys.onReleased: (e) => { if (e.key === Qt.Key_Space && !e.isAutoRepeat) { panning = false; e.accepted = true; } }
 
     function refresh() {
+        composite = project.usesCompositing();
         current = selected !== "" ? project.get(selected) : ({});
         if (selected !== "" && current.id === undefined) selected = "";
         const alive = selection.filter(id => project.indexOf(id) >= 0);
@@ -58,6 +115,9 @@ Item {
         group = selection.length > 1 ? bounds(selection) : ({});
     }
     onSelectedChanged: {
+        if (maskEdit !== "" && maskEdit !== selected) maskEdit = "";
+        if (warpEdit !== "" && warpEdit !== selected) warpEdit = "";
+        if (cellEdit && cellEdit.id !== selected) cellEdit = null;
         if (Magic.element !== "" && selected !== Magic.element) Magic.end();
         if (!syncing) selection = selected !== "" ? [selected] : [];
         refresh();
@@ -90,7 +150,7 @@ Item {
     }
     function selectAll() {
         stopEditing();
-        setSelection(project.document().elements.filter(o => !o.hidden && !o.locked).map(o => o.id));
+        setSelection(project.document().elements.filter(o => !o.hidden && !o.locked && o.type !== "adjust").map(o => o.id));
     }
     function clearSelection() {
         stopEditing();
@@ -99,9 +159,79 @@ Item {
     }
     // Esc: najpierw kończy kadrowanie, potem zdejmuje zaznaczenie
     function cancel() {
-        if (magicOn) Magic.end();
+        if (warpEdit !== "") warpEdit = "";
+        else if (maskEdit !== "") maskEdit = "";
+        else if (cellEdit) cellEdit = null;
+        else if (Selection.active) Selection.clear();
+        else if (selOn) drawFinished();
+        else if (drawOn || paintOn) drawFinished();
+        else if (magicOn) Magic.end();
         else if (cropping !== "") cropping = "";
         else clearSelection();
+    }
+    // ——— Tabela: pisanie w komórce ———
+    function editCell(id, r, c) {
+        const o = project.get(id);
+        const cells = o.cells || [];
+        if (r < 0 || r >= cells.length) return;
+        if (selected !== id) select(id);
+        cellEdit = { id: id, r: r, c: c };
+    }
+    // Tab / Enter: następna komórka; za ostatnią — nowy wiersz
+    function nextCell(down, back) {
+        if (!cellEdit) return;
+        const o = project.get(cellEdit.id);
+        const g = (o.cells || []).map(r => r.slice());
+        const C = Math.max(...g.map(r => r.length));
+        let r = cellEdit.r, c = cellEdit.c;
+        if (down) r += 1;
+        else if (back) { c -= 1; if (c < 0) { c = C - 1; r -= 1; } }
+        else { c += 1; if (c >= C) { c = 0; r += 1; } }
+        if (r < 0) return;
+        if (r >= g.length) {
+            g.push(new Array(C).fill(""));
+            project.change(o.id, { cells: g, h: Math.round(o.h / (g.length - 1) * g.length) });
+        }
+        cellEdit = { id: o.id, r: r, c: c };
+    }
+    // ——— Rysowanie ———
+    // Kreska z punktów strony → element „draw” (punkty w częściach pola)
+    function addDrawing(pts) {
+        if (pts.length === 0) return;
+        const sw = drawWidth;
+        const pad = drawTool === "neon" ? sw * 2.2 : sw / 2 + 1;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const q of pts) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+        x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+        const w = x1 - x0, h = y1 - y0;
+        const flat = [];
+        for (const q of pts) flat.push(Math.round((q[0] - x0) / w * 10000) / 10000, Math.round((q[1] - y0) / h * 10000) / 10000);
+        project.add({ type: "draw", pen: drawTool, stroke: String(drawColor), strokeWidth: Math.round(sw * 10) / 10, points: flat,
+                      x: Math.round(x0 * 10) / 10, y: Math.round(y0 * 10) / 10, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 });
+    }
+    // Gumka: usuwa rysunki, przez które przechodzi kursor (punkt strony, promień w pikselach strony)
+    function eraseAt(px, py, radius) {
+        const all = project.document().elements;
+        for (let i = all.length - 1; i >= 0; --i) {
+            const o = all[i];
+            if (o.type !== "draw" || o.hidden || o.locked) continue;
+            const r = -(o.rotation || 0) * Math.PI / 180;
+            const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+            const lx = (px - cx) * Math.cos(r) - (py - cy) * Math.sin(r) + o.w / 2;
+            const ly = (px - cx) * Math.sin(r) + (py - cy) * Math.cos(r) + o.h / 2;
+            const reach = radius + (o.strokeWidth || 8) / 2;
+            if (lx < -reach || ly < -reach || lx > o.w + reach || ly > o.h + reach) continue;
+            const p = o.points || [];
+            let hit = false;
+            for (let k = 0; k + 1 < p.length && !hit; k += 2) {
+                const ax = p[k] * o.w, ay = p[k + 1] * o.h;
+                const bx = k + 3 < p.length ? p[k + 2] * o.w : ax, by = k + 3 < p.length ? p[k + 3] * o.h : ay;
+                const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+                const t = len > 0 ? Math.max(0, Math.min(1, ((lx - ax) * dx + (ly - ay) * dy) / len)) : 0;
+                hit = Math.hypot(lx - ax - t * dx, ly - ay - t * dy) <= reach;
+            }
+            if (hit) project.remove(o.id);
+        }
     }
     // Prostokąt (bez obrotu) obejmujący elementy
     function bounds(ids) {
@@ -122,7 +252,7 @@ Item {
         const all = project.document().elements;
         for (let i = all.length - 1; i >= 0; --i) {
             const o = all[i];
-            if (o.hidden) continue;
+            if (o.hidden || o.type === "adjust") continue;
             const r = -(o.rotation || 0) * Math.PI / 180;
             const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
             const lx = (px - cx) * Math.cos(r) - (py - cy) * Math.sin(r), ly = (px - cx) * Math.sin(r) + (py - cy) * Math.cos(r);
@@ -161,6 +291,7 @@ Item {
     Connections {
         target: stage.project
         function onDataChanged() { stage.refresh(); }
+        function onPageChanged() { stage.refresh(); }
         function onReset() { stage.editing = ""; stage.refresh(); }
         function onRowsRemoved() { stage.refresh(); }
         function onCountChanged() { stage.refresh(); }
@@ -472,6 +603,14 @@ Item {
                 id: layer
                 anchors.fill: parent
                 clip: true
+                // Strona złożona w całości, gdy są tryby mieszania albo korekcje; elementy niżej zostają do obsługi myszy
+                PageView {
+                    anchors.fill: parent
+                    visible: stage.composite
+                    project: stage.project
+                    page: stage.project.currentPage
+                    hidden: stage.editing
+                }
                 Repeater {
                     model: stage.project
                     delegate: Item {
@@ -479,7 +618,7 @@ Item {
                         required property var element
                         readonly property string uid: element.id
                         readonly property bool cropping: stage.cropping === uid
-                        visible: !element.hidden
+                        visible: !element.hidden && element.type !== "adjust"
                         x: element.x * stage.zoom
                         y: element.y * stage.zoom
                         width: element.w * stage.zoom
@@ -509,7 +648,7 @@ Item {
                             anchors.margins: -bleed * stage.zoom       // miękki cień wystaje poza pole
                             project: stage.project
                             element: d.element
-                            visible: stage.editing !== d.uid
+                            visible: stage.editing !== d.uid && !stage.composite
                         }
                         // Obwódka każdego z kilku zaznaczonych
                         Rectangle {
@@ -551,6 +690,13 @@ Item {
                                 starts = [];
                                 start = mapToItem(page, e.x, e.y);
                                 startEl = d.element;
+                                // Pisanie w tabeli: kliknięcie w inną komórkę przenosi pisanie tam
+                                if (stage.cellEdit && stage.cellEdit.id === d.uid && e.button === Qt.LeftButton) {
+                                    const cells = d.element.cells || [];
+                                    const C = Math.max(1, ...cells.map(r => r.length));
+                                    stage.editCell(d.uid, Math.floor(e.y / height * cells.length), Math.min(C - 1, Math.floor(e.x / width * C)));
+                                    return;
+                                }
                                 if (e.button === Qt.LeftButton && (e.modifiers & Qt.ShiftModifier)) {
                                     stage.toggle(d.uid);
                                     return;
@@ -600,9 +746,14 @@ Item {
                                 if (moved) stage.project.commit();
                                 else if (pickOne) stage.select(d.uid);
                             }
-                            onDoubleClicked: {
+                            onDoubleClicked: (mouse) => {
                                 if (d.element.locked) return;
                                 if (d.element.type === "text") stage.startEditing(d.uid);
+                                else if (d.element.type === "table") {
+                                    const cells = d.element.cells || [];
+                                    const C = Math.max(1, ...cells.map(r => r.length));
+                                    stage.editCell(d.uid, Math.floor(mouse.y / height * cells.length), Math.min(C - 1, Math.floor(mouse.x / width * C)));
+                                }
                                 else if (d.element.type === "image") stage.cropping = d.cropping ? "" : d.uid;
                             }
                         }
@@ -780,8 +931,8 @@ Item {
                 id: sel
                 readonly property var el: stage.current
                 readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
-                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn     // bez uchwytów
-                visible: stage.selected !== "" && el.id !== undefined && !el.hidden
+                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn || stage.paintOn || stage.selOn     // bez uchwytów
+                visible: stage.selected !== "" && el.id !== undefined && !el.hidden && el.type !== "adjust" && !el.warp && !stage.warpOn
                 x: (el.x || 0) * stage.zoom
                 y: (el.y || 0) * stage.zoom
                 width: (el.w || 0) * stage.zoom
@@ -927,7 +1078,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !stage.selOn && !stage.warpOn && !(single && el.type === "adjust")
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -944,6 +1095,7 @@ Item {
                     anchors.centerIn: parent
                     spacing: 2
                     ToolBtn { visible: quickBar.single && quickBar.el.type === "text"; icon: "pencil"; tip: "Edytuj tekst (Enter)"; onClicked: stage.quickAction("edit") }
+                    ToolBtn { visible: quickBar.single && quickBar.el.type === "table"; icon: "pencil"; tip: "Pisz w komórkach (dwuklik w komórkę)"; onClicked: stage.editCell(stage.selected, 0, 0) }
                     ToolBtn {
                         visible: quickBar.single && quickBar.el.type === "image" && !!quickBar.el.src && Magic.available
                         icon: "sparkles"; tip: "Usuń tło (AI)"; enabled: !Magic.busy
@@ -1094,6 +1246,484 @@ Item {
                     }
                 }
             }
+
+            // ——— Pisanie w komórce tabeli ———
+            Item {
+                id: cellBox
+                readonly property var el: stage.cellEdit ? stage.project.get(stage.cellEdit.id) : ({})
+                readonly property var cells: el.cells || []
+                readonly property int cols: { let n = 1; for (const r of cells) n = Math.max(n, r.length); return n; }
+                visible: !!stage.cellEdit && el.id !== undefined
+                x: (el.x || 0) * stage.zoom
+                y: (el.y || 0) * stage.zoom
+                width: (el.w || 0) * stage.zoom
+                height: (el.h || 0) * stage.zoom
+                rotation: el.rotation || 0
+                z: 21
+                Rectangle {
+                    id: cellRect
+                    readonly property real cw: cellBox.width / cellBox.cols
+                    readonly property real rh: cellBox.height / Math.max(1, cellBox.cells.length)
+                    readonly property bool head: cellBox.el.header !== false && stage.cellEdit && stage.cellEdit.r === 0
+                    x: stage.cellEdit ? stage.cellEdit.c * cw : 0
+                    y: stage.cellEdit ? stage.cellEdit.r * rh : 0
+                    width: cw; height: rh
+                    color: head ? (cellBox.el.headerFill || "#16181D") : (cellBox.el.fill || "white")
+                    border.width: 2; border.color: Theme.accent
+                    TextInput {
+                        id: cellInput
+                        readonly property real pad: Math.min((cellBox.el.size || 24) * 0.7, cellBox.el.w / cellBox.cols * 0.15) * stage.zoom
+                        x: pad; width: parent.width - 2 * pad
+                        anchors.verticalCenter: parent.verticalCenter
+                        clip: true
+                        horizontalAlignment: cellBox.el.align === "center" ? TextInput.AlignHCenter : cellBox.el.align === "right" ? TextInput.AlignRight : TextInput.AlignLeft
+                        color: cellRect.head ? (cellBox.el.headerColor || "white") : (cellBox.el.color || "#3D4048")
+                        selectionColor: Theme.accent
+                        selectByMouse: true
+                        font.family: cellBox.el.font || "Geist"
+                        font.pixelSize: Math.max(6, (cellBox.el.size || 24) * stage.zoom)
+                        font.weight: cellRect.head ? Font.Bold : Font.Normal
+                        property bool loading: false
+                        function load() {
+                            if (!stage.cellEdit) return;
+                            loading = true;
+                            text = (cellBox.cells[stage.cellEdit.r] || [])[stage.cellEdit.c] || "";
+                            loading = false;
+                            selectAll();
+                            forceActiveFocus();
+                        }
+                        onTextEdited: {
+                            const g = cellBox.cells.map(r => { const o = r.slice(); while (o.length < cellBox.cols) o.push(""); return o; });
+                            g[stage.cellEdit.r][stage.cellEdit.c] = text;
+                            stage.project.change(stage.cellEdit.id, { cells: g }, false);
+                        }
+                        Keys.onTabPressed: { stage.project.commit(); stage.nextCell(false, false); }
+                        Keys.onBacktabPressed: { stage.project.commit(); stage.nextCell(false, true); }
+                        Keys.onReturnPressed: { stage.project.commit(); stage.nextCell(true, false); }
+                        Keys.onEnterPressed: { stage.project.commit(); stage.nextCell(true, false); }
+                        Keys.onEscapePressed: { stage.project.commit(); stage.cellEdit = null; stage.forceActiveFocus(); }
+                        onActiveFocusChanged: if (!activeFocus) stage.project.commit()
+                    }
+                }
+                Connections {
+                    target: stage
+                    function onCellEditChanged() { if (stage.cellEdit) Qt.callLater(cellInput.load); else stage.project.commit(); }
+                }
+            }
+
+            // ——— Swobodne przekształcenie ———
+            Item {
+                id: warpBox
+                readonly property var el: stage.current
+                visible: stage.warpOn
+                x: (el.x || 0) * stage.zoom
+                y: (el.y || 0) * stage.zoom
+                width: (el.w || 0) * stage.zoom
+                height: (el.h || 0) * stage.zoom
+                rotation: el.rotation || 0
+                z: 23
+                readonly property var pts: stage.warpOn ? stage.warpPoints() : [0, 0, 0, 0, 0, 0, 0, 0]
+                onPtsChanged: warpLines.requestPaint()
+                Canvas {
+                    id: warpLines
+                    anchors.fill: parent
+                    anchors.margins: -2000
+                    onPaint: {
+                        const c = getContext("2d"), p = warpBox.pts, z = stage.zoom, o = 2000;
+                        c.reset();
+                        c.beginPath();
+                        for (let i = 0; i < 4; ++i) { if (i === 0) c.moveTo(p[0] * z + o, p[1] * z + o); else c.lineTo(p[2 * i] * z + o, p[2 * i + 1] * z + o); }
+                        c.closePath();
+                        c.lineWidth = 3; c.strokeStyle = "rgba(0, 0, 0, 0.35)"; c.stroke();
+                        c.lineWidth = 1.5; c.strokeStyle = Theme.accent; c.stroke();
+                    }
+                }
+                Repeater {
+                    model: 4
+                    delegate: Rectangle {
+                        id: wh
+                        required property int index
+                        x: warpBox.pts[2 * index] * stage.zoom - 7
+                        y: warpBox.pts[2 * index + 1] * stage.zoom - 7
+                        width: 14; height: 14; radius: 7
+                        color: "white"
+                        border.width: 2; border.color: Theme.accent
+                        MouseArea {
+                            anchors.fill: parent; anchors.margins: -8
+                            cursorShape: Qt.CrossCursor
+                            onPositionChanged: (e) => {
+                                if (!pressed) return;
+                                const q = mapToItem(warpBox, e.x, e.y), list = warpBox.pts.slice();
+                                list[2 * wh.index] = Math.round(q.x / stage.zoom * 10) / 10;
+                                list[2 * wh.index + 1] = Math.round(q.y / stage.zoom * 10) / 10;
+                                stage.project.change(stage.warpEdit, { warp: list }, false);
+                            }
+                            onReleased: stage.project.commit()
+                        }
+                    }
+                }
+            }
+
+            // ——— Zaznaczanie pikseli ———
+            Item {
+                id: selBox
+                anchors.fill: parent
+                visible: stage.selOn
+                z: 22
+                Rectangle {
+                    id: selRect
+                    visible: false
+                    color: "transparent"
+                    radius: selArea.kind === "ellipse" ? Math.max(width, height) : 0
+                    border.width: 1; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1; radius: parent.radius; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.6) }
+                }
+                Canvas {
+                    id: selCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const c = getContext("2d");
+                        c.reset();
+                        if (pts.length < 2) return;
+                        c.beginPath();
+                        c.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) c.lineTo(q[0], q[1]);
+                        c.lineWidth = 3; c.strokeStyle = "rgba(0, 0, 0, 0.5)"; c.stroke();
+                        c.lineWidth = 1; c.strokeStyle = "white"; c.stroke();
+                    }
+                }
+                MouseArea {
+                    id: selArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    enabled: !Magic.busy
+                    cursorShape: Qt.CrossCursor
+                    property string kind: ""
+                    property string mode: "new"
+                    property bool moving: false
+                    property point start
+                    function pos(e) { return Qt.point(e.x - 60, e.y - 60); }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        const p = pos(e), k = 1 / stage.zoom;
+                        const shift = !!(e.modifiers & Qt.ShiftModifier), alt = !!(e.modifiers & Qt.AltModifier);
+                        mode = shift && alt ? "intersect" : shift ? "add" : alt ? "subtract" : stage.selMode;
+                        kind = stage.selTool;
+                        start = p;
+                        moving = mode === "new" && (kind === "rect" || kind === "ellipse" || kind === "lasso") && Selection.contains(p.x * k, p.y * k);
+                        if (kind === "lasso" && !moving) { selCanvas.pts = [[p.x, p.y]]; selCanvas.requestPaint(); }
+                    }
+                    onPositionChanged: (e) => {
+                        if (!pressed) return;
+                        const p = pos(e);
+                        if (moving) { ants.x = p.x - start.x; ants.y = p.y - start.y; return; }
+                        if (kind === "rect" || kind === "ellipse") {
+                            selRect.x = Math.min(p.x, start.x); selRect.y = Math.min(p.y, start.y);
+                            selRect.width = Math.abs(p.x - start.x); selRect.height = Math.abs(p.y - start.y);
+                            selRect.visible = true;
+                        } else if (kind === "lasso") {
+                            const pts = selCanvas.pts, last = pts[pts.length - 1];
+                            if (Math.hypot(p.x - last[0], p.y - last[1]) < 2) return;
+                            selCanvas.pts = pts.concat([[p.x, p.y]]);
+                            selCanvas.requestPaint();
+                        }
+                    }
+                    onReleased: (e) => {
+                        const k = 1 / stage.zoom, p = pos(e);
+                        selRect.visible = false;
+                        if (moving) {
+                            ants.x = 0; ants.y = 0;
+                            moving = false;
+                            if (Math.hypot(p.x - start.x, p.y - start.y) >= 2) Selection.translate((p.x - start.x) * k, (p.y - start.y) * k);
+                            else Selection.clear();
+                            return;
+                        }
+                        if (kind === "rect" || kind === "ellipse") {
+                            const w = Math.abs(p.x - start.x), h = Math.abs(p.y - start.y);
+                            if (w >= 3 && h >= 3)
+                                Selection.shape(stage.project, Math.min(p.x, start.x) * k, Math.min(p.y, start.y) * k, w * k, h * k, kind === "ellipse", mode, stage.selFeather);
+                            else if (mode === "new") Selection.clear();
+                        } else if (kind === "lasso") {
+                            if (selCanvas.pts.length >= 3) Selection.lasso(stage.project, selCanvas.pts.map(q => [q[0] * k, q[1] * k]), mode, stage.selFeather);
+                            else if (mode === "new") Selection.clear();
+                            selCanvas.pts = [];
+                            selCanvas.requestPaint();
+                        } else if (kind === "wand" || kind === "color") {
+                            Selection.wand(stage.project, p.x * k, p.y * k, stage.selTolerance, kind === "wand", stage.selLayerOnly ? stage.selected : "", mode, 0);
+                        } else if (kind === "object") {
+                            const q = mapToItem(stage, e.x, e.y), o = stage.elementAt(q.x, q.y);
+                            if (o && o.type === "image" && o.src) Magic.selectObject(stage.project, o.id, p.x * k, p.y * k, mode);
+                            else stage.paintMessage("Kliknij zdjęcie — AI zaznacza rzeczy na zdjęciach");
+                        }
+                    }
+                }
+            }
+            // Maszerujące mrówki: widać je też przy malowaniu i korekcjach
+            SelectionView {
+                id: ants
+                width: page.width; height: page.height
+                visible: Selection.active
+                z: 30
+                Connections { target: Selection; function onChanged() { ants.rebuild(); } }
+            }
+
+            // ——— Malowanie i retusz ———
+            Item {
+                id: paintBox
+                anchors.fill: parent
+                visible: stage.paintOn
+                z: 20
+                Canvas {
+                    id: healCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const c = getContext("2d");
+                        c.reset();
+                        if (pts.length === 0) return;
+                        c.beginPath();
+                        c.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) c.lineTo(q[0], q[1]);
+                        if (pts.length === 1) c.lineTo(pts[0][0] + 0.01, pts[0][1]);
+                        c.lineCap = "round"; c.lineJoin = "round";
+                        c.lineWidth = stage.paintSize * stage.zoom;
+                        c.strokeStyle = "rgba(255, 61, 154, 0.5)";
+                        c.stroke();
+                    }
+                }
+                // Źródło stempla
+                Item {
+                    visible: stage.paintTool === "clone" && Retouch.hasSource
+                    x: Retouch.source.x * stage.zoom; y: Retouch.source.y * stage.zoom
+                    Rectangle { x: -9; y: -0.75; width: 18; height: 1.5; color: "white"; border.width: 0.5; border.color: "black" }
+                    Rectangle { x: -0.75; y: -9; width: 1.5; height: 18; color: "white"; border.width: 0.5; border.color: "black" }
+                }
+                Rectangle {
+                    id: paintRing
+                    readonly property real d: Math.max(6, stage.paintSize * stage.zoom)
+                    visible: paintArea.containsMouse && stage.paintTool !== "pick" && stage.paintTool !== "fill"
+                    width: d; height: d; radius: d / 2
+                    color: "transparent"
+                    border.width: 1.5; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.5) }
+                }
+                MouseArea {
+                    id: paintArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    hoverEnabled: true
+                    enabled: !Magic.busy
+                    cursorShape: stage.paintTool === "pick" || stage.paintTool === "fill" ? Qt.CrossCursor : Qt.BlankCursor
+                    property string target: ""
+                    function pos(e) { return Qt.point((e.x - 60) / stage.zoom, (e.y - 60) / stage.zoom); }
+                    function ring(e) {
+                        paintRing.x = e.x - 60 - paintRing.width / 2;
+                        paintRing.y = e.y - 60 - paintRing.height / 2;
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        ring(e);
+                        target = "";
+                        const p = pos(e), t = stage.paintTool;
+                        if (t === "pick") { stage.colorPicked(stage.project.colorAt(p.x, p.y)); return; }
+                        const id = stage.paintTarget();
+                        if (id === "") return;
+                        Retouch.color = String(stage.paintColor);
+                        Retouch.size = stage.paintSize;
+                        Retouch.hardness = stage.paintHardness;
+                        Retouch.strength = stage.paintStrength;
+                        if (t === "fill") { Retouch.fill(stage.project, id, p.x, p.y, stage.fillTolerance); return; }
+                        if (t === "heal") {
+                            target = id;
+                            healCanvas.pts = [[e.x - 60, e.y - 60]];
+                            healCanvas.requestPaint();
+                            return;
+                        }
+                        Retouch.tool = t;
+                        if (t === "clone" && (e.modifiers & Qt.AltModifier)) { Retouch.setSource(stage.project, id, p.x, p.y); return; }
+                        if (Retouch.press(stage.project, id, p.x, p.y)) target = id;
+                    }
+                    onPositionChanged: (e) => {
+                        ring(e);
+                        if (!pressed || target === "") return;
+                        const p = pos(e);
+                        if (stage.paintTool === "heal") {
+                            const pts = healCanvas.pts, last = pts[pts.length - 1];
+                            if (Math.hypot(e.x - 60 - last[0], e.y - 60 - last[1]) < 2) return;
+                            healCanvas.pts = pts.concat([[e.x - 60, e.y - 60]]);
+                            healCanvas.requestPaint();
+                        } else {
+                            Retouch.move(p.x, p.y);
+                        }
+                    }
+                    onReleased: {
+                        if (target === "") return;
+                        if (stage.paintTool === "heal") {
+                            Magic.heal(stage.project, target, healCanvas.pts.map(q => [q[0] / stage.zoom, q[1] / stage.zoom]), stage.paintSize);
+                            healCanvas.pts = [];
+                            healCanvas.requestPaint();
+                        } else {
+                            Retouch.release();
+                        }
+                        target = "";
+                    }
+                }
+            }
+
+            // ——— Malowanie po masce warstwy ———
+            Item {
+                id: maskBox
+                readonly property var el: stage.current
+                readonly property bool whole: el.type === "adjust"
+                visible: stage.maskOn
+                x: whole ? 0 : (el.x || 0) * stage.zoom
+                y: whole ? 0 : (el.y || 0) * stage.zoom
+                width: whole ? page.width : (el.w || 0) * stage.zoom
+                height: whole ? page.height : (el.h || 0) * stage.zoom
+                rotation: whole ? 0 : el.rotation || 0
+                z: 20
+                Rectangle {
+                    anchors.fill: parent; anchors.margins: -1
+                    color: "transparent"
+                    border.width: 1.5; border.color: Theme.accent
+                }
+                Canvas {
+                    id: maskCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const c = getContext("2d");
+                        c.reset();
+                        if (pts.length === 0) return;
+                        c.beginPath();
+                        c.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) c.lineTo(q[0], q[1]);
+                        if (pts.length === 1) c.lineTo(pts[0][0] + 0.01, pts[0][1]);
+                        c.lineCap = "round"; c.lineJoin = "round";
+                        c.lineWidth = stage.maskSize;
+                        c.strokeStyle = stage.maskReveal ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 40, 80, 0.5)";
+                        c.stroke();
+                    }
+                }
+                Rectangle {
+                    id: maskRing
+                    visible: maskArea.containsMouse
+                    width: stage.maskSize; height: width; radius: width / 2
+                    color: "transparent"
+                    border.width: 1.5; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.45) }
+                }
+                MouseArea {
+                    id: maskArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.BlankCursor
+                    onPositionChanged: (e) => {
+                        maskRing.x = e.x - maskRing.width / 2;
+                        maskRing.y = e.y - maskRing.height / 2;
+                        if (!pressed) return;
+                        const pts = maskCanvas.pts, last = pts[pts.length - 1];
+                        if (last && Math.hypot(e.x - last[0], e.y - last[1]) < 2) return;
+                        maskCanvas.pts = pts.concat([[e.x, e.y]]);
+                        maskCanvas.requestPaint();
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        maskCanvas.pts = [[e.x, e.y]];
+                        maskCanvas.requestPaint();
+                    }
+                    onReleased: {
+                        stage.project.maskStroke(stage.maskEdit, maskCanvas.pts.map(q => [q[0] / width, q[1] / height]),
+                                                 stage.maskSize / width, stage.maskReveal, stage.maskSoft);
+                        maskCanvas.pts = [];
+                        maskCanvas.requestPaint();
+                    }
+                }
+            }
+
+            // ——— Rysowanie odręczne ———
+            Item {
+                id: drawBox
+                anchors.fill: parent
+                visible: stage.drawOn
+                z: 20
+                Canvas {
+                    id: drawCanvas
+                    anchors.fill: parent
+                    anchors.margins: -400               // kreska może wyjść poza stronę
+                    property var pts: []
+                    onPaint: {
+                        const ctx = getContext("2d");
+                        ctx.reset();
+                        if (pts.length === 0 || stage.drawTool === "eraser") return;
+                        const o = 400, t = stage.drawTool;
+                        const lw = stage.drawWidth * stage.zoom;
+                        ctx.beginPath();
+                        ctx.moveTo(pts[0][0] + o, pts[0][1] + o);
+                        if (pts.length === 1) ctx.lineTo(pts[0][0] + o + 0.01, pts[0][1] + o);
+                        for (let i = 1; i < pts.length - 1; ++i)
+                            ctx.quadraticCurveTo(pts[i][0] + o, pts[i][1] + o, (pts[i][0] + pts[i + 1][0]) / 2 + o, (pts[i][1] + pts[i + 1][1]) / 2 + o);
+                        if (pts.length > 1) ctx.lineTo(pts[pts.length - 1][0] + o, pts[pts.length - 1][1] + o);
+                        ctx.lineCap = t === "highlighter" ? "butt" : "round";
+                        ctx.lineJoin = t === "highlighter" ? "bevel" : "round";
+                        ctx.lineWidth = lw;
+                        ctx.strokeStyle = stage.drawColor;
+                        ctx.globalAlpha = t === "highlighter" ? 0.42 : 1;
+                        if (t === "neon") { ctx.shadowColor = stage.drawColor; ctx.shadowBlur = lw * 2.5; }
+                        ctx.stroke();
+                        if (t === "neon") {
+                            ctx.shadowBlur = 0;
+                            ctx.lineWidth = lw * 0.4;
+                            ctx.strokeStyle = "rgba(255, 255, 255, 0.86)";
+                            ctx.stroke();
+                        }
+                    }
+                }
+                Rectangle {
+                    id: penRing
+                    readonly property real d: Math.max(8, (stage.drawTool === "eraser" ? 24 : stage.drawWidth * stage.zoom))
+                    visible: drawArea.containsMouse
+                    width: d; height: d; radius: d / 2
+                    color: stage.drawTool === "eraser" ? Qt.rgba(1, 1, 1, 0.35) : "transparent"
+                    border.width: 1.5; border.color: stage.drawTool === "eraser" ? "#FF3D9A" : "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.45) }
+                }
+                MouseArea {
+                    id: drawArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    hoverEnabled: true
+                    cursorShape: Qt.BlankCursor
+                    function ring(e) {
+                        penRing.x = e.x - 60 - penRing.width / 2;
+                        penRing.y = e.y - 60 - penRing.height / 2;
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        ring(e);
+                        if (stage.drawTool === "eraser") { stage.eraseAt((e.x - 60) / stage.zoom, (e.y - 60) / stage.zoom, 12 / stage.zoom); return; }
+                        drawCanvas.pts = [[e.x - 60, e.y - 60]];
+                        drawCanvas.requestPaint();
+                    }
+                    onPositionChanged: (e) => {
+                        ring(e);
+                        if (!pressed) return;
+                        const x = e.x - 60, y = e.y - 60;
+                        if (stage.drawTool === "eraser") { stage.eraseAt(x / stage.zoom, y / stage.zoom, 12 / stage.zoom); return; }
+                        const pts = drawCanvas.pts;
+                        const last = pts[pts.length - 1];
+                        if (last && Math.hypot(x - last[0], y - last[1]) < 2.5) return;
+                        drawCanvas.pts = pts.concat([[x, y]]);
+                        drawCanvas.requestPaint();
+                    }
+                    onReleased: {
+                        if (stage.drawTool !== "eraser") stage.addDrawing(drawCanvas.pts.map(q => [q[0] / stage.zoom, q[1] / stage.zoom]));
+                        drawCanvas.pts = [];
+                        drawCanvas.requestPaint();
+                    }
+                }
+            }
         }
     }
 
@@ -1203,6 +1833,189 @@ Item {
         }
     }
 
+    // Rysowanie: podpowiedź i wyjście
+    Rectangle {
+        visible: stage.drawOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: drawPillRow.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        Row {
+            id: drawPillRow
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[stage.drawTool === "eraser" ? "eraser" : "brush"] || Icons.brush; size: 16; stroke: 2; color: Theme.text }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: stage.drawTool === "eraser" ? "Przeciągnij po rysunku, żeby go zmazać" : "Rysuj po stronie · każda kreska to osobny element"
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+            }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // Pasek przy zaznaczeniu: opis tego, co ma się tu pojawić, i działania od razu pod ręką
+    Rectangle {
+        visible: Selection.active && !Magic.busy && !stage.paintOn && !stage.drawOn && !stage.maskOn && !stage.magicOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: Math.min(parent.width - 24, ctxCol.implicitWidth + 20); height: ctxCol.implicitHeight + 16; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 7
+        function fill() {
+            const t = promptInput.text.trim();
+            stage.generate(t);
+        }
+        Column {
+          id: ctxCol
+          anchors.centerIn: parent
+          spacing: 6
+          Rectangle {
+            visible: Magic.available && Magic.canGenerate()
+            width: ctxRow.implicitWidth; height: 38; radius: 19
+            color: Theme.fill
+            border.width: promptInput.activeFocus ? 1.5 : 0; border.color: Theme.accent
+            Icon { x: 13; anchors.verticalCenter: parent.verticalCenter; d: Icons.sparkles; size: 16; stroke: 1.9; color: Theme.accentText }
+            TextInput {
+                id: promptInput
+                x: 38; width: parent.width - 38 - genBtn.width - 10
+                anchors.verticalCenter: parent.verticalCenter
+                clip: true
+                color: Theme.text
+                selectionColor: Theme.accent
+                selectByMouse: true
+                font.family: Theme.font; font.pixelSize: 13
+                Keys.onReturnPressed: parent.parent.parent.fill()
+                Keys.onEnterPressed: parent.parent.parent.fill()
+                Keys.onEscapePressed: { focus = false; stage.forceActiveFocus(); }
+                Text {
+                    visible: !promptInput.text
+                    text: "Opisz, co ma się tu pojawić, np. drewniana ławka"
+                    color: Theme.text2; font: promptInput.font
+                }
+            }
+            Btn {
+                id: genBtn
+                anchors.right: parent.right; anchors.rightMargin: 3
+                anchors.verticalCenter: parent.verticalCenter
+                height: 32; primary: true
+                text: "Generuj"
+                tip: Magic.downloadMB("generate") > 0 ? "Za pierwszym razem pobierze model AI (" + (Magic.downloadMB("generate") / 1000).toFixed(1).replace(".", ",") + " GB)" : "Wynik trafi na osobną warstwę"
+                onClicked: parent.parent.parent.fill()
+            }
+          }
+          Row {
+            id: ctxRow
+            spacing: 4
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; primary: true; icon: "layers"; text: "Wyodrębnij"; tip: "Na nową warstwę, zdjęcie zostaje bez zmian (Ctrl+J)"; onClicked: stage.selAction("extract") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; visible: Magic.available; icon: "sparkles"; text: "Usuń"; tip: "Znika z obrazu, a tło uzupełnia się samo"; onClicked: stage.selAction("aifill") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "circleHalf"; text: "Maska"; tip: "Zostaje tylko zaznaczone; nic się nie kasuje"; onClicked: stage.selAction("mask") }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "sliders"; text: "Korekcja"; tip: "Kolory i tony tylko tutaj"; onClicked: stage.selAction("adjust") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "crop"; tip: "Przytnij stronę do zaznaczenia"; onClicked: stage.selAction("crop") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "swap"; tip: "Odwróć zaznaczenie (Ctrl+Shift+I)"; onClicked: stage.selAction("invert") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Odznacz (Esc)"; onClicked: stage.selAction("clear") }
+          }
+        }
+    }
+
+    // Zaznaczanie: podpowiedź i wyjście
+    Rectangle {
+        visible: stage.selOn && !Magic.busy && !Selection.active
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: selPill.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: selPill
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: stage.selHint; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // Malowanie: wyjście i stan
+    Rectangle {
+        visible: stage.paintOn && !Magic.busy
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: paintPill.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: paintPill
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: stage.current.type === "image" && stage.current.src
+                      ? "Pracujesz na: " + (stage.current.pixel ? "warstwa pikselowa" : "zdjęcie") + " · [ ] zmienia rozmiar"
+                      : "Pędzel utworzy nową warstwę · [ ] zmienia rozmiar"
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+            }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // ——— Pasek przekształcenia ———
+    Rectangle {
+        visible: stage.warpOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: warpRow.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: warpRow
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Przeciągnij rogi: perspektywa, zniekształcenie"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 32; text: "Wyzeruj"; onClicked: stage.project.change(stage.warpEdit, { warp: null }) }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.warpEdit = "" }
+        }
+    }
+
+    // ——— Pasek maski warstwy ———
+    Rectangle {
+        visible: stage.maskOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: Math.min(parent.width - 24, maskRow.implicitWidth + 24)
+        height: maskRow.implicitHeight + 18
+        radius: 16
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: maskRow
+            anchors.centerIn: parent
+            spacing: 6
+            Chip { anchors.verticalCenter: parent.verticalCenter; text: "Ukryj"; on: !stage.maskReveal; tip: "Pędzel ukrywa warstwę (X zamienia)"; onClicked: stage.maskReveal = false }
+            Chip { anchors.verticalCenter: parent.verticalCenter; text: "Przywróć"; on: stage.maskReveal; tip: "Pędzel przywraca warstwę (X zamienia)"; onClicked: stage.maskReveal = true }
+            ValueSlider { width: 120; height: 44; label: "Rozmiar"; from: 4; to: 300; step: 1; value: stage.maskSize; suffix: " px"; onMoved: (v) => stage.maskSize = v }
+            ValueSlider { width: 110; height: 44; label: "Miękkość"; from: 0; to: 1; step: 0.05; value: stage.maskSoft; shown: value * 100; suffix: "%"; onMoved: (v) => stage.maskSoft = v }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "swap"; tip: "Odwróć maskę"; onClicked: stage.project.invertMask(stage.maskEdit) }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "chevronDown"; tip: "Wygaszanie ku dołowi"; onClicked: stage.project.gradientMask(stage.maskEdit, 180) }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "forward"; tip: "Wygaszanie w prawo"; onClicked: stage.project.gradientMask(stage.maskEdit, 90) }
+            ToolBtn {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "trash"; tip: "Usuń maskę"
+                onClicked: { const id = stage.maskEdit; stage.maskEdit = ""; stage.project.change(id, { layerMask: null, layerMaskOff: null }); }
+            }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 34; onClicked: stage.maskEdit = "" }
+        }
+    }
+
     // ——— Pasek narzędzi AI ———
     Rectangle {
         id: magicBar
@@ -1265,6 +2078,7 @@ Item {
                 Btn { primary: true; icon: "sparkles"; text: "Usuń"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("erase") }
                 Btn { text: "Wyodrębnij"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("extract") }
                 Btn { text: "Przenieś"; height: 34; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("move") }
+                Btn { text: "Maska"; height: 34; tip: "Zostaw tylko zaznaczone jako maskę warstwy — zdjęcie zostaje nietknięte"; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.apply("mask") }
                 ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij zaznaczenie (Ctrl+Z)"; enabled: Magic.hasMask && !Magic.busy; onClicked: Magic.undoMask() }
                 Btn { text: "Gotowe"; height: 34; onClicked: Magic.end() }
             }
@@ -1294,6 +2108,13 @@ Item {
                 width: parent.width; height: 4; radius: 2
                 color: Qt.rgba(1, 1, 1, 0.25)
                 Rectangle { width: parent.width * Math.max(0, Magic.progress); height: parent.height; radius: 2; color: "white" }
+            }
+            Text {
+                visible: Magic.generating
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Anuluj"
+                color: "white"; font.family: Theme.font; font.pixelSize: 12; font.underline: true
+                MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: Magic.cancelGenerate() }
             }
         }
     }

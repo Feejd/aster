@@ -97,11 +97,28 @@ void PageView::setPage(int page)
     update();
 }
 
+void PageView::setHidden(const QString &id)
+{
+    if (m_hidden == id)
+        return;
+    m_hidden = id;
+    Q_EMIT hiddenChanged();
+    update();
+}
+
 void PageView::paint(QPainter *painter)
 {
     if (!m_project || m_page >= m_project->pageCount())
         return;
     painter->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
     painter->scale(width() / m_project->pageWidth(), height() / m_project->pageHeight());
-    Art::paintPage(painter, m_project->pageDocument(m_page), m_project);
+    QVariantMap doc = m_project->pageDocument(m_page);
+    if (!m_hidden.isEmpty()) {
+        QVariantList list;
+        for (const QVariant &v : doc.value(QStringLiteral("elements")).toList())
+            if (v.toMap().value(QStringLiteral("id")).toString() != m_hidden)
+                list.append(v);
+        doc[QStringLiteral("elements")] = list;
+    }
+    Art::paintPage(painter, doc, m_project);
 }

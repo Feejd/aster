@@ -58,7 +58,7 @@ Item {
             AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 30 }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Grafika"
+                text: "Aster Pixel"
                 color: Theme.text
                 font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.4
             }

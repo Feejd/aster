@@ -6,14 +6,14 @@ import QtCore
 import Aster.Ui
 import Aster.Grafika
 
-// Edytor: panel po lewej (Szablony, Tekst, Kształty, Zdjęcia, Tło), płótno, właściwości po prawej,
-// pasek z nazwą projektu, cofaniem, powiększeniem i eksportem. Skróty jak w programach biurowych.
+// Edytor w układzie programów graficznych: pasek u góry (nazwa, cofanie, powiększenie, eksport), warstwy z lewej,
+// płótno na neutralnym tle, z prawej rząd narzędzi (zaznaczanie, tekst, kształty, zdjęcia, rysowanie, AI, tło,
+// szablony) i panel wybranego narzędzia — przy „Zaznacz” właściwości zaznaczonego.
 Item {
     id: ed
     required property Project project
     property var app                 // Main: toast, goHome, presets
     property real radius: 24
-    readonly property real sideWidth: 72 + 272
 
     // Pisanie w polu tekstowym — wtedy Delete, strzałki i Ctrl+Z należą do pola
     readonly property bool typing: {
@@ -24,7 +24,7 @@ Item {
     readonly property string sel: stage.selected
     readonly property var many: stage.selection           // zaznaczone (jeden albo kilka)
 
-    onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "templates"; stage.forceActiveFocus(); }
+    onVisibleChanged: if (visible) { Selection.clear(); stage.clearSelection(); stage.fit = true; side.tab = "select"; stage.forceActiveFocus(); }
 
     Settings { id: viewSettings; category: "Grafika"; property bool rulers: false }
 
@@ -171,6 +171,7 @@ Item {
         project.commit();
     }
     function remove() {
+        if (Selection.active && sel !== "") { selAction("delete"); return; }
         if (many.length === 0) return;
         const ids = many.filter(id => !project.get(id).locked);
         if (ids.length === 0) return;
@@ -187,6 +188,7 @@ Item {
         stage.forceActiveFocus();
     }
     function undo() {
+        if (side.tab === "pixels" && Selection.canUndo) { Selection.undo(); return; }
         if (Magic.element !== "" && Magic.hasMask) { Magic.undoMask(); return; }
         project.undo();
         if (Magic.element !== "" && project.indexOf(Magic.element) >= 0) Magic.begin(project, Magic.element);
@@ -197,7 +199,7 @@ Item {
             if (Magic.element === "" && ids.length > 0) stage.setSelection(ids);
             if (message !== "") ed.app.toast(message, "");
         }
-        function onFailed(message) { ed.app.toast(message, ""); }
+        function onFailed(message) { ed.aiPending = ""; ed.app.toast(message, ""); }
     }
     function saveElements() {
         if (many.length === 0) return;
@@ -392,12 +394,14 @@ Item {
         else if (a === "cut") { copy(); remove(); }
         else if (a === "paste") paste();
         else if (a === "duplicate") duplicate();
-        else if (a === "edit") stage.startEditing(sel);
+        else if (a === "edit") { if (stage.current.type === "table") stage.editCell(sel, 0, 0); else stage.startEditing(sel); }
         else if (a === "crop") stage.cropping = sel;
         else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
+        else if (a.startsWith("blend:")) setBlend(a.substring(6));
+        else if (a === "warp") startWarp();
         else if (a === "bgtab") side.tab = "background";
-        else if (a === "layers") side.tab = "layers";
+        else if (a === "layers") {}                         // warstwy są zawsze widoczne z lewej
         else if (a === "selectAll") stage.selectAll();
         else if (a === "rulers") stage.rulers = !stage.rulers;
         else if (a.startsWith("guides:")) {
@@ -411,6 +415,7 @@ Item {
         else if (a === "aiBackground") Magic.removeBackground(project, sel);
         else if (a === "templates") side.tab = "templates";
         else if (a === "shapesTab") side.tab = "shapes";
+        else if (a === "draw") side.tab = "draw";
         else if (a === "addText") side.addTextStyle(side.textStyles[0]);
         else if (a === "addPhoto") { side.tab = "photos"; chooseImage("element"); }
         else if (a === "shortcuts") shortcutsSheet.open = true;
@@ -441,7 +446,9 @@ Item {
         } else if (sel !== "") {
             const el = stage.current;
             if (el.type === "text") items.push({ label: "Edytuj tekst", icon: "pencil", shortcut: "Enter", action: "edit" });
+            if (el.type === "table") items.push({ label: "Pisz w komórkach", icon: "pencil", shortcut: "Enter", action: "edit" });
             if (el.type === "image" && el.src) items.push({ label: "Kadruj", icon: "crop", shortcut: "dwuklik", action: "crop" });
+            if (el.type !== "adjust") items.push({ label: "Przekształć rogami", icon: "crop", shortcut: "Ctrl+T", action: "warp" });
             if (el.type === "image") items.push({ label: "Odbij w poziomie", icon: "mirror", action: "flip" });
             if (el.type === "image" && el.src && Magic.available) {
                 items.push({ label: "Usuń tło (AI)", icon: "sparkles", action: "aiBackground" });
@@ -524,11 +531,58 @@ Item {
         else if (cmd === "saveel") saveElements();
         else if (cmd === "magic") startMagic();
         else if (cmd === "magicbg") Magic.removeBackground(project, sel);
+        else if (cmd === "magicblur") Magic.blurBackground(project, sel, Number(arg));
+        else if (cmd === "autoenhance") project.change(sel, project.autoEnhance(stage.current.src));
         else if (cmd === "magicobj") { const [x, y] = arg.split(",").map(Number); Magic.addObject(x, y, false); }
         else if (cmd === "magicstroke") { const a = JSON.parse(arg); Magic.addStroke(a.points, a.width || 0, !!a.lasso, false); }
         else if (cmd === "magicapply") Magic.apply(arg);
         else if (cmd === "magictool") stage.magicTool = arg;
         else if (cmd === "shortcuts") shortcutsSheet.open = true;
+        else if (cmd === "addadjust") addAdjustment();
+        else if (cmd === "blend") setBlend(arg);
+        else if (cmd === "maskedit") editMask(sel);
+        else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
+        else if (cmd === "maskinvert") project.invertMask(sel);
+        else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
+        else if (cmd === "generate") Magic.generate(project, arg);
+        else if (cmd === "warp") startWarp();
+        else if (cmd === "regen") Magic.regenerate(project, sel, arg);
+        else if (cmd === "aitool") setTool("magic");
+        else if (cmd === "airun") aiRun(arg);
+        else if (cmd === "seltool") { side.selTool = arg; side.tab = "pixels"; }
+        else if (cmd === "selmode") side.selMode = arg;
+        else if (cmd === "selinvert") Selection.invert(project);
+        else if (cmd === "selfeather") Selection.feather(Number(arg));
+        else if (cmd === "selgrow") Selection.grow(Number(arg));
+        else if (cmd === "seldo") selAction(arg);
+        else if (cmd === "selsubject") selectSubject();
+        else if (cmd === "selclear") Selection.clear();
+        else if (cmd === "painttool") usePaintTool(arg);
+        else if (cmd === "paintcolor") side.paintColor = arg;
+        else if (cmd === "pixellayer") addPixelLayer();
+        else if (cmd === "paintwave") {
+            // Fala na wysokości arg (część strony) bieżącym narzędziem
+            const W = project.pageWidth, H = project.pageHeight, id = stage.paintTarget(), t = side.paintTool;
+            Retouch.tool = t; Retouch.color = String(side.paintColor); Retouch.size = side.paintSize; Retouch.hardness = side.paintHardness; Retouch.strength = side.paintStrength;
+            Retouch.press(project, id, W * 0.1, H * Number(arg));
+            for (let i = 1; i <= 40; ++i) Retouch.move(W * (0.1 + 0.8 * i / 40), H * Number(arg) + Math.sin(i / 40 * Math.PI * 3) * H * 0.06);
+            Retouch.release();
+        }
+        else if (cmd === "paintsource") { const q = arg.split(","); Retouch.tool = "clone"; Retouch.setSource(project, sel, Number(q[0]), Number(q[1])); }
+        else if (cmd === "paintfill") { const q = arg.split(","); Retouch.color = String(side.paintColor); Retouch.strength = 1; Retouch.fill(project, sel, Number(q[0]), Number(q[1]), side.fillTolerance); }
+        else if (cmd === "pick") ed.app.toast(project.colorAt(...arg.split(",").map(Number)), "");
+        else if (cmd === "heal") { const a = JSON.parse(arg); Magic.heal(project, sel, a.points, a.width); }
+        else if (cmd === "drawtool") { side.tab = "draw"; side.drawTool = arg; }
+        else if (cmd === "drawcolor") side.drawColor = arg;
+        else if (cmd === "cell") { const q = arg.split(","); stage.editCell(sel, Number(q[0]), Number(q[1])); }
+        else if (cmd === "nextcell") stage.nextCell(arg === "down", arg === "back");
+        else if (cmd === "drawwave") {
+            // Fala przez stronę na wysokości arg (część strony)
+            const W = project.pageWidth, H = project.pageHeight, pts = [];
+            for (let i = 0; i <= 40; ++i) pts.push([W * (0.1 + 0.8 * i / 40), H * Number(arg) + Math.sin(i / 40 * Math.PI * 3) * H * 0.06]);
+            stage.addDrawing(pts);
+        }
+        else if (cmd === "erase") { const q = arg.split(","); stage.eraseAt(Number(q[0]) * project.pageWidth, Number(q[1]) * project.pageHeight, 10); }
         else if (cmd === "insertsaved") insertSaved(side.saved[Number(arg)].file);
         else if (cmd === "replacecolor") { const [a, b] = arg.split(","); project.commit(); project.replaceColor(a, b); }
         else if (cmd === "usestyle") side.useTextStyle(side.myStyles[Number(arg)]);
@@ -552,7 +606,15 @@ Item {
     Shortcut { sequences: [StandardKey.Cut]; enabled: ed.active && !ed.typing; onActivated: { ed.copy(); ed.remove(); } }
     Shortcut { sequences: [StandardKey.Paste]; enabled: ed.active && !ed.typing; onActivated: ed.paste() }
     Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.duplicate() }
-    Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: stage.selectAll() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: { if (side.tab === "pixels") Selection.all(ed.project); else stage.selectAll(); } }
+    Shortcut { sequence: "Ctrl+Shift+A"; enabled: ed.active && !ed.typing; onActivated: Selection.clear() }
+    Shortcut { sequence: "Ctrl+Shift+I"; enabled: ed.active && !ed.typing; onActivated: Selection.invert(ed.project) }
+    Shortcut { sequence: "Ctrl+T"; enabled: ed.active && !ed.typing && ed.sel !== ""; onActivated: ed.startWarp() }
+    Shortcut { sequence: "Ctrl+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("copy") }
+    Shortcut { sequence: "Ctrl+Shift+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("cut") }
+    Shortcut { sequence: "M"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "rect"; side.tab = "pixels"; } }
+    Shortcut { sequence: "L"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "lasso"; side.tab = "pixels"; } }
+    Shortcut { sequence: "W"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "wand"; side.tab = "pixels"; } }
     Shortcut { sequence: "PgDown"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.min(ed.project.pageCount - 1, ed.project.currentPage + 1)) }
     Shortcut { sequence: "PgUp"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.max(0, ed.project.currentPage - 1)) }
     Shortcut { sequence: "Ctrl+Return"; enabled: ed.active && !ed.typing; onActivated: { stage.clearSelection(); ed.project.addPage(); } }
@@ -578,6 +640,7 @@ Item {
         onActivated: {
             if (stage.cropping !== "") stage.cropping = "";
             else if (stage.current.type === "image" && stage.current.src && !stage.current.locked) stage.cropping = ed.sel;
+            else if (stage.current.type === "table" && !stage.current.locked) stage.editCell(ed.sel, 0, 0);
             else stage.startEditing(ed.sel);
         }
     }
@@ -605,6 +668,18 @@ Item {
     Shortcut { sequence: "Ctrl+0"; enabled: ed.visible; onActivated: stage.fit = true }
     Shortcut { sequence: "Ctrl+1"; enabled: ed.visible; onActivated: stage.zoomTo(1) }
     Shortcut { sequence: "T"; enabled: ed.active && !ed.typing; onActivated: side.addTextStyle(side.textStyles[2]) }
+    Shortcut { sequence: "X"; enabled: ed.active && !ed.typing && stage.maskOn; onActivated: stage.maskReveal = !stage.maskReveal }
+    Shortcut { sequence: "V"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("select") }
+    Shortcut { sequence: "B"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("brush") }
+    Shortcut { sequence: "E"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("eraser") }
+    Shortcut { sequence: "G"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("fill") }
+    Shortcut { sequence: "I"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("pick") }
+    Shortcut { sequence: "J"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("heal") }
+    Shortcut { sequence: "S"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("clone") }
+    Shortcut { sequence: "P"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("draw") }
+    Shortcut { sequence: "["; enabled: ed.active && !ed.typing && stage.paintOn; onActivated: side.setPaintSize(Math.max(1, Math.round(side.paintSize * 0.85))) }
+    Shortcut { sequence: "]"; enabled: ed.active && !ed.typing && stage.paintOn; onActivated: side.setPaintSize(Math.round(side.paintSize * 1.18) + 1) }
+    Shortcut { sequence: "U"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("shapes") }
 
     FileDialog {
         id: imageDialog
@@ -639,261 +714,544 @@ Item {
         }
     }
 
-    // ——— Lewa strona: powrót i panel ———
+    // Pełne tło: w programie graficznym nic nie może prześwitywać i udawać kolorów projektu
+    Rectangle {
+        anchors.fill: parent
+        radius: ed.radius
+        color: Theme.dark ? "#1E1F24" : "#F3F4F7"
+    }
+
+    // ——— Układ jak w programach graficznych: pasek u góry, warstwy z lewej, płótno, narzędzia i ich panel z prawej ———
+    readonly property real barH: 52
+    readonly property alias side: side
+    readonly property real layersWidth: 250
+    readonly property real toolsWidth: 304
+    // Narzędzia (kolejność w rzędzie po prawej); select — zaznaczanie i właściwości zaznaczonego
+    readonly property var tools: [
+        { id: "select", label: "Zaznacz i przesuń", icon: "cursor", key: "V" },
+        { id: "pixels", label: "Zaznaczanie", icon: "marquee", key: "M" },
+        { id: "text", label: "Tekst", icon: "textT", key: "T" },
+        { id: "shapes", label: "Kształty i grafiki", icon: "shapes", key: "U" },
+        { id: "photos", label: "Zdjęcia", icon: "image", key: "" },
+        { id: "paint", label: "Maluj i retuszuj", icon: "brush", key: "B" },
+        { id: "draw", label: "Rysowanie linii", icon: "squiggle", key: "P" },
+        { id: "magic", label: "Magia AI", icon: "sparkles", key: "" },
+        { id: "background", label: "Tło", icon: "palette", key: "" },
+        { id: "templates", label: "Szablony", icon: "layout", key: "" }
+    ]
+    function setTool(t) {
+        if (t === "magic" && aiLayer !== "" && stage.selected !== aiLayer) stage.select(aiLayer);    // działa na zaznaczonym albo najwyższym zdjęciu
+        side.tab = t;
+    }
+    // ——— Warstwy: tryb mieszania, maska, korekcja ———
+    readonly property string maskEditing: stage.maskEdit
+    readonly property var blendModes: [
+        { id: "", label: "Zwykły" }, { id: "multiply", label: "Mnożenie" }, { id: "screen", label: "Ekran" }, { id: "overlay", label: "Nakładka" },
+        { id: "darken", label: "Ciemniejsze" }, { id: "lighten", label: "Jaśniejsze" }, { id: "colorDodge", label: "Rozjaśnianie" },
+        { id: "colorBurn", label: "Przepalenie" }, { id: "hardLight", label: "Twarde światło" }, { id: "softLight", label: "Miękkie światło" },
+        { id: "difference", label: "Różnica" }, { id: "exclusion", label: "Wykluczenie" }
+    ]
+    function blendLabel(id) { for (const b of blendModes) if (b.id === (id || "")) return b.label; return "Zwykły"; }
+    function showBlendMenu(item) {
+        const pt = item.mapToItem(ed, 0, 0);
+        menu.openAt(pt.x, Math.max(8, pt.y - blendModes.length * 34 - 16), blendModes.map(b => ({ label: b.label, action: "blend:" + b.id })));
+    }
+    function setBlend(mode) {
+        for (const id of many) project.change(id, { blend: mode === "" ? null : mode }, false);
+        project.commit();
+    }
+    function editMask(id) {
+        if (!project.get(id).layerMask) project.addMask(id);
+        if (stage.selected !== id) stage.select(id);
+        stage.maskEdit = id;
+    }
+    function usePaintTool(t) { side.paintTool = t; side.tab = "paint"; }
+    function addPixelLayer() { stage.select(project.newPixelLayer()); }
+    Connections { target: Retouch; function onFailed(message) { ed.app.toast(message, ""); } }
+    function startWarp() {
+        if (sel === "" || stage.current.type === "adjust" || stage.current.locked) return;
+        side.tab = "select";
+        stage.warpEdit = sel;
+    }
+    function addAdjustment() {
+        const id = project.add({ type: "adjust", x: 0, y: 0, w: project.pageWidth, h: project.pageHeight });
+        if (Selection.active) { Selection.maskLayer(project, id); Selection.clear(); }      // korekcja tylko w zaznaczeniu
+        side.tab = "select";
+        stage.select(id);
+    }
+    // ——— Zaznaczenie pikseli: działania ———
+    function imageLayer() {
+        // Zaznaczona warstwa-zdjęcie, a bez niej najwyższe zdjęcie na stronie
+        if (stage.current.type === "image" && stage.current.src) return stage.selected;
+        const all = project.document().elements;
+        for (let i = all.length - 1; i >= 0; --i) if (all[i].type === "image" && all[i].src && !all[i].hidden) return all[i].id;
+        return "";
+    }
+    readonly property var stageCurrent: stage.current
+    readonly property string aiLayer: { stage.current; project.count; return imageLayer(); }
+    property string aiPending: ""                   // działanie po tym, jak AI skończy zaznaczać
+    Connections {
+        target: Selection
+        function onChanged() {
+            if (ed.aiPending === "" || !Selection.active) return;
+            const a = ed.aiPending;
+            ed.aiPending = "";
+            if (a === "background") Selection.invert(ed.project); else ed.selAction(a);
+        }
+    }
+    // Jedno kliknięcie w panelu: AI zaznacza główny obiekt, potem wykonuje działanie
+    function aiRun(a) {
+        if (aiLayer === "") return;
+        Selection.clear();
+        aiPending = a === "subject" ? "" : a;
+        Magic.selectSubject(project, aiLayer, "new");
+    }
+    function aiManual() {
+        if (aiLayer === "") return;
+        stage.select(aiLayer);
+        startMagic();
+    }
+    function selectSubject() {
+        const id = imageLayer();
+        if (id === "") { app.toast("Na stronie nie ma zdjęcia", ""); return; }
+        Magic.selectSubject(project, id, side.selMode);
+    }
+    function selAction(a) {
+        const el = stage.current, isImage = el.type === "image" && !!el.src && !el.locked;
+        if (a === "extract") {
+            const id = Selection.toLayer(project, imageLayer(), false);
+            if (id !== "") { stage.select(id); app.toast("Wyodrębniono na nową warstwę — zdjęcie zostało bez zmian", ""); }
+        }
+        else if (a === "crop") {
+            const b = Selection.bounds();
+            project.cropPage(b.x, b.y, b.w, b.h);
+            Selection.clear();
+            stage.fit = true;
+        }
+        else if (a === "invert") Selection.invert(project);
+        else if (a === "clear") Selection.clear();
+        else if (a === "copy" || a === "cut") { const id = Selection.toLayer(project, sel, a === "cut" && sel !== ""); if (id !== "") { stage.select(id); } }
+        else if (a === "delete") {
+            if (sel === "") { app.toast("Wybierz warstwę, z której usunąć", ""); return; }
+            if (isImage) Retouch.clearSelected(project, sel); else Selection.maskLayer(project, sel, true);
+        }
+        else if (a === "fill") {
+            const id = isImage ? sel : project.newPixelLayer();
+            if (id !== sel) stage.select(id);
+            Retouch.color = String(side.paintColor);
+            Retouch.fillSelected(project, id);
+        }
+        else if (a === "aifill") {
+            const id = imageLayer();
+            if (id === "") app.toast("Na stronie nie ma zdjęcia", ""); else Magic.fillSelection(project, id);
+        }
+        else if (a === "mask") {
+            if (sel === "") { app.toast("Wybierz warstwę, na której ma być maska", ""); return; }
+            Selection.maskLayer(project, sel);
+            Selection.clear();
+        }
+    }
+
+    // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
+    Connections {
+        target: stage
+        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint" && side.tab !== "pixels" && side.tab !== "magic") side.tab = "select"; }
+    }
+
+    // ——— Pasek u góry ———
     Item {
-        id: sideTop
-        width: ed.sideWidth; height: 60
+        id: bar
+        width: parent.width; height: ed.barH
         DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
+        TapHandler { onDoubleTapped: { const w = ed.Window.window; if (w.visibility === Window.Maximized) w.showNormal(); else w.showMaximized(); } }
+
         HoverButton {
-            x: 14; anchors.verticalCenter: parent.verticalCenter
-            width: homeRow.implicitWidth + 22; height: 36; radius: 18
+            id: homeBtn
+            x: 12; anchors.verticalCenter: parent.verticalCenter
+            width: homeRow.implicitWidth + 18; height: 34; radius: 10
+            tip: "Wróć do projektów"
             onClicked: ed.app.goHome()
             Row {
                 id: homeRow
                 anchors.centerIn: parent
-                spacing: 8
-                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 16; stroke: 2.2; color: Theme.text }
-                AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 24 }
-                Text { anchors.verticalCenter: parent.verticalCenter; text: "Projekty"; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                spacing: 7
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 15; stroke: 2.2; color: Theme.text }
+                AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 22 }
             }
         }
-    }
-    SidePanel {
-        id: side
-        y: sideTop.height
-        width: ed.sideWidth
-        height: parent.height - y
-        project: ed.project
-        editor: ed
-    }
-
-    // ——— Prawa strona: pasek, płótno, właściwości ———
-    GlassPane {
-        id: pane
-        x: ed.sideWidth
-        width: parent.width - x
-        height: parent.height
-        topRightRadius: ed.radius
-        bottomRightRadius: ed.radius
-
-        Item {
-            id: bar
-            width: parent.width; height: 60
-            DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
-            TapHandler { onDoubleTapped: { const w = ed.Window.window; if (w.visibility === Window.Maximized) w.showNormal(); else w.showMaximized(); } }
-
-            // Nazwa projektu (do zmiany w miejscu)
-            Rectangle {
-                id: nameBox
-                x: 18; anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(Math.max(140, nameInput.contentWidth + 24), parent.width - right.width - 220)
-                height: 36; radius: 10
-                color: nameInput.activeFocus ? Theme.fill : nameHover.hovered ? Theme.hover : "transparent"
-                HoverHandler { id: nameHover; cursorShape: Qt.IBeamCursor }
-                TextInput {
-                    id: nameInput
-                    x: 12; width: parent.width - 24
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: ed.project.name
-                    color: Theme.text
-                    clip: true
-                    selectByMouse: true
-                    selectionColor: Theme.accent
-                    font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
-                    onAccepted: focus = false
-                    onEditingFinished: ed.project.name = text
-                    Keys.onEscapePressed: { text = ed.project.name; focus = false; }
-                }
-            }
-            Text {
-                anchors.left: nameBox.right; anchors.leftMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: ed.project.modified ? "Zmiany zapiszą się same" : ed.project.path !== "" ? "Zapisano" : ""
-                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
-            }
-
-            Row {
-                id: right
-                anchors.right: parent.right; anchors.rightMargin: 16
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
-                Item { width: 8; height: 1 }
-                ToolBtn {
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon: "ruler"
-                    tip: "Linijki i prowadnice (Ctrl+R)"
-                    baseColor: stage.rulers ? Theme.accentSoft : "transparent"
-                    onClicked: stage.rulers = !stage.rulers
-                }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
-                HoverButton {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 58; height: 32
-                    onClicked: { if (stage.fit) stage.zoomTo(1); else stage.fit = true; }
-                    Text {
-                        anchors.centerIn: parent
-                        text: Math.round(stage.zoom * 100) + "%"
-                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.features: { "tnum": 1 }
-                    }
-                }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
-                Item { width: 8; height: 1 }
-                Btn {
-                    id: exportBtn
-                    anchors.verticalCenter: parent.verticalCenter
-                    primary: true
-                    icon: "download"
-                    text: "Eksportuj"
-                    onClicked: exportPop.openAt(exportBtn)
-                }
-                Item { width: 6; height: 1 }
-                WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: ed.app }
-            }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
-        }
-
-        Stage {
-            id: stage
-            y: bar.height
-            width: parent.width - inspector.width
-            height: parent.height - y - pageBar.height
-            project: ed.project
-            rulers: viewSettings.rulers
-            onRulersChanged: viewSettings.rulers = rulers
-            onMenuRequested: (x, y) => ed.showContextMenu(x, y)
-            onQuickAction: (a) => ed.runMenu(a)
-        }
-
-        // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
-        Item {
-            id: pageBar
-            y: stage.y + stage.height
-            width: stage.width
-            height: 92
-            readonly property real thumbH: 56
-            readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
-            property int dragFrom: -1           // przeciąganie strony na inne miejsce
-            property int dragTo: -1
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
-            Flickable {
-                id: pageFlick
-                anchors.fill: parent
-                anchors.leftMargin: 16; anchors.rightMargin: 16
-                contentWidth: pageRow.width
-                flickableDirection: Flickable.HorizontalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                clip: true
-                Row {
-                    id: pageRow
-                    height: pageFlick.height
-                    spacing: 10
-                    Repeater {
-                        model: ed.project.pageCount
-                        delegate: Item {
-                            id: pg
-                            required property int index
-                            readonly property bool current: index === ed.project.currentPage
-                            width: pageBar.thumbW + 8
-                            height: pageRow.height
-                            Rectangle {
-                                id: pgFrame
-                                x: 0; y: 10
-                                width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
-                                radius: 8
-                                color: "transparent"
-                                border.width: pg.current ? 2 : 1
-                                border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
-                                PageView {
-                                    x: 4; y: 4
-                                    width: pageBar.thumbW; height: pageBar.thumbH
-                                    project: ed.project
-                                    page: pg.index
-                                }
-                                MouseArea {
-                                    id: pgMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    cursorShape: pageBar.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
-                                    property real startX
-                                    property bool dragged: false
-                                    onPressed: (e) => { startX = mapToItem(pageRow, e.x, e.y).x; dragged = false; }
-                                    onPositionChanged: (e) => {
-                                        if (!pressed || !(pressedButtons & Qt.LeftButton)) return;
-                                        const x = mapToItem(pageRow, e.x, e.y).x;
-                                        if (pageBar.dragFrom < 0 && Math.abs(x - startX) < 8) return;
-                                        pageBar.dragFrom = pg.index;
-                                        dragged = true;
-                                        pageBar.dragTo = Math.max(0, Math.min(ed.project.pageCount - 1, Math.floor(x / (pageBar.thumbW + 18))));
-                                    }
-                                    onReleased: {
-                                        if (pageBar.dragFrom < 0) return;
-                                        const from = pageBar.dragFrom, to = pageBar.dragTo;
-                                        pageBar.dragFrom = -1;
-                                        if (from !== to) { stage.clearSelection(); ed.project.movePage(from, to); }
-                                    }
-                                    onClicked: (e) => {
-                                        if (dragged) return;
-                                        if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
-                                        else ed.goToPage(pg.index);
-                                    }
-                                }
-                                // Miejsce, w które trafi przeciągana strona
-                                Rectangle {
-                                    visible: pageBar.dragFrom >= 0 && pageBar.dragTo === pg.index && pageBar.dragFrom !== pg.index
-                                    x: pageBar.dragTo > pageBar.dragFrom ? parent.width + 3 : -7
-                                    y: -2; width: 3; height: parent.height + 4; radius: 1.5
-                                    color: Theme.accent
-                                }
-                            }
-                            Text {
-                                anchors.horizontalCenter: pgFrame.horizontalCenter
-                                y: pgFrame.y + pgFrame.height + 3
-                                text: pg.index + 1
-                                color: pg.current ? Theme.accentText : Theme.text2
-                                font.family: Theme.font; font.pixelSize: 11; font.weight: pg.current ? Font.DemiBold : Font.Normal
-                            }
-                        }
-                    }
-                    HoverButton {
-                        y: 10
-                        width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
-                        radius: 8
-                        baseColor: Theme.fill
-                        onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
-                        Column {
-                            id: addPageRow
-                            anchors.centerIn: parent
-                            spacing: 2
-                            Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.plus; size: 16; stroke: 2.2; color: Theme.text }
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: ed.project.pageCount > 1 ? "Strona" : "Dodaj stronę"
-                                color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        Rectangle { x: homeBtn.x + homeBtn.width + 8; anchors.verticalCenter: parent.verticalCenter; width: 1; height: 20; color: Theme.line }
+        // Nazwa projektu (do zmiany w miejscu)
         Rectangle {
-            x: inspector.x; y: bar.height
-            width: 1; height: inspector.height
-            color: Theme.line
+            id: nameBox
+            x: homeBtn.x + homeBtn.width + 17; anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(Math.max(120, nameInput.contentWidth + 20), parent.width - right.width - x - 160)
+            height: 32; radius: 8
+            color: nameInput.activeFocus ? Theme.fill : nameHover.hovered ? Theme.hover : "transparent"
+            HoverHandler { id: nameHover; cursorShape: Qt.IBeamCursor }
+            TextInput {
+                id: nameInput
+                x: 10; width: parent.width - 20
+                anchors.verticalCenter: parent.verticalCenter
+                text: ed.project.name
+                color: Theme.text
+                clip: true
+                selectByMouse: true
+                selectionColor: Theme.accent
+                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                onAccepted: focus = false
+                onEditingFinished: ed.project.name = text
+                Keys.onEscapePressed: { text = ed.project.name; focus = false; }
+            }
         }
-        Inspector {
-            id: inspector
-            x: parent.width - width
-            y: bar.height
-            width: 290
-            height: parent.height - y
+        Text {
+            anchors.left: nameBox.right; anchors.leftMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            text: (Math.round(ed.project.pageWidth) + " × " + Math.round(ed.project.pageHeight) + " px")
+                  + (ed.project.modified ? " · zapisuję…" : ed.project.path !== "" ? " · zapisano" : "")
+            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }
+        }
+
+        Row {
+            id: right
+            anchors.right: parent.right; anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
+            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 1; height: 20; color: Theme.line }
+            // Powiększenie w jednej grupie
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: zoomRow.implicitWidth + 4; height: 32; radius: 9
+                color: Theme.fill
+                Row {
+                    id: zoomRow
+                    anchors.centerIn: parent
+                    ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
+                    HoverButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 54; height: 28; radius: 7
+                        tip: stage.fit ? "Rzeczywisty rozmiar (100%)" : "Dopasuj do okna (Ctrl+0)"
+                        onClicked: { if (stage.fit) stage.zoomTo(1); else stage.fit = true; }
+                        Text {
+                            anchors.centerIn: parent
+                            text: Math.round(stage.zoom * 100) + "%"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; font.features: { "tnum": 1 }
+                        }
+                    }
+                    ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
+                }
+            }
+            ToolBtn {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "ruler"
+                tip: "Linijki i prowadnice (Ctrl+R)"
+                baseColor: stage.rulers ? Theme.accentSoft : "transparent"
+                onClicked: stage.rulers = !stage.rulers
+            }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
+            Item { width: 6; height: 1 }
+            Btn {
+                id: exportBtn
+                anchors.verticalCenter: parent.verticalCenter
+                primary: true
+                height: 34
+                icon: "download"
+                text: "Eksportuj"
+                onClicked: exportPop.openAt(exportBtn)
+            }
+            Item { width: 6; height: 1 }
+            WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: ed.app }
+        }
+    }
+
+    // ——— Lewa strona: warstwy ———
+    Item {
+        id: layersBox
+        y: bar.height
+        width: ed.layersWidth
+        height: parent.height - y
+        SidePanel {
+            id: layersPanel
+            width: parent.width
+            height: parent.height - layerFoot.height
             project: ed.project
-            stage: stage
             editor: ed
+            showRail: false
+            tab: "layers"
+        }
+        // Ustawienia zaznaczonej warstwy i przyciski jak w programach do zdjęć
+        Item {
+            id: layerFoot
+            y: parent.height - height
+            width: parent.width; height: 108
+            readonly property var one: stage.current
+            readonly property bool has: ed.many.length > 0
+            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            Row {
+                x: 12; y: 10
+                spacing: 8
+                HoverButton {
+                    id: blendBtn
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 112; height: 32; radius: 8
+                    baseColor: Theme.fill
+                    enabled: layerFoot.has
+                    opacity: enabled ? 1 : 0.45
+                    tip: "Tryb mieszania — jak warstwa łączy się z tym, co pod nią"
+                    onClicked: ed.showBlendMenu(blendBtn)
+                    Text {
+                        x: 10; width: parent.width - 30
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: ed.blendLabel(layerFoot.one.blend)
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 12
+                    }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
+                }
+                ValueSlider {
+                    width: parent.parent.width - 24 - 112 - 8
+                    enabled: stage.selected !== ""
+                    opacity: enabled ? 1 : 0.45
+                    label: "Krycie"
+                    from: 0; to: 1; step: 0.01
+                    value: layerFoot.one.opacity === undefined ? 1 : layerFoot.one.opacity
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => ed.project.change(stage.selected, { opacity: v >= 0.995 ? null : Math.round(v * 100) / 100 }, done)
+                }
+            }
+            Row {
+                x: 8; y: 64
+                spacing: 2
+                ToolBtn {
+                    icon: "circleHalf"
+                    tip: stage.selected !== "" && layerFoot.one.layerMask ? "Maluj po masce warstwy" : "Dodaj maskę warstwy — chowa część warstwy pędzlem, bez kasowania"
+                    enabled: stage.selected !== ""
+                    onClicked: ed.editMask(stage.selected)
+                }
+                ToolBtn { icon: "plus"; tip: "Nowa warstwa do malowania"; onClicked: ed.addPixelLayer() }
+                ToolBtn { icon: "sliders"; tip: "Warstwa korekcyjna — zmienia kolory wszystkiego pod spodem"; onClicked: ed.addAdjustment() }
+                ToolBtn { icon: "layers"; tip: "Grupuj zaznaczone (Ctrl+G)"; enabled: ed.many.length > 1; onClicked: ed.runMenu("group") }
+                ToolBtn { icon: "copy"; tip: "Duplikuj warstwę (Ctrl+D)"; enabled: layerFoot.has; onClicked: ed.duplicate() }
+                ToolBtn { icon: "trash"; tip: "Usuń warstwę (Delete)"; enabled: layerFoot.has; onClicked: ed.remove() }
+            }
+        }
+    }
+
+    // ——— Środek: płótno i strony ———
+    Rectangle {
+        id: pane
+        x: ed.layersWidth
+        y: bar.height
+        width: parent.width - ed.layersWidth - ed.toolsWidth
+        height: parent.height - y
+        color: Theme.dark ? "#16171B" : "#E6E7EB"          // neutralne tło płótna, jak w programach do zdjęć
+        Rectangle { width: parent.width; height: 1; color: Theme.line; z: 2 }
+        Rectangle { width: 1; height: parent.height; color: Theme.line; z: 2 }
+        Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.line; z: 2 }
+
+    Stage {
+        id: stage
+        width: parent.width
+        height: parent.height - pageBar.height
+        project: ed.project
+        rulers: viewSettings.rulers
+        onRulersChanged: viewSettings.rulers = rulers
+        onMenuRequested: (x, y) => ed.showContextMenu(x, y)
+        drawTool: side.tab === "draw" ? side.drawTool : ""
+        drawColor: side.drawColor
+        drawWidth: side.drawWidth
+        paintTool: side.tab === "paint" ? side.paintTool : ""
+        selTool: side.tab === "pixels" ? side.selTool : side.tab === "magic" && Magic.element === "" ? "object" : ""
+        selHint: side.tab === "magic" ? "Kliknij rzecz na zdjęciu · Shift dodaje kolejną" : "Shift dodaje · Alt odejmuje · Esc odznacza"
+        onSelAction: (a) => a === "adjust" ? ed.addAdjustment() : ed.selAction(a)
+        onGenerate: (t) => Magic.generate(ed.project, t)
+        selMode: side.selMode
+        selFeather: side.selFeather
+        selTolerance: side.selTolerance
+        selLayerOnly: side.selLayerOnly
+        paintColor: side.paintColor
+        paintSize: side.paintSize
+        paintHardness: side.paintHardness
+        paintStrength: side.paintStrength
+        fillTolerance: side.fillTolerance
+        onColorPicked: (c) => { side.paintColor = c; side.paintTool = "brush"; ed.app.toast("Pobrano kolor " + c, ""); }
+        onPaintMessage: (t) => ed.app.toast(t, "")
+        onDrawFinished: side.tab = side.lastTab
+        onQuickAction: (a) => ed.runMenu(a)
+    }
+
+    // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
+    Item {
+        id: pageBar
+        z: 3
+        y: stage.y + stage.height
+        width: stage.width
+        height: 80
+        readonly property real thumbH: 48
+        readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
+        property int dragFrom: -1           // przeciąganie strony na inne miejsce
+        property int dragTo: -1
+        Rectangle { anchors.fill: parent; color: Theme.dark ? "#1C1D22" : "#F1F2F5" }
+        Rectangle { width: parent.width; height: 1; color: Theme.line }
+        Flickable {
+            id: pageFlick
+            anchors.fill: parent
+            anchors.leftMargin: 16; anchors.rightMargin: 16
+            contentWidth: pageRow.width
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            Row {
+                id: pageRow
+                height: pageFlick.height
+                spacing: 10
+                Repeater {
+                    model: ed.project.pageCount
+                    delegate: Item {
+                        id: pg
+                        required property int index
+                        readonly property bool current: index === ed.project.currentPage
+                        width: pageBar.thumbW + 8
+                        height: pageRow.height
+                        Rectangle {
+                            id: pgFrame
+                            x: 0; y: 10
+                            width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
+                            radius: 8
+                            color: "transparent"
+                            border.width: pg.current ? 2 : 1
+                            border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
+                            PageView {
+                                x: 4; y: 4
+                                width: pageBar.thumbW; height: pageBar.thumbH
+                                project: ed.project
+                                page: pg.index
+                            }
+                            MouseArea {
+                                id: pgMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                cursorShape: pageBar.dragFrom >= 0 ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                property real startX
+                                property bool dragged: false
+                                onPressed: (e) => { startX = mapToItem(pageRow, e.x, e.y).x; dragged = false; }
+                                onPositionChanged: (e) => {
+                                    if (!pressed || !(pressedButtons & Qt.LeftButton)) return;
+                                    const x = mapToItem(pageRow, e.x, e.y).x;
+                                    if (pageBar.dragFrom < 0 && Math.abs(x - startX) < 8) return;
+                                    pageBar.dragFrom = pg.index;
+                                    dragged = true;
+                                    pageBar.dragTo = Math.max(0, Math.min(ed.project.pageCount - 1, Math.floor(x / (pageBar.thumbW + 18))));
+                                }
+                                onReleased: {
+                                    if (pageBar.dragFrom < 0) return;
+                                    const from = pageBar.dragFrom, to = pageBar.dragTo;
+                                    pageBar.dragFrom = -1;
+                                    if (from !== to) { stage.clearSelection(); ed.project.movePage(from, to); }
+                                }
+                                onClicked: (e) => {
+                                    if (dragged) return;
+                                    if (e.button === Qt.RightButton) { ed.goToPage(pg.index); ed.showPageMenu(pg.index, pgFrame); }
+                                    else ed.goToPage(pg.index);
+                                }
+                            }
+                            // Miejsce, w które trafi przeciągana strona
+                            Rectangle {
+                                visible: pageBar.dragFrom >= 0 && pageBar.dragTo === pg.index && pageBar.dragFrom !== pg.index
+                                x: pageBar.dragTo > pageBar.dragFrom ? parent.width + 3 : -7
+                                y: -2; width: 3; height: parent.height + 4; radius: 1.5
+                                color: Theme.accent
+                            }
+                        }
+                        Text {
+                            anchors.horizontalCenter: pgFrame.horizontalCenter
+                            y: pgFrame.y + pgFrame.height + 3
+                            text: pg.index + 1
+                            color: pg.current ? Theme.accentText : Theme.text2
+                            font.family: Theme.font; font.pixelSize: 11; font.weight: pg.current ? Font.DemiBold : Font.Normal
+                        }
+                    }
+                }
+                HoverButton {
+                    y: 10
+                    width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
+                    radius: 8
+                    baseColor: Theme.fill
+                    onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
+                    Column {
+                        id: addPageRow
+                        anchors.centerIn: parent
+                        spacing: 2
+                        Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.plus; size: 16; stroke: 2.2; color: Theme.text }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: ed.project.pageCount > 1 ? "Strona" : "Dodaj stronę"
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    }
+
+    // ——— Prawa strona: narzędzia i panel narzędzia ———
+    Item {
+        id: toolsBox
+        x: parent.width - width
+        y: bar.height
+        width: ed.toolsWidth
+        height: parent.height - y
+        Rectangle {
+            id: toolStrip
+            x: 12; y: 10
+            width: parent.width - 24; height: 40
+            radius: 11
+            color: Theme.fill
+            Row {
+                anchors.centerIn: parent
+                spacing: 1
+                Repeater {
+                    model: ed.tools
+                    delegate: HoverButton {
+                        id: toolBtn
+                        required property var modelData
+                        readonly property bool on: Magic.element !== "" ? modelData.id === "magic" : side.tab === modelData.id
+                        width: (toolStrip.width - 8 - (ed.tools.length - 1)) / ed.tools.length; height: 32; radius: 8
+                        baseColor: on ? Theme.accent : "transparent"
+                        color: on ? baseColor : hovered ? Theme.hover : baseColor
+                        tip: modelData.label + (modelData.key !== "" ? " (" + modelData.key + ")" : "")
+                        onClicked: ed.setTool(modelData.id)
+                        Icon { anchors.centerIn: parent; d: Icons[toolBtn.modelData.icon]; size: 17; stroke: 1.9; color: toolBtn.on ? "white" : Theme.text }
+                    }
+                }
+            }
+        }
+        Item {
+            id: toolBody
+            y: toolStrip.y + toolStrip.height + 2
+            width: parent.width
+            height: parent.height - y
+            Inspector {
+                id: inspector
+                anchors.fill: parent
+                visible: side.tab === "select"
+                project: ed.project
+                stage: stage
+                editor: ed
+            }
+            SidePanel {
+                id: side
+                anchors.fill: parent
+                visible: side.tab !== "select"
+                project: ed.project
+                editor: ed
+                showRail: false
+                tab: "select"
+            }
         }
     }
 
@@ -1021,9 +1379,10 @@ Item {
         z: 100
         readonly property var groups: [
             { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
-                                         ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
-            { title: "Elementy", items: [["T", "Nowy tekst"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
-                                         ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
+                                         ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Ctrl+Shift+A", "Odznacz piksele"], ["Ctrl+Shift+I", "Odwróć zaznaczenie"], ["Ctrl+J", "Zaznaczenie na warstwę"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
+            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B / E", "Pędzel / gumka"], ["G / I", "Wypełnij / pipeta"], ["J / S", "Korektor / stempel"], ["[ / ]", "Rozmiar pędzla"],
+                                         ["P", "Rysowanie linii"], ["M / L / W", "Zaznacz: prostokąt, lasso, różdżka"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+                                         ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+T", "Przekształć rogami"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],
                                                ["Spacja+przeciąganie", "Przesuń widok"], ["Ctrl+R", "Linijki i prowadnice"],
