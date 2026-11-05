@@ -14,10 +14,12 @@ Item {
     property bool active: false
     property bool starting: false
     property bool pressedLook: false      // np. otwarty Start
+    property bool popupOpen: false        // nad ikoną jest już karta okien albo menu
     property real base: 50
     property real magnify: 1
     signal clicked()
     signal middleClicked()
+    signal rightClicked()
 
     readonly property real size: base * magnify
     width: size + 8
@@ -101,7 +103,7 @@ Item {
         id: tip
         anchors.horizontalCenter: parent.horizontalCenter
         y: tile.y - height - 12 - item.jump + (shown ? 0 : 6)
-        readonly property bool shown: area.containsMouse && !area.pressed && item.label !== ""
+        readonly property bool shown: area.containsMouse && !area.pressed && item.label !== "" && !item.popupOpen
         width: tipText.implicitWidth + 22; height: 28; radius: 14
         color: Theme.dark ? Qt.rgba(0.16, 0.16, 0.19, 0.94) : Qt.rgba(1, 1, 1, 0.94)
         border.width: 1
@@ -123,7 +125,11 @@ Item {
         id: area
         anchors.fill: parent
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        onClicked: (m) => m.button === Qt.MiddleButton ? item.middleClicked() : item.clicked()
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+        onClicked: (m) => {
+            if (m.button === Qt.MiddleButton) item.middleClicked();
+            else if (m.button === Qt.RightButton) item.rightClicked();
+            else item.clicked();
+        }
     }
 }

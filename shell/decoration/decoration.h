@@ -36,7 +36,6 @@ private:
     void updateShadow();
     void updateGroupHover();
     bool isDark() const;
-    bool cornersRounded() const;
 
     QList<Button *> m_buttons;
     QVariantAnimation m_groupAnim;

@@ -1,0 +1,12 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Description": "Nowe okna nie kryją się dokładnie pod poprzednimi",
+        "EnabledByDefault": true,
+        "Id": "asteruklad",
+        "License": "GPL",
+        "Name": "Układ okien Aster"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}
