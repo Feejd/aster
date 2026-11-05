@@ -44,7 +44,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(sheet.cardWidth, sheet.width - 40)
         height: body.childrenRect.height + 82
-        radius: 18
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         opacity: sheet.shown ? 1 : 0

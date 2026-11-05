@@ -352,8 +352,31 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
         do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
-  - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
-        automatyka głośności
+  - [x] praca raperów na gotowym bicie: „Na swoim bicie” (ekran startowy) i „Bit z pliku” (menu ścieżek) —
+        `src/analysis.*` rozpoznaje tempo (strumień nastąpień, autokorelacja do 16 uderzeń; trafia co do 0,1 BPM),
+        fazę uderzeń (pełne i dolne pasmo, pierwszeństwo pierwszego dźwięku) i tonację (szczyty widma 30–1000 Hz,
+        profile Krumhansla); projekt dostaje tempo i tonację bitu, bit ląduje na siatce (cisza przed „raz” przycięta).
+        Próby na 6 szablonach: tempo 10/11 (drill bez akordów — połowa), tonacja 7/11 (pomyłki o kwartę), faza 11/11
+  - [x] odsłuch głosu w słuchawkach z efektami uzbrojonej ścieżki (autotune na żywo), ostrzeżenie o sprzężeniu
+  - [x] nagrywanie w pętli: każde przejście regionu to podejście (jeden plik, przesunięcia w klipie), domyślnie
+        ostatnie pełne; wybór w zakładce Klip, menu klipu albo plakietką na klipie; comping = podziel i wybierz
+  - [x] wymiana fragmentu (punch-in, P): nagranie tylko w regionie na linijce, rozbieg ok. 3 s (pełne takty) z bitem
+        i starym nagraniem, w regionie stare milknie; po regionie koniec sam, 10 ms przenikania na brzegach
+  - [x] role ścieżek rapera (Wokal / Dubel / Ad-libsy, klawisze 1–3, „nagrywasz na” przy przycisku nagrywania;
+        brakującą ścieżkę Studio zakłada z brzmieniem); w menu klipu „Nagraj dubel / ad-libsy do tego fragmentu”;
+        efekt „Sztuczny dubel” (dwie pływające kopie 19 i 27 ms po bokach) w karcie Przestrzeń
+  - [x] tekst piosenki (zakładka Tekst, T): pisanie, czytanie z kolorowymi rymami (`src/lyrics.*`: od przedostatniej
+        sylaby, wymowa ó/u, rz/ż, ubezdźwięcznienie; asonanse i rymy męskie; para do 3 wersów odstępu), czas wersów
+        od taktu co 1–2 takty albo ustawiany ↓ w trakcie grania (miary, do szesnastki), prompter nad osią przy nagrywaniu
+  - [x] czystość głosu (karta w zakładce Ścieżka): odszumianie nagrań w tle (`src/denoise.*`: profil szumu
+        z 10% najcichszych ramek, bramka widmowa STFT 2048/512 z wygładzaniem; lekko/średnio/mocno: szum w pauzach
+        −8/−14/−21 dB, głos ±0,4 dB; plik „· odszumione N.wav”, oryginał w klipie, nowe nagrania ścieżki od razu)
+        i de-esser na żywo (zwrotnica LR4 4,5 kHz, udział góry w sygnale; „s” −9 dB przy 40%, głos bez zmian;
+        gotowe brzmienia wokalu mają 40%)
+  - Kierunek od 2026-11-05: pełnoprawny DAW — plan i etapy w `docs/STUDIO-DAW.md`
+  - [ ] Dalej (raperzy): podpowiedzi rymów (słownik hunspell-pl),
+        znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
+        separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
         stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
   - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,

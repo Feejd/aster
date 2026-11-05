@@ -9,9 +9,15 @@ pkg_check_modules(SAMPLERATE REQUIRED IMPORTED_TARGET samplerate)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
 pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
+# Wtyczki VST3: pakiety vst3sdk-devel (Fedora); inny przedrostek, gdy SDK leży poza systemem
+set(STUDIO_VST3_PREFIX "/usr" CACHE PATH "Gdzie jest VST3 SDK")
+find_library(VST3_HOSTING vst3sdk_hosting HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
+find_library(VST3_COMMON vst3sdk_common HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
+find_library(RUBBERBAND rubberband HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)    # rozciąganie w czasie
 
 qt_add_executable(aster-studio src/main.cpp)
-target_include_directories(aster-studio PRIVATE src)
+target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include)
 
 set(STUDIO_QML
     qml/Main.qml
@@ -24,7 +30,12 @@ set(STUDIO_QML
     qml/Field.qml
     qml/Segmented.qml
     qml/Inspector.qml
-    qml/PatternEditor.qml
+    qml/Lyrics.qml
+    qml/ChannelRack.qml
+    qml/Browser.qml
+    qml/ChannelPanel.qml
+    qml/LyricText.qml
+    qml/Prompter.qml
     qml/PianoRoll.qml
 )
 foreach(f ${STUDIO_QML})
@@ -37,6 +48,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
+        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/remote.cpp src/remote.h src/plugin.h src/rack.cpp src/instrument.h src/stretch.cpp src/stretch.h src/library.cpp
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
@@ -56,12 +68,22 @@ qt_add_qml_module(aster-studio
         src/waveform.h
 )
 
+# Proces pomocniczy: jedna wtyczka, własny kod VST3 i CLAP, bez Qt Quick
+add_executable(aster-plugin-host src/pluginhost_main.cpp src/remote.cpp src/plugincommon.cpp src/vst3host.cpp src/claphost.cpp src/pluginwindow.cpp)
+target_include_directories(aster-plugin-host PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk ${STUDIO_VST3_PREFIX}/include)
+target_compile_definitions(aster-plugin-host PRIVATE RELEASE=1)
+target_link_libraries(aster-plugin-host PRIVATE Qt6::Core PkgConfig::X11 ${VST3_HOSTING} ${VST3_COMMON} ${CMAKE_DL_LIBS})
+add_dependencies(aster-studio aster-plugin-host)
+install(TARGETS aster-plugin-host DESTINATION libexec)
+
 target_link_libraries(aster-studio PRIVATE
     Qt6::Gui
     Qt6::Quick
     Qt6::Qml
     Qt6::DBus
     PkgConfig::PIPEWIRE
+    ${RUBBERBAND}
+    ${CMAKE_DL_LIBS}
     PkgConfig::SNDFILE
     PkgConfig::SAMPLERATE
     PkgConfig::ALSA

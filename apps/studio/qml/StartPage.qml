@@ -12,6 +12,7 @@ Item {
     signal newRequested(string genre)
     signal openRequested()
     signal bundleRequested()
+    signal beatRequested()
     signal menuRequested(var project, Item item, real x, real y)
 
     // ——— Pasek boczny ———
@@ -29,10 +30,7 @@ Item {
                 Rectangle {
                     x: 8; anchors.verticalCenter: parent.verticalCenter
                     width: 24; height: 24; radius: 7
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: "#FF9F7A" }
-                        GradientStop { position: 1; color: "#E5484D" }
-                    }
+                    color: "#E5484D"
                     Icon { anchors.centerIn: parent; d: Icons.music; size: 14; stroke: 2; color: "white" }
                 }
                 Text { x: 42; anchors.verticalCenter: parent.verticalCenter; text: "Projekty"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
@@ -116,8 +114,15 @@ Item {
                 x: 28; y: newLabel.y + newLabel.height + 12
                 spacing: 16
                 StarterCard {
+                    title: "Na swoim bicie"
+                    hint: "Wrzuć bit MP3 lub WAV — tempo i tonacja ustawią się same"
+                    icon: "audioTrack"
+                    colors: ["#B86BFF", "#5B21B6"]
+                    onClicked: start.beatRequested()
+                }
+                StarterCard {
                     title: "Nowy projekt"
-                    hint: "Pusta piosenka z metronomem — ścieżki na wokal i gitarę"
+                    hint: "Zestaw perkusji, pierwszy wzór i ścieżki do nagrań"
                     icon: "plus"
                     colors: ["#FF9F7A", "#E5484D"]
                     onClicked: start.newRequested("")
@@ -154,11 +159,8 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property var shades: [["#8E5CFF", "#3A1C8C"], ["#5C6CFF", "#1C2A8C"], ["#FFB86B", "#C2410C"], ["#7CE0C3", "#16806A"], ["#FF6BD5", "#9D1C7A"], ["#FF9F7A", "#E5484D"]]
-                        width: 138; height: 96; radius: 16
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: gcard.shades[gcard.index % 6][0] }
-                            GradientStop { position: 1; color: gcard.shades[gcard.index % 6][1] }
-                        }
+                        width: 138; height: 96; radius: 12
+                        baseColor: gcard.shades[gcard.index % 6][1]
                         onClicked: start.newRequested(modelData.id)
                         Text { x: 14; y: 12; text: gcard.modelData.label; color: "white"; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold }
                         Text { x: 14; y: 36; text: gcard.modelData.bpm + " BPM"; color: Qt.rgba(1, 1, 1, 0.85); font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -201,13 +203,9 @@ Item {
                         Rectangle {
                             id: art
                             x: 10; y: 6
-                            width: parent.width - 20; height: 120; radius: 14
+                            width: parent.width - 20; height: 120; radius: 12
                             readonly property var shades: [["#FFB86B", "#E5484D"], ["#7CE0C3", "#1E9E7A"], ["#A39BFF", "#5B3FD9"], ["#74CCFF", "#2457E6"], ["#FF9ED2", "#C72C83"]]
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0; color: art.shades[tile.index % 5][0] }
-                                GradientStop { position: 1; color: art.shades[tile.index % 5][1] }
-                            }
+                            color: art.shades[tile.index % 5][1]
                             scale: tileArea.pressed ? 0.98 : 1
                             Behavior on scale { NumberAnimation { duration: 100 } }
                             // Umowne „ścieżki” z falą — miniatura projektu
@@ -283,15 +281,12 @@ Item {
         property string hint
         property string icon
         property var colors
-        width: 300; height: 92; radius: 16
+        width: 290; height: 92; radius: 12
         baseColor: Theme.fill
         Rectangle {
             x: 16; anchors.verticalCenter: parent.verticalCenter
-            width: 56; height: 56; radius: 15
-            gradient: Gradient {
-                GradientStop { position: 0; color: sc.colors[0] }
-                GradientStop { position: 1; color: sc.colors[1] }
-            }
+            width: 56; height: 56; radius: 10
+            color: sc.colors[1]
             Icon { anchors.centerIn: parent; d: Icons[sc.icon] || ""; size: 26; stroke: 2.2; color: "white" }
         }
         Column {

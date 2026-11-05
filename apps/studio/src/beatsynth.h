@@ -35,6 +35,11 @@ QString chordName(int root, bool minor, int degree, bool seventh);
 QJsonArray chordNotes(const QJsonObject &keysPattern);     // akordy → nuty (do piano rolla)   // „a-moll”, „F-dur⁷”
 int noteMidi(const QJsonObject &bassPattern, int degree);  // stopień skali → MIDI
 
+// Pojedyncze brzmienia zestawu dla kanałów samplera: kick, snare, clap, hat, openhat, perc
+std::shared_ptr<AudioSource> kitSample(const QString &kit, const QString &row, int rate);
+struct BassParams { double decay, glide, drive; };
+BassParams bassParams(const QString &kit);
+
 // Pętla audio (stereo, `rate`) z wzoru w danym tempie; ogony dźwięków zawijają się na początek (pętla bez szwu)
 std::shared_ptr<AudioSource> render(const QJsonObject &pattern, Kind kind, double bpm, int rate);
 

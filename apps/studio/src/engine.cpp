@@ -24,10 +24,49 @@ void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool
     while (n > 0) {
         const int k = std::min(n, MaxBlock);
         block(s, pos, k, out, click, meters, rate, clips);
+        m_monPos += k;
         pos += k;
         out += 2 * k;
         n -= k;
     }
+}
+
+// Ostatnie n ramek insertu sprzed `delay` ramek
+void Renderer::delayed(int insert, int delay, int n, float *l, float *r)
+{
+    const int cap = MaxDelay;
+    delay = std::min(delay, cap - MaxBlock - 1);
+    const float *rl = m_delay.data() + size_t(insert) * 2 * cap, *rr = rl + cap;
+    int at = m_delayPos[insert] - n - delay;
+    while (at < 0)
+        at += cap;
+    for (int i = 0; i < n; ++i) {
+        l[i] = rl[at];
+        r[i] = rr[at];
+        if (++at == cap)
+            at = 0;
+    }
+}
+
+// Skok głowicy, zawrócenie pętli, nowa migawka: gdzie jesteśmy w nutach kanałów. Zatrzymanie i skok ucinają grające nuty
+void Renderer::sequence(const Snapshot *s, long long pos, int n, bool playing)
+{
+    const bool jump = playing && pos != m_nextPos;
+    const bool stopped = !playing && m_wasPlaying;
+    const int channels = std::min(int(s->channels.size()), int(MaxChannels));
+    if (jump || stopped)
+        for (int c = 0; c < channels; ++c)
+            if (Instrument *i = s->channels[size_t(c)].inst)
+                i->silence();
+    if (playing && (jump || s != m_seqSnap)) {
+        for (int c = 0; c < channels; ++c) {
+            const auto &ev = s->channels[size_t(c)].events;
+            m_cursor[c] = size_t(std::lower_bound(ev.begin(), ev.end(), pos, [](const SeqEvent &e, long long p) { return e.at < p; }) - ev.begin());
+        }
+    }
+    m_seqSnap = s;
+    m_nextPos = pos + n;
+    m_wasPlaying = playing;
 }
 
 void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips)
@@ -43,34 +82,129 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
     bool reverb = false;
 
     if (s) {
-        for (size_t ti = 0; ti < s->tracks.size(); ++ti) {
-            const TrackRT &t = s->tracks[ti];
-            reverb |= t.send > 0;
-            echo |= t.echo > 0;
-            bool any = false;
-            // Granie na żywo na tej ścieżce — wchodzi przed efekty, jak klipy
-            if (m_live && m_live->any(int(ti))) {
-                std::fill_n(m_tl, n, 0.f);
-                std::fill_n(m_tr, n, 0.f);
-                any = true;
-                m_live->render(int(ti), m_tl, m_tr, n);
+        const int inserts = std::min(int(s->inserts.size()), int(MaxTracks));
+        std::fill_n(m_any, inserts, false);
+        auto open = [&](int i) {
+            if (!m_any[i]) {
+                std::fill_n(busL(i), n, 0.f);
+                std::fill_n(busR(i), n, 0.f);
+                m_any[i] = true;
             }
-            if (!t.audible)
+        };
+
+        // Automatyka: wartości na ten blok
+        for (int i = 0; i < inserts; ++i)
+            std::fill_n(m_autoSet[i], int(AutoRT::Kinds), false);
+        float autoMaster = -1;
+        if (m_autoLast.size() < s->autos.size())
+            m_autoLast.resize(std::min<size_t>(s->autos.size(), 4096), -1.f);
+        if (clips) {
+            for (size_t k = 0; k < s->autos.size() && k < m_autoLast.size(); ++k) {
+                const AutoRT &a = s->autos[k];
+                if (pos < a.start || pos >= a.end)
+                    continue;
+                const float v = a.at(pos);
+                if (a.kind == AutoRT::Param) {
+                    if (a.plugin && std::fabs(v - m_autoLast[k]) > 1e-4f) {
+                        a.plugin->automate(a.param, v);
+                        m_autoLast[k] = v;
+                    }
+                } else if (a.kind == AutoRT::Master) {
+                    autoMaster = v;
+                } else if (a.kind < AutoRT::Kinds && a.index >= 0 && a.index < inserts) {
+                    m_autoVal[a.index][a.kind] = v;
+                    m_autoSet[a.index][a.kind] = true;
+                }
+            }
+        }
+        m_autoMaster = autoMaster;
+
+        // Kanały: nuty tego bloku do instrumentów, ich dźwięk do insertów
+        sequence(s, pos, n, clips);
+        const Plug::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
+        const int channels = std::min(int(s->channels.size()), int(MaxChannels));
+        // Grupy ucinania: otwarty hat milknie, gdy uderzy zamknięty — co do próbki
+        int chokes = 0;
+        if (clips)
+            for (int c = 0; c < channels; ++c) {
+                const ChannelRT &ch = s->channels[size_t(c)];
+                if (!ch.choke)
+                    continue;
+                for (size_t k = m_cursor[c]; k < ch.events.size() && ch.events[k].at < pos + n && chokes < 64; ++k)
+                    if (ch.events[k].on && ch.events[k].at >= pos)
+                        m_chokes[chokes++] = {c, ch.choke, int(ch.events[k].at - pos)};
+            }
+        for (int c = 0; c < channels; ++c) {
+            const ChannelRT &ch = s->channels[size_t(c)];
+            if (!ch.inst || ch.insert < 0 || ch.insert >= inserts)
                 continue;
-            for (const ClipRT &c : t.clips) {
-                if (!clips)
-                    break;
+            int count = 0;
+            for (int k = 0; k < m_liveCount && count < 256; ++k)
+                if (m_liveNotes[k].channel == c)
+                    m_ev[count++] = Plug::Note{0, m_liveNotes[k].on, m_liveNotes[k].pitch, m_liveNotes[k].velocity};
+            if (clips) {
+                size_t &cur = m_cursor[c];
+                while (cur < ch.events.size() && ch.events[cur].at < pos + n && count < 512) {
+                    const SeqEvent &e = ch.events[cur++];
+                    if (e.at >= pos)
+                        m_ev[count++] = Plug::Note{int(e.at - pos), e.on, e.pitch, e.velocity};
+                }
+            }
+            if (ch.choke) {
+                for (int k = 0; k < chokes && count < 512; ++k)
+                    if (m_chokes[k].channel != c && m_chokes[k].group == ch.choke)
+                        m_ev[count++] = Plug::Note{m_chokes[k].offset, false, -1, 0};
+                std::stable_sort(m_ev, m_ev + count, [](const Plug::Note &a, const Plug::Note &b) { return a.offset < b.offset; });
+            }
+            std::fill_n(m_cl, n, 0.f);
+            std::fill_n(m_cr, n, 0.f);
+            ch.inst->process(m_cl, m_cr, n, m_ev, count, tp);
+            if (!ch.audible)
+                continue;
+            float cg = 1.f;
+            if (clips)
+                for (const AutoRT &a : s->autos)
+                    if (a.kind == AutoRT::ChannelVolume && a.index == c && pos >= a.start && pos < a.end)
+                        cg = AutoRT::gainOf(a.at(pos));
+            open(ch.insert);
+            float *bl = busL(ch.insert), *br = busR(ch.insert);
+            for (int i = 0; i < n; ++i) {
+                bl[i] += m_cl[i] * ch.gainL * cg;
+                br[i] += m_cr[i] * ch.gainR * cg;
+            }
+        }
+
+        m_liveCount = 0;
+
+        // Granie na żywo i odsłuch mikrofonu — wchodzą przed efekty, jak klipy
+        for (int i = 0; i < inserts; ++i)
+            if (m_live && m_live->any(i)) {
+                open(i);
+                m_live->render(i, busL(i), busR(i), n);
+            }
+        if (m_mon && m_monTrack >= 0 && m_monTrack < inserts && m_monPos < m_monN) {
+            open(m_monTrack);
+            const int k = std::min(n, m_monN - m_monPos);
+            float *bl = busL(m_monTrack), *br = busR(m_monTrack);
+            for (int i = 0; i < k; ++i) {
+                bl[i] += m_mon[m_monPos + i];
+                br[i] += m_mon[m_monPos + i];
+            }
+        }
+
+        // Klipy audio z playlisty
+        for (const LaneRT &lane : s->lanes) {
+            if (!clips || lane.insert < 0 || lane.insert >= inserts)
+                continue;
+            for (const ClipRT &c : lane.clips) {
                 const long long a = std::max(pos, c.start);
                 const long long b = std::min(pos + n, c.start + c.length);
                 if (a >= b || !c.src || c.srcLen <= 0)
                     continue;
-                if (!any) {
-                    std::fill_n(m_tl, n, 0.f);
-                    std::fill_n(m_tr, n, 0.f);
-                    any = true;
-                }
+                open(lane.insert);
+                float *tl = busL(lane.insert), *tr = busR(lane.insert);
                 const AudioSource &src = *c.src;
-                const long long fin = std::max(declick, c.fadeIn), fout = std::max(declick, c.fadeOut);
+                const long long fin = c.raw ? 0 : std::max(declick, c.fadeIn), fout = c.raw ? 0 : std::max(declick, c.fadeOut);
                 for (long long f = a; f < b; ++f) {
                     const long long t0 = f - c.start;
                     const long long si = c.srcStart + (c.loop ? (t0 + c.offset) % c.srcLen : t0);
@@ -81,68 +215,172 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                         g *= std::sin(1.5707963f * float(t0) / fin);
                     if (c.length - t0 < fout)
                         g *= std::sin(1.5707963f * float(c.length - t0) / fout);
-                    m_tl[f - pos] += src.at(si, 0) * g;
-                    m_tr[f - pos] += src.at(si, 1) * g;
+                    tl[f - pos] += src.at(si, 0) * g;
+                    tr[f - pos] += src.at(si, 1) * g;
                 }
             }
-            if (!any)
-                continue;
+        }
 
-            // Efekty ścieżki: autotune → korektor → kompresor → głośność i panorama → wysyłka do pogłosu
-            if (ti < size_t(MaxTracks)) {
-                if (t.tune.on)
-                    m_tune[ti].process(m_tl, m_tr, n, t.tune, rate);
-                for (int k = 0; k < 4; ++k) {
-                    if (t.eq[k].flat())
-                        continue;
-                    BiquadState &zl = m_eq[ti][k][0], &zr = m_eq[ti][k][1];
-                    for (int i = 0; i < n; ++i) {
-                        m_tl[i] = zl.run(t.eq[k], m_tl[i]);
-                        m_tr[i] = zr.run(t.eq[k], m_tr[i]);
-                    }
-                }
-                if (t.drive > 0) {
-                    // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
-                    const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
-                    for (int i = 0; i < n; ++i) {
-                        m_tl[i] = std::tanh(m_tl[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tl[i] * 0.35f * t.drive;
-                        m_tr[i] = std::tanh(m_tr[i] * k) * norm * (1.f - 0.35f * t.drive) + m_tr[i] * 0.35f * t.drive;
-                    }
-                }
-                if (t.comp.on) {
-                    CompState &cs = m_comp[ti];
-                    for (int i = 0; i < n; ++i) {
-                        const float g = cs.process(t.comp, std::max(std::fabs(m_tl[i]), std::fabs(m_tr[i])), rate);
-                        m_tl[i] *= g;
-                        m_tr[i] *= g;
-                    }
+        // Inserty: źródła wysyłek przed celami
+        for (int ii : s->order) {
+            if (ii < 0 || ii >= inserts)
+                continue;
+            const InsertRT &t = s->inserts[size_t(ii)];
+            auto fxValue = [&](AutoRT::Kind k, float base) { return m_autoSet[ii][k] ? m_autoVal[ii][k] : base; };
+            const float tSend = fxValue(AutoRT::Reverb, t.send / 0.6f) * 0.6f, tEcho = fxValue(AutoRT::Echo, t.echo / 0.7f) * 0.7f;
+            const float tDrive = fxValue(AutoRT::Drive, t.drive), tDbl = fxValue(AutoRT::Double, t.dbl), tDeess = fxValue(AutoRT::Deess, t.deess);
+            reverb |= tSend > 0;
+            echo |= tEcho > 0;
+            if (!t.audible)
+                continue;
+            if (!m_any[ii] && t.fx.empty())         // wtyczka gra też po końcu klipu (ogony pogłosu i echa)
+                continue;
+            open(ii);
+            float *tl = busL(ii), *tr = busR(ii);
+
+            // Efekty: autotune → korektor → de-esser → przester → kompresor → sztuczny dubel → wtyczki → głośność i panorama
+            if (t.tune.on)
+                m_tune[size_t(ii)].process(tl, tr, n, t.tune, rate);
+            for (int k = 0; k < 4; ++k) {
+                if (t.eq[k].flat())
+                    continue;
+                BiquadState &zl = m_eq[ii][k][0], &zr = m_eq[ii][k][1];
+                for (int i = 0; i < n; ++i) {
+                    tl[i] = zl.run(t.eq[k], tl[i]);
+                    tr[i] = zr.run(t.eq[k], tr[i]);
                 }
             }
+            if (tDeess > 0 && !t.deessLp.flat())
+                m_deess[ii].process(tl, tr, n, t.deessLp, t.deessHp, tDeess, rate);
+            if (tDrive > 0) {
+                // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
+                const float k = 1.f + 6.f * tDrive, norm = 1.f / std::tanh(k);
+                for (int i = 0; i < n; ++i) {
+                    tl[i] = std::tanh(tl[i] * k) * norm * (1.f - 0.35f * tDrive) + tl[i] * 0.35f * tDrive;
+                    tr[i] = std::tanh(tr[i] * k) * norm * (1.f - 0.35f * tDrive) + tr[i] * 0.35f * tDrive;
+                }
+            }
+            if (t.comp.on) {
+                CompState &cs = m_comp[ii];
+                for (int i = 0; i < n; ++i) {
+                    const float g = cs.process(t.comp, std::max(std::fabs(tl[i]), std::fabs(tr[i])), rate);
+                    tl[i] *= g;
+                    tr[i] *= g;
+                }
+            }
+            if (tDbl > 0)
+                m_dbl[size_t(ii)].process(tl, tr, n, tDbl, rate);
+            else
+                m_dbl[size_t(ii)].idle();
+            for (const PluginRT &p : t.fx) {
+                const bool side = p.side >= 0 && p.side < inserts && m_any[p.side];
+                p.plugin->process(tl, tr, n, nullptr, 0, tp, side ? busL(p.side) : nullptr, side ? busR(p.side) : nullptr);
+            }
+            // Sidechain Studia: gdy gra źródło, ten insert się cofa (bas pod stopą, bit pod głosem)
+            if (t.duckFrom >= 0 && t.duckFrom < inserts && t.duck > 0 && m_any[t.duckFrom]) {
+                const float *sl = busL(t.duckFrom), *sr = busR(t.duckFrom);
+                const float att = 1.f - std::exp(-1.f / (0.002f * rate)), rel = 1.f - std::exp(-1.f / (0.14f * rate));
+                float env = m_duckEnv[ii];
+                for (int i = 0; i < n; ++i) {
+                    const float x = std::max(std::fabs(sl[i]), std::fabs(sr[i]));
+                    env += (x > env ? att : rel) * (x - env);
+                    const float g = 1.f - t.duck * std::min(1.f, env / 0.25f);
+                    tl[i] *= g;
+                    tr[i] *= g;
+                }
+                m_duckEnv[ii] = env;
+            }
+
+            if (ii == m_tap) {
+                std::copy_n(tl, n, m_tapL);
+                std::copy_n(tr, n, m_tapR);
+                m_tapHit = true;
+            }
+
+            // Głośność i panorama: rampa z poprzedniego bloku (automatyka i ruch suwaka bez trzasków)
+            const float gNow = m_autoSet[ii][AutoRT::Volume] ? AutoRT::gainOf(m_autoVal[ii][AutoRT::Volume]) : t.gain;
+            const float pNow = m_autoSet[ii][AutoRT::Pan] ? m_autoVal[ii][AutoRT::Pan] * 2 - 1 : t.pan;
+            const float endL = gNow * (pNow > 0 ? 1.f - pNow : 1.f), endR = gNow * (pNow < 0 ? 1.f + pNow : 1.f);
+            if (!m_gainKnown[ii]) {
+                m_gainL[ii] = endL;
+                m_gainR[ii] = endR;
+                m_gainKnown[ii] = true;
+            }
+            const float stepL = (endL - m_gainL[ii]) / n, stepR = (endR - m_gainR[ii]) / n;
+            float gl = m_gainL[ii], gr = m_gainR[ii];
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {
-                const float l = m_tl[i] * t.gainL, r = m_tr[i] * t.gainR;
-                m_l[i] += l;
-                m_r[i] += r;
-                if (t.send > 0) {
-                    m_rl[i] += l * t.send;
-                    m_rr[i] += r * t.send;
-                }
-                if (t.echo > 0) {
-                    m_el[i] += l * t.echo;
-                    m_er[i] += r * t.echo;
-                }
-                pl = std::max(pl, std::fabs(l));
-                pr = std::max(pr, std::fabs(r));
+                gl += stepL;
+                gr += stepR;
+                tl[i] *= gl;
+                tr[i] *= gr;
+                pl = std::max(pl, std::fabs(tl[i]));
+                pr = std::max(pr, std::fabs(tr[i]));
             }
-            if (meters && ti < size_t(MaxTracks)) {
-                raisePeak((*meters)[ti][0], pl);
-                raisePeak((*meters)[ti][1], pr);
+            // Kompensacja: droga na sumę i wysyłki opóźnione tak, żeby wszystko spotkało się równo
+            bool needDelay = t.delay > 0;
+            for (const SendRT &sd : t.sends)
+                needDelay |= sd.delay > 0;
+            if (needDelay) {
+                const int cap = MaxDelay;
+                float *rl = m_delay.data() + size_t(ii) * 2 * cap, *rr = rl + cap;
+                int w = m_delayPos[ii];
+                for (int i = 0; i < n; ++i) {
+                    rl[w] = tl[i];
+                    rr[w] = tr[i];
+                    if (++w == cap)
+                        w = 0;
+                }
+                m_delayPos[ii] = w;
+            }
+            const float *ol = tl, *or_ = tr;
+            if (t.delay > 0) {
+                delayed(ii, t.delay, n, m_dl, m_dr);
+                ol = m_dl;
+                or_ = m_dr;
+            }
+            for (int i = 0; i < n; ++i) {
+                const float l = ol[i], r = or_[i];
+                if (t.toMaster) {
+                    m_l[i] += l;
+                    m_r[i] += r;
+                }
+                if (tSend > 0) {
+                    m_rl[i] += l * tSend;
+                    m_rr[i] += r * tSend;
+                }
+                if (tEcho > 0) {
+                    m_el[i] += l * tEcho;
+                    m_er[i] += r * tEcho;
+                }
+            }
+            m_gainL[ii] = endL;
+            m_gainR[ii] = endR;
+            for (const SendRT &sd : t.sends) {
+                if (sd.to < 0 || sd.to >= inserts)
+                    continue;
+                open(sd.to);
+                float *dl = busL(sd.to), *dr = busR(sd.to);
+                const float *fl = tl, *fr = tr;
+                if (sd.delay > 0) {
+                    delayed(ii, sd.delay, n, m_cl, m_cr);
+                    fl = m_cl;
+                    fr = m_cr;
+                }
+                for (int i = 0; i < n; ++i) {
+                    dl[i] += fl[i] * sd.gain;
+                    dr[i] += fr[i] * sd.gain;
+                }
+            }
+            if (meters) {
+                raisePeak((*meters)[ii][0], pl);
+                raisePeak((*meters)[ii][1], pr);
             }
         }
     }
 
     if (m_live && s)
-        m_live->dropFrom(int(s->tracks.size()));
+        m_live->dropFrom(int(s->inserts.size()));
 
     // Wspólny pogłos (gra dalej, gdy klipy się skończą — wybrzmiewanie)
     if (reverb) {
@@ -159,7 +397,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
     }
 
     // Suma: głośność → mastering (korektor, kompresor, szerokość, dociśnięcie) → ogranicznik z wyprzedzeniem
-    const float master = s ? s->master : 1.f;
+    const float master = s ? (m_autoMaster >= 0 ? AutoRT::gainOf(m_autoMaster) : s->master) : 1.f;
     const MasterParams mp = s ? s->mastering : MasterParams{};
     const float release = 1.f - std::exp(-1.f / (0.15f * rate));
     float pl = 0.f, pr = 0.f;
@@ -203,7 +441,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         const int bpb = s ? std::max(1, s->beatsPerBar) : 4;
         const long long len = rate / 16;
         for (int i = 0; i < n; ++i) {
-            const long long p = pos + i;
+            const long long p = pos + i - (s ? s->latency : 0);   // metronom razem z tym, co słychać
             const double beat = std::floor(double(p) / fpb);
             const long long off = p - std::llround(beat * fpb);
             if (off < 0 || off >= len)
@@ -217,6 +455,14 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         }
     }
 
+    if (m_tap >= 0) {
+        for (int i = 0; i < n; ++i) {
+            out[2 * i] = m_tapHit ? m_tapL[i] : 0.f;
+            out[2 * i + 1] = m_tapHit ? m_tapR[i] : 0.f;
+        }
+        m_tapHit = false;
+        return;
+    }
     for (int i = 0; i < n; ++i) {
         out[2 * i] = m_l[i];
         out[2 * i + 1] = m_r[i];
@@ -446,6 +692,13 @@ void Engine::connectInput()
                       pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS), params, 1);
 }
 
+void Engine::setMonitor(int track, int channel)
+{
+    // Bufora nie czyścimy stąd (czyta go tylko wątek wyjścia) — sam odrzuca nadmiar
+    m_monChannel.store(channel, std::memory_order_relaxed);
+    m_monTrack.store(track, std::memory_order_relaxed);
+}
+
 void Engine::setCapture(bool on)
 {
     if (!m_core || on == (m_in != nullptr))
@@ -527,11 +780,39 @@ void Engine::onPlayback()
         m_rtPos = seek;
 
     takeLiveCommands();
+    {
+        // Nuty z klawiatury do kanałów
+        unsigned rd = m_noteR.load(std::memory_order_relaxed);
+        const unsigned wr = m_noteW.load(std::memory_order_acquire);
+        int k = 0;
+        for (; rd != wr && k < int(NoteQueue); ++rd)
+            m_noteBlock[k++] = m_noteQueue[rd % NoteQueue];
+        m_noteR.store(rd, std::memory_order_release);
+        m_renderer.setLiveNotes(m_noteBlock, k);
+    }
+    // Odsłuch: to, co przyszło z mikrofonu. Nadmiar ponad jeden blok i trochę zapasu — odrzucony,
+    // żeby opóźnienie nie rosło; brak — cisza (wejście jeszcze nie ruszyło)
+    const int monTrack = m_monTrack.load(std::memory_order_relaxed);
+    if (monTrack >= 0) {
+        const size_t want = std::min<size_t>(n, m_monBuf.size());
+        size_t avail = m_monRing.available();
+        while (avail > want + 512) {
+            const size_t drop = std::min(avail - want, m_monBuf.size());
+            m_monRing.read(m_monBuf.data(), drop);
+            avail -= drop;
+        }
+        const size_t got = m_monRing.read(m_monBuf.data(), std::min(want, avail));
+        std::fill(m_monBuf.begin() + long(got), m_monBuf.begin() + long(want), 0.f);
+        m_renderer.setMonitor(monTrack, m_monBuf.data(), int(want));
+    } else {
+        m_renderer.setMonitor(-1, nullptr, 0);
+    }
     if (m_playing.load()) {
         const long long cie = m_countInEnd.load();
         const bool click = m_metronome.load() || (cie != NoSeek && m_rtPos < cie);
-        // Region pętli: po dojściu do końca wracamy na początek (w środku bloku, bez przerwy)
-        const bool cycle = m_cycle.load() && !m_recActive.load();
+        // Region pętli: po dojściu do końca wracamy na początek (w środku bloku, bez przerwy).
+        // W trakcie nagrywania też — każde przejście to kolejne podejście (nagranie leci ciągiem)
+        const bool cycle = m_cycle.load();
         const long long cs = m_cycleStart.load(), ce = m_cycleEnd.load();
         uint32_t done = 0;
         while (done < n) {
@@ -594,6 +875,19 @@ void Engine::onCapture()
         }
         raisePeak(m_inPeak[0], pl);
         raisePeak(m_inPeak[1], pr);
+        if (m_monTrack.load(std::memory_order_relaxed) >= 0) {
+            const int ch = m_monChannel.load(std::memory_order_relaxed);
+            float mono[256];
+            for (uint32_t i = 0; i < n;) {
+                const uint32_t k = std::min<uint32_t>(256, n - i);
+                for (uint32_t j = 0; j < k; ++j) {
+                    const float l = src[2 * (i + j)], r = src[2 * (i + j) + 1];
+                    mono[j] = ch == 1 ? l : ch == 2 ? r : 0.5f * (l + r);
+                }
+                m_monRing.write(mono, k);
+                i += k;
+            }
+        }
         if (m_recActive.load() && m_playing.load()) {
             // Miejsce na osi czasu: to, co muzyk słyszał, gdy grał — po odjęciu opóźnienia wyjścia i wejścia
             if (m_recFirst.load() == NoSeek) {
@@ -601,7 +895,7 @@ void Engine::onCapture()
                 long long inDelay = 0;
                 if (pw_stream_get_time_n(m_in, &t, sizeof t) == 0 && t.rate.denom)
                     inDelay = t.delay * Rate * t.rate.num / t.rate.denom;
-                m_recFirst.store(m_pos.load() - m_outDelay.load() - inDelay - n - m_extraLatency.load());
+                m_recFirst.store(m_pos.load() - m_outDelay.load() - inDelay - n - m_extraLatency.load() - m_pluginLatency.load());
             }
             m_ring.write(src, size_t(n) * 2);
         }
@@ -636,6 +930,15 @@ void Engine::pushLive(const LiveCmd &c)
         return;                                 // kolejka pełna (nie powinno się zdarzyć) — nutę pomijamy
     m_liveCmds[w % LiveQueue] = c;
     m_liveW.store(w + 1, std::memory_order_release);
+}
+
+void Engine::channelNote(int channel, bool on, int pitch, float velocity)
+{
+    const unsigned w = m_noteW.load(std::memory_order_relaxed);
+    if (w - m_noteR.load(std::memory_order_acquire) >= NoteQueue)
+        return;
+    m_noteQueue[w % NoteQueue] = {channel, on, pitch, velocity};
+    m_noteW.store(w + 1, std::memory_order_release);
 }
 
 void Engine::liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain)
@@ -830,6 +1133,12 @@ std::shared_ptr<AudioSource> Engine::stopRecording(long long *start)
     return src;
 }
 
+long long Engine::recordedFrames() const
+{
+    QMutexLocker lock(&m_liveMutex);
+    return (long long)(m_livePeaks.size() / 2) * AudioSource::PeakStep;
+}
+
 std::vector<float> Engine::livePeaks() const
 {
     QMutexLocker lock(&m_liveMutex);
@@ -837,6 +1146,31 @@ std::vector<float> Engine::livePeaks() const
 }
 
 // ——— Eksport ———
+
+bool Engine::renderInsert(const Snapshot &s, int insert, long long frames, int skip, const QString &path)
+{
+    SF_INFO info{};
+    info.samplerate = Rate;
+    info.channels = 2;
+    info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+    SNDFILE *sf = sf_open(QFile::encodeName(path).constData(), SFM_WRITE, &info);
+    if (!sf)
+        return false;
+    auto renderer = std::make_unique<Renderer>();
+    renderer->setTap(insert);
+    std::vector<float> buf(size_t(Renderer::MaxBlock) * 2);
+    const long long total = frames + skip;
+    bool ok = true;
+    for (long long pos = 0; pos < total && ok; pos += Renderer::MaxBlock) {
+        int n = int(std::min<long long>(Renderer::MaxBlock, total - pos));
+        renderer->process(&s, pos, n, buf.data(), false, nullptr, Rate);
+        const long long drop = std::clamp(skip - pos, 0LL, (long long)n);
+        n -= int(drop);
+        ok = n <= 0 || sf_writef_float(sf, buf.data() + 2 * drop, n) == n;
+    }
+    sf_close(sf);
+    return ok;
+}
 
 bool Engine::exportMix(const Snapshot &s, long long frames, const QString &path, const QString &format,
                        const std::function<bool(double)> &progress, QString *error)
@@ -873,12 +1207,16 @@ bool Engine::exportMix(const Snapshot &s, long long frames, const QString &path,
         renderer->setCeiling(0.84f);        // −1,5 dBFS
     std::vector<float> buf(size_t(Renderer::MaxBlock) * 2);
     bool ok = true;
-    for (long long pos = 0; pos < frames; pos += Renderer::MaxBlock) {
-        const int n = int(std::min<long long>(Renderer::MaxBlock, frames - pos));
+    // Opóźnienie wtyczek: suma spóźnia się o s.latency, więc tyle ramek z początku wypada
+    const long long skip = s.latency, total = frames + skip;
+    for (long long pos = 0; pos < total; pos += Renderer::MaxBlock) {
+        int n = int(std::min<long long>(Renderer::MaxBlock, total - pos));
         renderer->process(&s, pos, n, buf.data(), false, nullptr, Rate);
         for (int i = 0; i < 2 * n; ++i)
             buf[size_t(i)] = std::clamp(buf[size_t(i)], -1.f, 1.f);
-        if (sf_writef_float(sf, buf.data(), n) != n) {
+        const long long drop = std::clamp(skip - pos, 0LL, (long long)n);
+        n -= int(drop);
+        if (n > 0 && sf_writef_float(sf, buf.data() + 2 * drop, n) != n) {
             if (error)
                 *error = QString::fromUtf8(sf_strerror(sf));
             ok = false;

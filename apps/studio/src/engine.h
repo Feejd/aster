@@ -2,6 +2,8 @@
 
 #include "audiosource.h"
 #include "dsp.h"
+#include "instrument.h"
+#include "plugin.h"
 #include "tune.h"
 #include "synthvoice.h"
 
@@ -36,24 +38,115 @@ struct ClipRT
     long long fadeIn = 0, fadeOut = 0;   // narastanie i wyciszanie (ramki)
     float gain = 1.f;                     // głośność klipu
     bool loop = false;
+    bool raw = false;                     // plik zamrożonego insertu: bez łagodzenia brzegów (uderzenie w ramce 0)
 };
 
-struct TrackRT
+// Insert miksera: suma tego, co do niego idzie, efekty, głośność i wysyłki
+struct SendRT
 {
-    std::vector<ClipRT> clips;
-    float gainL = 1.f, gainR = 1.f;      // głośność × panorama
+    int to = 0;                           // numer insertu
+    float gain = 0;
+    int delay = 0;                        // wyrównanie opóźnień wtyczek (ramki)
+};
+
+struct PluginRT
+{
+    Plug::Plugin *plugin = nullptr;       // żyje w Snapshot::plugins
+    int side = -1;                        // insert podany na wejście boczne
+};
+
+struct InsertRT
+{
+    float gain = 1.f, pan = 0.f;          // suwak i panorama (automatyka je zastępuje)
     bool audible = true;                  // po uwzględnieniu wycisz/solo
+    bool toMaster = true;                 // grupa bez wyjścia na master gra tylko przez wysyłki
     Biquad eq[4];                         // usuwanie dudnienia, niskie, średnie, wysokie
     CompParams comp;
     float send = 0;                       // ile do pogłosu (po suwaku głośności)
     float echo = 0;                       // ile do echa
     float drive = 0;                      // przester / ciepło (0 = brak)
+    float dbl = 0;                        // sztuczny dubel (0 = brak)
+    float deess = 0;                      // de-esser (0 = brak)
+    Biquad deessLp, deessHp;              // jego zwrotnica (dół / góra)
     TuneParams tune;                      // autotune
+    std::vector<PluginRT> fx;             // wtyczki VST3 po efektach Studia
+    int duckFrom = -1;                    // sidechain Studia: insert, który ścisza ten
+    float duck = 0;                       // jak mocno (0…1)
+    int delay = 0;                        // wyrównanie opóźnień wtyczek na drodze do sumy (ramki)
+    std::vector<SendRT> sends;            // po suwaku, do insertów dalej w Snapshot::order
+};
+
+// Automatyka: krzywa jednego parametru w czasie utworu
+struct AutoRT
+{
+    enum Kind { Volume, Pan, Reverb, Echo, Drive, Double, Deess, Kinds, ChannelVolume, Master, Param };
+    Kind kind = Volume;
+    int index = 0;                        // insert albo kanał
+    Plug::Plugin *plugin = nullptr;       // Param
+    unsigned param = 0;
+    long long start = 0, end = 0;
+    std::vector<std::pair<long long, float>> points;   // ramki od początku utworu, wartość 0…1
+    float at(long long pos) const
+    {
+        if (points.empty())
+            return 0;
+        if (pos <= points.front().first)
+            return points.front().second;
+        if (pos >= points.back().first)
+            return points.back().second;
+        for (size_t i = 1; i < points.size(); ++i)
+            if (pos < points[i].first) {
+                const auto &a = points[i - 1], &b = points[i];
+                return a.second + (b.second - a.second) * float(pos - a.first) / float(std::max(1LL, b.first - a.first));
+            }
+        return points.back().second;
+    }
+    // Fader: te same pozycje co suwak miksera (0 dB przy ~71%, +6 dB na górze)
+    static float gainOf(float v)
+    {
+        if (v <= 0.001f)
+            return 0;
+        const float db = 6.f + 40.f * std::log10(v);
+        return std::pow(10.f, db / 20.f);
+    }
+};
+
+// Pas playlisty: klipy audio i insert, do którego grają
+struct LaneRT
+{
+    int insert = 0;
+    std::vector<ClipRT> clips;
+};
+
+// Nuta w czasie utworu (ramki), posortowane rosnąco
+struct SeqEvent
+{
+    long long at = 0;
+    int pitch = 60;
+    float velocity = 0.8f;
+    bool on = true;
+};
+
+// Kanał: instrument, jego nuty i insert docelowy
+struct ChannelRT
+{
+    Instrument *inst = nullptr;           // żyje w Snapshot::instruments
+    int insert = 0;
+    float gainL = 1.f, gainR = 1.f;
+    bool audible = true;
+    int choke = 0;                        // grupa ucinania: nuta kanału ucina pozostałe z tej samej grupy
+    std::vector<SeqEvent> events;
 };
 
 struct Snapshot
 {
-    std::vector<TrackRT> tracks;
+    std::vector<LaneRT> lanes;
+    std::vector<InsertRT> inserts;
+    std::vector<ChannelRT> channels;
+    std::vector<AutoRT> autos;
+    int latency = 0;                      // opóźnienie całej sumy przez wtyczki (ramki)
+    std::vector<int> order;               // inserty w kolejności liczenia: źródła wysyłek przed celami
+    std::vector<std::shared_ptr<Instrument>> instruments;
     double bpm = 120;
     int beatsPerBar = 4;
     float master = 1.f;
@@ -63,6 +156,7 @@ struct Snapshot
     float echoFeedback = 0.35f;
     MasterParams mastering;
     std::vector<SourcePtr> keep;          // trzyma pliki przy życiu, dopóki migawka jest w użyciu
+    std::vector<std::shared_ptr<Plug::Plugin>> plugins;   // i wtyczki (zwalnia je wątek interfejsu)
 };
 
 // Mikser: ten sam kod gra na żywo i eksportuje (eksport brzmi dokładnie tak jak odsłuch)
@@ -73,22 +167,63 @@ public:
     static constexpr int MaxTracks = 64;
     using Meters = std::atomic<float>[MaxTracks + 1][2];     // [ścieżka][kanał], ostatnia — suma
 
-    Renderer() : m_tune(MaxTracks) {}
+    static constexpr int MaxChannels = 128;
+    static constexpr int MaxDelay = 32768;     // ponad 0,6 s opóźnienia wtyczek na ścieżce
+    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks), m_bus(size_t(MaxTracks) * 2 * MaxBlock, 0.f), m_delay(size_t(MaxTracks) * 2 * MaxDelay, 0.f) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
     void setLive(LivePool *live) { m_live = live; }
+    // Zamrażanie: wyjściem staje się ten insert po efektach, przed suwakiem
+    void setTap(int insert) { m_tap = insert; }
+    // Nuty grane teraz (klawiatura, MIDI): wchodzą na początek najbliższego bloku
+    struct LiveNote { int channel; bool on; int pitch; float velocity; };
+    void setLiveNotes(const LiveNote *notes, int count) { m_liveNotes = notes; m_liveCount = count; }
+    // Odsłuch wejścia (mono) na ścieżce `track` w tym wywołaniu process() — przed efektami, jak klipy
+    void setMonitor(int track, const float *buf, int count) { m_monTrack = track; m_mon = buf; m_monN = count; m_monPos = 0; }
     // Pułap ogranicznika sumy (liniowo). Dla MP3/OGG niżej — koder dokłada własne szczyty.
     void setCeiling(float c) { m_ceiling = c; }
 
 private:
     void block(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips);
     LivePool *m_live = nullptr;           // głosy grane na żywo (tylko w silniku, nie przy eksporcie)
-    float m_l[MaxBlock], m_r[MaxBlock], m_tl[MaxBlock], m_tr[MaxBlock];
+    const LiveNote *m_liveNotes = nullptr;
+    int m_liveCount = 0;
+    const float *m_mon = nullptr;         // odsłuch wejścia: próbki, ich liczba i ile już zużyto
+    int m_monTrack = -1, m_monN = 0, m_monPos = 0;
+    void sequence(const Snapshot *s, long long pos, int n, bool playing);
+    float *busL(int i) { return m_bus.data() + size_t(i) * 2 * MaxBlock; }
+    float *busR(int i) { return busL(i) + MaxBlock; }
+    float m_l[MaxBlock], m_r[MaxBlock], m_cl[MaxBlock], m_cr[MaxBlock];
+    std::vector<float> m_bus;             // po dwa kanały na każdy insert
+    std::vector<float> m_delay;           // pierścień po suwaku każdego insertu (kompensacja opóźnień)
+    int m_delayPos[MaxTracks] = {};
+    float m_duckEnv[MaxTracks] = {};
+    float m_dl[MaxBlock], m_dr[MaxBlock];
+    float m_tapL[MaxBlock], m_tapR[MaxBlock];
+    bool m_tapHit = false;
+    void delayed(int insert, int delay, int n, float *l, float *r);
+    bool m_any[MaxTracks] = {};           // ten insert ma dźwięk w tym bloku
+    size_t m_cursor[MaxChannels] = {};    // następna nuta kanału
+    long long m_nextPos = 0;              // gdzie powinien zacząć się kolejny blok (inaczej — skok głowicy)
+    const Snapshot *m_seqSnap = nullptr;
+    bool m_wasPlaying = false;
+    Plug::Note m_ev[512];
+    struct Choke { int channel, group, offset; };
+    Choke m_chokes[64];
+    float m_autoVal[MaxTracks][AutoRT::Kinds];
+    bool m_autoSet[MaxTracks][AutoRT::Kinds];
+    float m_gainL[MaxTracks], m_gainR[MaxTracks];      // poprzedni blok: głośność płynie, bez trzasków
+    bool m_gainKnown[MaxTracks] = {};
+    int m_tap = -1;
+    float m_autoMaster = -1;
+    std::vector<float> m_autoLast;                     // ostatnio wysłana wartość parametru wtyczki
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];
+    DeEsser m_deess[MaxTracks];
     std::vector<PitchCorrector> m_tune;   // osobny stan autotune dla każdej ścieżki
+    std::vector<Doubler> m_dbl;           // i sztucznego dubla
     Reverb m_reverb;
     int m_reverbRate = 0;
     float m_rl[MaxBlock], m_rr[MaxBlock], m_el[MaxBlock], m_er[MaxBlock];
@@ -147,9 +282,10 @@ public:
     long long position() const;
     bool playing() const { return m_playing.load(); }
     void setMetronome(bool on) { m_metronome.store(on); }
-    // Region pętli odtwarzania (ćwiczenie fragmentu); nie działa w trakcie nagrywania
+    // Region pętli odtwarzania (ćwiczenie fragmentu); przy nagrywaniu — podejścia jedno po drugim
     void setCycle(bool on, long long start, long long end);
     void setLatencyOffset(long long frames) { m_extraLatency.store(frames); }
+    void setPluginLatency(long long frames) { m_pluginLatency.store(frames); }   // nagranie wyrównane do tego, co słychać
     void readMeters(std::vector<float> &tracks, float master[2]);   // szczyty od ostatniego odczytu
 
     // Nagrywanie: od pozycji `start` (wcześniej odliczanie), kanał wejścia 0 = oba zmieszane, 1 = lewy, 2 = prawy
@@ -159,6 +295,7 @@ public:
     bool recording() const { return m_recThread.joinable(); }
     long long recordStart() const { return m_recStart; }
     std::vector<float> livePeaks() const;  // szczyty nagrywanego dźwięku (do rysowania w trakcie)
+    long long recordedFrames() const;       // ile już nagrano (z dokładnością do PeakStep)
 
     // Odsłuch pojedynczego dźwięku (klik w piano rollu, klawiatura) — gra też przy zatrzymanym transporcie.
     // Dźwięk trzymany jest po stronie interfejsu jeszcze kilka sekund, więc wątek audio nigdy go nie zwalnia.
@@ -166,7 +303,12 @@ public:
 
     // Granie na żywo (klawiatura komputera, MIDI): nuta brzmi, dopóki nie przyjdzie liveNoteOff z tym samym id
     void liveNoteOn(int id, int track, SynthVoice::Inst inst, double freq, float gain);
+    void channelNote(int channel, bool on, int pitch, float velocity);   // nuta na kanał (numer w migawce)
     void liveNoteOff(int id);
+
+    // Odsłuch: głos z mikrofonu słychać na ścieżce `track` z jej efektami (autotune, pogłos…); -1 — wyłączony.
+    // channel jak przy nagrywaniu: 0 = oba zmieszane, 1 = lewy, 2 = prawy
+    void setMonitor(int track, int channel);
 
     // Wejście włączone tylko, gdy jakaś ścieżka czeka na nagranie (inaczej system pokazuje używany mikrofon)
     void setCapture(bool on);
@@ -181,6 +323,8 @@ public:
     QString input() const { return m_inName; }
 
     // Eksport miksu poza czasem rzeczywistym. format: wav | flac | mp3 | ogg. progress zwraca false → przerwij
+    // Insert po efektach do pliku WAV (zmiennoprzecinkowego), bez sumy i ogranicznika; skip — opóźnienie jego wtyczek
+    static bool renderInsert(const Snapshot &s, int insert, long long frames, int skip, const QString &path);
     static bool exportMix(const Snapshot &s, long long frames, const QString &path, const QString &format,
                           const std::function<bool(double)> &progress, QString *error);
 
@@ -225,6 +369,7 @@ private:
     std::atomic<long long> m_countInEnd{NoSeek};
     std::atomic<long long> m_outDelay{0};
     std::atomic<long long> m_extraLatency{0};
+    std::atomic<long long> m_pluginLatency{0};
     std::atomic<bool> m_cycle{false};
     std::atomic<long long> m_cycleStart{0}, m_cycleEnd{0};
     long long m_rtPos = 0;                 // tylko wątek audio
@@ -242,6 +387,11 @@ private:
     std::vector<float> m_livePeaks;
     std::atomic<float> m_inPeak[2] = {};
     std::atomic<long long> m_recClipStart{0};
+
+    // Odsłuch: wątek wejścia pisze mono, wątek wyjścia czyta (opóźnienie trzymane przy kilku ms)
+    SpscRing m_monRing{size_t(Rate)};
+    std::atomic<int> m_monTrack{-1}, m_monChannel{0};
+    std::vector<float> m_monBuf = std::vector<float>(16384);   // tylko wątek wyjścia
 
     // Głosy odsłuchu: wątek interfejsu wpisuje dźwięk i zwiększa numer, wątek audio zaczyna go od początku
     static constexpr int PreviewVoices = 8;
@@ -268,6 +418,9 @@ private:
     LiveCmd m_liveCmds[LiveQueue];
     std::atomic<unsigned> m_liveW{0}, m_liveR{0};
     LivePool m_live;                              // tylko wątek audio
+    static constexpr unsigned NoteQueue = 256;
+    Renderer::LiveNote m_noteQueue[NoteQueue], m_noteBlock[NoteQueue];
+    std::atomic<unsigned> m_noteW{0}, m_noteR{0};
     void pushLive(const LiveCmd &c);
     void takeLiveCommands();                      // wątek audio
     int m_previewNext = 0;
