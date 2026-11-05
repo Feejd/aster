@@ -43,6 +43,8 @@ Każdy etap zostawia działający program i kończy się commitem.
        mikser na insertach z wtyczkami i wysyłkami, piano roll kanału, instrumenty VST3 także z klawiatury MIDI.
        Beat Maker zastąpiony: stare wzory i szablony gatunków zamieniają się na kanały i wzory.
        Zostało: efekty natywne jako osobne sloty, przeciąganie z przeglądarki na playlistę.
-4. [ ] Automatyka, kompensacja opóźnień, sidechain, zamrażanie kanałów.
+4. [x] Automatyka (klipy z krzywą: głośność, panorama, efekty, parametry VST3, głośność kanału), kompensacja
+       opóźnień wtyczek (także w wysyłkach, metronomie, nagrywaniu i eksporcie), sidechain Studia i wejście boczne
+       VST3, zamrażanie insertów do pliku. Jeszcze nie: nagrywanie automatyki ruchem suwaka, krzywe nieliniowe.
 5. [ ] Sampler pełny (obwiednie, ucinanie, rozciąganie w czasie: rubberband), biblioteka brzmień, presety.
 6. [ ] Wtyczki w osobnym procesie, CLAP, yabridge w obrazie i wtyczki z Windowsa (test na x86_64).

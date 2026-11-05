@@ -302,6 +302,9 @@ public:
     Q_INVOKABLE void removeInsert(int id);
     Q_INVOKABLE bool setInsertSend(int id, int to, double db);       // poniżej −60 dB — bez wysyłki; pętle odrzucone
     Q_INVOKABLE void setInsertToMaster(int id, bool on);
+    Q_INVOKABLE bool setInsertDuck(int id, int from, double amount);   // sidechain: from = 0 wyłącza
+    Q_INVOKABLE bool setPluginSide(int insert, int slot, int from);    // wejście boczne wtyczki
+    Q_INVOKABLE void freezeInsert(int id, bool on);                    // efekty i instrumenty do pliku — procesor odpoczywa
     Q_INVOKABLE void setInsertVolume(int id, double db);
     Q_INVOKABLE void setInsertPan(int id, double pan);
     Q_INVOKABLE void setInsertMute(int id, bool on);
@@ -416,6 +419,7 @@ private:
         bool bypass = false;
         QByteArray state;               // ostatni znany stan (także gdy wtyczki brakuje na tym komputerze)
         std::shared_ptr<Vst3::Plugin> plugin;
+        int side = 0;                   // insert na wejściu bocznym (0 — brak)
     };
     struct Send
     {
@@ -438,6 +442,9 @@ private:
         bool lowCut = false;
         QString preset;
         bool toMaster = true;
+        int duckFrom = 0;               // sidechain Studia: insert, który ścisza ten (0 — brak)
+        double duck = 0.6;
+        QString frozen;                 // zamrożony: gra ten plik (po efektach) zamiast źródeł i wtyczek
         QList<Send> sends;
         QList<Slot> slots_;             // wtyczki VST3
     };
@@ -589,6 +596,9 @@ private:
     void compileAutos(Snapshot *s);
     QHash<int, Vst3::Plugin *> m_snapPlugins;   // slot → instancja w budowanej migawce (eksport ma własne)
     QList<int> insertOrder() const;
+    bool wouldLoop(int source, int target) const;      // dźwięk z target dochodzi już do source
+    void compileLatency(Snapshot *s);
+    int m_lastLatency = 0;
     long long patternFrames(const Pattern &p) const;
     Pattern *findPattern(int id);
     Channel *findChannel(int id);

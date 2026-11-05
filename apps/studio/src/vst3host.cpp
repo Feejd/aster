@@ -172,6 +172,7 @@ struct Plugin::Impl
     ParameterChanges inChanges{256}, outChanges{256};
     ProcessContext ctx{};
     int inBuses = 0, outBuses = 0;
+    int auxBus = -1;                               // pierwsza szyna boczna (sidechain)
     int maxBlock = 2048;
     double rate = 48000;
     ParamMsg rtParams[64];                         // automatyka z wątku audio
@@ -308,8 +309,12 @@ std::unique_ptr<Plugin> Plugin::load(const Info &info, double rate, int maxBlock
         ProcessSetup setup{kRealtime, kSample32, maxBlock, rate};
         if (d->processor->setupProcessing(setup) != kResultOk)
             return fail(QStringLiteral("Wtyczka nie obsługuje dźwięku 32-bitowego: %1").arg(info.name));
-        for (int i = 0; i < d->inBuses; ++i)
-            d->component->activateBus(kAudio, kInput, i, i == 0);
+        for (int i = 0; i < d->inBuses; ++i) {
+            BusInfo bi{};
+            if (i > 0 && d->auxBus < 0 && d->component->getBusInfo(kAudio, kInput, i, bi) == kResultOk && bi.busType == kAux)
+                d->auxBus = i;
+            d->component->activateBus(kAudio, kInput, i, i == 0 || i == d->auxBus);
+        }
         for (int i = 0; i < d->outBuses; ++i)
             d->component->activateBus(kAudio, kOutput, i, i == 0);
         for (int i = 0, n = d->component->getBusCount(kEvent, kInput); i < n; ++i)
@@ -333,7 +338,9 @@ std::unique_ptr<Plugin> Plugin::load(const Info &info, double rate, int maxBlock
     return fail(QStringLiteral("Nie ma już tej wtyczki: %1").arg(info.name));
 }
 
-void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t)
+bool Plugin::hasSidechain() const { return d->auxBus >= 0; }
+
+void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t, const float *sideL, const float *sideR)
 {
     Impl *i = d.get();
     if (i->busy.test_and_set(std::memory_order_acquire))
@@ -398,6 +405,16 @@ void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount
     };
     if (pd.numInputs > 0)
         copyIn(pd.inputs[0]);
+    if (i->auxBus >= 0 && i->auxBus < pd.numInputs) {
+        AudioBusBuffers &b = pd.inputs[i->auxBus];
+        for (int c = 0; c < b.numChannels; ++c) {
+            const float *from = c == 0 ? sideL : sideR;
+            if (from)
+                std::memcpy(b.channelBuffers32[c], from, size_t(n) * sizeof(float));
+            else
+                std::memset(b.channelBuffers32[c], 0, size_t(n) * sizeof(float));
+        }
+    }
     i->processor->process(pd);
     if (pd.numOutputs > 0) {
         const AudioBusBuffers &o = pd.outputs[0];

@@ -31,6 +31,23 @@ void Renderer::process(const Snapshot *s, long long pos, int n, float *out, bool
     }
 }
 
+// Ostatnie n ramek insertu sprzed `delay` ramek
+void Renderer::delayed(int insert, int delay, int n, float *l, float *r)
+{
+    const int cap = MaxDelay;
+    delay = std::min(delay, cap - MaxBlock - 1);
+    const float *rl = m_delay.data() + size_t(insert) * 2 * cap, *rr = rl + cap;
+    int at = m_delayPos[insert] - n - delay;
+    while (at < 0)
+        at += cap;
+    for (int i = 0; i < n; ++i) {
+        l[i] = rl[at];
+        r[i] = rr[at];
+        if (++at == cap)
+            at = 0;
+    }
+}
+
 // Skok głowicy, zawrócenie pętli, nowa migawka: gdzie jesteśmy w nutach kanałów. Zatrzymanie i skok ucinają grające nuty
 void Renderer::sequence(const Snapshot *s, long long pos, int n, bool playing)
 {
@@ -170,7 +187,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 open(lane.insert);
                 float *tl = busL(lane.insert), *tr = busR(lane.insert);
                 const AudioSource &src = *c.src;
-                const long long fin = std::max(declick, c.fadeIn), fout = std::max(declick, c.fadeOut);
+                const long long fin = c.raw ? 0 : std::max(declick, c.fadeIn), fout = c.raw ? 0 : std::max(declick, c.fadeOut);
                 for (long long f = a; f < b; ++f) {
                     const long long t0 = f - c.start;
                     const long long si = c.srcStart + (c.loop ? (t0 + c.offset) % c.srcLen : t0);
@@ -238,8 +255,30 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                 m_dbl[size_t(ii)].process(tl, tr, n, tDbl, rate);
             else
                 m_dbl[size_t(ii)].idle();
-            for (Vst3::Plugin *p : t.fx)
-                p->process(tl, tr, n, nullptr, 0, tp);
+            for (const PluginRT &p : t.fx) {
+                const bool side = p.side >= 0 && p.side < inserts && m_any[p.side];
+                p.plugin->process(tl, tr, n, nullptr, 0, tp, side ? busL(p.side) : nullptr, side ? busR(p.side) : nullptr);
+            }
+            // Sidechain Studia: gdy gra źródło, ten insert się cofa (bas pod stopą, bit pod głosem)
+            if (t.duckFrom >= 0 && t.duckFrom < inserts && t.duck > 0 && m_any[t.duckFrom]) {
+                const float *sl = busL(t.duckFrom), *sr = busR(t.duckFrom);
+                const float att = 1.f - std::exp(-1.f / (0.002f * rate)), rel = 1.f - std::exp(-1.f / (0.14f * rate));
+                float env = m_duckEnv[ii];
+                for (int i = 0; i < n; ++i) {
+                    const float x = std::max(std::fabs(sl[i]), std::fabs(sr[i]));
+                    env += (x > env ? att : rel) * (x - env);
+                    const float g = 1.f - t.duck * std::min(1.f, env / 0.25f);
+                    tl[i] *= g;
+                    tr[i] *= g;
+                }
+                m_duckEnv[ii] = env;
+            }
+
+            if (ii == m_tap) {
+                std::copy_n(tl, n, m_tapL);
+                std::copy_n(tr, n, m_tapR);
+                m_tapHit = true;
+            }
 
             // Głośność i panorama: rampa z poprzedniego bloku (automatyka i ruch suwaka bez trzasków)
             const float gNow = m_autoSet[ii][AutoRT::Volume] ? AutoRT::gainOf(m_autoVal[ii][AutoRT::Volume]) : t.gain;
@@ -256,9 +295,35 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             for (int i = 0; i < n; ++i) {
                 gl += stepL;
                 gr += stepR;
-                const float l = tl[i] * gl, r = tr[i] * gr;
-                tl[i] = l;
-                tr[i] = r;
+                tl[i] *= gl;
+                tr[i] *= gr;
+                pl = std::max(pl, std::fabs(tl[i]));
+                pr = std::max(pr, std::fabs(tr[i]));
+            }
+            // Kompensacja: droga na sumę i wysyłki opóźnione tak, żeby wszystko spotkało się równo
+            bool needDelay = t.delay > 0;
+            for (const SendRT &sd : t.sends)
+                needDelay |= sd.delay > 0;
+            if (needDelay) {
+                const int cap = MaxDelay;
+                float *rl = m_delay.data() + size_t(ii) * 2 * cap, *rr = rl + cap;
+                int w = m_delayPos[ii];
+                for (int i = 0; i < n; ++i) {
+                    rl[w] = tl[i];
+                    rr[w] = tr[i];
+                    if (++w == cap)
+                        w = 0;
+                }
+                m_delayPos[ii] = w;
+            }
+            const float *ol = tl, *or_ = tr;
+            if (t.delay > 0) {
+                delayed(ii, t.delay, n, m_dl, m_dr);
+                ol = m_dl;
+                or_ = m_dr;
+            }
+            for (int i = 0; i < n; ++i) {
+                const float l = ol[i], r = or_[i];
                 if (t.toMaster) {
                     m_l[i] += l;
                     m_r[i] += r;
@@ -271,8 +336,6 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     m_el[i] += l * tEcho;
                     m_er[i] += r * tEcho;
                 }
-                pl = std::max(pl, std::fabs(l));
-                pr = std::max(pr, std::fabs(r));
             }
             m_gainL[ii] = endL;
             m_gainR[ii] = endR;
@@ -281,9 +344,15 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     continue;
                 open(sd.to);
                 float *dl = busL(sd.to), *dr = busR(sd.to);
+                const float *fl = tl, *fr = tr;
+                if (sd.delay > 0) {
+                    delayed(ii, sd.delay, n, m_cl, m_cr);
+                    fl = m_cl;
+                    fr = m_cr;
+                }
                 for (int i = 0; i < n; ++i) {
-                    dl[i] += tl[i] * sd.gain;
-                    dr[i] += tr[i] * sd.gain;
+                    dl[i] += fl[i] * sd.gain;
+                    dr[i] += fr[i] * sd.gain;
                 }
             }
             if (meters) {
@@ -355,7 +424,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         const int bpb = s ? std::max(1, s->beatsPerBar) : 4;
         const long long len = rate / 16;
         for (int i = 0; i < n; ++i) {
-            const long long p = pos + i;
+            const long long p = pos + i - (s ? s->latency : 0);   // metronom razem z tym, co słychać
             const double beat = std::floor(double(p) / fpb);
             const long long off = p - std::llround(beat * fpb);
             if (off < 0 || off >= len)
@@ -369,6 +438,14 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         }
     }
 
+    if (m_tap >= 0) {
+        for (int i = 0; i < n; ++i) {
+            out[2 * i] = m_tapHit ? m_tapL[i] : 0.f;
+            out[2 * i + 1] = m_tapHit ? m_tapR[i] : 0.f;
+        }
+        m_tapHit = false;
+        return;
+    }
     for (int i = 0; i < n; ++i) {
         out[2 * i] = m_l[i];
         out[2 * i + 1] = m_r[i];
@@ -801,7 +878,7 @@ void Engine::onCapture()
                 long long inDelay = 0;
                 if (pw_stream_get_time_n(m_in, &t, sizeof t) == 0 && t.rate.denom)
                     inDelay = t.delay * Rate * t.rate.num / t.rate.denom;
-                m_recFirst.store(m_pos.load() - m_outDelay.load() - inDelay - n - m_extraLatency.load());
+                m_recFirst.store(m_pos.load() - m_outDelay.load() - inDelay - n - m_extraLatency.load() - m_pluginLatency.load());
             }
             m_ring.write(src, size_t(n) * 2);
         }
@@ -1053,6 +1130,31 @@ std::vector<float> Engine::livePeaks() const
 
 // ——— Eksport ———
 
+bool Engine::renderInsert(const Snapshot &s, int insert, long long frames, int skip, const QString &path)
+{
+    SF_INFO info{};
+    info.samplerate = Rate;
+    info.channels = 2;
+    info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+    SNDFILE *sf = sf_open(QFile::encodeName(path).constData(), SFM_WRITE, &info);
+    if (!sf)
+        return false;
+    auto renderer = std::make_unique<Renderer>();
+    renderer->setTap(insert);
+    std::vector<float> buf(size_t(Renderer::MaxBlock) * 2);
+    const long long total = frames + skip;
+    bool ok = true;
+    for (long long pos = 0; pos < total && ok; pos += Renderer::MaxBlock) {
+        int n = int(std::min<long long>(Renderer::MaxBlock, total - pos));
+        renderer->process(&s, pos, n, buf.data(), false, nullptr, Rate);
+        const long long drop = std::clamp(skip - pos, 0LL, (long long)n);
+        n -= int(drop);
+        ok = n <= 0 || sf_writef_float(sf, buf.data() + 2 * drop, n) == n;
+    }
+    sf_close(sf);
+    return ok;
+}
+
 bool Engine::exportMix(const Snapshot &s, long long frames, const QString &path, const QString &format,
                        const std::function<bool(double)> &progress, QString *error)
 {
@@ -1088,12 +1190,16 @@ bool Engine::exportMix(const Snapshot &s, long long frames, const QString &path,
         renderer->setCeiling(0.84f);        // −1,5 dBFS
     std::vector<float> buf(size_t(Renderer::MaxBlock) * 2);
     bool ok = true;
-    for (long long pos = 0; pos < frames; pos += Renderer::MaxBlock) {
-        const int n = int(std::min<long long>(Renderer::MaxBlock, frames - pos));
+    // Opóźnienie wtyczek: suma spóźnia się o s.latency, więc tyle ramek z początku wypada
+    const long long skip = s.latency, total = frames + skip;
+    for (long long pos = 0; pos < total; pos += Renderer::MaxBlock) {
+        int n = int(std::min<long long>(Renderer::MaxBlock, total - pos));
         renderer->process(&s, pos, n, buf.data(), false, nullptr, Rate);
         for (int i = 0; i < 2 * n; ++i)
             buf[size_t(i)] = std::clamp(buf[size_t(i)], -1.f, 1.f);
-        if (sf_writef_float(sf, buf.data(), n) != n) {
+        const long long drop = std::clamp(skip - pos, 0LL, (long long)n);
+        n -= int(drop);
+        if (n > 0 && sf_writef_float(sf, buf.data() + 2 * drop, n) != n) {
             if (error)
                 *error = QString::fromUtf8(sf_strerror(sf));
             ok = false;

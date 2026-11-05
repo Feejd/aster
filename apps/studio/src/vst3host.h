@@ -53,7 +53,9 @@ public:
     const Info &info() const { return m_info; }
 
     // Wątek audio: l, r — wejście i wyjście w miejscu (n ≤ maxBlock)
-    void process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t);
+    // side — wejście boczne (sidechain), gdy wtyczka je ma; nullptr — cisza
+    void process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t, const float *sideL = nullptr, const float *sideR = nullptr);
+    bool hasSidechain() const;
     void automate(unsigned id, double value);      // wątek audio: wartość parametru na początek następnego process()
     int latency() const { return m_latency.load(); }
 

@@ -38,6 +38,7 @@ struct ClipRT
     long long fadeIn = 0, fadeOut = 0;   // narastanie i wyciszanie (ramki)
     float gain = 1.f;                     // głośność klipu
     bool loop = false;
+    bool raw = false;                     // plik zamrożonego insertu: bez łagodzenia brzegów (uderzenie w ramce 0)
 };
 
 // Insert miksera: suma tego, co do niego idzie, efekty, głośność i wysyłki
@@ -45,6 +46,13 @@ struct SendRT
 {
     int to = 0;                           // numer insertu
     float gain = 0;
+    int delay = 0;                        // wyrównanie opóźnień wtyczek (ramki)
+};
+
+struct PluginRT
+{
+    Vst3::Plugin *plugin = nullptr;       // żyje w Snapshot::plugins
+    int side = -1;                        // insert podany na wejście boczne
 };
 
 struct InsertRT
@@ -61,7 +69,10 @@ struct InsertRT
     float deess = 0;                      // de-esser (0 = brak)
     Biquad deessLp, deessHp;              // jego zwrotnica (dół / góra)
     TuneParams tune;                      // autotune
-    std::vector<Vst3::Plugin *> fx;       // wtyczki VST3 po efektach Studia (żyją w Snapshot::plugins)
+    std::vector<PluginRT> fx;             // wtyczki VST3 po efektach Studia
+    int duckFrom = -1;                    // sidechain Studia: insert, który ścisza ten
+    float duck = 0;                       // jak mocno (0…1)
+    int delay = 0;                        // wyrównanie opóźnień wtyczek na drodze do sumy (ramki)
     std::vector<SendRT> sends;            // po suwaku, do insertów dalej w Snapshot::order
 };
 
@@ -132,6 +143,7 @@ struct Snapshot
     std::vector<InsertRT> inserts;
     std::vector<ChannelRT> channels;
     std::vector<AutoRT> autos;
+    int latency = 0;                      // opóźnienie całej sumy przez wtyczki (ramki)
     std::vector<int> order;               // inserty w kolejności liczenia: źródła wysyłek przed celami
     std::vector<std::shared_ptr<Instrument>> instruments;
     double bpm = 120;
@@ -155,11 +167,14 @@ public:
     using Meters = std::atomic<float>[MaxTracks + 1][2];     // [ścieżka][kanał], ostatnia — suma
 
     static constexpr int MaxChannels = 128;
-    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks), m_bus(size_t(MaxTracks) * 2 * MaxBlock, 0.f) {}
+    static constexpr int MaxDelay = 32768;     // ponad 0,6 s opóźnienia wtyczek na ścieżce
+    Renderer() : m_tune(MaxTracks), m_dbl(MaxTracks), m_bus(size_t(MaxTracks) * 2 * MaxBlock, 0.f), m_delay(size_t(MaxTracks) * 2 * MaxDelay, 0.f) {}
     // Miesza `n` ramek od pozycji `pos` (może być ujemna — odliczanie) do `out` (L/R z przeplotem)
     // clips: false — bez klipów (zatrzymany transport): grają tylko głosy na żywo i ogony pogłosu/echa
     void process(const Snapshot *s, long long pos, int n, float *out, bool click, Meters *meters, int rate, bool clips = true);
     void setLive(LivePool *live) { m_live = live; }
+    // Zamrażanie: wyjściem staje się ten insert po efektach, przed suwakiem
+    void setTap(int insert) { m_tap = insert; }
     // Nuty grane teraz (klawiatura, MIDI): wchodzą na początek najbliższego bloku
     struct LiveNote { int channel; bool on; int pitch; float velocity; };
     void setLiveNotes(const LiveNote *notes, int count) { m_liveNotes = notes; m_liveCount = count; }
@@ -180,6 +195,13 @@ private:
     float *busR(int i) { return busL(i) + MaxBlock; }
     float m_l[MaxBlock], m_r[MaxBlock], m_cl[MaxBlock], m_cr[MaxBlock];
     std::vector<float> m_bus;             // po dwa kanały na każdy insert
+    std::vector<float> m_delay;           // pierścień po suwaku każdego insertu (kompensacja opóźnień)
+    int m_delayPos[MaxTracks] = {};
+    float m_duckEnv[MaxTracks] = {};
+    float m_dl[MaxBlock], m_dr[MaxBlock];
+    float m_tapL[MaxBlock], m_tapR[MaxBlock];
+    bool m_tapHit = false;
+    void delayed(int insert, int delay, int n, float *l, float *r);
     bool m_any[MaxTracks] = {};           // ten insert ma dźwięk w tym bloku
     size_t m_cursor[MaxChannels] = {};    // następna nuta kanału
     long long m_nextPos = 0;              // gdzie powinien zacząć się kolejny blok (inaczej — skok głowicy)
@@ -190,6 +212,7 @@ private:
     bool m_autoSet[MaxTracks][AutoRT::Kinds];
     float m_gainL[MaxTracks], m_gainR[MaxTracks];      // poprzedni blok: głośność płynie, bez trzasków
     bool m_gainKnown[MaxTracks] = {};
+    int m_tap = -1;
     float m_autoMaster = -1;
     std::vector<float> m_autoLast;                     // ostatnio wysłana wartość parametru wtyczki
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
@@ -259,6 +282,7 @@ public:
     // Region pętli odtwarzania (ćwiczenie fragmentu); przy nagrywaniu — podejścia jedno po drugim
     void setCycle(bool on, long long start, long long end);
     void setLatencyOffset(long long frames) { m_extraLatency.store(frames); }
+    void setPluginLatency(long long frames) { m_pluginLatency.store(frames); }   // nagranie wyrównane do tego, co słychać
     void readMeters(std::vector<float> &tracks, float master[2]);   // szczyty od ostatniego odczytu
 
     // Nagrywanie: od pozycji `start` (wcześniej odliczanie), kanał wejścia 0 = oba zmieszane, 1 = lewy, 2 = prawy
@@ -296,6 +320,8 @@ public:
     QString input() const { return m_inName; }
 
     // Eksport miksu poza czasem rzeczywistym. format: wav | flac | mp3 | ogg. progress zwraca false → przerwij
+    // Insert po efektach do pliku WAV (zmiennoprzecinkowego), bez sumy i ogranicznika; skip — opóźnienie jego wtyczek
+    static bool renderInsert(const Snapshot &s, int insert, long long frames, int skip, const QString &path);
     static bool exportMix(const Snapshot &s, long long frames, const QString &path, const QString &format,
                           const std::function<bool(double)> &progress, QString *error);
 
@@ -340,6 +366,7 @@ private:
     std::atomic<long long> m_countInEnd{NoSeek};
     std::atomic<long long> m_outDelay{0};
     std::atomic<long long> m_extraLatency{0};
+    std::atomic<long long> m_pluginLatency{0};
     std::atomic<bool> m_cycle{false};
     std::atomic<long long> m_cycleStart{0}, m_cycleEnd{0};
     long long m_rtPos = 0;                 // tylko wątek audio

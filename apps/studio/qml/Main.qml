@@ -369,6 +369,15 @@ Window {
         const shown = targets.slice(0, 18);
         menu.openAt(p.x, Math.max(60, p.y - shown.length * 34), shown.map((t, i) => ({ label: t.label, icon: "activity", action: "autoT:" + i })));
     }
+    function sideMenu(item, slot) {
+        menu.sideSlot = slot;
+        const self = Studio.inserts.find((i) => i.id === Studio.selectedInsert);
+        const cur = slot ? (self.plugins.find((p) => p.id === slot) || {}).side : self.duckFrom;
+        const p = item.mapToItem(frame, 0, 0);
+        const list = [{ label: "Bez sidechaina", icon: cur ? "" : "check", action: "side:0" }].concat(
+            Studio.inserts.filter((i) => i.id !== self.id && !i.hidden).map((i) => ({ label: i.name, icon: i.id === cur ? "check" : "", action: "side:" + i.id })));
+        menu.openAt(p.x, Math.max(60, p.y - list.length * 34), list);
+    }
     function patternMenu(item) {
         const p = item.mapToItem(frame, 0, item.height + 6);
         menu.openAt(p.x, p.y, Studio.patterns.map((q) => ({ label: q.name, icon: q.id === Studio.currentPattern ? "check" : "", action: "pat:" + q.id })));
@@ -404,6 +413,11 @@ Window {
         else if (a.startsWith("role:")) recordOn(a.substring(5));
         else if (a.startsWith("pat:")) { Studio.currentPattern = Number(a.substring(4)); }
         else if (a.startsWith("autoT:")) { const t = menu.autoTargets[Number(a.substring(6))]; Studio.addAutomation(t.target, t.label); toast("Krzywa na playliście: klik dodaje punkt, prawy przycisk usuwa"); }
+        else if (a.startsWith("side:")) {
+            const from = Number(a.substring(5));
+            if (menu.sideSlot) Studio.setPluginSide(Studio.selectedInsert, menu.sideSlot, from);
+            else Studio.setInsertDuck(Studio.selectedInsert, from, 0.7);
+        }
         else if (a === "chAuto") Qt.callLater(() => autoMenu(menu.anchorItem, Studio.channelAutoTargets(menu.channel)));
         else if (a === "chPiano") { Studio.selectedChannel = menu.channel; dock = "piano"; }
         else if (a === "chPlugin") Studio.openChannelPlugin(menu.channel);
@@ -834,6 +848,7 @@ Window {
                     visible: win.dock === "mixer"
                     colors: win.trackColors
                     onAddPluginRequested: pluginSheet.start()
+                    onSidechainRequested: (item, slot) => win.sideMenu(item, slot)
                     onAutomateRequested: (item) => win.autoMenu(item, Studio.autoTargets(Studio.selectedInsert))
                 }
             }
@@ -1344,6 +1359,7 @@ Window {
             property string folder
             property int channel
             property var autoTargets: []
+            property int sideSlot: 0
             property Item anchorItem: null
             onTriggered: (a) => win.runMenu(a)
         }

@@ -11,6 +11,7 @@ Item {
     property var colors: []
     signal addPluginRequested()
     signal automateRequested(Item item)
+    signal sidechainRequested(Item item, int slot)     // slot 0 — sidechain Studia
     function color(i) { return colors.length ? colors[i % colors.length] : Theme.accent; }
 
     // Suwak: pozycja 0…1 ↔ decybele (0 dB przy ~71%, +6 dB na górze)
@@ -100,7 +101,16 @@ Item {
                         color: Theme.fill
                         opacity: plug.p && (plug.p.bypass || plug.p.missing) ? 0.55 : 1
                         HoverButton {
-                            x: 2; width: parent.width - 54; height: parent.height; radius: 6
+                            id: sideBtn
+                            visible: !!plug.p && plug.p.hasSide
+                            x: parent.width - 76; anchors.verticalCenter: parent.verticalCenter
+                            width: 24; height: 24; radius: 6
+                            onClicked: mx.sidechainRequested(sideBtn, plug.p.id)
+                            Text { anchors.centerIn: parent; text: "SC"; color: plug.p && plug.p.side ? Theme.accentText : Theme.text2; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Bold }
+                            Tip { shown: parent.hovered; text: "Wejście boczne wtyczki" }
+                        }
+                        HoverButton {
+                            x: 2; width: parent.width - 54 - (sideBtn.visible ? 26 : 0); height: parent.height; radius: 6
                             enabled: !!plug.p && !plug.p.missing
                             onClicked: Studio.openPlugin(side.sel.id, plug.p.id)
                             Text { x: 6; width: parent.width - 10; anchors.verticalCenter: parent.verticalCenter; text: plug.p ? plug.p.name : ""; elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
@@ -131,6 +141,33 @@ Item {
                         Text { anchors.verticalCenter: parent.verticalCenter; text: "Automatyka…"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
                     }
                     Tip { shown: parent.hovered; text: "Krzywa głośności, efektu albo parametru wtyczki na playliście" }
+                }
+                // Sidechain Studia: wybrany insert ścisza ten
+                HoverButton {
+                    id: duckBtn
+                    width: sideCol.width; height: 26; radius: 7
+                    onClicked: mx.sidechainRequested(duckBtn, 0)
+                    Text {
+                        x: 6; width: parent.width - 12; anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: {
+                            const from = side.sel ? Studio.inserts.find((i) => i.id === side.sel.duckFrom) : null;
+                            return from ? "Ścisza go: " + from.name : "Sidechain…";
+                        }
+                        color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                    }
+                    Tip { shown: parent.hovered; text: "Gdy gra wybrany insert, ten się cofa — np. bas pod stopą" }
+                }
+                HoverButton {
+                    visible: !!side.sel
+                    width: sideCol.width; height: 26; radius: 7
+                    onClicked: Studio.freezeInsert(side.sel.id, !side.sel.frozen)
+                    Text {
+                        x: 6; anchors.verticalCenter: parent.verticalCenter
+                        text: side.sel && side.sel.frozen ? "Odmroź" : "Zamroź"
+                        color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                    }
+                    Tip { shown: parent.hovered; text: "Efekty i instrumenty do pliku — procesor odpoczywa" }
                 }
                 Text { text: "Wysyłki"; topPadding: 6; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
                 Repeater {

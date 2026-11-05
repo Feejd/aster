@@ -3,11 +3,14 @@
 #include "beatsynth.h"
 #include "studio.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPointer>
 #include <QSet>
+#include <QThreadPool>
 #include <algorithm>
 #include <cmath>
 
@@ -82,12 +85,7 @@ bool Studio::setInsertSend(int id, int to, double db)
     const int at = insertIndex(id);
     if (at < 0 || insertIndex(to) < 0 || id == to)
         return false;
-    QHash<int, QList<int>> graph;
-    for (const Insert &in : std::as_const(m_inserts))
-        for (const Send &s : in.sends)
-            graph[in.id] << s.to;
-    QSet<int> seen;
-    if (db > -60 && reaches(graph, to, id, seen)) {
+    if (db > -60 && wouldLoop(id, to)) {
         emit message(QStringLiteral("Ta wysyłka zamknęłaby pętlę — dźwięk krążyłby w kółko."));
         return false;
     }
@@ -96,6 +94,100 @@ bool Studio::setInsertSend(int id, int to, double db)
     sends.removeIf([to](const Send &s) { return s.to == to; });
     if (db > -60)
         sends.append({to, std::min(db, 6.0)});
+    changed(false);
+    return true;
+}
+
+bool Studio::setInsertDuck(int id, int from, double amount)
+{
+    Insert *in = findInsert(id);
+    if (!in || (from && (insertIndex(from) < 0 || wouldLoop(from, id)))) {
+        if (in)
+            emit message(QStringLiteral("Ten sidechain zamknąłby pętlę."));
+        return false;
+    }
+    checkpoint();
+    in = findInsert(id);
+    in->duckFrom = from;
+    in->duck = std::clamp(amount, 0.0, 1.0);
+    changed(false);
+    return true;
+}
+
+void Studio::freezeInsert(int id, bool on)
+{
+    Insert *in = findInsert(id);
+    if (!in || !isOpen() || recording())
+        return;
+    if (!on) {
+        checkpoint();
+        findInsert(id)->frozen.clear();
+        changed(false);
+        return;
+    }
+    for (const Insert &o : std::as_const(m_inserts))
+        for (const Send &s : o.sends)
+            if (s.to == id) {
+                emit message(QStringLiteral("Tego insertu nie da się zamrozić: dostaje dźwięk z wysyłki."));
+                return;
+            }
+    const long long end = frames(duration());
+    if (end <= 0)
+        return;
+    const QString path = uniqueAudioPath(QStringLiteral("_zamrożone %1").arg(in->name), QStringLiteral("wav"));
+    const int at = insertIndex(id);
+    std::shared_ptr<Snapshot> snap(buildSnapshot(true));
+    // Tylko ten insert: nic innego nie musi grać, a automatyka i wejścia boczne zostają
+    int own = 0;
+    for (const PluginRT &p : snap->inserts[size_t(at)].fx)
+        own += p.plugin->latency();
+    snap->latency = 0;
+    for (InsertRT &rt : snap->inserts) {
+        rt.delay = 0;
+        for (SendRT &sd : rt.sends)
+            sd.delay = 0;
+    }
+    ++m_loading;
+    emit busyChanged();
+    const QString file = QFileInfo(path).fileName();
+    const QString dir = m_folder;
+    QPointer<Studio> self(this);
+    const long long total = end + 3 * Engine::Rate;            // ogony efektów
+    QThreadPool::globalInstance()->start([self, snap, at, total, own, path, file, id, dir] {
+        const bool ok = Engine::renderInsert(*snap, at, total, own, path);
+        QString err;
+        std::shared_ptr<AudioSource> src = ok ? loadAudio(path, Engine::Rate, &err) : nullptr;
+        QMetaObject::invokeMethod(qApp, [self, ok, src, file, id, dir] {
+            if (!self)
+                return;
+            --self->m_loading;
+            emit self->busyChanged();
+            if (self->m_folder != dir)
+                return;
+            Insert *strip = self->findInsert(id);
+            if (!ok || !src || !strip) {
+                emit self->message(QStringLiteral("Nie udało się zamrozić insertu."));
+                return;
+            }
+            self->checkpoint();
+            src->file = file;
+            self->m_sources.insert(file, src);
+            self->findInsert(id)->frozen = file;
+            self->changed(false);
+            emit self->message(QStringLiteral("Zamrożone — wtyczki i instrumenty odpoczywają. Odmroź, żeby coś zmienić."));
+        });
+    });
+}
+
+bool Studio::setPluginSide(int insert, int slot, int from)
+{
+    Insert *in = findInsert(insert);
+    if (!in || (from && (insertIndex(from) < 0 || wouldLoop(from, insert))))
+        return false;
+    checkpoint();
+    for (Slot &s : findInsert(insert)->slots_)
+        if (s.id == slot)
+            s.side = from;
     changed(false);
     return true;
 }
@@ -110,15 +202,28 @@ void Studio::setInsertToMaster(int id, bool on)
     changed(false);
 }
 
-// Źródła wysyłek przed celami
+// Źródła wysyłek i sidechainów przed celami
 QList<int> Studio::insertOrder() const
 {
     const int n = int(m_inserts.size());
     QList<int> pending(n, 0), out;
-    for (const Insert &in : m_inserts)
+    QList<QList<int>> next(n);
+    auto edge = [&](int from, int to) {
+        if (from >= 0 && to >= 0) {
+            next[from] << to;
+            ++pending[to];
+        }
+    };
+    for (int i = 0; i < n; ++i) {
+        const Insert &in = m_inserts[i];
         for (const Send &s : in.sends)
-            if (const int t = insertIndex(s.to); t >= 0)
-                ++pending[t];
+            edge(i, insertIndex(s.to));
+        if (in.duckFrom)
+            edge(insertIndex(in.duckFrom), i);
+        for (const Slot &s : in.slots_)
+            if (s.side)
+                edge(insertIndex(s.side), i);
+    }
     QList<int> ready;
     for (int i = 0; i < n; ++i)
         if (!pending[i])
@@ -126,11 +231,58 @@ QList<int> Studio::insertOrder() const
     while (!ready.isEmpty()) {
         const int i = ready.takeFirst();
         out << i;
-        for (const Send &s : m_inserts[i].sends)
-            if (const int t = insertIndex(s.to); t >= 0 && --pending[t] == 0)
+        for (int t : std::as_const(next[i]))
+            if (--pending[t] == 0)
                 ready << t;
     }
     return out;
+}
+
+// Czy połączenie source → target zamknęłoby pętlę: target już dochodzi do source
+bool Studio::wouldLoop(int source, int target) const
+{
+    QHash<int, QList<int>> graph;
+    for (const Insert &in : m_inserts) {
+        for (const Send &s : in.sends)
+            graph[in.id] << s.to;
+        if (in.duckFrom)
+            graph[in.duckFrom] << in.id;
+        for (const Slot &s : in.slots_)
+            if (s.side)
+                graph[s.side] << in.id;
+    }
+    QSet<int> seen;
+    return source == target || reaches(graph, target, source, seen);
+}
+
+// Kompensacja opóźnień: wtyczka spóźnia dźwięk, więc wszystko, co spotyka się z nią później, czeka tyle samo
+void Studio::compileLatency(Snapshot *s)
+{
+    const int n = int(m_inserts.size());
+    QList<int> own(n, 0), in(n, 0), out(n, 0);
+    for (int i = 0; i < n; ++i)
+        for (const PluginRT &p : s->inserts[size_t(i)].fx)
+            own[i] += p.plugin->latency();
+    // Wejście insertu: najpóźniejsze ze źródeł
+    for (int i : s->order) {
+        out[i] = in[i] + own[i];
+        for (const SendRT &sd : s->inserts[size_t(i)].sends)
+            if (sd.to >= 0 && sd.to < n)
+                in[sd.to] = std::max(in[sd.to], out[i]);
+    }
+    int total = 0;
+    for (int i = 0; i < n; ++i)
+        if (s->inserts[size_t(i)].toMaster)
+            total = std::max(total, out[i]);
+    for (int i = 0; i < n; ++i) {
+        InsertRT &rt = s->inserts[size_t(i)];
+        rt.delay = rt.toMaster ? total - out[i] : 0;
+        for (SendRT &sd : rt.sends)
+            if (sd.to >= 0 && sd.to < n)
+                sd.delay = in[sd.to] - out[i];
+    }
+    s->latency = total;
+    m_engine.setPluginLatency(total);
 }
 
 QVariantList Studio::inserts() const
@@ -141,10 +293,13 @@ QVariantList Studio::inserts() const
         for (const Send &s : in.sends)
             sends.append(QVariantMap{{QStringLiteral("to"), s.to}, {QStringLiteral("db"), s.db}});
         for (const Slot &s : in.slots_)
-            plugs.append(QVariantMap{{QStringLiteral("id"), s.id}, {QStringLiteral("name"), s.info.name}, {QStringLiteral("bypass"), s.bypass}, {QStringLiteral("missing"), !s.plugin}});
+            plugs.append(QVariantMap{{QStringLiteral("id"), s.id}, {QStringLiteral("name"), s.info.name}, {QStringLiteral("bypass"), s.bypass}, {QStringLiteral("missing"), !s.plugin},
+                                     {QStringLiteral("side"), s.side}, {QStringLiteral("hasSide"), s.plugin && s.plugin->hasSidechain()}, {QStringLiteral("latency"), s.plugin ? s.plugin->latency() : 0}});
         l.append(QVariantMap{{QStringLiteral("id"), in.id}, {QStringLiteral("name"), in.name}, {QStringLiteral("color"), in.color},
                              {QStringLiteral("volume"), in.volume}, {QStringLiteral("pan"), in.pan}, {QStringLiteral("mute"), in.mute},
                              {QStringLiteral("solo"), in.solo}, {QStringLiteral("toMaster"), in.toMaster},
+                             {QStringLiteral("duckFrom"), in.duckFrom}, {QStringLiteral("duck"), in.duck},
+                             {QStringLiteral("frozen"), !in.frozen.isEmpty()},
                              {QStringLiteral("sends"), sends}, {QStringLiteral("plugins"), plugs},
                              {QStringLiteral("eqLow"), in.eqLow}, {QStringLiteral("eqMid"), in.eqMid}, {QStringLiteral("eqHigh"), in.eqHigh},
                              {QStringLiteral("comp"), in.comp}, {QStringLiteral("reverb"), in.reverb}, {QStringLiteral("lowCut"), in.lowCut},
@@ -167,7 +322,8 @@ QJsonObject Studio::insertJson(const Insert &t, bool pluginStates) const
     QJsonArray plugs, sends;
     for (const Slot &s : t.slots_) {
         QJsonObject o{{QStringLiteral("id"), s.id}, {QStringLiteral("path"), s.info.path}, {QStringLiteral("uid"), s.info.uid},
-                      {QStringLiteral("name"), s.info.name}, {QStringLiteral("vendor"), s.info.vendor}, {QStringLiteral("bypass"), s.bypass}};
+                      {QStringLiteral("name"), s.info.name}, {QStringLiteral("vendor"), s.info.vendor}, {QStringLiteral("bypass"), s.bypass},
+                      {QStringLiteral("side"), s.side}};
         if (pluginStates)
             o.insert(QStringLiteral("state"), QString::fromLatin1((s.plugin ? s.plugin->state() : s.state).toBase64()));
         plugs.append(o);
@@ -177,6 +333,7 @@ QJsonObject Studio::insertJson(const Insert &t, bool pluginStates) const
     return QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("name"), t.name}, {QStringLiteral("color"), t.color},
                        {QStringLiteral("volume"), t.volume}, {QStringLiteral("pan"), t.pan}, {QStringLiteral("mute"), t.mute},
                        {QStringLiteral("solo"), t.solo}, {QStringLiteral("toMaster"), t.toMaster}, {QStringLiteral("sends"), sends},
+                       {QStringLiteral("duckFrom"), t.duckFrom}, {QStringLiteral("duck"), t.duck}, {QStringLiteral("frozen"), t.frozen},
                        {QStringLiteral("plugins"), plugs},
                        {QStringLiteral("effects"), QJsonObject{{QStringLiteral("preset"), t.preset}, {QStringLiteral("lowCut"), t.lowCut},
                                                                {QStringLiteral("eqLow"), t.eqLow}, {QStringLiteral("eqMid"), t.eqMid},
@@ -209,6 +366,11 @@ Studio::Insert Studio::insertFromJson(const QJsonObject &o, const QHash<int, Slo
     t.mute = o.value(QStringLiteral("mute")).toBool();
     t.solo = o.value(QStringLiteral("solo")).toBool();
     t.toMaster = o.value(QStringLiteral("toMaster")).toBool(true);
+    t.duckFrom = o.value(QStringLiteral("duckFrom")).toInt();
+    t.duck = o.value(QStringLiteral("duck")).toDouble(0.6);
+    t.frozen = o.value(QStringLiteral("frozen")).toString();
+    if (!t.frozen.isEmpty() && !m_sources.contains(t.frozen))
+        loadSources({t.frozen});
     for (const QJsonValue &v : o.value(QStringLiteral("sends")).toArray())
         t.sends.append({v.toObject().value(QStringLiteral("to")).toInt(), v.toObject().value(QStringLiteral("db")).toDouble()});
     const QJsonObject fx = o.value(QStringLiteral("effects")).toObject();
@@ -232,6 +394,7 @@ Studio::Insert Studio::insertFromJson(const QJsonObject &o, const QHash<int, Slo
         s.id = so.value(QStringLiteral("id")).toInt();
         s.info = infoFrom(so);
         s.bypass = so.value(QStringLiteral("bypass")).toBool();
+        s.side = so.value(QStringLiteral("side")).toInt();
         const bool hasState = so.contains(QStringLiteral("state"));
         if (hasState)
             s.state = QByteArray::fromBase64(so.value(QStringLiteral("state")).toString().toLatin1());
@@ -625,6 +788,11 @@ void Studio::compileChannels(Snapshot *s, bool forExport)
         rt.gainL = float(g * (pan > 0 ? 1 - pan : 1));
         rt.gainR = float(g * (pan < 0 ? 1 + pan : 1));
         rt.audible = !c.mute;
+        if (const Insert *in = findInsert(c.insert); in && !in->frozen.isEmpty() && m_sources.contains(in->frozen)) {
+            rt.inst = nullptr;                  // gra plik zamrożonego insertu
+            s->channels.push_back(std::move(rt));
+            continue;
+        }
         for (const Place &pl : std::as_const(places)) {
             const auto it = pl.p->data.constFind(c.id);
             if (it == pl.p->data.constEnd())

@@ -414,6 +414,8 @@ void Studio::closeProject()
     for (const Track &t : m_tracks)
         for (const Clip &c : t.clips)
             used.insert(c.file);
+    for (const Insert &in : std::as_const(m_inserts))
+        used.insert(in.frozen);
     const QDir audio(m_folder + QStringLiteral("/audio"));
     for (const QString &f : audio.entryList({QStringLiteral("_*.wav")}, QDir::Files))
         if (!used.contains(f))
@@ -855,6 +857,10 @@ Snapshot *Studio::buildSnapshot(bool forExport)
         rt.pan = float(std::clamp(t.pan, -1.0, 1.0));
         rt.audible = anySolo ? soloed.contains(t.id) && !t.mute : !t.mute;
         rt.toMaster = t.toMaster;
+        if (t.duckFrom) {
+            rt.duckFrom = insertIndex(t.duckFrom);
+            rt.duck = float(t.duck);
+        }
         for (const Send &sd : t.sends)
             rt.sends.push_back({insertIndex(sd.to), float(dbToGain(sd.db))});
         const double R = Engine::Rate;
@@ -894,7 +900,7 @@ Snapshot *Studio::buildSnapshot(bool forExport)
                     continue;
             }
             s->plugins.push_back(p);
-            rt.fx.push_back(p.get());
+            rt.fx.push_back({p.get(), sl.side ? insertIndex(sl.side) : -1});
             m_snapPlugins.insert(sl.id, p.get());
         }
         s->inserts.push_back(std::move(rt));
@@ -927,8 +933,38 @@ Snapshot *Studio::buildSnapshot(bool forExport)
         if (!m_patMode)                         // WZÓR: gra tylko bieżący wzór
             s->lanes.push_back(std::move(rt));
     }
+    // Zamrożone inserty: same pliki, bez źródeł i efektów
+    for (const Insert &t : std::as_const(m_inserts)) {
+        const SourcePtr src = t.frozen.isEmpty() ? nullptr : m_sources.value(t.frozen);
+        if (!src)
+            continue;
+        const int at = insertIndex(t.id);
+        InsertRT &rt = s->inserts[size_t(at)];
+        InsertRT bare;
+        bare.gain = rt.gain;
+        bare.pan = rt.pan;
+        bare.audible = rt.audible;
+        bare.toMaster = rt.toMaster;
+        bare.send = rt.send;
+        bare.echo = rt.echo;
+        bare.sends = rt.sends;
+        rt = bare;
+        for (LaneRT &lane : s->lanes)
+            if (lane.insert == at)
+                lane.clips.clear();
+        s->keep.push_back(src);
+        LaneRT lane;
+        lane.insert = at;
+        ClipRT c;
+        c.src = src.get();
+        c.length = c.srcLen = src->frames;
+        c.raw = true;
+        lane.clips.push_back(c);
+        s->lanes.push_back(std::move(lane));
+    }
     compileChannels(s, forExport);
     compileAutos(s);
+    compileLatency(s);
     return s;
 }
 
@@ -1832,6 +1868,18 @@ double Studio::recordTakeOffset() const
 void Studio::tick()
 {
     m_engine.collect();
+    {
+        // Wtyczka może zmienić opóźnienie (np. tryb wysokiej jakości) — wyrównanie liczy się od nowa
+        int sum = 0;
+        for (const Insert &in : std::as_const(m_inserts))
+            for (const Slot &sl : in.slots_)
+                if (sl.plugin && !sl.bypass)
+                    sum += sl.plugin->latency();
+        if (sum != m_lastLatency) {
+            m_lastLatency = sum;
+            m_engine.setSnapshot(buildSnapshot());
+        }
+    }
     // Wymiana fragmentu: po regionie i krótkim wybrzmieniu nagrywanie kończy się samo
     if (recording() && m_punchOut > m_punchIn && m_engine.position() > m_punchOut + Engine::Rate * 3 / 4) {
         finishRecording();
