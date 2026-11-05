@@ -94,7 +94,20 @@ Programy:
       tło (kolor, przejście, zdjęcie); przeciąganie z przyciąganiem do środka i krawędzi, uchwyty, obrót, warstwy,
       cofnij/ponów, skróty; zapis sam (Dokumenty/Grafiki, `.grafika` = ZIP z JSON), eksport PNG/JPG (1×, 2×) i PDF
       (wektorowy, w formacie do druku); jedno rysowanie (QPainter) dla ekranu i eksportu
-- [ ] Grafika, dalej: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
+- [x] Aster Pixel: układ programu graficznego, warstwy z trybami mieszania, krycie, maski warstw (pędzel, wygaszanie,
+      zaznaczenie AI), warstwy korekcyjne, krzywe, tony i kolor na zdjęciach
+- [ ] Aster Pixel, kierunek Photoshop z prostszym interfejsem. Zasada: proste działa od razu (gotowe wyglądy, „Popraw
+      automatycznie”, AI), a pełna kontrola czeka w zwijanych sekcjach i panelu warstw, nigdy na drodze. Kolejność:
+  - [ ] malowanie po pikselach: warstwa rastrowa, pędzel z twardością i kryciem, gumka, wiadro, pipeta
+  - [ ] retusz: stempel, pędzel korygujący, rozjaśnianie i ściemnianie, rozmazywanie
+  - [ ] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, zaznaczenie AI wspólne dla wszystkich działań;
+        wytnij, wypełnij, wtapianie, maska z zaznaczenia, zaznaczenie obowiązuje przy malowaniu i korekcjach
+  - [ ] przekształcenia: swobodne, perspektywa, zniekształcenie rogów, wypaczanie; przycinanie całego płótna
+  - [ ] warstwy: foldery, maski przycinające, style warstw (obrys, poświata, faza), inteligentne filtry
+  - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej
+  - [ ] pliki: import i eksport PSD, zapis WebP, TIFF, profile kolorów, 16 bitów
+  - [ ] AI: powiększanie zdjęć, wypełnianie obszaru z opisu (jeśli da się to zrobić lokalnie na zwykłym komputerze)
+- [ ] Stare pomysły: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
       i grafik do pobrania ze Sklepu Aster, wiele stron w projekcie (karuzela, prezentacja), zaznaczanie kilku elementów
       i grupy, przycinanie zdjęć i filtry, przyciąganie przy zmianie rozmiaru, własne kolory marki, Flatpak w Sklepie Aster
 - [x] Telefon (okna KDE Connect) — `apps/phone`, jak „Łącze z telefonem” w Windows, przez D-Bus z kdeconnectd:

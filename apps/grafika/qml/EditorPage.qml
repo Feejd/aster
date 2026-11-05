@@ -396,6 +396,7 @@ Item {
         else if (a === "crop") stage.cropping = sel;
         else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
+        else if (a.startsWith("blend:")) setBlend(a.substring(6));
         else if (a === "bgtab") side.tab = "background";
         else if (a === "layers") {}                         // warstwy są zawsze widoczne z lewej
         else if (a === "selectAll") stage.selectAll();
@@ -533,6 +534,12 @@ Item {
         else if (cmd === "magicapply") Magic.apply(arg);
         else if (cmd === "magictool") stage.magicTool = arg;
         else if (cmd === "shortcuts") shortcutsSheet.open = true;
+        else if (cmd === "addadjust") addAdjustment();
+        else if (cmd === "blend") setBlend(arg);
+        else if (cmd === "maskedit") editMask(sel);
+        else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
+        else if (cmd === "maskinvert") project.invertMask(sel);
+        else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
         else if (cmd === "drawtool") { side.tab = "draw"; side.drawTool = arg; }
         else if (cmd === "drawcolor") side.drawColor = arg;
         else if (cmd === "cell") { const q = arg.split(","); stage.editCell(sel, Number(q[0]), Number(q[1])); }
@@ -621,6 +628,7 @@ Item {
     Shortcut { sequence: "Ctrl+0"; enabled: ed.visible; onActivated: stage.fit = true }
     Shortcut { sequence: "Ctrl+1"; enabled: ed.visible; onActivated: stage.zoomTo(1) }
     Shortcut { sequence: "T"; enabled: ed.active && !ed.typing; onActivated: side.addTextStyle(side.textStyles[2]) }
+    Shortcut { sequence: "X"; enabled: ed.active && !ed.typing && stage.maskOn; onActivated: stage.maskReveal = !stage.maskReveal }
     Shortcut { sequence: "V"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("select") }
     Shortcut { sequence: "B"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("draw") }
     Shortcut { sequence: "U"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("shapes") }
@@ -682,6 +690,33 @@ Item {
         }
         side.tab = t;
     }
+    // ——— Warstwy: tryb mieszania, maska, korekcja ———
+    readonly property string maskEditing: stage.maskEdit
+    readonly property var blendModes: [
+        { id: "", label: "Zwykły" }, { id: "multiply", label: "Mnożenie" }, { id: "screen", label: "Ekran" }, { id: "overlay", label: "Nakładka" },
+        { id: "darken", label: "Ciemniejsze" }, { id: "lighten", label: "Jaśniejsze" }, { id: "colorDodge", label: "Rozjaśnianie" },
+        { id: "colorBurn", label: "Przepalenie" }, { id: "hardLight", label: "Twarde światło" }, { id: "softLight", label: "Miękkie światło" },
+        { id: "difference", label: "Różnica" }, { id: "exclusion", label: "Wykluczenie" }
+    ]
+    function blendLabel(id) { for (const b of blendModes) if (b.id === (id || "")) return b.label; return "Zwykły"; }
+    function showBlendMenu(item) {
+        const pt = item.mapToItem(ed, 0, 0);
+        menu.openAt(pt.x, Math.max(8, pt.y - blendModes.length * 34 - 16), blendModes.map(b => ({ label: b.label, action: "blend:" + b.id })));
+    }
+    function setBlend(mode) {
+        for (const id of many) project.change(id, { blend: mode === "" ? null : mode }, false);
+        project.commit();
+    }
+    function editMask(id) {
+        if (!project.get(id).layerMask) project.addMask(id);
+        if (stage.selected !== id) stage.select(id);
+        stage.maskEdit = id;
+    }
+    function addAdjustment() {
+        const id = project.add({ type: "adjust", x: 0, y: 0, w: project.pageWidth, h: project.pageHeight });
+        stage.select(id);
+    }
+
     // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
     Connections {
         target: stage
@@ -803,11 +838,67 @@ Item {
         height: parent.height - y
         SidePanel {
             id: layersPanel
-            anchors.fill: parent
+            width: parent.width
+            height: parent.height - layerFoot.height
             project: ed.project
             editor: ed
             showRail: false
             tab: "layers"
+        }
+        // Ustawienia zaznaczonej warstwy i przyciski jak w programach do zdjęć
+        Item {
+            id: layerFoot
+            y: parent.height - height
+            width: parent.width; height: 108
+            readonly property var one: stage.current
+            readonly property bool has: ed.many.length > 0
+            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            Row {
+                x: 12; y: 10
+                spacing: 8
+                HoverButton {
+                    id: blendBtn
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 112; height: 32; radius: 8
+                    baseColor: Theme.fill
+                    enabled: layerFoot.has
+                    opacity: enabled ? 1 : 0.45
+                    tip: "Tryb mieszania — jak warstwa łączy się z tym, co pod nią"
+                    onClicked: ed.showBlendMenu(blendBtn)
+                    Text {
+                        x: 10; width: parent.width - 30
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: ed.blendLabel(layerFoot.one.blend)
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 12
+                    }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
+                }
+                ValueSlider {
+                    width: parent.parent.width - 24 - 112 - 8
+                    enabled: stage.selected !== ""
+                    opacity: enabled ? 1 : 0.45
+                    label: "Krycie"
+                    from: 0; to: 1; step: 0.01
+                    value: layerFoot.one.opacity === undefined ? 1 : layerFoot.one.opacity
+                    shown: value * 100; suffix: "%"
+                    onMoved: (v, done) => ed.project.change(stage.selected, { opacity: v >= 0.995 ? null : Math.round(v * 100) / 100 }, done)
+                }
+            }
+            Row {
+                x: 8; y: 64
+                spacing: 2
+                ToolBtn {
+                    icon: "circleHalf"
+                    tip: stage.selected !== "" && layerFoot.one.layerMask ? "Maluj po masce warstwy" : "Dodaj maskę warstwy — chowa część warstwy pędzlem, bez kasowania"
+                    enabled: stage.selected !== ""
+                    onClicked: ed.editMask(stage.selected)
+                }
+                ToolBtn { icon: "sliders"; tip: "Warstwa korekcyjna — zmienia kolory wszystkiego pod spodem"; onClicked: ed.addAdjustment() }
+                ToolBtn { icon: "layers"; tip: "Grupuj zaznaczone (Ctrl+G)"; enabled: ed.many.length > 1; onClicked: ed.runMenu("group") }
+                ToolBtn { icon: "copy"; tip: "Duplikuj warstwę (Ctrl+D)"; enabled: layerFoot.has; onClicked: ed.duplicate() }
+                ToolBtn { icon: "trash"; tip: "Usuń warstwę (Delete)"; enabled: layerFoot.has; onClicked: ed.remove() }
+            }
         }
     }
 
@@ -1137,7 +1228,7 @@ Item {
         readonly property var groups: [
             { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
                                          ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
-            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B", "Rysowanie"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B", "Rysowanie"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
                                          ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],

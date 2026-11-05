@@ -790,6 +790,33 @@ void Magic::apply(const QString &action)
 #ifdef GRAFIKA_ONNX
     if (m_id.isEmpty() || !m_project || !m_hasMask)
         return;
+    if (action == QLatin1String("mask")) {
+        // Zaznaczenie jako maska warstwy: zostaje tylko ono, a zdjęcie jest nietknięte — pędzlem można to poprawić
+        const QSizeF frame(num(m_el, "w", 100), num(m_el, "h", 100));
+        const qreal k = 1024 / qMax(frame.width(), frame.height());
+        QImage layer(qMax(8, qRound(frame.width() * k)), qMax(8, qRound(frame.height() * k)), QImage::Format_ARGB32_Premultiplied);
+        layer.fill(Qt::black);
+        {
+            QImage white(m_mask.size(), QImage::Format_ARGB32_Premultiplied);
+            for (int y = 0; y < white.height(); ++y) {
+                const uchar *in = m_mask.constScanLine(y);
+                QRgb *o = reinterpret_cast<QRgb *>(white.scanLine(y));
+                for (int x = 0; x < white.width(); ++x)
+                    o[x] = qPremultiply(qRgba(255, 255, 255, in[x]));
+            }
+            QPainter q(&layer);
+            q.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+            q.scale(k, k);
+            q.setTransform(m_toFrame, true);
+            q.drawImage(0, 0, white);
+        }
+        const QString id = m_id;
+        QPointer<Project> pr(m_project);
+        end();
+        pr->setMaskImage(id, layer.convertToFormat(QImage::Format_Grayscale8));
+        Q_EMIT finished(QStringLiteral("Zaznaczenie jest maską warstwy — zdjęcie zostało nietknięte."), {id});
+        return;
+    }
     const QImage img = m_img, mask = m_mask;
     const QVariantMap el = m_el;
     QPointer<Project> pr(m_project);

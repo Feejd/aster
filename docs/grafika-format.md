@@ -40,6 +40,23 @@ Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zd
 - Tło: `type` = `color` (`color`), `gradient` (`color` → `color2`, `angle` w stopniach jak w CSS: 0 — ku górze, 180 — w dół),
   `radial` (od środka `color` do brzegów `color2`), `image` (`src` — plik z `images/`, `imageOpacity`, pod spodem `color`).
 
+## Warstwy
+
+Każdy element to warstwa. Oprócz `opacity` i `hidden` może mieć:
+
+- `blend` — tryb mieszania z tym, co pod spodem: `multiply`, `screen`, `overlay`, `darken`, `lighten`, `colorDodge`,
+  `colorBurn`, `hardLight`, `softLight`, `difference`, `exclusion` (brak pola — zwykły). Strona z takim trybem składa się
+  na obrazie, więc w PDF jest wtedy jednym obrazem (ok. 300 dpi, najwyżej 60 Mpx), a nie wektorami.
+- `layerMask` — plik maski z `images/` (PNG w skali szarości, najczęściej dłuższy bok 1024 px): jasność to widoczność
+  warstwy, białe widać, czarne ukryte. Maska pokrywa pole elementu i obraca się razem z nim. Oryginał warstwy się nie
+  zmienia. `layerMaskOff: true` wyłącza maskę bez jej usuwania.
+
+`adjust` to warstwa korekcyjna: nic nie rysuje, tylko zmienia wszystko, co leży pod nią na stronie (cała strona, `x`, `y`,
+`w`, `h` bez znaczenia). Obowiązują `opacity`, `hidden`, `layerMask` oraz pola korekcji: `brightness`, `contrast`,
+`saturation`, `exposure`, `shadows`, `highlights`, `temperature`, `tint` (−1–1), `hue` (stopnie, −180–180) i `curves` —
+krzywe `{ rgb, r, g, b }`, każda to lista punktów `[x, y]` (0–1) od ciemnych do jasnych. Zdjęcie (`image`) przyjmuje
+`exposure`, `shadows`, `highlights`, `temperature`, `tint`, `hue` i `curves` tak samo, tylko dla siebie.
+
 ## Elementy
 
 Wspólne pola: `id`, `type`, `x`, `y`, `w`, `h` (lewy górny róg i rozmiar przed obrotem), `rotation` (stopnie, zgodnie

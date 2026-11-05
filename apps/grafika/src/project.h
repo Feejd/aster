@@ -62,7 +62,16 @@ public:
     QImage image(const QString &key, qreal pixels) const override;
     QImage fullImage(const QString &key) const;
     // Automatyczna poprawa: jasność, kontrast i nasycenie dobrane do zdjęcia (pola elementu do zmiany)
-    Q_INVOKABLE QVariantMap autoEnhance(const QString &key) const;                  // zdjęcie w pełnej rozdzielczości (do AI)
+    Q_INVOKABLE QVariantMap autoEnhance(const QString &key) const;
+    // Warstwy jak w programach do zdjęć
+    Q_INVOKABLE bool usesCompositing() const;                    // bieżąca strona ma tryby mieszania albo korekcje
+    Q_INVOKABLE QVariantList curveSamples(const QVariantList &points, int size) const;
+    Q_INVOKABLE void addMask(const QString &id, bool hidden = false);   // maska warstwy: cała biała albo cała czarna
+    // Malowanie po masce: punkty i grubość w częściach pola warstwy, soft 0..1 — miękkość pędzla
+    Q_INVOKABLE void maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft);
+    Q_INVOKABLE void invertMask(const QString &id);
+    Q_INVOKABLE void gradientMask(const QString &id, qreal angle);       // wygaszanie: od pełnego widoku do zera
+    void setMaskImage(const QString &id, const QImage &mask);            // gotowa maska (np. zaznaczenie AI)                  // zdjęcie w pełnej rozdzielczości (do AI)
     QString addImage(const QImage &img);                         // nowe zdjęcie w projekcie (PNG, z przezroczystością)
     QByteArray vector(const QString &key) const override;
     Q_INVOKABLE bool recolorable(const QString &key) const;     // SVG z currentColor (jednokolorowa ikona)

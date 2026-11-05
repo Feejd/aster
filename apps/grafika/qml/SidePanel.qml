@@ -144,6 +144,7 @@ Item {
     function layerName(o) {
         if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
         if (o.type === "image") return o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        if (o.type === "adjust") return "Korekcja";
         if (o.type === "draw") return o.pen === "highlighter" ? "Zakreślenie" : "Rysunek";
         if (o.type === "vector") return "Grafika";
         if (o.type === "code") return o.kind === "qr" ? "Kod QR" : "Kod kreskowy";
@@ -1098,8 +1099,10 @@ Item {
                                     color: sp.project.background.color || "#ffffff"     // biały tekst widać na tle strony
                                     border.width: 1; border.color: Theme.line
                                     clip: true
+                                    Icon { visible: row.modelData.type === "adjust"; anchors.centerIn: parent; d: Icons.sliders; size: 18; stroke: 1.9; color: "#5B6270" }
                                     ArtView {
                                         readonly property real k: Math.min(30 / Math.max(1, row.modelData.w), 30 / Math.max(1, row.modelData.h))
+                                        visible: row.modelData.type !== "adjust"
                                         anchors.centerIn: parent
                                         width: Math.max(2, row.modelData.w * k); height: Math.max(2, row.modelData.h * k)
                                         rotation: row.modelData.rotation || 0
@@ -1107,8 +1110,26 @@ Item {
                                         element: row.modelData
                                     }
                                 }
+                                // Maska warstwy: klik — malowanie po masce
+                                Rectangle {
+                                    id: maskThumb
+                                    visible: !!row.modelData.layerMask
+                                    anchors.left: thumb.right; anchors.leftMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: visible ? 34 : 0; height: 34; radius: 7
+                                    color: "#000000"
+                                    border.width: sp.editor.maskEditing === row.modelData.id ? 2 : 1
+                                    border.color: sp.editor.maskEditing === row.modelData.id ? Theme.accent : Theme.line
+                                    clip: true
+                                    opacity: row.modelData.layerMaskOff ? 0.4 : 1
+                                    ArtView {
+                                        anchors.fill: parent; anchors.margins: 1
+                                        project: sp.project
+                                        element: ({ type: "image", src: row.modelData.layerMask, w: 32, h: 32 })
+                                    }
+                                }
                                 Text {
-                                    anchors.left: thumb.right; anchors.leftMargin: 10
+                                    anchors.left: maskThumb.visible ? maskThumb.right : thumb.right; anchors.leftMargin: 10
                                     anchors.right: tools.left; anchors.rightMargin: 4
                                     anchors.verticalCenter: parent.verticalCenter
                                     elide: Text.ElideRight
@@ -1144,6 +1165,8 @@ Item {
                                             sp.refreshLayers();
                                         } else {
                                             sp.editor.selectLayer(row.modelData.id, e.modifiers & Qt.ShiftModifier);
+                                            if (maskThumb.visible && e.x >= maskThumb.x && e.x <= maskThumb.x + maskThumb.width)
+                                                sp.editor.editMask(row.modelData.id);
                                         }
                                     }
                                 }

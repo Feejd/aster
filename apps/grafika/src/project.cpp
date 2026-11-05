@@ -11,7 +11,10 @@
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QMimeData>
+#include <QLinearGradient>
 #include <QPainter>
+#include <QPainterPath>
+#include <QtMath>
 #include <QPdfWriter>
 #include <QRandomGenerator>
 #include <QSaveFile>
@@ -1207,6 +1210,104 @@ QVariantMap Project::autoEnhance(const QString &key) const
     const qreal saturation = c < 35 ? 0.25 : c < 60 ? 0.15 : c < 90 ? 0.08 : 0;
     auto r2 = [](qreal v) { return std::round(v * 100) / 100; };
     return {{QStringLiteral("brightness"), r2(brightness)}, {QStringLiteral("contrast"), r2(k - 1)}, {QStringLiteral("saturation"), r2(saturation)}};
+}
+
+bool Project::usesCompositing() const
+{
+    return Art::compositing({{QStringLiteral("elements"), m_elements}});
+}
+
+QVariantList Project::curveSamples(const QVariantList &points, int size) const
+{
+    return Art::curveSamples(points, qBound(2, size, 512));
+}
+
+// Maska ma proporcje warstwy; dłuższy bok 1024 px wystarcza nawet w dużym eksporcie, bo maski są miękkie
+static QSize maskSize(const QVariantMap &el, qreal pageW, qreal pageH)
+{
+    const bool adjust = el.value(QStringLiteral("type")).toString() == QLatin1String("adjust");
+    const qreal w = adjust ? pageW : qMax(1.0, el.value(QStringLiteral("w")).toDouble());
+    const qreal h = adjust ? pageH : qMax(1.0, el.value(QStringLiteral("h")).toDouble());
+    const qreal k = 1024 / qMax(w, h);
+    return QSize(qMax(8, qRound(w * k)), qMax(8, qRound(h * k)));
+}
+
+void Project::setMaskImage(const QString &id, const QImage &mask)
+{
+    change(id, {{QStringLiteral("layerMask"), addImage(mask)}});
+}
+
+void Project::addMask(const QString &id, bool hidden)
+{
+    const QVariantMap el = get(id);
+    if (el.isEmpty())
+        return;
+    QImage m(maskSize(el, m_width, m_height), QImage::Format_Grayscale8);
+    m.fill(hidden ? 0 : 255);
+    setMaskImage(id, m);
+}
+
+void Project::maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft)
+{
+    const QVariantMap el = get(id);
+    QImage m = fullImage(el.value(QStringLiteral("layerMask")).toString());
+    if (m.isNull() || points.isEmpty())
+        return;
+    m = m.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const qreal px = qMax(1.0, width * m.width());
+    QPainterPath path;
+    for (int i = 0; i < points.size(); ++i) {
+        const QVariantList q = points.at(i).toList();
+        if (q.size() != 2)
+            continue;
+        const QPointF pt(q[0].toDouble() * m.width(), q[1].toDouble() * m.height());
+        if (path.elementCount() == 0)
+            path.moveTo(pt);
+        else
+            path.lineTo(pt);
+    }
+    if (points.size() == 1)
+        path.lineTo(path.currentPosition() + QPointF(0.01, 0));
+    QImage stroke(m.size(), QImage::Format_ARGB32_Premultiplied);
+    stroke.fill(Qt::transparent);
+    {
+        QPainter q(&stroke);
+        q.setRenderHint(QPainter::Antialiasing);
+        q.setPen(QPen(reveal ? Qt::white : Qt::black, px, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        q.drawPath(path);
+    }
+    Art::blur(stroke, qRound(qBound(0.0, soft, 1.0) * px * 0.3));
+    {
+        QPainter q(&m);
+        q.drawImage(0, 0, stroke);
+    }
+    setMaskImage(id, m.convertToFormat(QImage::Format_Grayscale8));
+}
+
+void Project::invertMask(const QString &id)
+{
+    QImage m = fullImage(get(id).value(QStringLiteral("layerMask")).toString());
+    if (m.isNull())
+        return;
+    m = m.convertToFormat(QImage::Format_Grayscale8);
+    m.invertPixels();
+    setMaskImage(id, m);
+}
+
+void Project::gradientMask(const QString &id, qreal angle)
+{
+    const QVariantMap el = get(id);
+    const QSize size = maskSize(el, m_width, m_height);
+    QImage m(size, QImage::Format_RGB32);
+    const QRectF r(QPointF(0, 0), size);
+    // Kąt jak przy przejściach kolorów: 180° — pełny widok u góry, zanika ku dołowi
+    const qreal a = qDegreesToRadians(angle), d = (qAbs(qSin(a)) * r.width() + qAbs(qCos(a)) * r.height()) / 2;
+    const QPointF dir(qSin(a) * d, -qCos(a) * d);
+    QLinearGradient g(r.center() - dir, r.center() + dir);
+    g.setColorAt(0, Qt::white);
+    g.setColorAt(1, Qt::black);
+    QPainter(&m).fillRect(r, g);
+    setMaskImage(id, m.convertToFormat(QImage::Format_Grayscale8));
 }
 
 QString Project::clipboardText() const

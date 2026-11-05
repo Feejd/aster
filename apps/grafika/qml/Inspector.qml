@@ -15,6 +15,7 @@ Item {
     readonly property int count: stage.selection.length
     readonly property string type: count > 1 ? "many" : id_ !== "" ? (el.locked ? "locked" : el.type) : "page"
     readonly property bool line: type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
+    readonly property bool placed: type !== "page" && type !== "many" && type !== "locked" && type !== "adjust"     // leży na stronie
     readonly property var bg: project.background
     property var projectColors: []
     Connections { target: ins.project; function onColorsChanged() { colorsTimer.restart(); } }
@@ -80,7 +81,7 @@ Item {
         x: 16; y: 12
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
-            : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
+            : ins.type === "adjust" ? "Warstwa korekcyjna" : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
         font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
     }
@@ -499,6 +500,19 @@ Item {
                     text: "Przerywana"
                     on: !!ins.el.dash
                     onClicked: ins.set({ dash: !on })
+                }
+            }
+
+            // ——— Warstwa korekcyjna ———
+            Section {
+                collapsible: true; divider: true
+                visible: ins.type === "adjust"
+                title: "Korekcja wszystkiego pod spodem"
+                CorrectionPanel {
+                    project: ins.project
+                    el: ins.el
+                    wholePage: true
+                    apply: (p, done) => ins.set(p, done)
                 }
             }
 
@@ -935,6 +949,16 @@ Item {
                     shown: value * 100
                     onMoved: (v, done) => ins.set({ vignette: v < 0.01 ? null : v }, done)
                 }
+                Section {
+                    collapsible: true
+                    collapsed: true
+                    title: "Zaawansowane: tony, kolor, krzywa"
+                    CorrectionPanel {
+                        project: ins.project
+                        el: ins.el
+                        apply: (p, done) => ins.set(p, done)
+                    }
+                }
                 Btn {
                     visible: !!(ins.el.brightness || ins.el.contrast || ins.el.saturation || ins.el.filter || ins.el.blur || ins.el.vignette)
                     text: "Przywróć oryginał"
@@ -1132,7 +1156,7 @@ Item {
             // ——— Wspólne ———
             Section {
                 collapsible: true; divider: true
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked" && !ins.line
+                visible: ins.placed && !ins.line
                 title: "Cień"
                 Row {
                     spacing: 8
@@ -1185,7 +1209,7 @@ Item {
             }
             Section {
                 collapsible: true; divider: true
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
+                visible: ins.placed
                 title: "Wygląd"
                 ValueSlider {
                     label: "Przezroczystość"
@@ -1204,7 +1228,7 @@ Item {
             }
             Section {
                 collapsible: true; divider: true
-                visible: ins.type !== "page" && ins.type !== "many" && ins.type !== "locked"
+                visible: ins.placed
                 title: "Na stronie"
                 Row {
                     spacing: 2

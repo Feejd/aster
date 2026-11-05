@@ -3,6 +3,7 @@
 #include <QCache>
 #include <QFontMetricsF>
 #include <QGlyphRun>
+#include <QHash>
 #include <Prison/Barcode>
 #include <QJsonDocument>
 #include <QLocale>
@@ -15,6 +16,9 @@
 #include <QRawFont>
 #include <QTextLayout>
 #include <QtMath>
+
+#include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -653,6 +657,177 @@ void paintDraw(QPainter *p, const QVariantMap &el)
     p->drawPath(path);
 }
 
+// ——— Korekcje tonów i kolorów ———
+// Te same pola na zdjęciu (poprawki) i na warstwie korekcyjnej (wszystko pod spodem): exposure, shadows, highlights,
+// temperature, tint (−1..1), hue (stopnie), curves { rgb, r, g, b } — punkty [x, y] 0..1. Warstwa korekcyjna ma też
+// brightness, contrast, saturation; zdjęcie liczy je wcześniej w adjusted().
+
+// Krzywa przez punkty: gładka i bez przeregulowań (Fritsch–Carlson)
+QList<qreal> curveTable(const QVariantList &points, int size)
+{
+    QList<QPointF> pts;
+    for (const QVariant &v : points) {
+        const QVariantList q = v.toList();
+        if (q.size() == 2)
+            pts.append(QPointF(qBound(0.0, q[0].toDouble(), 1.0), qBound(0.0, q[1].toDouble(), 1.0)));
+    }
+    std::sort(pts.begin(), pts.end(), [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
+    if (pts.isEmpty() || pts.first().x() > 0)
+        pts.prepend(QPointF(0, pts.isEmpty() ? 0 : pts.first().y()));
+    if (pts.size() < 2 || pts.last().x() < 1)
+        pts.append(QPointF(1, pts.size() < 2 ? 1 : pts.last().y()));
+    const int n = int(pts.size());
+    QList<qreal> d(n - 1), m(n);
+    for (int i = 0; i < n - 1; ++i)
+        d[i] = (pts[i + 1].y() - pts[i].y()) / qMax(1e-6, pts[i + 1].x() - pts[i].x());
+    m[0] = d[0];
+    m[n - 1] = d[n - 2];
+    for (int i = 1; i < n - 1; ++i)
+        m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+    for (int i = 0; i < n - 1; ++i) {
+        if (d[i] == 0) {
+            m[i] = m[i + 1] = 0;
+            continue;
+        }
+        const qreal a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+        if (h > 9) {
+            const qreal t = 3 / qSqrt(h);
+            m[i] = t * a * d[i];
+            m[i + 1] = t * b * d[i];
+        }
+    }
+    QList<qreal> out(size);
+    int seg = 0;
+    for (int i = 0; i < size; ++i) {
+        const qreal x = qreal(i) / (size - 1);
+        while (seg < n - 2 && x > pts[seg + 1].x())
+            ++seg;
+        const qreal h = qMax(1e-6, pts[seg + 1].x() - pts[seg].x()), t = qBound(0.0, (x - pts[seg].x()) / h, 1.0);
+        const qreal t2 = t * t, t3 = t2 * t;
+        out[i] = qBound(0.0, (2 * t3 - 3 * t2 + 1) * pts[seg].y() + (t3 - 2 * t2 + t) * h * m[seg]
+                                 + (-2 * t3 + 3 * t2) * pts[seg + 1].y() + (t3 - t2) * h * m[seg + 1], 1.0);
+    }
+    return out;
+}
+
+constexpr const char *ToneKeys[] = {"exposure", "shadows", "highlights", "temperature", "tint", "hue"};
+
+bool hasCorrection(const QVariantMap &el)
+{
+    for (const char *k : ToneKeys)
+        if (num(el, k, 0) != 0)
+            return true;
+    const QVariantMap curves = el.value(QStringLiteral("curves")).toMap();
+    return !curves.isEmpty();
+}
+
+QString correctionKey(const QVariantMap &el)
+{
+    QVariantMap m;
+    for (const char *k : ToneKeys)
+        if (el.contains(QLatin1String(k)))
+            m[QLatin1String(k)] = el.value(QLatin1String(k));
+    if (el.contains(QStringLiteral("curves")))
+        m[QStringLiteral("curves")] = el.value(QStringLiteral("curves"));
+    return QString::fromUtf8(QJsonDocument::fromVariant(m).toJson(QJsonDocument::Compact));
+}
+
+// `img` w formacie ARGB32. full — także jasność, kontrast i nasycenie (warstwa korekcyjna)
+void correct(QImage &img, const QVariantMap &el, bool full)
+{
+    const qreal exposure = qBound(-1.0, num(el, "exposure", 0), 1.0), shadows = qBound(-1.0, num(el, "shadows", 0), 1.0);
+    const qreal highlights = qBound(-1.0, num(el, "highlights", 0), 1.0), temperature = qBound(-1.0, num(el, "temperature", 0), 1.0);
+    const qreal tint = qBound(-1.0, num(el, "tint", 0), 1.0), hue = num(el, "hue", 0);
+    const qreal br = full ? qBound(-1.0, num(el, "brightness", 0), 1.0) : 0, ct = full ? qBound(-1.0, num(el, "contrast", 0), 1.0) : 0;
+    const qreal sat = full ? qBound(-1.0, num(el, "saturation", 0), 1.0) : 0;
+    const QVariantMap curves = el.value(QStringLiteral("curves")).toMap();
+    const QList<qreal> master = curves.contains(QStringLiteral("rgb")) ? curveTable(curves.value(QStringLiteral("rgb")).toList(), 256) : QList<qreal>();
+    uchar lut[3][256];
+    for (int ch = 0; ch < 3; ++ch) {
+        const char *name = ch == 0 ? "r" : ch == 1 ? "g" : "b";
+        const QList<qreal> own = curves.contains(QLatin1String(name)) ? curveTable(curves.value(QLatin1String(name)).toList(), 256) : QList<qreal>();
+        const qreal gain = std::pow(2.0, exposure * 2) * (ch == 0 ? 1 + 0.22 * temperature : ch == 2 ? 1 - 0.22 * temperature : 1 - 0.16 * tint);
+        for (int i = 0; i < 256; ++i) {
+            qreal v = i / 255.0 * gain;
+            const qreal l = qBound(0.0, v, 1.0);
+            v += shadows * 0.5 * (1 - l) * (1 - l) * l * 4 * 0.6 + highlights * 0.5 * l * l * (1 - l) * 4 * 0.6;
+            v = (v - 0.5) * (1 + ct) + 0.5 + br * 110 / 255;
+            int k = qBound(0, qRound(v * 255), 255);
+            if (!master.isEmpty())
+                k = qRound(master[k] * 255);
+            if (!own.isEmpty())
+                k = qRound(own[k] * 255);
+            lut[ch][i] = uchar(k);
+        }
+    }
+    const bool color = hue != 0 || sat != 0;
+    const qreal a = qDegreesToRadians(hue), c = qCos(a), si = qSin(a), keep = 1 + sat;
+    for (int y = 0; y < img.height(); ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const QRgb px = line[x];
+            int r = lut[0][qRed(px)], g = lut[1][qGreen(px)], b = lut[2][qBlue(px)];
+            if (color) {
+                // Obrót odcienia wokół osi szarości (YIQ) i nasycenie
+                const qreal Y = 0.299 * r + 0.587 * g + 0.114 * b, I = 0.596 * r - 0.274 * g - 0.322 * b, Q = 0.211 * r - 0.523 * g + 0.312 * b;
+                const qreal i2 = (I * c - Q * si) * keep, q2 = (I * si + Q * c) * keep;
+                r = qBound(0, qRound(Y + 0.956 * i2 + 0.621 * q2), 255);
+                g = qBound(0, qRound(Y - 0.272 * i2 - 0.647 * q2), 255);
+                b = qBound(0, qRound(Y - 1.106 * i2 + 1.703 * q2), 255);
+            }
+            line[x] = qRgba(r, g, b, qAlpha(px));
+        }
+    }
+}
+
+// ——— Maski i tryby mieszania ———
+
+// Maska warstwy: alfa = jasność obrazu (białe widać, czarne ukryte)
+QImage layerMask(const QVariantMap &el, const ImageSource *images)
+{
+    const QString key = el.value(QStringLiteral("layerMask")).toString();
+    if (key.isEmpty() || !images || el.value(QStringLiteral("layerMaskOff")).toBool())
+        return {};
+    const QImage src = images->image(key, 4096);
+    if (src.isNull())
+        return {};
+    static QMutex lock;
+    static QCache<qint64, QImage> cache(64);
+    {
+        QMutexLocker l(&lock);
+        if (const QImage *hit = cache.object(src.cacheKey()))
+            return *hit;
+    }
+    const QImage g = src.convertToFormat(QImage::Format_Grayscale8);
+    QImage out(g.size(), QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < g.height(); ++y) {
+        const uchar *in = g.constScanLine(y);
+        QRgb *o = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < g.width(); ++x)
+            o[x] = qPremultiply(qRgba(255, 255, 255, in[x]));
+    }
+    QMutexLocker l(&lock);
+    cache.insert(src.cacheKey(), new QImage(out), int(out.sizeInBytes() / (1024 * 1024)) + 1);
+    return out;
+}
+
+QPainter::CompositionMode blendMode(const QString &name)
+{
+    static const QHash<QString, QPainter::CompositionMode> modes = {
+        {QStringLiteral("multiply"), QPainter::CompositionMode_Multiply}, {QStringLiteral("screen"), QPainter::CompositionMode_Screen},
+        {QStringLiteral("overlay"), QPainter::CompositionMode_Overlay}, {QStringLiteral("darken"), QPainter::CompositionMode_Darken},
+        {QStringLiteral("lighten"), QPainter::CompositionMode_Lighten}, {QStringLiteral("colorDodge"), QPainter::CompositionMode_ColorDodge},
+        {QStringLiteral("colorBurn"), QPainter::CompositionMode_ColorBurn}, {QStringLiteral("hardLight"), QPainter::CompositionMode_HardLight},
+        {QStringLiteral("softLight"), QPainter::CompositionMode_SoftLight}, {QStringLiteral("difference"), QPainter::CompositionMode_Difference},
+        {QStringLiteral("exclusion"), QPainter::CompositionMode_Exclusion}};
+    return modes.value(name, QPainter::CompositionMode_SourceOver);
+}
+
+bool layerBlends(const QVariantMap &el)
+{
+    return blendMode(el.value(QStringLiteral("blend")).toString()) != QPainter::CompositionMode_SourceOver;
+}
+
 // ——— Poprawki zdjęć ———
 
 // Jasność, kontrast, nasycenie (−1..1) i gotowe filtry; wynik w pamięci podręcznej, bo płótno rysuje się często.
@@ -752,7 +927,8 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
     const qreal removeBg = el.value(QStringLiteral("removeBg")).toBool() ? num(el, "bgTolerance", 0.25) : -1;
     const QString filter = el.value(QStringLiteral("filter")).toString();
     const QColor duo1 = color(el, "duo1", QColor(0x1E, 0x2A, 0x78)), duo2 = color(el, "duo2", QColor(0xFF, 0xB3, 0xC7));
-    if (br == 0 && ct == 0 && sat == 0 && filter.isEmpty() && blur == 0 && vignette == 0 && removeBg < 0)
+    const bool tones = hasCorrection(el);
+    if (br == 0 && ct == 0 && sat == 0 && filter.isEmpty() && blur == 0 && vignette == 0 && removeBg < 0 && !tones)
         return src;
 
     static QMutex lock;
@@ -760,7 +936,7 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
     const int side = qMax(src.width(), src.height());
     const int target = pixels * 1.25 < side ? qMax(16, qRound(pixels * 1.25)) : side;
     const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6|%7|%8|%9").arg(src.cacheKey()).arg(target).arg(br).arg(ct).arg(sat).arg(filter)
-                            .arg(blur).arg(vignette).arg(removeBg) + duo1.name() + duo2.name();
+                            .arg(blur).arg(vignette).arg(removeBg) + duo1.name() + duo2.name() + (tones ? correctionKey(el) : QString());
     {
         QMutexLocker l(&lock);
         if (const QImage *hit = cache.object(key))
@@ -813,6 +989,8 @@ QImage adjusted(const QImage &src, const QVariantMap &el, qreal pixels)
             line[x] = qRgba(qBound(0, qRound(r), 255), qBound(0, qRound(g), 255), qBound(0, qRound(b), 255), qAlpha(c));
         }
     }
+    if (tones)
+        correct(img, el, false);
     if (blur > 0) {
         // Promień w częściach zdjęcia — ten sam wygląd na ekranie i w eksporcie w pełnej rozdzielczości
         img = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -1280,8 +1458,35 @@ static void paintSoftShadow(QPainter *p, const QVariantMap &el, const ImageSourc
 void paintElement(QPainter *p, const QVariantMap &el, const ImageSource *images)
 {
     const QString kind = el.value(QStringLiteral("type")).toString();
+    if (kind == QLatin1String("adjust"))
+        return;                             // warstwa korekcyjna zmienia to, co pod nią — liczy ją paintPage
     if (el.value(QStringLiteral("shadow")).toBool() && (kind != QLatin1String("text") || el.contains(QStringLiteral("shadowBlur"))))
         paintSoftShadow(p, el, images);
+    // Maska warstwy: element na boku, potem jasność maski jako przezroczystość. Cień liczy się z już zamaskowanego kształtu.
+    const QImage mask = layerMask(el, images);
+    if (!mask.isNull()) {
+        const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+        qreal scale = qBound(0.05, deviceScale(p), 8.0);
+        scale = qMin(scale, qSqrt(40'000'000 / qMax(1.0, w * h)));
+        QImage buf(qMax(1, qCeil(w * scale)), qMax(1, qCeil(h * scale)), QImage::Format_ARGB32_Premultiplied);
+        buf.fill(Qt::transparent);
+        QVariantMap plain = el;
+        for (const char *k : {"layerMask", "shadow"})
+            plain.remove(QLatin1String(k));
+        QPainter q(&buf);
+        q.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+        q.scale(scale, scale);
+        paintElement(&q, plain, images);
+        q.resetTransform();
+        q.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+        q.drawImage(buf.rect(), mask);
+        q.end();
+        p->save();
+        p->setRenderHint(QPainter::SmoothPixmapTransform);
+        p->drawImage(QRectF(0, 0, w, h), buf);
+        p->restore();
+        return;
+    }
     p->save();
     p->setRenderHint(QPainter::Antialiasing);
     p->setRenderHint(QPainter::TextAntialiasing);
@@ -1324,12 +1529,92 @@ void paintBackground(QPainter *p, const QVariantMap &bg, const QSizeF &page, con
     }
 }
 
+// Tryby mieszania i korekcje potrzebują tego, co już leży pod spodem — strona składa się wtedy na obrazie
+static void compositePage(QImage &buf, QPainter &q, const QVariantMap &doc, const ImageSource *images, const QSizeF &page)
+{
+    const QTransform base = q.worldTransform();
+    const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
+    for (const QVariant &v : elements) {
+        const QVariantMap el = v.toMap();
+        if (el.value(QStringLiteral("hidden")).toBool())
+            continue;
+        const qreal opacity = qBound(0.0, num(el, "opacity", 1), 1.0);
+        if (el.value(QStringLiteral("type")).toString() == QLatin1String("adjust")) {
+            // Korekcja całej strony pod warstwą; krycie i maska mieszają ją z tym, co było
+            QImage fixed = buf.convertToFormat(QImage::Format_ARGB32);
+            correct(fixed, el, true);
+            fixed = fixed.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+            const QImage mask = layerMask(el, images);
+            if (!mask.isNull()) {
+                QPainter m(&fixed);
+                m.setRenderHint(QPainter::SmoothPixmapTransform);
+                m.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+                m.setTransform(base);
+                m.drawImage(QRectF(QPointF(0, 0), page), mask);
+            }
+            q.save();
+            q.resetTransform();
+            q.setOpacity(opacity);
+            q.drawImage(0, 0, fixed);
+            q.restore();
+            continue;
+        }
+        const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+        QTransform t = base;
+        t.translate(num(el, "x", 0) + w / 2, num(el, "y", 0) + h / 2);
+        t.rotate(num(el, "rotation", 0));
+        t.translate(-w / 2, -h / 2);
+        if (!layerBlends(el)) {
+            q.save();
+            q.setTransform(t);
+            q.setOpacity(opacity);
+            paintElement(&q, el, images);
+            q.restore();
+            continue;
+        }
+        QImage lay(buf.size(), QImage::Format_ARGB32_Premultiplied);
+        lay.fill(Qt::transparent);
+        {
+            QPainter l(&lay);
+            l.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+            l.setTransform(t);
+            paintElement(&l, el, images);
+        }
+        q.save();
+        q.resetTransform();
+        q.setOpacity(opacity);
+        q.setCompositionMode(blendMode(el.value(QStringLiteral("blend")).toString()));
+        q.drawImage(0, 0, lay);
+        q.restore();
+    }
+}
+
 void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images, qreal bleed)
 {
     const QSizeF page(num(doc, "width", 1080), num(doc, "height", 1080));
     p->save();
     // Spad (druk): tło i elementy wychodzą o `bleed` poza stronę, żeby po przycięciu nie było białych brzegów
     p->setClipRect(QRectF(QPointF(0, 0), page).adjusted(-bleed, -bleed, bleed, bleed));
+    if (compositing(doc)) {
+        const QSizeF full = page + QSizeF(2 * bleed, 2 * bleed);
+        const qreal scale = qMin(qBound(0.05, deviceScale(p), 8.0), qSqrt(60'000'000 / (full.width() * full.height())));
+        QImage buf(qMax(1, qCeil(full.width() * scale)), qMax(1, qCeil(full.height() * scale)), QImage::Format_ARGB32_Premultiplied);
+        buf.fill(Qt::transparent);
+        {
+            QPainter q(&buf);
+            q.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
+            q.scale(scale, scale);
+            q.save();
+            paintBackground(&q, doc.value(QStringLiteral("background")).toMap(), full, images);
+            q.restore();
+            q.translate(bleed, bleed);
+            compositePage(buf, q, doc, images, page);
+        }
+        p->setRenderHint(QPainter::SmoothPixmapTransform);
+        p->drawImage(QRectF(QPointF(-bleed, -bleed), full), buf);
+        p->restore();
+        return;
+    }
     p->save();
     p->translate(-bleed, -bleed);
     paintBackground(p, doc.value(QStringLiteral("background")).toMap(), page + QSizeF(2 * bleed, 2 * bleed), images);
@@ -1349,6 +1634,30 @@ void paintPage(QPainter *p, const QVariantMap &doc, const ImageSource *images, q
         p->restore();
     }
     p->restore();
+}
+
+bool compositing(const QVariantMap &doc)
+{
+    const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
+    for (const QVariant &v : elements) {
+        const QVariantMap el = v.toMap();
+        if (!el.value(QStringLiteral("hidden")).toBool() && (el.value(QStringLiteral("type")).toString() == QLatin1String("adjust") || layerBlends(el)))
+            return true;
+    }
+    return false;
+}
+
+QVariantList curveSamples(const QVariantList &points, int size)
+{
+    QVariantList out;
+    for (const qreal v : curveTable(points, size))
+        out.append(v);
+    return out;
+}
+
+void blur(QImage &premultiplied, int radius)
+{
+    boxBlur(premultiplied, radius);
 }
 
 qreal bleed(const QVariantMap &el)
