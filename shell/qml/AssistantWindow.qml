@@ -14,8 +14,8 @@ Window {
     color: "transparent"
     visible: false
     width: Screen.width
-    height: Screen.height - 46 - 84
-    readonly property int shotY: 46
+    height: Screen.height - 32 - 84
+    readonly property int shotY: 32
     title: "Aster Intelligence"
 
     property bool open: false
@@ -110,11 +110,11 @@ Window {
 
         MouseArea { anchors.fill: parent }
 
-        Island { anchors.fill: parent; radius: 30 }
+        Island { anchors.fill: parent; radius: 16 }
         Rectangle {
             anchors.fill: parent
-            radius: 30
-            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.55) : Qt.rgba(1, 1, 1, 0.55)
+            radius: 16
+            color: "transparent"
         }
 
         // ——— Nagłówek ———

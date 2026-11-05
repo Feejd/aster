@@ -20,7 +20,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     Playback {
         id: pb

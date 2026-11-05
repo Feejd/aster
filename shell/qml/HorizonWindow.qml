@@ -25,8 +25,8 @@ Window {
     readonly property int shotX: 0
     readonly property int shotY: 0
 
-    readonly property int reserved: 46
-    readonly property int barY: 7
+    readonly property int reserved: 32
+    readonly property int barY: 0
     readonly property int barH: 32
     property bool controlOpen: false
     property bool primary: true                // powiadomienia tylko na głównym ekranie
@@ -176,9 +176,17 @@ Window {
         onTriggered: if (islandHover.hovered || askField.text !== "") restart(); else hz.closeAsk()
     }
 
-    // ——— Lewa wyspa ———
+    // Górny pasek: jedna pełna belka przez cały ekran
+    Rectangle {
+        width: parent.width; height: hz.reserved
+        color: Theme.bar
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
+    }
+
+    // ——— Lewa strona paska ———
     Island {
         id: left
+        flat: true
         x: 10; y: hz.barY
         width: leftRow.width + 12
         height: hz.barH
@@ -193,12 +201,9 @@ Window {
             spacing: 6
             Rectangle {
                 id: mark
-                width: 26; height: 26; radius: 13
+                width: 24; height: 24; radius: 6
                 anchors.verticalCenter: parent.verticalCenter
-                gradient: Gradient {
-                    GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.35) }
-                    GradientStop { position: 1; color: Theme.accent }
-                }
+                color: Theme.accent
                 scale: markArea.pressed ? 0.88 : (markArea.containsMouse ? 1.06 : 1)
                 rotation: markArea.containsMouse ? 30 : 0
                 Behavior on scale { SpringAnimation { spring: 5; damping: 0.3 } }
@@ -252,10 +257,10 @@ Window {
         readonly property var n: hz.current
         readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
         width: hz.asking ? hz.askW : hz.noting ? 440 : idleW
-        height: hz.asking ? askCol.implicitHeight : hz.noting ? 92 : hz.barH
-        radius: hz.asking ? 24 : Math.min(height / 2, 28)
+        height: hz.asking ? askCol.implicitHeight : hz.noting ? 92 : 26
+        radius: hz.asking || hz.noting ? 14 : 7
         x: Math.round((hz.width - width) / 2)
-        y: hz.barY
+        y: 3
         onWidthChanged: hz.updateRegion()
         onHeightChanged: hz.updateRegion()
         // Sprężyna — wyspa „rozlewa się” jak kropla, a nie przesuwa
@@ -694,6 +699,7 @@ Window {
     // ——— Prawa wyspa ———
     Island {
         id: right
+        flat: true
         anchors.right: parent.right; anchors.rightMargin: 10
         y: hz.barY
         width: rightRow.width + 8

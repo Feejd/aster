@@ -25,7 +25,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26           // margines na cień
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24          // zaokrąglenie rogów
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12          // zaokrąglenie rogów
 
     // ——— Stan ———
     property var backStack: []

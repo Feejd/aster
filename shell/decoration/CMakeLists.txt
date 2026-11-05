@@ -1,4 +1,4 @@
-# Ramka okien Aster — wtyczka KDecoration3 dla KWin. Rysuje pasek tytułu i kolorowe przyciski programów,
+# Ramka okien Aster — wtyczka KDecoration3 dla KWin. Rysuje pasek tytułu i przyciski programów,
 # które nie mają własnego paska (programy Aster rysują go same, zob. common/WindowButtons.qml).
 find_package(KDecoration3 CONFIG QUIET)
 find_package(KF6CoreAddons CONFIG QUIET)

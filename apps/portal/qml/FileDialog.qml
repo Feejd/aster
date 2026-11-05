@@ -36,7 +36,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     readonly property bool saving: mode === "save"
     readonly property string heading: dialogTitle || (saving ? "Zapisz" : directory ? "Wybierz folder" : multiple ? "Otwórz pliki" : "Otwórz plik")
     readonly property string okLabel: acceptLabel || (saving ? "Zapisz" : directory ? "Wybierz" : "Otwórz")
