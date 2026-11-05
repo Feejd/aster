@@ -11,6 +11,7 @@ finish-args:
   - --device=dri
   - --filesystem=xdg-config/aster:ro       # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
   - --filesystem=home
 cleanup:
   - /include

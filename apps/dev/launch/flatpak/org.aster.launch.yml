@@ -22,6 +22,7 @@ finish-args:
   - --filesystem=xdg-config/aster:ro # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.Flatpak     # ssh/rsync/curl/CLI hostingów z systemu (flatpak-spawn --host)
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
   # D-Bus dla asystenta i polecenia aster-launch; Flatpak nie eksportuje usług spoza przestrzeni nazw aplikacji,
   # więc w Flatpaku org.aster.Launch działa, gdy okno jest otwarte (w systemie Aster uruchamia je D-Bus)
   - --own-name=org.aster.Launch

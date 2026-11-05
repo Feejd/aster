@@ -18,6 +18,7 @@ finish-args:
   - --talk-name=org.freedesktop.secrets  # tajne zmienne środowisk w portfelu systemu
   - --own-name=org.aster.pulse           # usługa dla agenta (interfejs org.aster.Pulse)
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
 cleanup:
   - /include
   - /lib/cmake

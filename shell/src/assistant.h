@@ -113,6 +113,7 @@ Q_SIGNALS:
     void statusChanged();
     void toggleRequested();
     void controlRequested();    // Super+A: centrum sterowania
+    void menuSearchRequested(); // Super+/: szukanie polecenia w programie
     void answered();            // odpowiedź skończona (albo błąd)
     void selectionChanged();
     void conversationShown();   // agent otworzył wcześniejszą rozmowę — Shell pokazuje panel

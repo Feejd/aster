@@ -27,6 +27,35 @@ Window {
     readonly property int m: maxed ? 0 : 26           // margines na cień
     readonly property real r: visibility === Window.FullScreen ? 0 : 12          // zaokrąglenie rogów
 
+    // Menu na górnym pasku
+    onActiveChanged: if (active) AppMenu.menus = win.menuBar
+    readonly property var menuBar: [
+        { title: "Plik", items: [
+            { text: "Nowy folder", key: "Ctrl+Shift+N", run: () => win.newFolder(), enabled: () => !win.inTrash && !win.inArchive },
+            { text: "Nowy dokument", run: () => win.newDocument(), enabled: () => !win.inTrash && !win.inArchive },
+            { separator: true },
+            { text: "Otwórz", key: "Enter", run: () => win.openSelected(), enabled: () => win.selection.length === 1 },
+            { text: "Podgląd", key: "Spacja", run: () => win.toggleQuickLook(), enabled: () => win.selection.length === 1 },
+            { text: "Zmień nazwę", key: "F2", run: () => win.startRename(), enabled: () => win.selection.length === 1 },
+            { separator: true },
+            { text: "Przenieś do Kosza", key: "Delete", run: () => win.trashSelected(), enabled: () => win.selection.length > 0 }
+        ] },
+        { title: "Edycja", items: [
+            { text: "Cofnij", key: "Ctrl+Z", run: () => win.doUndo() },
+            { separator: true },
+            { text: "Wytnij", key: "Ctrl+X", run: () => win.doCut(), enabled: () => win.selection.length > 0 },
+            { text: "Kopiuj", key: "Ctrl+C", run: () => win.doCopy(), enabled: () => win.selection.length > 0 },
+            { text: "Wklej", key: "Ctrl+V", run: () => win.doPaste() },
+            { separator: true },
+            { text: "Zaznacz wszystko", key: "Ctrl+A", run: () => win.selectAll() }
+        ] },
+        { title: "Idź", items: [
+            { text: "Wstecz", key: "Alt+Lewo", run: () => win.goBack() },
+            { text: "Dalej", key: "Alt+Prawo", run: () => win.goForward() },
+            { text: "Do góry", key: "Alt+Góra", run: () => win.goUp() }
+        ] }
+    ]
+
     // ——— Stan ———
     property var backStack: []
     property var fwdStack: []
@@ -533,6 +562,7 @@ Window {
     onHeightChanged: effectsTimer.restart()
     onMaxedChanged: effectsTimer.restart()
     Component.onCompleted: {
+        AppMenu.menus = win.menuBar;
         effectsTimer.restart();
         keys.forceActiveFocus();
         if (extractOnStart) extractHere(extractOnStart);

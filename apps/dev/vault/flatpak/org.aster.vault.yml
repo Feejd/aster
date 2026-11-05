@@ -21,6 +21,7 @@ finish-args:
   - --filesystem=xdg-config/aster:ro  # motyw i akcent z ustawień Astera
   - --talk-name=org.freedesktop.secrets
   - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.aster.Shell
   - --env=QT_PLUGIN_PATH=/app/lib/plugins
 cleanup:
   - /include
