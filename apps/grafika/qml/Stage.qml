@@ -1127,7 +1127,7 @@ Item {
                 visible: stage.project.count === 0 && stage.editing === ""
                 anchors.centerIn: parent
                 width: emptyCol.implicitWidth + 48; height: emptyCol.implicitHeight + 40
-                radius: 20
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.line
                 opacity: 0.97
@@ -1838,7 +1838,7 @@ Item {
         visible: stage.drawOn
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: drawPillRow.implicitWidth + 16; height: 44; radius: 22
+        width: drawPillRow.implicitWidth + 16; height: 44; radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         Row {
@@ -1861,7 +1861,7 @@ Item {
         visible: Selection.active && !Magic.busy && !stage.paintOn && !stage.drawOn && !stage.maskOn && !stage.magicOn
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: Math.min(parent.width - 24, ctxCol.implicitWidth + 20); height: ctxCol.implicitHeight + 16; radius: 22
+        width: Math.min(parent.width - 24, ctxCol.implicitWidth + 20); height: ctxCol.implicitHeight + 16; radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 7
@@ -1875,7 +1875,7 @@ Item {
           spacing: 6
           Rectangle {
             visible: Magic.available && Magic.canGenerate()
-            width: ctxRow.implicitWidth; height: 38; radius: 19
+            width: ctxRow.implicitWidth; height: 38; radius: 8
             color: Theme.fill
             border.width: promptInput.activeFocus ? 1.5 : 0; border.color: Theme.accent
             Icon { x: 13; anchors.verticalCenter: parent.verticalCenter; d: Icons.sparkles; size: 16; stroke: 1.9; color: Theme.accentText }
@@ -1926,7 +1926,7 @@ Item {
         visible: stage.selOn && !Magic.busy && !Selection.active
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: selPill.implicitWidth + 16; height: 44; radius: 22
+        width: selPill.implicitWidth + 16; height: 44; radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 6
@@ -1945,7 +1945,7 @@ Item {
         visible: stage.paintOn && !Magic.busy
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: paintPill.implicitWidth + 16; height: 44; radius: 22
+        width: paintPill.implicitWidth + 16; height: 44; radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 6
@@ -1970,7 +1970,7 @@ Item {
         visible: stage.warpOn
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
-        width: warpRow.implicitWidth + 16; height: 44; radius: 22
+        width: warpRow.implicitWidth + 16; height: 44; radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 6
@@ -1992,7 +1992,7 @@ Item {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
         width: Math.min(parent.width - 24, maskRow.implicitWidth + 24)
         height: maskRow.implicitHeight + 18
-        radius: 16
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         z: 6
@@ -2024,7 +2024,7 @@ Item {
         anchors.bottom: parent.bottom; anchors.bottomMargin: 14
         width: Math.min(parent.width - 24, magicCol.implicitWidth + 28)
         height: magicCol.implicitHeight + 24
-        radius: 18
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.line
         Column {
@@ -2040,7 +2040,7 @@ Item {
                         id: tool
                         required property var modelData
                         readonly property bool on: stage.magicTool === modelData.id
-                        width: toolRow.implicitWidth + 22; height: 32; radius: 16
+                        width: toolRow.implicitWidth + 22; height: 32; radius: 8
                         baseColor: on ? Theme.accent : Theme.fill
                         color: on ? baseColor : hovered ? Theme.hover : baseColor
                         onClicked: stage.magicTool = modelData.id
@@ -2089,7 +2089,7 @@ Item {
         visible: Magic.busy
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top; anchors.topMargin: stage.ruler + 14
-        width: busyCol.implicitWidth + 32; height: busyCol.implicitHeight + 18; radius: 16
+        width: busyCol.implicitWidth + 32; height: busyCol.implicitHeight + 18; radius: 12
         color: Qt.rgba(0, 0, 0, 0.78)
         Column {
             id: busyCol
@@ -2124,7 +2124,7 @@ Item {
         visible: stage.hint === "" && stage.cropping !== ""
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 16
-        width: cropText.implicitWidth + 24; height: 30; radius: 15
+        width: cropText.implicitWidth + 24; height: 30; radius: 8
         color: Qt.rgba(0, 0, 0, 0.72)
         Text {
             id: cropText
@@ -2138,7 +2138,7 @@ Item {
         visible: stage.hint !== ""
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom; anchors.bottomMargin: 16
-        width: hintText.implicitWidth + 20; height: 26; radius: 13
+        width: hintText.implicitWidth + 20; height: 26; radius: 8
         color: Qt.rgba(0, 0, 0, 0.72)
         Text {
             id: hintText

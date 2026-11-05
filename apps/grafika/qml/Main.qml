@@ -124,7 +124,6 @@ Window {
         color: Theme.windowGlass
         border.width: win.maxed ? 0 : 1
         border.color: Theme.edge
-        WindowSheen { window: win; radius: win.r }
 
         StartPage {
             id: start
@@ -152,7 +151,7 @@ Window {
             y: shown ? 70 : -height - 10
             opacity: shown ? 1 : 0
             z: 600
-            width: Math.min(parent.width - 60, toastRow.implicitWidth + 36); height: 40; radius: 20
+            width: Math.min(parent.width - 60, toastRow.implicitWidth + 36); height: 40; radius: 12
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }

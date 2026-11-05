@@ -9,7 +9,7 @@ import Aster.Grafika
 Item {
     id: sp
     property var app                // Main: newProject, fromTemplate, openProject, presets
-    property real radius: 24
+    property real radius: 12
     property string category: ""
     property string group: ""                  // rozmiary: "" | social | print | screen
     property string query: ""                  // wyszukiwanie szablonów i projektów
@@ -294,7 +294,7 @@ Item {
         property real pw
         property real ph
         width: 162; height: 164
-        radius: 16
+        radius: 12
         baseColor: Theme.fill
         Item {
             id: shapeBox
@@ -346,11 +346,11 @@ Item {
         property bool hasMenu: false
         signal menu(real x, real y)
         width: 196; height: 236
-        radius: 16
+        radius: 12
         Rectangle {
             x: 0; y: 0
             width: parent.width; height: 184
-            radius: 14
+            radius: 10
             color: Theme.fill
             Image {
                 anchors.fill: parent
