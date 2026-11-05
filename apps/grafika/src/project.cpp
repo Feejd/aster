@@ -359,6 +359,7 @@ void Project::setName(const QString &name)
 void Project::create(qreal width, qreal height, const QString &name, const QVariantMap &print)
 {
     m_assets.clear();
+    m_live.clear();
     m_undo.clear();
     m_redo.clear();
     // print — rozmiar do druku w mm (A4, plakat), dla PDF
@@ -1072,8 +1073,56 @@ QString Project::importImage(const QString &fileOrUrl)
     return key;
 }
 
+void Project::setLive(const QString &key, const QImage &img)
+{
+    m_live.insert(key, img);
+    Q_EMIT imagesChanged();
+}
+
+void Project::clearLive(const QString &key)
+{
+    if (m_live.remove(key))
+        Q_EMIT imagesChanged();
+}
+
+QString Project::addDecoded(const QByteArray &png, const QImage &img)
+{
+    const QString key = QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha1).toHex().left(20)) + QStringLiteral(".png");
+    if (m_assets.contains(key))
+        return key;
+    Asset a;
+    a.data = png;
+    a.ext = QStringLiteral("png");
+    a.full = img;
+    a.preview = qMax(img.width(), img.height()) > 1600 ? img.scaled(1600, 1600, Qt::KeepAspectRatio, Qt::SmoothTransformation) : img;
+    m_assets.insert(key, a);
+    Q_EMIT imagesChanged();
+    return key;
+}
+
+QString Project::colorAt(qreal x, qreal y) const
+{
+    const qreal k = qMin(1.0, 2048 / qMax(m_width, m_height));
+    const QImage img = Art::renderPage(pageDocument(m_page), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this, Qt::white);
+    const QPoint p(qBound(0, qRound(x * k), img.width() - 1), qBound(0, qRound(y * k), img.height() - 1));
+    return QColor(img.pixel(p)).name(QColor::HexRgb).toUpper();
+}
+
+QString Project::newPixelLayer()
+{
+    const qreal k = qMin(1.0, 4096 / qMax(m_width, m_height));
+    QImage img(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k)), QImage::Format_ARGB32);
+    img.fill(Qt::transparent);
+    const QString key = addImage(img);
+    return add({{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("src"), key}, {QStringLiteral("pixel"), true},
+                {QStringLiteral("x"), 0.0}, {QStringLiteral("y"), 0.0}, {QStringLiteral("w"), m_width}, {QStringLiteral("h"), m_height}});
+}
+
 QImage Project::image(const QString &key, qreal pixels) const
 {
+    const auto live = m_live.constFind(key);
+    if (live != m_live.cend())
+        return *live;
     const auto it = m_assets.constFind(key);
     if (it == m_assets.cend())
         return {};
@@ -1083,6 +1132,9 @@ QImage Project::image(const QString &key, qreal pixels) const
 
 QImage Project::fullImage(const QString &key) const
 {
+    const auto live = m_live.constFind(key);
+    if (live != m_live.cend())
+        return *live;
     const auto it = m_assets.constFind(key);
     return it == m_assets.cend() ? QImage() : it->full;
 }

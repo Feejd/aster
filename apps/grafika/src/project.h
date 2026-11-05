@@ -72,6 +72,12 @@ public:
     Q_INVOKABLE void invertMask(const QString &id);
     Q_INVOKABLE void gradientMask(const QString &id, qreal angle);       // wygaszanie: od pełnego widoku do zera
     void setMaskImage(const QString &id, const QImage &mask);            // gotowa maska (np. zaznaczenie AI)                  // zdjęcie w pełnej rozdzielczości (do AI)
+    // Podgląd malowania: zdjęcie `key` rysuje się na razie z `img`, plik w projekcie jeszcze się nie zmienia
+    void setLive(const QString &key, const QImage &img);
+    void clearLive(const QString &key);
+    QString addDecoded(const QByteArray &png, const QImage &img);    // PNG policzony w tle, bez ponownego dekodowania
+    Q_INVOKABLE QString colorAt(qreal x, qreal y) const;              // kolor strony w punkcie (pipeta), #rrggbb
+    Q_INVOKABLE QString newPixelLayer();                              // pusta, przezroczysta warstwa do malowania na całą stronę
     QString addImage(const QImage &img);                         // nowe zdjęcie w projekcie (PNG, z przezroczystością)
     QByteArray vector(const QString &key) const override;
     Q_INVOKABLE bool recolorable(const QString &key) const;     // SVG z currentColor (jednokolorowa ikona)
@@ -156,6 +162,7 @@ Q_SIGNALS:
     void error(const QString &message);
 
 private:
+    QHash<QString, QImage> m_live;
     struct Asset {
         QByteArray data;
         QString ext;

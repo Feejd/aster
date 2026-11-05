@@ -540,6 +540,21 @@ Item {
         else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
         else if (cmd === "maskinvert") project.invertMask(sel);
         else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
+        else if (cmd === "painttool") usePaintTool(arg);
+        else if (cmd === "paintcolor") side.paintColor = arg;
+        else if (cmd === "pixellayer") addPixelLayer();
+        else if (cmd === "paintwave") {
+            // Fala na wysokości arg (część strony) bieżącym narzędziem
+            const W = project.pageWidth, H = project.pageHeight, id = stage.paintTarget(), t = side.paintTool;
+            Retouch.tool = t; Retouch.color = String(side.paintColor); Retouch.size = side.paintSize; Retouch.hardness = side.paintHardness; Retouch.strength = side.paintStrength;
+            Retouch.press(project, id, W * 0.1, H * Number(arg));
+            for (let i = 1; i <= 40; ++i) Retouch.move(W * (0.1 + 0.8 * i / 40), H * Number(arg) + Math.sin(i / 40 * Math.PI * 3) * H * 0.06);
+            Retouch.release();
+        }
+        else if (cmd === "paintsource") { const q = arg.split(","); Retouch.tool = "clone"; Retouch.setSource(project, sel, Number(q[0]), Number(q[1])); }
+        else if (cmd === "paintfill") { const q = arg.split(","); Retouch.color = String(side.paintColor); Retouch.strength = 1; Retouch.fill(project, sel, Number(q[0]), Number(q[1]), side.fillTolerance); }
+        else if (cmd === "pick") ed.app.toast(project.colorAt(...arg.split(",").map(Number)), "");
+        else if (cmd === "heal") { const a = JSON.parse(arg); Magic.heal(project, sel, a.points, a.width); }
         else if (cmd === "drawtool") { side.tab = "draw"; side.drawTool = arg; }
         else if (cmd === "drawcolor") side.drawColor = arg;
         else if (cmd === "cell") { const q = arg.split(","); stage.editCell(sel, Number(q[0]), Number(q[1])); }
@@ -630,7 +645,15 @@ Item {
     Shortcut { sequence: "T"; enabled: ed.active && !ed.typing; onActivated: side.addTextStyle(side.textStyles[2]) }
     Shortcut { sequence: "X"; enabled: ed.active && !ed.typing && stage.maskOn; onActivated: stage.maskReveal = !stage.maskReveal }
     Shortcut { sequence: "V"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("select") }
-    Shortcut { sequence: "B"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("draw") }
+    Shortcut { sequence: "B"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("brush") }
+    Shortcut { sequence: "E"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("eraser") }
+    Shortcut { sequence: "G"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("fill") }
+    Shortcut { sequence: "I"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("pick") }
+    Shortcut { sequence: "J"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("heal") }
+    Shortcut { sequence: "S"; enabled: ed.active && !ed.typing; onActivated: ed.usePaintTool("clone") }
+    Shortcut { sequence: "P"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("draw") }
+    Shortcut { sequence: "["; enabled: ed.active && !ed.typing && stage.paintOn; onActivated: side.setPaintSize(Math.max(1, Math.round(side.paintSize * 0.85))) }
+    Shortcut { sequence: "]"; enabled: ed.active && !ed.typing && stage.paintOn; onActivated: side.setPaintSize(Math.round(side.paintSize * 1.18) + 1) }
     Shortcut { sequence: "U"; enabled: ed.active && !ed.typing; onActivated: ed.setTool("shapes") }
 
     FileDialog {
@@ -677,7 +700,8 @@ Item {
         { id: "text", label: "Tekst", icon: "textT", key: "T" },
         { id: "shapes", label: "Kształty i grafiki", icon: "shapes", key: "U" },
         { id: "photos", label: "Zdjęcia", icon: "image", key: "" },
-        { id: "draw", label: "Rysowanie", icon: "squiggle", key: "B" },
+        { id: "paint", label: "Maluj i retuszuj", icon: "brush", key: "B" },
+        { id: "draw", label: "Rysowanie linii", icon: "squiggle", key: "P" },
         { id: "magic", label: "Magia AI", icon: "sparkles", key: "" },
         { id: "background", label: "Tło", icon: "palette", key: "" },
         { id: "templates", label: "Szablony", icon: "layout", key: "" }
@@ -712,6 +736,9 @@ Item {
         if (stage.selected !== id) stage.select(id);
         stage.maskEdit = id;
     }
+    function usePaintTool(t) { side.paintTool = t; side.tab = "paint"; }
+    function addPixelLayer() { stage.select(project.newPixelLayer()); }
+    Connections { target: Retouch; function onFailed(message) { ed.app.toast(message, ""); } }
     function addAdjustment() {
         const id = project.add({ type: "adjust", x: 0, y: 0, w: project.pageWidth, h: project.pageHeight });
         stage.select(id);
@@ -720,7 +747,7 @@ Item {
     // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
     Connections {
         target: stage
-        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw") side.tab = "select"; }
+        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint") side.tab = "select"; }
     }
 
     // ——— Pasek u góry ———
@@ -894,6 +921,7 @@ Item {
                     enabled: stage.selected !== ""
                     onClicked: ed.editMask(stage.selected)
                 }
+                ToolBtn { icon: "plus"; tip: "Nowa warstwa do malowania"; onClicked: ed.addPixelLayer() }
                 ToolBtn { icon: "sliders"; tip: "Warstwa korekcyjna — zmienia kolory wszystkiego pod spodem"; onClicked: ed.addAdjustment() }
                 ToolBtn { icon: "layers"; tip: "Grupuj zaznaczone (Ctrl+G)"; enabled: ed.many.length > 1; onClicked: ed.runMenu("group") }
                 ToolBtn { icon: "copy"; tip: "Duplikuj warstwę (Ctrl+D)"; enabled: layerFoot.has; onClicked: ed.duplicate() }
@@ -925,6 +953,14 @@ Item {
         drawTool: side.tab === "draw" ? side.drawTool : ""
         drawColor: side.drawColor
         drawWidth: side.drawWidth
+        paintTool: side.tab === "paint" ? side.paintTool : ""
+        paintColor: side.paintColor
+        paintSize: side.paintSize
+        paintHardness: side.paintHardness
+        paintStrength: side.paintStrength
+        fillTolerance: side.fillTolerance
+        onColorPicked: (c) => { side.paintColor = c; side.paintTool = "brush"; ed.app.toast("Pobrano kolor " + c, ""); }
+        onPaintMessage: (t) => ed.app.toast(t, "")
         onDrawFinished: side.tab = side.lastTab
         onQuickAction: (a) => ed.runMenu(a)
     }
@@ -1068,7 +1104,7 @@ Item {
                         id: toolBtn
                         required property var modelData
                         readonly property bool on: Magic.element !== "" ? modelData.id === "magic" : side.tab === modelData.id
-                        width: (toolStrip.width - 8 - 7) / 8; height: 32; radius: 8
+                        width: (toolStrip.width - 8 - (ed.tools.length - 1)) / ed.tools.length; height: 32; radius: 8
                         baseColor: on ? Theme.accent : "transparent"
                         color: on ? baseColor : hovered ? Theme.hover : baseColor
                         tip: modelData.label + (modelData.key !== "" ? " (" + modelData.key + ")" : "")
@@ -1228,7 +1264,8 @@ Item {
         readonly property var groups: [
             { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
                                          ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
-            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B", "Rysowanie"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+            { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B / E", "Pędzel / gumka"], ["G / I", "Wypełnij / pipeta"], ["J / S", "Korektor / stempel"], ["[ / ]", "Rozmiar pędzla"],
+                                         ["P", "Rysowanie linii"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
                                          ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],

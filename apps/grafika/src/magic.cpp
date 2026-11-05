@@ -1,4 +1,5 @@
 #include "magic.h"
+#include "art.h"
 #include "project.h"
 
 #include <QCoreApplication>
@@ -153,16 +154,10 @@ QImage withAlpha(const QImage &img, const QImage &mask)
     return out;
 }
 
-// Ramka elementu ↔ piksele zdjęcia (tak jak rysuje Art: „cover”, kadr focusX/focusY, powiększenie, odbicie)
+// Ramka elementu ↔ piksele zdjęcia
 QTransform frameTransform(const QVariantMap &el, const QSize &img)
 {
-    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
-    const qreal s = qMax(w / img.width(), h / img.height()) * qMax(1.0, num(el, "zoom", 1));
-    const qreal ox = -(img.width() * s - w) * num(el, "focusX", 0.5), oy = -(img.height() * s - h) * num(el, "focusY", 0.5);
-    QTransform t = QTransform::fromScale(s, s) * QTransform::fromTranslate(ox, oy);
-    if (el.value(QStringLiteral("flipX")).toBool())
-        t = t * QTransform(-1, 0, 0, 1, w, 0);
-    return t;
+    return Art::frameTransform(el, img);
 }
 
 // Wycięty fragment zdjęcia (tylko część widoczna w kadrze) i jego miejsce na stronie — nowa ramka z tym samym obrotem
@@ -615,6 +610,56 @@ void Magic::blurBackground(Project *project, const QString &id, qreal strength)
     Q_UNUSED(project);
     Q_UNUSED(id);
     Q_UNUSED(strength);
+    Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
+#endif
+}
+
+void Magic::heal(Project *project, const QString &id, const QVariantList &points, qreal width)
+{
+#ifdef GRAFIKA_ONNX
+    if (!project || points.isEmpty())
+        return;
+    const QVariantMap el = project->get(id);
+    const QImage img = project->fullImage(el.value(QStringLiteral("src")).toString());
+    if (img.isNull())
+        return;
+    // Punkty strony → piksele zdjęcia
+    const QTransform toImage = Art::pageToFrame(el) * Art::frameTransform(el, img.size()).inverted();
+    const qreal px = qMax(3.0, width * std::sqrt(std::abs(toImage.determinant())));
+    QPainterPath path;
+    for (int i = 0; i < points.size(); ++i) {
+        const QVariantList pt = points[i].toList();
+        const QPointF q = toImage.map(QPointF(pt.value(0).toDouble(), pt.value(1).toDouble()));
+        if (i == 0)
+            path.moveTo(q);
+        else
+            path.lineTo(q);
+    }
+    if (points.size() == 1)
+        path.lineTo(path.currentPosition() + QPointF(0.01, 0));
+    QImage mask(img.size(), QImage::Format_Alpha8);
+    mask.fill(0);
+    {
+        QPainter p(&mask);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(Qt::white, px, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(path);
+    }
+    QPointer<Project> pr(project);
+    auto models = m_models;
+    run(QStringLiteral("Naprawiam…"), featureModels(QStringLiteral("erase")), [=, this]() -> std::function<void()> {
+        const QImage filled = models->erase(img, mask);
+        return [=, this] {
+            if (pr && pr->indexOf(id) >= 0)
+                pr->change(id, {{QStringLiteral("src"), pr->addImage(filled)}});
+            Q_EMIT finished(QString(), {id});
+        };
+    });
+#else
+    Q_UNUSED(project);
+    Q_UNUSED(id);
+    Q_UNUSED(points);
+    Q_UNUSED(width);
     Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
 #endif
 }

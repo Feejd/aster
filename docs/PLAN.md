@@ -98,8 +98,9 @@ Programy:
       zaznaczenie AI), warstwy korekcyjne, krzywe, tony i kolor na zdjęciach
 - [ ] Aster Pixel, kierunek Photoshop z prostszym interfejsem. Zasada: proste działa od razu (gotowe wyglądy, „Popraw
       automatycznie”, AI), a pełna kontrola czeka w zwijanych sekcjach i panelu warstw, nigdy na drodze. Kolejność:
-  - [ ] malowanie po pikselach: warstwa rastrowa, pędzel z twardością i kryciem, gumka, wiadro, pipeta
-  - [ ] retusz: stempel, pędzel korygujący, rozjaśnianie i ściemnianie, rozmazywanie
+  - [x] malowanie po pikselach: warstwa pikselowa, pędzel z twardością i kryciem, gumka, wypełnianie, pipeta
+  - [x] retusz: Korektor AI, stempel, rozjaśnianie i ściemnianie, rozmazywanie, rozmywanie
+  - [ ] pędzle: nacisk tabletu, kształty pędzla, malowanie w trybach mieszania
   - [ ] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, zaznaczenie AI wspólne dla wszystkich działań;
         wytnij, wypełnij, wtapianie, maska z zaznaczenia, zaznaczenie obowiązuje przy malowaniu i korekcjach
   - [ ] przekształcenia: swobodne, perspektywa, zniekształcenie rogów, wypaczanie; przycinanie całego płótna

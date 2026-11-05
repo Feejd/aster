@@ -6,6 +6,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
+#include <QMouseEvent>
 #include <QTimer>
 #include <QUrl>
 #include <QtQml/qqmlextensionplugin.h>
@@ -46,7 +47,25 @@ int main(int argc, char *argv[])
     // Do testów: ASTER_OPEN=kroki rozdzielone „;” (testOpen w Main.qml, co 1,2 s), ASTER_SHOT=plik.png (ASTER_SHOT_DELAY ms)
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
-        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] { QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step)); });
+        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] {
+            // drag:x0,y0,x1,y1[,alt] — prawdziwe zdarzenia myszy w oknie (punkty okna), jak ruch człowieka
+            if (step.startsWith(QLatin1String("drag:"))) {
+                const QStringList a = step.mid(5).split(QLatin1Char(','));
+                const QPointF from(a.value(0).toDouble(), a.value(1).toDouble()), to(a.value(2).toDouble(), a.value(3).toDouble());
+                const Qt::KeyboardModifiers mods = a.size() > 4 ? Qt::AltModifier : Qt::NoModifier;
+                auto send = [window, mods](QEvent::Type type, const QPointF &p, Qt::MouseButton button, Qt::MouseButtons held) {
+                    QMouseEvent e(type, p, p, window->mapToGlobal(p), button, held, mods);
+                    QCoreApplication::sendEvent(window, &e);
+                };
+                send(QEvent::MouseMove, from, Qt::NoButton, Qt::NoButton);
+                send(QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton);
+                for (int k = 1; k <= 24; ++k)
+                    send(QEvent::MouseMove, from + (to - from) * (k / 24.0), Qt::NoButton, Qt::LeftButton);
+                send(QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton);
+                return;
+            }
+            QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step));
+        });
     const QString shot = qEnvironmentVariable("ASTER_SHOT");
     if (!shot.isEmpty()) {
         const int delay = qEnvironmentVariableIntValue("ASTER_SHOT_DELAY");

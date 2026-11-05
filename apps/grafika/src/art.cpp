@@ -1655,6 +1655,27 @@ QVariantList curveSamples(const QVariantList &points, int size)
     return out;
 }
 
+QTransform frameTransform(const QVariantMap &el, const QSize &image)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    const qreal s = qMax(w / image.width(), h / image.height()) * qMax(1.0, num(el, "zoom", 1));
+    const qreal ox = -(image.width() * s - w) * num(el, "focusX", 0.5), oy = -(image.height() * s - h) * num(el, "focusY", 0.5);
+    QTransform t = QTransform::fromScale(s, s) * QTransform::fromTranslate(ox, oy);
+    if (el.value(QStringLiteral("flipX")).toBool())
+        t = t * QTransform(-1, 0, 0, 1, w, 0);
+    return t;
+}
+
+QTransform pageToFrame(const QVariantMap &el)
+{
+    const qreal w = num(el, "w", 100), h = num(el, "h", 100);
+    QTransform t;
+    t.translate(num(el, "x", 0) + w / 2, num(el, "y", 0) + h / 2);
+    t.rotate(num(el, "rotation", 0));
+    t.translate(-w / 2, -h / 2);
+    return t.inverted();
+}
+
 void blur(QImage &premultiplied, int radius)
 {
     boxBlur(premultiplied, radius);

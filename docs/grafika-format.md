@@ -84,6 +84,8 @@ napisem tworzą grupę — zaznaczają się i przesuwają razem). Miękki cień 
   z przezroczystością), a element dostaje jego `src` — poprzednie zdjęcie zostaje w historii cofania. Rozmycie tła
   zapamiętuje `bgBlur` (siła 0–1), `bgBlurSrc` (ostre zdjęcie) i `bgBlurOut` (wynik): dopóki `src` = `bgBlurOut`,
   zmiana siły liczy od ostrego zdjęcia zamiast rozmywać drugi raz.
+  `pixel: true` — warstwa pikselowa: przezroczysty PNG na całą stronę, po którym się maluje. Malowanie i retusz
+  nie dodają pól, wynik każdej kreski to nowe zdjęcie w `images/` (cofanie wraca do poprzedniego).
   `stroke` i `strokeWidth` — obramowanie wzdłuż kształtu zdjęcia (w całości wewnątrz ramki).
   `credit` — podpis autora, gdy licencja go wymaga (zdjęcia CC BY z Wikimedia Commons).
   Bez `src` element jest miejscem na zdjęcie (np. w szablonie) — zdjęcie upuszczone na nie trafia do środka ramki.

@@ -52,6 +52,9 @@ public:
     // Rozmycie tła za osobą albo rzeczą (jak tryb portretowy), strength 0…1; 0 przywraca ostre zdjęcie
     Q_INVOKABLE void blurBackground(Project *project, const QString &id, qreal strength);
 
+    // Korektor: zamalowany pędzlem kawałek (punkty strony, grubość w pikselach strony) znika, a tło uzupełnia się samo
+    Q_INVOKABLE void heal(Project *project, const QString &id, const QVariantList &points, qreal width);
+
     Q_INVOKABLE void begin(Project *project, const QString &id);
     Q_INVOKABLE void end();
     // Współrzędne w ramce elementu (piksele elementu, bez obrotu); width — grubość pędzla

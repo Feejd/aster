@@ -33,6 +33,29 @@ Item {
     property real maskSize: 60                  // piksele ekranu
     property real maskSoft: 0.5
     readonly property bool maskOn: maskEdit !== "" && maskEdit === selected
+    // Malowanie i retusz po pikselach: brush | eraser | fill | pick | heal | clone | dodge | burn | smudge | blur
+    property string paintTool: ""
+    property color paintColor: "#16181D"
+    property real paintSize: 40                 // piksele strony
+    property real paintHardness: 0.7
+    property real paintStrength: 1
+    property real fillTolerance: 0.15
+    readonly property bool paintOn: paintTool !== ""
+    signal colorPicked(string color)
+    signal paintMessage(string text)
+    // Warstwa, po której malujemy: zaznaczone zdjęcie; bez niego pędzel i wypełnianie zakładają nową warstwę pikselową
+    function paintTarget() {
+        const o = current;
+        if (selected !== "" && o.type === "image" && o.src && !o.locked && !o.hidden) return selected;
+        if (paintTool === "brush" || paintTool === "fill") {
+            const id = project.newPixelLayer();
+            select(id);
+            return id;
+        }
+        paintMessage("Zaznacz zdjęcie albo warstwę pikselową, na której chcesz pracować");
+        return "";
+    }
+    onPaintOnChanged: if (paintOn && Magic.element !== "") Magic.end()
     property var cellEdit: null                 // pisanie w komórce tabeli: { id, r, c }
     signal drawFinished()
     onDrawOnChanged: if (drawOn) { if (Magic.element !== "") Magic.end(); clearSelection(); }
@@ -120,7 +143,7 @@ Item {
     function cancel() {
         if (maskEdit !== "") maskEdit = "";
         else if (cellEdit) cellEdit = null;
-        else if (drawOn) drawFinished();
+        else if (drawOn || paintOn) drawFinished();
         else if (magicOn) Magic.end();
         else if (cropping !== "") cropping = "";
         else clearSelection();
@@ -887,7 +910,7 @@ Item {
                 id: sel
                 readonly property var el: stage.current
                 readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
-                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn     // bez uchwytów
+                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn || stage.paintOn     // bez uchwytów
                 visible: stage.selected !== "" && el.id !== undefined && !el.hidden && el.type !== "adjust"
                 x: (el.x || 0) * stage.zoom
                 y: (el.y || 0) * stage.zoom
@@ -1034,7 +1057,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !(single && el.type === "adjust")
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !(single && el.type === "adjust")
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -1264,6 +1287,109 @@ Item {
                 Connections {
                     target: stage
                     function onCellEditChanged() { if (stage.cellEdit) Qt.callLater(cellInput.load); else stage.project.commit(); }
+                }
+            }
+
+            // ——— Malowanie i retusz ———
+            Item {
+                id: paintBox
+                anchors.fill: parent
+                visible: stage.paintOn
+                z: 20
+                Canvas {
+                    id: healCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const c = getContext("2d");
+                        c.reset();
+                        if (pts.length === 0) return;
+                        c.beginPath();
+                        c.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) c.lineTo(q[0], q[1]);
+                        if (pts.length === 1) c.lineTo(pts[0][0] + 0.01, pts[0][1]);
+                        c.lineCap = "round"; c.lineJoin = "round";
+                        c.lineWidth = stage.paintSize * stage.zoom;
+                        c.strokeStyle = "rgba(255, 61, 154, 0.5)";
+                        c.stroke();
+                    }
+                }
+                // Źródło stempla
+                Item {
+                    visible: stage.paintTool === "clone" && Retouch.hasSource
+                    x: Retouch.source.x * stage.zoom; y: Retouch.source.y * stage.zoom
+                    Rectangle { x: -9; y: -0.75; width: 18; height: 1.5; color: "white"; border.width: 0.5; border.color: "black" }
+                    Rectangle { x: -0.75; y: -9; width: 1.5; height: 18; color: "white"; border.width: 0.5; border.color: "black" }
+                }
+                Rectangle {
+                    id: paintRing
+                    readonly property real d: Math.max(6, stage.paintSize * stage.zoom)
+                    visible: paintArea.containsMouse && stage.paintTool !== "pick" && stage.paintTool !== "fill"
+                    width: d; height: d; radius: d / 2
+                    color: "transparent"
+                    border.width: 1.5; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1.5; radius: width / 2; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.5) }
+                }
+                MouseArea {
+                    id: paintArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    hoverEnabled: true
+                    enabled: !Magic.busy
+                    cursorShape: stage.paintTool === "pick" || stage.paintTool === "fill" ? Qt.CrossCursor : Qt.BlankCursor
+                    property string target: ""
+                    function pos(e) { return Qt.point((e.x - 60) / stage.zoom, (e.y - 60) / stage.zoom); }
+                    function ring(e) {
+                        paintRing.x = e.x - 60 - paintRing.width / 2;
+                        paintRing.y = e.y - 60 - paintRing.height / 2;
+                    }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        ring(e);
+                        target = "";
+                        const p = pos(e), t = stage.paintTool;
+                        if (t === "pick") { stage.colorPicked(stage.project.colorAt(p.x, p.y)); return; }
+                        const id = stage.paintTarget();
+                        if (id === "") return;
+                        Retouch.color = String(stage.paintColor);
+                        Retouch.size = stage.paintSize;
+                        Retouch.hardness = stage.paintHardness;
+                        Retouch.strength = stage.paintStrength;
+                        if (t === "fill") { Retouch.fill(stage.project, id, p.x, p.y, stage.fillTolerance); return; }
+                        if (t === "heal") {
+                            target = id;
+                            healCanvas.pts = [[e.x - 60, e.y - 60]];
+                            healCanvas.requestPaint();
+                            return;
+                        }
+                        Retouch.tool = t;
+                        if (t === "clone" && (e.modifiers & Qt.AltModifier)) { Retouch.setSource(stage.project, id, p.x, p.y); return; }
+                        if (Retouch.press(stage.project, id, p.x, p.y)) target = id;
+                    }
+                    onPositionChanged: (e) => {
+                        ring(e);
+                        if (!pressed || target === "") return;
+                        const p = pos(e);
+                        if (stage.paintTool === "heal") {
+                            const pts = healCanvas.pts, last = pts[pts.length - 1];
+                            if (Math.hypot(e.x - 60 - last[0], e.y - 60 - last[1]) < 2) return;
+                            healCanvas.pts = pts.concat([[e.x - 60, e.y - 60]]);
+                            healCanvas.requestPaint();
+                        } else {
+                            Retouch.move(p.x, p.y);
+                        }
+                    }
+                    onReleased: {
+                        if (target === "") return;
+                        if (stage.paintTool === "heal") {
+                            Magic.heal(stage.project, target, healCanvas.pts.map(q => [q[0] / stage.zoom, q[1] / stage.zoom]), stage.paintSize);
+                            healCanvas.pts = [];
+                            healCanvas.requestPaint();
+                        } else {
+                            Retouch.release();
+                        }
+                        target = "";
+                    }
                 }
             }
 
@@ -1546,6 +1672,31 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: stage.drawTool === "eraser" ? "Przeciągnij po rysunku, żeby go zmazać" : "Rysuj po stronie · każda kreska to osobny element"
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+            }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // Malowanie: wyjście i stan
+    Rectangle {
+        visible: stage.paintOn && !Magic.busy
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: paintPill.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: paintPill
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: stage.current.type === "image" && stage.current.src
+                      ? "Pracujesz na: " + (stage.current.pixel ? "warstwa pikselowa" : "zdjęcie") + " · [ ] zmienia rozmiar"
+                      : "Pędzel utworzy nową warstwę · [ ] zmienia rozmiar"
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13
             }
             Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }

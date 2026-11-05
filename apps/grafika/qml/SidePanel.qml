@@ -22,6 +22,7 @@ Item {
         { id: "shapes", label: "Elementy", icon: "shapes" },
         { id: "photos", label: "Zdjęcia", icon: "image" },
         { id: "draw", label: "Rysuj", icon: "squiggle" },
+        { id: "paint", label: "Maluj i retuszuj", icon: "brush" },
         { id: "background", label: "Tło", icon: "palette" },
         { id: "layers", label: "Warstwy", icon: "layers" }
     ]
@@ -44,8 +45,35 @@ Item {
         drawSizes = m;
     }
     property string prevTab: "select"
+
+    // ——— Malowanie i retusz: ustawienia osobno dla każdego narzędzia, rozmiar w częściach krótszego boku strony ———
+    property string paintTool: "brush"
+    property color paintColor: "#16181D"
+    property var paintSizes: ({ brush: 0.03, eraser: 0.05, heal: 0.03, clone: 0.04, dodge: 0.08, burn: 0.08, smudge: 0.05, blur: 0.06 })
+    property var paintPower: ({ brush: 1, eraser: 1, clone: 1, dodge: 0.5, burn: 0.5, smudge: 0.7, blur: 1 })
+    property real paintHardness: 0.7
+    property real fillTolerance: 0.15
+    readonly property real paintSize: Math.max(1, Math.round(base * (paintSizes[paintTool] || 0.04)))
+    readonly property real paintStrength: paintPower[paintTool] === undefined ? 1 : paintPower[paintTool]
+    readonly property bool paintHasSize: paintTool !== "fill" && paintTool !== "pick"
+    readonly property bool paintHasColor: paintTool === "brush" || paintTool === "fill"
+    readonly property var paintTools: [
+        { id: "brush", label: "Pędzel", icon: "brush", key: "B", hint: "Maluje kolorem. Bez zaznaczonego zdjęcia tworzy nową warstwę do malowania." },
+        { id: "eraser", label: "Gumka", icon: "eraser", key: "E", hint: "Ściera piksele warstwy do przezroczystości." },
+        { id: "fill", label: "Wypełnij", icon: "droplet", key: "G", hint: "Klik wypełnia kolorem podobny obszar." },
+        { id: "pick", label: "Pipeta", icon: "pipette", key: "I", hint: "Klik pobiera kolor ze strony do pędzla." },
+        { id: "heal", label: "Korektor AI", icon: "sparkles", key: "J", hint: "Zamaluj plamkę, kabel albo przechodnia — zniknie, a tło uzupełni się samo." },
+        { id: "clone", label: "Stempel", icon: "stamp", key: "S", hint: "Alt+klik wskazuje źródło, potem pędzel kopiuje stamtąd piksele." },
+        { id: "dodge", label: "Rozjaśnij", icon: "neon", key: "", hint: "Rozjaśnia malowane miejsca." },
+        { id: "burn", label: "Ściemnij", icon: "moon", key: "", hint: "Ściemnia malowane miejsca." },
+        { id: "smudge", label: "Rozmaż", icon: "squiggle", key: "", hint: "Ciągnie piksele jak palec po mokrej farbie." },
+        { id: "blur", label: "Rozmyj", icon: "circleHalf", key: "", hint: "Zmiękcza malowane miejsca." }
+    ]
+    readonly property string paintHint: { for (const t of paintTools) if (t.id === paintTool) return t.hint; return ""; }
+    function setPaintSize(px) { const m = Object.assign({}, paintSizes); m[paintTool] = px / base; paintSizes = m; }
+    function setPaintPower(v) { const m = Object.assign({}, paintPower); m[paintTool] = v; paintPower = m; }
     onTabChanged: {
-        if (tab !== "draw") prevTab = tab; else lastTab = prevTab;
+        if (tab !== "draw" && tab !== "paint") prevTab = tab; else lastTab = prevTab;
         if (tab === "photos") photos = Library.photos();
         if (tab === "layers") refreshLayers();
     }
@@ -143,7 +171,7 @@ Item {
     readonly property var shapeNames: ({ rect: "Prostokąt", ellipse: "Koło", triangle: "Trójkąt", star: "Gwiazda", heart: "Serce", line: "Linia", arrow: "Strzałka" })
     function layerName(o) {
         if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
-        if (o.type === "image") return o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
+        if (o.type === "image") return o.pixel ? "Warstwa pikselowa" : o.src ? "Zdjęcie" : "Miejsce na zdjęcie";
         if (o.type === "adjust") return "Korekcja";
         if (o.type === "draw") return o.pen === "highlighter" ? "Zakreślenie" : "Rysunek";
         if (o.type === "vector") return "Grafika";
@@ -427,7 +455,7 @@ Item {
                 width: scroll.width
                 height: sp.tab === "templates" ? templatesCol.height : sp.tab === "text" ? textCol.height
                       : sp.tab === "shapes" ? elementsCol.height : sp.tab === "photos" ? photosCol.height
-                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : bgCol.height
+                      : sp.tab === "layers" ? layersCol.height : sp.tab === "draw" ? drawCol.height : sp.tab === "paint" ? paintCol.height : bgCol.height
 
                 // Szablony
                 Column {
@@ -1216,6 +1244,111 @@ Item {
                             color: Theme.text; font.family: Theme.font; font.pixelSize: 13
                         }
                         Icon { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.lock; size: 14; stroke: 1.8; color: Theme.text2; opacity: 0.5 }
+                    }
+                }
+
+                // Malowanie i retusz
+                Column {
+                    id: paintCol
+                    visible: sp.tab === "paint"
+                    width: parent.width
+                    spacing: 14
+                    Grid {
+                        columns: 2
+                        spacing: 6
+                        Repeater {
+                            model: sp.paintTools
+                            delegate: HoverButton {
+                                id: pt
+                                required property var modelData
+                                readonly property bool on: sp.paintTool === modelData.id
+                                width: (pages.width - 6) / 2; height: 36; radius: 9
+                                baseColor: on ? Theme.accent : Theme.fill
+                                color: on ? baseColor : hovered ? Theme.hover : baseColor
+                                tip: modelData.key !== "" ? "Skrót: " + modelData.key : ""
+                                onClicked: sp.paintTool = modelData.id
+                                Row {
+                                    x: 10; anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 8
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons[pt.modelData.icon]; size: 16; stroke: 1.9; color: pt.on ? "white" : Theme.text }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; text: pt.modelData.label; color: pt.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: pt.on ? Font.DemiBold : Font.Medium }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: sp.paintHint
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.25
+                    }
+                    Section {
+                        visible: sp.paintHasColor
+                        title: "Kolor"
+                        Grid {
+                            columns: 6
+                            spacing: 8
+                            Repeater {
+                                model: sp.drawColors
+                                delegate: Rectangle {
+                                    id: pc
+                                    required property string modelData
+                                    readonly property bool on: String(sp.paintColor).toUpperCase() === modelData.toUpperCase()
+                                    width: (pages.width - 40) / 6; height: width; radius: width / 2
+                                    color: modelData
+                                    border.width: on ? 3 : 1; border.color: on ? Theme.accent : Qt.rgba(0, 0, 0, 0.14)
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sp.paintColor = pc.modelData }
+                                }
+                            }
+                        }
+                        ColorWell {
+                            id: paintWell
+                            label: "Inny kolor"
+                            value: String(sp.paintColor)
+                            onClicked: sp.editor.pickColor(paintWell, value, false, (c) => sp.paintColor = c)
+                        }
+                    }
+                    Column {
+                        width: parent.width
+                        spacing: 2
+                        ValueSlider {
+                            visible: sp.paintHasSize
+                            label: "Rozmiar"
+                            from: 1; to: Math.max(40, Math.round(sp.base * 0.3)); step: 1
+                            value: sp.paintSize
+                            suffix: " px"
+                            onMoved: (v) => sp.setPaintSize(v)
+                        }
+                        ValueSlider {
+                            visible: sp.paintHasSize && sp.paintTool !== "heal"
+                            label: "Twardość"
+                            from: 0; to: 1; step: 0.01
+                            value: sp.paintHardness
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.paintHardness = v
+                        }
+                        ValueSlider {
+                            visible: sp.paintTool !== "heal" && sp.paintTool !== "pick" && sp.paintTool !== "fill"
+                            label: sp.paintTool === "brush" || sp.paintTool === "eraser" || sp.paintTool === "clone" ? "Krycie" : "Siła"
+                            from: 0.02; to: 1; step: 0.01
+                            value: sp.paintStrength
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.setPaintPower(v)
+                        }
+                        ValueSlider {
+                            visible: sp.paintTool === "fill"
+                            label: "Tolerancja"
+                            from: 0; to: 1; step: 0.01
+                            value: sp.fillTolerance
+                            shown: value * 100; suffix: "%"
+                            onMoved: (v) => sp.fillTolerance = v
+                        }
+                    }
+                    Btn {
+                        width: parent.width
+                        icon: "plus"
+                        text: "Nowa warstwa do malowania"
+                        onClicked: sp.editor.addPixelLayer()
                     }
                 }
 
