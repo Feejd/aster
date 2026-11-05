@@ -898,6 +898,15 @@ Window {
         function onMessage(text) { win.toast(text); }
         function onRepoCreated(url) { win.toast("Repozytorium na GitHubie: " + url); Project.refreshGit(); }
     }
+    // Pasek kart: aktywna karta zawsze w całości widoczna, reszta dostępna kółkiem
+    function revealTab(f, tab) {
+        if (tab.x < f.contentX) f.contentX = Math.max(0, tab.x - 8);
+        else if (tab.x + tab.width > f.contentX + f.width) f.contentX = tab.x + tab.width - f.width + 8;
+    }
+    function wheelTabs(f, e) {
+        const d = e.pixelDelta.x || e.pixelDelta.y || (e.angleDelta.x || e.angleDelta.y) / 120 * 80;
+        f.contentX = Math.max(0, Math.min(Math.max(0, f.contentWidth - f.width), f.contentX - d));
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -1559,6 +1568,10 @@ Window {
                 TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
                 Flickable {
                     id: tabFlick
+                    function reveal(tab) { win.revealTab(tabFlick, tab); }
+                    // Kółko i touchpad nad kartami przewijają je w bok
+                    WheelHandler { acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (e) => win.wheelTabs(tabFlick, e) }
+                    WheelHandler { orientation: Qt.Horizontal; acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (e) => win.wheelTabs(tabFlick, e) }
                     x: 8
                     width: Math.min(tabRow.width, (win.split ? win.splitX : rightGroup.x) - x - 8)
                     height: parent.height
@@ -1576,6 +1589,10 @@ Window {
                 }
                 // Karty prawej grupy
                 Flickable {
+                    id: tabFlick1
+                    function reveal(tab) { win.revealTab(tabFlick1, tab); }
+                    WheelHandler { acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (e) => win.wheelTabs(tabFlick1, e) }
+                    WheelHandler { orientation: Qt.Horizontal; acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (e) => win.wheelTabs(tabFlick1, e) }
                     visible: win.split
                     x: win.splitX + 8
                     width: Math.min(tabRow1.width, rightGroup.x - x - 8)
@@ -2497,12 +2514,22 @@ Window {
         // Aktywna w swojej grupie; wyraźniej — w grupie z fokusem
         readonly property bool active: { win.revision; return index === win.groupActive(group); }
         readonly property bool focused: active && (!win.split || group === win.focusGroup)
+        readonly property var flk: shownGroup === 0 ? tabFlick : tabFlick1
+        // Row układa karty tuż przed rysowaniem — dlatego też na zmianę pozycji i szerokości, nie tylko aktywności
+        function revealSelf() { if (tab.active && tab.visible) flk.reveal(tab); }
+        onActiveChanged: Qt.callLater(revealSelf)
+        onXChanged: revealSelf()
+        onWidthChanged: revealSelf()
+        Component.onCompleted: Qt.callLater(revealSelf)
         readonly property bool dirty: { win.revision; const p = win.page(index); return !!p && p.modified; }
         width: Math.min(240, tabLabel.implicitWidth + 70); height: 34
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         radius: 9
         color: focused ? Theme.fill : active ? Qt.rgba(Theme.fill.r, Theme.fill.g, Theme.fill.b, Theme.fill.a * 0.5) : (tabArea.containsMouse ? Theme.hover : "transparent")
-        FileIcon { x: 11; anchors.verticalCenter: parent.verticalCenter; name: Project.fileName(tab.path); size: 14 }
+        FileIcon {
+            x: 11; anchors.verticalCenter: parent.verticalCenter; name: Project.fileName(tab.path); size: 14
+            visible: tab.x + x + size > tab.flk.contentX && tab.x + x < tab.flk.contentX + tab.flk.width
+        }
         Text {
             id: tabLabel
             x: 32; width: parent.width - 32 - 30

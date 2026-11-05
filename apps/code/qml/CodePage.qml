@@ -828,23 +828,6 @@ Item {
             color: Theme.text2; opacity: 0.6
             font.family: Theme.font; font.pixelSize: 12; font.italic: true
         }
-
-        WheelHandler {
-            acceptedModifiers: Qt.ControlModifier
-            onWheel: (e) => page.zoomRequested(e.angleDelta.y > 0 ? 1 : -1)
-        }
-        // Przewijanie kółkiem i touchpadem (Flickable nieinteraktywny — sam by tego nie robił)
-        WheelHandler {
-            acceptedModifiers: Qt.NoModifier | Qt.ShiftModifier
-            onWheel: (e) => {
-                const step = te.cursorRectangle.height || 20;
-                let dx = e.pixelDelta.x !== 0 ? e.pixelDelta.x : e.angleDelta.x / 120 * step * 3;
-                let dy = e.pixelDelta.y !== 0 ? e.pixelDelta.y : e.angleDelta.y / 120 * step * 3;
-                if (e.modifiers & Qt.ShiftModifier) { dx = dy; dy = 0; }
-                flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY - dy));
-                flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, flick.contentX - dx));
-            }
-        }
     }
 
     function handleKey(e) {
@@ -1063,6 +1046,31 @@ Item {
         }
     }
 
+    // Przewijanie kółkiem i touchpadem na całej karcie, także nad marginesem (Flickable jest nieinteraktywny —
+    // przeciąganie zaznacza tekst — więc sam nie przewija). Shift — w bok, Ctrl — powiększenie.
+    // Bez acceptedModifiers: Qt porównuje je dokładnie, „NoModifier | Shift” znaczyłoby „tylko z Shiftem”.
+    function wheelScroll(e) {
+        if (e.modifiers & Qt.ControlModifier) {
+            if (e.angleDelta.y !== 0) page.zoomRequested(e.angleDelta.y > 0 ? 1 : -1);
+            return;
+        }
+        const step = te.cursorRectangle.height || 20;
+        let dx = e.pixelDelta.x !== 0 ? e.pixelDelta.x : e.angleDelta.x / 120 * step * 3;
+        let dy = e.pixelDelta.y !== 0 ? e.pixelDelta.y : e.angleDelta.y / 120 * step * 3;
+        if (e.modifiers & Qt.ShiftModifier) { dx = dx || dy; dy = 0; }
+        flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY - dy));
+        flick.contentX = Math.max(0, Math.min(flick.contentWidth - flick.width, flick.contentX - dx));
+    }
+    WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: (e) => page.wheelScroll(e)
+    }
+    WheelHandler {
+        orientation: Qt.Horizontal
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: (e) => page.wheelScroll(e)
+    }
+
     // Minimapa
     Minimap {
         id: minimap
@@ -1093,7 +1101,7 @@ Item {
             }
             onPressed: (e) => scrollTo(e.y)
             onPositionChanged: (e) => { if (pressed) scrollTo(e.y); }
-            onWheel: (w) => { flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY - w.angleDelta.y / 120 * 60)); }
+            onWheel: (w) => page.wheelScroll(w)
         }
     }
 
