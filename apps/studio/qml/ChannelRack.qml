@@ -86,6 +86,8 @@ Item {
                     readonly property color tint: rk.color(ch ? ch.color : 0)
                     // Dane kroków: odświeża je każda zmiana racka
                     readonly property var pd: ch && Studio.patterns.length >= 0 && Studio.channels ? Studio.patternData(Studio.currentPattern, ch.id) : ({ steps: [], notes: [] })
+                    // Same nuty (melodia) — podgląd zamiast kroków; kroki z nutami (rolki hi-hatu) — jedno na drugim
+                    readonly property bool notesOnly: pd.notes.length > 0 && !pd.steps.some((v) => v > 0)
                     width: col.width; height: 34
 
                     Rectangle {
@@ -163,7 +165,7 @@ Item {
                         Item {
                             width: rk.steps * rk.stepW; height: 34
                             Row {
-                                visible: row.pd.notes.length === 0
+                                visible: !row.notesOnly
                                 Repeater {
                                     model: rk.steps
                                     delegate: Rectangle {
@@ -194,10 +196,10 @@ Item {
                                     color: rk.color(row.ch ? row.ch.color : 0)
                                 }
                             }
-                            Rectangle { visible: row.pd.notes.length > 0; width: parent.width; height: 34; radius: 6; color: Theme.fill; z: -1 }
+                            Rectangle { visible: row.notesOnly; width: parent.width; height: 34; radius: 6; color: Theme.fill; z: -1 }
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: row.pd.notes.length === 0
+                                enabled: !row.notesOnly
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 property real paint: 0
                                 property int last: -1
@@ -218,7 +220,7 @@ Item {
                             }
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: row.pd.notes.length > 0
+                                enabled: row.notesOnly
                                 onClicked: rk.pianoRequested(row.ch.id)
                             }
                         }
