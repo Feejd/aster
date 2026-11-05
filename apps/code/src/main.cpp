@@ -99,6 +99,15 @@ int main(int argc, char *argv[])
                 QCoreApplication::sendEvent(window, &ev);
                 return;
             }
+            // keys:TEKST — zwykłe klawisze, znak po znaku
+            if (step.startsWith(QLatin1String("keys:"))) {
+                for (const QChar c : step.mid(5)) {
+                    QKeyEvent press(QEvent::KeyPress, c.toUpper().unicode(), Qt::NoModifier, QString(c)), release(QEvent::KeyRelease, c.toUpper().unicode(), Qt::NoModifier, QString(c));
+                    QCoreApplication::sendEvent(window, &press);
+                    QCoreApplication::sendEvent(window, &release);
+                }
+                return;
+            }
             if (step.startsWith(QLatin1String("key:"))) {
                 const QKeySequence seq(step.mid(4));
                 const int k = seq.isEmpty() ? 0 : seq[0].key();

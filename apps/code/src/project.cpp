@@ -367,6 +367,50 @@ QVariantMap Project::load(const QString &pathOrUrl) const
             {QStringLiteral("readOnly"), !fi.isWritable()}};
 }
 
+namespace {
+
+constexpr int LocalHistoryLimit = 100;
+constexpr qint64 LocalHistoryMaxSize = 2 * 1024 * 1024;
+
+QString historyDir(const QString &path)
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/historia/")
+         + QString::fromLatin1(QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex());
+}
+
+QStringList historyIds(const QString &dir)
+{
+    QStringList ids = QDir(dir).entryList({QStringLiteral("*.txt")}, QDir::Files, QDir::Name | QDir::Reversed);
+    for (QString &i : ids)
+        i.chop(4);
+    return ids;
+}
+
+// Nowa wersja, chyba że taka sama jak ostatnia; najstarsze znikają ponad limit
+void historyStore(const QString &path, const QByteArray &data)
+{
+    if (data.size() > LocalHistoryMaxSize || SecretStore::isSecretFile(path))
+        return;
+    const QString dir = historyDir(path);
+    QDir().mkpath(dir);
+    QFile::setPermissions(dir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+    const QStringList ids = historyIds(dir);
+    if (!ids.isEmpty()) {
+        QFile last(dir + QLatin1Char('/') + ids.first() + QStringLiteral(".txt"));
+        if (last.open(QIODevice::ReadOnly) && last.readAll() == data)
+            return;
+    }
+    QFile f(dir + QLatin1Char('/') + QString::number(QDateTime::currentMSecsSinceEpoch()) + QStringLiteral(".txt"));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::NewOnly))
+        return;
+    f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    f.write(data);
+    for (int i = LocalHistoryLimit - 1; i < ids.size(); ++i)
+        QFile::remove(dir + QLatin1Char('/') + ids.at(i) + QStringLiteral(".txt"));
+}
+
+} // namespace
+
 bool Project::save(const QString &path, const QString &text, const QString &encoding, const QString &eol)
 {
     QString out = text;
@@ -389,12 +433,20 @@ bool Project::save(const QString &path, const QString &text, const QString &enco
             }
         }
     }
+    // Historia lokalna: dotychczasowa treść, zanim powstała pierwsza kopia tego pliku, i nowa wersja
+    if (historyIds(historyDir(path)).isEmpty()) {
+        QFile old(path);
+        if (old.size() <= LocalHistoryMaxSize && old.open(QIODevice::ReadOnly))
+            historyStore(path, old.readAll());
+    }
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly) || f.write(data) != data.size() || !f.commit()) {
         Q_EMIT message(QStringLiteral("Nie udało się zapisać „%1”").arg(QFileInfo(path).fileName()));
         return false;
     }
     refreshGit();
+    historyStore(path, data);
+    Q_EMIT localHistoryChanged(path);
     return true;
 }
 
@@ -491,6 +543,64 @@ void Project::watch(const QStringList &paths)
 void Project::showInFiles(const QString &path) const
 {
     QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).isDir() ? path : QFileInfo(path).absolutePath()));
+}
+
+// ——— Historia lokalna ———
+
+QVariantList Project::localHistory(const QString &path) const
+{
+    QVariantList out;
+    for (const QString &id : historyIds(historyDir(path)))
+        out << QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("time"), id.toLongLong() / 1000}};
+    return out;
+}
+
+QString Project::localVersion(const QString &path, const QString &id) const
+{
+    QFile f(historyDir(path) + QLatin1Char('/') + id + QStringLiteral(".txt"));
+    return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+}
+
+// ——— Git bez terminala ———
+
+bool Project::hasRemote() const
+{
+    if (m_gitTop.isEmpty())
+        return false;
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    startGit(&p, {QStringLiteral("remote")});
+    p.waitForFinished(3000);
+    return !p.readAllStandardOutput().trimmed().isEmpty();
+}
+
+bool Project::initGit()
+{
+    if (m_root.isEmpty() || !m_gitTop.isEmpty())
+        return false;
+    QProcess p;
+    p.setWorkingDirectory(m_root);
+    startGit(&p, {QStringLiteral("init"), QStringLiteral("-q"), QStringLiteral("-b"), QStringLiteral("main")});
+    if (!p.waitForFinished(5000) || p.exitCode() != 0)
+        return false;
+    // open() tego samego folderu nic nie robi — tu trzeba samemu przejść na nowe repozytorium
+    m_gitTop = m_root;
+    m_gitDir = m_root + QStringLiteral("/.git");
+    Q_EMIT gitChanged();
+    refreshGit();
+    return true;
+}
+
+bool Project::setGitIdentity(const QString &name, const QString &email)
+{
+    for (const auto &kv : {std::pair{QStringLiteral("user.name"), name}, std::pair{QStringLiteral("user.email"), email}}) {
+        QProcess p;
+        p.setWorkingDirectory(m_gitTop.isEmpty() ? m_root : m_gitTop);
+        startGit(&p, {QStringLiteral("config"), QStringLiteral("--global"), kv.first, kv.second});
+        if (!p.waitForFinished(3000) || p.exitCode() != 0)
+            return false;
+    }
+    return true;
 }
 
 // ——— Kopie niezapisanych plików (na wypadek awarii) ———
@@ -826,9 +936,12 @@ void Project::commit(const QString &message, bool amend, bool all)
             args << QStringLiteral("-F") << QStringLiteral("-");
         runGit(QStringLiteral("commit"), args, message.trimmed().toUtf8(), [this](bool ok, const QString &msg) {
             QString text = msg;
-            if (!ok && msg.contains(QLatin1String("user.email")))
-                text = QStringLiteral("Git nie zna autora — w terminalu: git config --global user.name \"Imię Nazwisko\" i git config --global user.email adres@poczta");
-            else if (!ok && msg.contains(QLatin1String("nothing to commit")))
+            // Git nie zna autora — okno z pytaniem zamiast polecenia do przepisania
+            if (!ok && (msg.contains(QLatin1String("user.email")) || msg.contains(QLatin1String("Author identity unknown")) || msg.contains(QLatin1String("empty ident")))) {
+                Q_EMIT gitIdentityNeeded();
+                return;
+            }
+            if (!ok && msg.contains(QLatin1String("nothing to commit")))
                 text = QStringLiteral("Nie ma nic do zatwierdzenia");
             Q_EMIT gitDone(QStringLiteral("commit"), ok, ok ? QStringLiteral("Zatwierdzono") : text.left(300));
         });

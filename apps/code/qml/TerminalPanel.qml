@@ -116,6 +116,7 @@ Item {
     }
 
     TaskOutput {
+        id: taskOut
         visible: tp.tab === 3
         anchors.fill: parent
         anchors.topMargin: header.height + 1
@@ -123,6 +124,55 @@ Item {
         onOpenPreview: (url) => tp.openPreview(url)
         onExplainFailure: (title, output) => tp.explainFailure(title, output)
         onInstallTool: (packages) => tp.installTool(packages)
+    }
+
+    // Powłoka zgłosiła brak programu — przycisk zamiast szukania pakietu
+    property string missingTool: ""
+    property string missingLine: ""
+    property string missingDismissed: ""
+    Timer {
+        interval: 1200; repeat: true
+        running: tp.visible && tp.tab === 0 && !!tp.term
+        onTriggered: {
+            const lines = tp.term.tailText(4).split("\n");
+            for (let i = lines.length - 1; i >= 0; --i) {
+                const m = lines[i].match(/(?:command not found: ([\w.+-]+)|: ([\w.+-]+): (?:command )?not found)/);
+                if (m) {
+                    const name = m[1] || m[2];
+                    tp.missingLine = lines[i];
+                    tp.missingTool = lines[i] !== tp.missingDismissed && taskOut.toolPackages[name] ? name : "";
+                    return;
+                }
+            }
+            tp.missingTool = "";
+        }
+    }
+    Rectangle {
+        visible: tp.tab === 0 && !!tp.missingTool
+        z: 3
+        anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 12
+        width: missRow.implicitWidth + 24; height: 40; radius: 10
+        color: Theme.surface
+        border.width: 1; border.color: Theme.edge
+        Row {
+            id: missRow
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Brakuje programu " + tp.missingTool; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            HoverButton {
+                anchors.verticalCenter: parent.verticalCenter
+                width: missT.implicitWidth + 20; height: 26; radius: 7
+                baseColor: Theme.accent
+                onClicked: { tp.installTool(taskOut.toolPackages[tp.missingTool]); tp.missingDismissed = tp.missingLine; tp.missingTool = ""; }
+                Text { id: missT; anchors.centerIn: parent; text: "Zainstaluj"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            }
+            HoverButton {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 26; height: 26; radius: 7
+                onClicked: { tp.missingDismissed = tp.missingLine; tp.missingTool = ""; }
+                Icon { anchors.centerIn: parent; d: Icons.close; size: 11; stroke: 2; color: Theme.text2 }
+            }
+        }
     }
 
     ReferencesView {

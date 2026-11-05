@@ -67,6 +67,17 @@ Rectangle {
         shown = true;
         list.positionViewAtBeginning();
     }
+    // Zapis z historii lokalnej: różnice względem obecnej treści
+    function openLocal(p, id, title, r) {
+        agentMode = false;
+        commit = "local:" + id;
+        commitRel = "";
+        commitTitle = title;
+        path = p;
+        rows = r;
+        shown = true;
+        list.positionViewAtBeginning();
+    }
     function openCommit(p, rel, hash, title) {
         agentMode = false;
         commit = hash;
@@ -103,7 +114,7 @@ Rectangle {
             }
             Text {
                 textFormat: Text.StyledText
-                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + (dv.commit ? dv.commit.slice(0, 8) + "  ·  " : "") + Project.relative(dv.path)
+                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + (dv.commit && !dv.commit.startsWith("local:") ? dv.commit.slice(0, 8) + "  ·  " : "") + Project.relative(dv.path)
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
             }
         }

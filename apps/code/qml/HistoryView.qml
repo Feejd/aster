@@ -3,20 +3,27 @@ import QtQuick
 import Aster.Ui
 import Aster.Code
 
-// Historia w pasku bocznym (jak „Oś czasu” w VS Code): zatwierdzenia zmieniające bieżący plik
+// Historia w pasku bocznym (jak „Oś czasu” w VS Code): każdy zapis pliku (historia lokalna, działa bez gita)
+// i zatwierdzenia zmieniające bieżący plik
 // (git log --follow) — klik pokazuje zmiany pliku w tym zatwierdzeniu; „Pliki” — całe zatwierdzenie
 // z listą zmienionych plików (także z ostatnich zatwierdzeń w widoku zmian).
 Item {
     id: hv
     property string path                       // bieżący plik edytora
-    property var entries: []
+    property var gitEntries: []
+    property var localEntries: []
+    // Zapisy i zatwierdzenia na jednej osi czasu, od najnowszych
+    readonly property var entries: localEntries.slice(0, 40).map(l => ({ local: true, id: l.id, time: l.time, subject: "Zapisano", hash: "", author: "", added: 0, removed: 0, rel: "" }))
+        .concat(gitEntries).sort((a, b) => b.time - a.time)
     property bool loading: false
     property var commitData: null              // otwarte zatwierdzenie albo null — historia pliku
     property string lastHead
     signal showDiff(string path, string rel, string hash, string title)
+    signal showLocal(string path, string id, string title)
 
     function refresh() {
-        if (!path || !Project.isGit) { entries = []; return; }
+        localEntries = path ? Project.localHistory(path) : [];
+        if (!path || !Project.isGit) { gitEntries = []; return; }
         loading = true;
         Project.requestHistory(path);
     }
@@ -25,7 +32,8 @@ Item {
     onVisibleChanged: if (visible) refresh()
     Connections {
         target: Project
-        function onHistoryReady(p, list) { if (p === hv.path) { hv.entries = list; hv.loading = false; } }
+        function onHistoryReady(p, list) { if (p === hv.path) { hv.gitEntries = list; hv.loading = false; } }
+        function onLocalHistoryChanged(p) { if (p === hv.path && hv.visible) hv.localEntries = Project.localHistory(p); }
         // Nowe zatwierdzenie (HEAD) — odśwież
         function onGitChanged() { if (Project.head !== hv.lastHead) { hv.lastHead = Project.head; if (hv.visible && !hv.commitData) hv.refresh(); } }
     }
@@ -53,7 +61,7 @@ Item {
                 x: 38; width: parent.width - 38 - 40
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideMiddle
-                text: hv.path ? Project.fileName(hv.path) + "  ·  " + hv.entries.length + (hv.entries.length === 1 ? " zmiana" : " zmian") : ""
+                text: hv.path ? Project.fileName(hv.path) : ""
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
             }
             HoverButton {
@@ -81,7 +89,7 @@ Item {
                     x: 16; anchors.verticalCenter: parent.verticalCenter
                     width: 12; height: 12; radius: 6
                     color: en.index === 0 ? Theme.accent : Theme.surface
-                    border.width: 2; border.color: Theme.accent
+                    border.width: 2; border.color: en.modelData.local ? Theme.text2 : Theme.accent
                 }
                 Column {
                     x: 38; anchors.verticalCenter: parent.verticalCenter
@@ -91,7 +99,8 @@ Item {
                     Text {
                         width: parent.width; elide: Text.ElideRight
                         textFormat: Text.StyledText
-                        text: en.modelData.author + " · " + hv.ago(en.modelData.time) + "  <font color=\"" + hv.addColor + "\">+" + en.modelData.added
+                        text: en.modelData.local ? hv.ago(en.modelData.time)
+                            : en.modelData.author + " · " + hv.ago(en.modelData.time) + "  <font color=\"" + hv.addColor + "\">+" + en.modelData.added
                               + "</font> <font color=\"" + Theme.danger + "\">−" + en.modelData.removed + "</font>"
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
                     }
@@ -100,11 +109,14 @@ Item {
                     id: enArea
                     anchors.fill: parent
                     hoverEnabled: true
-                    onClicked: hv.showDiff(hv.path, en.modelData.rel, en.modelData.hash, en.modelData.subject)
+                    onClicked: {
+                        if (en.modelData.local) hv.showLocal(hv.path, en.modelData.id, "zapis z " + new Date(en.modelData.time * 1000).toLocaleString(Qt.locale("pl_PL"), "d MMM, HH:mm"));
+                        else hv.showDiff(hv.path, en.modelData.rel, en.modelData.hash, en.modelData.subject);
+                    }
                 }
                 HoverButton {
                     id: filesBtn
-                    visible: enArea.containsMouse || hovered
+                    visible: !en.modelData.local && (enArea.containsMouse || hovered)
                     anchors.right: parent.right; anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     width: filesText.implicitWidth + 14; height: 22; radius: 6
@@ -118,7 +130,7 @@ Item {
             visible: !hv.loading && hv.entries.length === 0
             anchors.centerIn: parent
             width: parent.width - 40; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-            text: !Project.isGit ? "Historia jest dostępna w repozytorium gita" : !hv.path ? "Otwórz plik, żeby zobaczyć jego historię" : "Ten plik nie był jeszcze zatwierdzony"
+            text: !hv.path ? "Otwórz plik, żeby zobaczyć jego historię" : "Każdy zapis tego pliku pojawi się tutaj — można do niego wrócić"
             color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
         }
     }

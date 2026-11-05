@@ -51,6 +51,7 @@ Window {
         property bool previewOnSave: true
         property bool previewAuto: true
         property bool diffSideBySide: false
+        property bool welcomed: false
         property string prepareLater: "[]"       // projekty, w których użytkownik wybrał „Później”
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
@@ -552,6 +553,7 @@ Window {
     Connections {
         target: Project
         function onGitDone(op, ok, message) {
+            if (!ok && message.indexOf("zaloguj się do GitHuba") >= 0) deployView.open();
             if (message && (!ok || ["commit", "push", "pull", "checkout", "branch", "merge", "deleteBranch", "stash"].indexOf(op) >= 0)) win.toast(message);
         }
     }
@@ -701,7 +703,6 @@ Window {
     }
     // ——— Historia pliku ———
     function showHistory(path) {
-        if (!Project.isGit) { toast("Historia jest dostępna w repozytorium gita"); return; }
         if (path && path !== curPath) openFile(path);
         historyView.commitData = null;
         prefs.sidebar = true;
@@ -714,7 +715,7 @@ Window {
     }
     // Starsza wersja wchodzi do edytora jak zwykła zmiana — da się ją przejrzeć, cofnąć (Ctrl+Z) albo zapisać
     function restoreVersion(path, hash, rel) {
-        const f = Project.fileAt(hash, rel);
+        const f = hash.startsWith("local:") ? { ok: true, text: Project.localVersion(path, hash.slice(6)) } : Project.fileAt(hash, rel);
         if (!f.ok) { toast("Nie udało się wczytać tej wersji"); return; }
         openFile(path);
         const i = indexOfPath(path);
@@ -724,7 +725,7 @@ Window {
         TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [f.text], 0);
         e.cursorPosition = Math.min(pos, e.length);
         pin(i);
-        toast("Wersja z " + hash.slice(0, 7) + " w edytorze — zapisz (Ctrl+S) albo cofnij (Ctrl+Z)");
+        toast("Ta wersja jest w edytorze — zapisz (Ctrl+S) albo cofnij (Ctrl+Z)");
     }
     // ——— Środowisko projektu (kontener) ———
     property string envState: ProjectEnv.state
@@ -932,6 +933,18 @@ Window {
             const m = Tasks.lines.join("\n").match(/https:\/\/[^\s'"]+\.(?:netlify\.app|vercel\.app|pages\.dev|github\.io)[^\s'"]*/g);
             win.lastDeployUrl = m ? m[m.length - 1] : "";
             win.toast(code === 0 ? "Wdrożono" + (win.lastDeployUrl ? ": " + win.lastDeployUrl : "") : "Wdrożenie nie powiodło się — szczegóły w karcie Zadania");
+        }
+    }
+    // Git pyta, kto zatwierdza — dwa pola zamiast polecenia, potem zatwierdzenie idzie dalej
+    Connections {
+        target: Project
+        function onGitIdentityNeeded() {
+            nameBox.ask("Jak podpisywać zmiany?", "", "Imię i nazwisko — będą widoczne w historii projektu", (name) => {
+                nameBox.ask("Adres e-mail do podpisu", "", "Tylko do historii zmian; GitHub łączy po nim zatwierdzenia z kontem", (mail) => {
+                    if (Project.setGitIdentity(name, mail)) changesView.commitNow();
+                    else win.toast("Nie udało się zapisać podpisu");
+                });
+            });
         }
     }
     Connections {
@@ -1382,7 +1395,7 @@ Window {
             { label: "Zmień nazwę", icon: "pencil", action: "tree:rename", enabled: path !== Project.root },
             { label: "Przenieś do Kosza", icon: "trash", action: "tree:trash", danger: true, enabled: path !== Project.root },
             { separator: true },
-            { label: "Historia pliku", icon: "clock", action: "tree:history", enabled: !isDir && Project.isGit },
+            { label: "Historia pliku", icon: "clock", action: "tree:history", enabled: !isDir },
             { label: "Kopiuj ścieżkę", icon: "copy", action: "tree:copyPath" },
             { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tree:copyRel" },
             { label: "Otwórz w terminalu", icon: "terminal", action: "tree:terminal" },
@@ -1445,6 +1458,10 @@ Window {
         else if (what.startsWith("ask:")) askAgent(arg);
         else if (what === "acceptall") agentPanel.acceptAll();
         else if (what === "prepare") prepareProject();
+        else if (what === "historyview") showHistory(curPath);
+        else if (what === "firstrun") prefs.welcomed = false;
+        else if (what === "welcomed") prefs.welcomed = true;
+        else if (what === "tab0") { terminalShown = true; terminalPanel.tab = 0; }
         else if (what === "tab3") { terminalShown = true; terminalPanel.tab = 3; }
         else if (what === "tab1") { terminalShown = true; terminalPanel.tab = 1; }
         else if (what.startsWith("replaceline:")) { if (cur) { const kv = arg.split("=>"); const t = cur.edit.text.replace(kv[0], kv[1]); TextOps.multiEdit(cur.edit.textDocument, [{ a: 0, b: cur.edit.length }], [t], 0); } }
@@ -1925,6 +1942,41 @@ Window {
                     }
                 }
 
+                // Pierwsze uruchomienie: trzy rzeczy, które wystarczą
+                Rectangle {
+                    visible: !prefs.welcomed && win.hasProject
+                    anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 14
+                    width: Math.min(360, parent.width - 28); height: welCol.implicitHeight + 28
+                    radius: 14; z: 7
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.edge
+                    Column {
+                        id: welCol
+                        x: 16; y: 14; width: parent.width - 32
+                        spacing: 10
+                        Text { text: "Witaj w Aster Code"; color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold }
+                        Repeater {
+                            model: [["search", "Pole u góry: wpisz, co chcesz zrobić — znajdzie plik, polecenie albo ustawienie."],
+                                    ["play", "Trójkąt u góry uruchamia aplikację, a podgląd strony otwiera się sam."],
+                                    ["sparkles", "Agent zmienia kod za Ciebie — każdą zmianę najpierw pokazuje do akceptacji."]]
+                            delegate: Row {
+                                id: wr
+                                required property var modelData
+                                width: welCol.width
+                                spacing: 10
+                                Icon { d: Icons[wr.modelData[0]] || ""; size: 16; color: Theme.accentText }
+                                Text { width: parent.width - 26; wrapMode: Text.Wrap; text: wr.modelData[1]; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.15 }
+                            }
+                        }
+                        HoverButton {
+                            width: welT.implicitWidth + 24; height: 30; radius: 8
+                            baseColor: Theme.accent
+                            onClicked: prefs.welcomed = true
+                            Text { id: welT; anchors.centerIn: parent; text: "Zaczynamy"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                        }
+                    }
+                }
+
                 // Projekt nie jest gotowy: co brakuje i jeden przycisk
                 Rectangle {
                     id: prepareCard
@@ -2265,7 +2317,7 @@ Window {
                     ViewBtn { icon: "files"; view: 0; tip: "Pliki" }
                     ViewBtn { icon: "search"; view: 1; tip: "Szukaj w projekcie" }
                     ViewBtn { icon: "gitBranch"; view: 2; tip: "Zmiany i zatwierdzanie (git)"; badge: Project.changes.length }
-                    ViewBtn { icon: "clock"; view: 3; tip: "Historia pliku"; visible: Project.isGit }
+                    ViewBtn { icon: "clock"; view: 3; tip: "Historia pliku" }
                 }
             }
 
@@ -2356,6 +2408,7 @@ Window {
                 width: parent.width; height: parent.height - y
                 path: win.curPath
                 onShowDiff: (path, rel, hash, title) => diffView.openCommit(path, rel, hash, title)
+                onShowLocal: (path, id, title) => diffView.openLocal(path, id, title, Agent.lineDiff(Project.localVersion(path, id), win.agentFileText(path)))
             }
 
             ChangesView {
@@ -2367,6 +2420,7 @@ Window {
                 onShowDiff: (path, staged) => diffView.open(path, staged)
                 onDiscardRequested: (paths) => win.confirm = { kind: "discard", paths: paths, name: Project.fileName(paths[0] || "") }
                 onPickBranch: palette.openBranches("checkout")
+                onPublishRequested: deployView.open()
                 onShowCommit: (hash) => win.showCommit(hash)
             }
 
