@@ -186,7 +186,9 @@ Item {
         function onChanged() { layersLater.restart(); }
         function onReset() { layersLater.restart(); }
         function onDataChanged() { layersLater.restart(); }
+        function onCountChanged() { layersLater.restart(); }
     }
+    onVisibleChanged: if (visible && tab === "layers") layersLater.restart()
     readonly property var shapeNames: ({ rect: "Prostokąt", ellipse: "Koło", triangle: "Trójkąt", star: "Gwiazda", heart: "Serce", line: "Linia", arrow: "Strzałka" })
     function layerName(o) {
         if (o.type === "text") return (o.text || "").replace(/\s+/g, " ").trim() || "Tekst";
