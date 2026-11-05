@@ -66,6 +66,13 @@ Item {
         return "";
     }
     onPaintOnChanged: if (paintOn && Magic.element !== "") Magic.end()
+    // Swobodne przekształcenie: przeciąganie czterech rogów warstwy
+    property string warpEdit: ""
+    readonly property bool warpOn: warpEdit !== "" && warpEdit === selected
+    function warpPoints() {
+        const o = current;
+        return o.warp && o.warp.length === 8 ? o.warp.slice() : [0, 0, o.w, 0, o.w, o.h, 0, o.h];
+    }
     property var cellEdit: null                 // pisanie w komórce tabeli: { id, r, c }
     signal drawFinished()
     onDrawOnChanged: if (drawOn) { if (Magic.element !== "") Magic.end(); clearSelection(); }
@@ -109,6 +116,7 @@ Item {
     }
     onSelectedChanged: {
         if (maskEdit !== "" && maskEdit !== selected) maskEdit = "";
+        if (warpEdit !== "" && warpEdit !== selected) warpEdit = "";
         if (cellEdit && cellEdit.id !== selected) cellEdit = null;
         if (Magic.element !== "" && selected !== Magic.element) Magic.end();
         if (!syncing) selection = selected !== "" ? [selected] : [];
@@ -151,7 +159,8 @@ Item {
     }
     // Esc: najpierw kończy kadrowanie, potem zdejmuje zaznaczenie
     function cancel() {
-        if (maskEdit !== "") maskEdit = "";
+        if (warpEdit !== "") warpEdit = "";
+        else if (maskEdit !== "") maskEdit = "";
         else if (cellEdit) cellEdit = null;
         else if (Selection.active) Selection.clear();
         else if (selOn) drawFinished();
@@ -923,7 +932,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
                 readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn || stage.paintOn || stage.selOn     // bez uchwytów
-                visible: stage.selected !== "" && el.id !== undefined && !el.hidden && el.type !== "adjust"
+                visible: stage.selected !== "" && el.id !== undefined && !el.hidden && el.type !== "adjust" && !el.warp && !stage.warpOn
                 x: (el.x || 0) * stage.zoom
                 y: (el.y || 0) * stage.zoom
                 width: (el.w || 0) * stage.zoom
@@ -1069,7 +1078,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !stage.selOn && !(single && el.type === "adjust")
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !stage.selOn && !stage.warpOn && !(single && el.type === "adjust")
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -1299,6 +1308,59 @@ Item {
                 Connections {
                     target: stage
                     function onCellEditChanged() { if (stage.cellEdit) Qt.callLater(cellInput.load); else stage.project.commit(); }
+                }
+            }
+
+            // ——— Swobodne przekształcenie ———
+            Item {
+                id: warpBox
+                readonly property var el: stage.current
+                visible: stage.warpOn
+                x: (el.x || 0) * stage.zoom
+                y: (el.y || 0) * stage.zoom
+                width: (el.w || 0) * stage.zoom
+                height: (el.h || 0) * stage.zoom
+                rotation: el.rotation || 0
+                z: 23
+                readonly property var pts: stage.warpOn ? stage.warpPoints() : [0, 0, 0, 0, 0, 0, 0, 0]
+                onPtsChanged: warpLines.requestPaint()
+                Canvas {
+                    id: warpLines
+                    anchors.fill: parent
+                    anchors.margins: -2000
+                    onPaint: {
+                        const c = getContext("2d"), p = warpBox.pts, z = stage.zoom, o = 2000;
+                        c.reset();
+                        c.beginPath();
+                        for (let i = 0; i < 4; ++i) { if (i === 0) c.moveTo(p[0] * z + o, p[1] * z + o); else c.lineTo(p[2 * i] * z + o, p[2 * i + 1] * z + o); }
+                        c.closePath();
+                        c.lineWidth = 3; c.strokeStyle = "rgba(0, 0, 0, 0.35)"; c.stroke();
+                        c.lineWidth = 1.5; c.strokeStyle = Theme.accent; c.stroke();
+                    }
+                }
+                Repeater {
+                    model: 4
+                    delegate: Rectangle {
+                        id: wh
+                        required property int index
+                        x: warpBox.pts[2 * index] * stage.zoom - 7
+                        y: warpBox.pts[2 * index + 1] * stage.zoom - 7
+                        width: 14; height: 14; radius: 7
+                        color: "white"
+                        border.width: 2; border.color: Theme.accent
+                        MouseArea {
+                            anchors.fill: parent; anchors.margins: -8
+                            cursorShape: Qt.CrossCursor
+                            onPositionChanged: (e) => {
+                                if (!pressed) return;
+                                const q = mapToItem(warpBox, e.x, e.y), list = warpBox.pts.slice();
+                                list[2 * wh.index] = Math.round(q.x / stage.zoom * 10) / 10;
+                                list[2 * wh.index + 1] = Math.round(q.y / stage.zoom * 10) / 10;
+                                stage.project.change(stage.warpEdit, { warp: list }, false);
+                            }
+                            onReleased: stage.project.commit()
+                        }
+                    }
                 }
             }
 
@@ -1852,6 +1914,7 @@ Item {
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; visible: Magic.available; icon: "sparkles"; text: "Usuń"; tip: "Znika z obrazu, a tło uzupełnia się samo"; onClicked: stage.selAction("aifill") }
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "circleHalf"; text: "Maska"; tip: "Zostaje tylko zaznaczone; nic się nie kasuje"; onClicked: stage.selAction("mask") }
             Btn { anchors.verticalCenter: parent.verticalCenter; height: 34; icon: "sliders"; text: "Korekcja"; tip: "Kolory i tony tylko tutaj"; onClicked: stage.selAction("adjust") }
+            ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "crop"; tip: "Przytnij stronę do zaznaczenia"; onClicked: stage.selAction("crop") }
             ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "swap"; tip: "Odwróć zaznaczenie (Ctrl+Shift+I)"; onClicked: stage.selAction("invert") }
             ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Odznacz (Esc)"; onClicked: stage.selAction("clear") }
           }
@@ -1899,6 +1962,26 @@ Item {
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13
             }
             Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // ——— Pasek przekształcenia ———
+    Rectangle {
+        visible: stage.warpOn
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: warpRow.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: warpRow
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Przeciągnij rogi: perspektywa, zniekształcenie"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 32; text: "Wyzeruj"; onClicked: stage.project.change(stage.warpEdit, { warp: null }) }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.warpEdit = "" }
         }
     }
 

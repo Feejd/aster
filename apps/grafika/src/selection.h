@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE void undo();
 
     // Działania na warstwie `id`. toLayer działa na każdym rodzaju warstwy; puste id — wszystko, co widać na stronie.
+    Q_INVOKABLE QVariantMap bounds() const;             // prostokąt zaznaczenia w pikselach strony
     Q_INVOKABLE QString toLayer(Project *project, const QString &id, bool cut);
     Q_INVOKABLE void maskLayer(Project *project, const QString &id, bool hide = false);
 

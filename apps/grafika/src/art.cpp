@@ -1564,6 +1564,16 @@ static void compositePage(QImage &buf, QPainter &q, const QVariantMap &doc, cons
         t.translate(num(el, "x", 0) + w / 2, num(el, "y", 0) + h / 2);
         t.rotate(num(el, "rotation", 0));
         t.translate(-w / 2, -h / 2);
+        // Swobodne przekształcenie: cztery rogi pola w nowych miejscach (perspektywa, zniekształcenie)
+        const QVariantList warp = el.value(QStringLiteral("warp")).toList();
+        if (warp.size() == 8) {
+            QPolygonF to;
+            for (int i = 0; i < 4; ++i)
+                to << QPointF(warp[2 * i].toDouble(), warp[2 * i + 1].toDouble());
+            QTransform q;
+            if (QTransform::quadToQuad(QPolygonF(QRectF(0, 0, w, h)).first(4), to, q))
+                t = q * t;
+        }
         if (!layerBlends(el)) {
             q.save();
             q.setTransform(t);
@@ -1641,7 +1651,8 @@ bool compositing(const QVariantMap &doc)
     const QVariantList elements = doc.value(QStringLiteral("elements")).toList();
     for (const QVariant &v : elements) {
         const QVariantMap el = v.toMap();
-        if (!el.value(QStringLiteral("hidden")).toBool() && (el.value(QStringLiteral("type")).toString() == QLatin1String("adjust") || layerBlends(el)))
+        if (!el.value(QStringLiteral("hidden")).toBool()
+            && (el.value(QStringLiteral("type")).toString() == QLatin1String("adjust") || layerBlends(el) || el.contains(QStringLiteral("warp"))))
             return true;
     }
     return false;

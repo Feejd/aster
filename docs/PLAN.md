@@ -105,7 +105,8 @@ Programy:
         odejmowanie, część wspólna, wtapianie, powiększanie, przesuwanie; kopia i wycięcie na warstwę, wypełnianie,
         wypełnienie AI, maska z zaznaczenia; zaznaczenie obowiązuje przy malowaniu, retuszu i korekcjach
   - [ ] zaznaczenia, dalej: tryb podglądu maski, zapisywanie zaznaczeń, przekształcanie zaznaczonych pikseli, wielokąt
-  - [ ] przekształcenia: swobodne, perspektywa, zniekształcenie rogów, wypaczanie; przycinanie całego płótna
+  - [x] przekształcenia: perspektywa i zniekształcenie czterema rogami (Ctrl+T), przycinanie strony do zaznaczenia
+  - [ ] przekształcenia, dalej: siatka wypaczania, narzędzie kadrowania płótna, obrót i skala w jednym trybie
   - [ ] warstwy: foldery, maski przycinające, style warstw (obrys, poświata, faza), inteligentne filtry
   - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej
   - [ ] pliki: import i eksport PSD, zapis WebP, TIFF, profile kolorów, 16 bitów

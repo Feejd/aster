@@ -174,7 +174,7 @@ Item {
     readonly property var tplList: Library.templates.filter(t => tplCategory === "" ? true
         : tplCategory === "fit" ? Math.abs(t.width / t.height - project.pageWidth / project.pageHeight) < 0.02
         : t.category === tplCategory)
-    onTplListChanged: if (tplCategory === "fit" && tplList.length === 0) tplCategory = ""
+    onTplListChanged: if (tplCategory === "fit" && tplList.length === 0) Qt.callLater(() => tplCategory = "")
 
     // ——— Warstwy ———
     property var layers: []                  // od wierzchu

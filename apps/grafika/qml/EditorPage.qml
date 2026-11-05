@@ -399,6 +399,7 @@ Item {
         else if (a === "flip") project.change(sel, { flipX: stage.current.flipX ? null : true });
         else if (a === "background") imageToBackground(sel);
         else if (a.startsWith("blend:")) setBlend(a.substring(6));
+        else if (a === "warp") startWarp();
         else if (a === "bgtab") side.tab = "background";
         else if (a === "layers") {}                         // warstwy są zawsze widoczne z lewej
         else if (a === "selectAll") stage.selectAll();
@@ -447,6 +448,7 @@ Item {
             if (el.type === "text") items.push({ label: "Edytuj tekst", icon: "pencil", shortcut: "Enter", action: "edit" });
             if (el.type === "table") items.push({ label: "Pisz w komórkach", icon: "pencil", shortcut: "Enter", action: "edit" });
             if (el.type === "image" && el.src) items.push({ label: "Kadruj", icon: "crop", shortcut: "dwuklik", action: "crop" });
+            if (el.type !== "adjust") items.push({ label: "Przekształć rogami", icon: "crop", shortcut: "Ctrl+T", action: "warp" });
             if (el.type === "image") items.push({ label: "Odbij w poziomie", icon: "mirror", action: "flip" });
             if (el.type === "image" && el.src && Magic.available) {
                 items.push({ label: "Usuń tło (AI)", icon: "sparkles", action: "aiBackground" });
@@ -543,6 +545,8 @@ Item {
         else if (cmd === "maskinvert") project.invertMask(sel);
         else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
         else if (cmd === "generate") Magic.generate(project, arg);
+        else if (cmd === "warp") startWarp();
+        else if (cmd === "regen") Magic.regenerate(project, sel, arg);
         else if (cmd === "aitool") setTool("magic");
         else if (cmd === "airun") aiRun(arg);
         else if (cmd === "seltool") { side.selTool = arg; side.tab = "pixels"; }
@@ -605,6 +609,7 @@ Item {
     Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: { if (side.tab === "pixels") Selection.all(ed.project); else stage.selectAll(); } }
     Shortcut { sequence: "Ctrl+Shift+A"; enabled: ed.active && !ed.typing; onActivated: Selection.clear() }
     Shortcut { sequence: "Ctrl+Shift+I"; enabled: ed.active && !ed.typing; onActivated: Selection.invert(ed.project) }
+    Shortcut { sequence: "Ctrl+T"; enabled: ed.active && !ed.typing && ed.sel !== ""; onActivated: ed.startWarp() }
     Shortcut { sequence: "Ctrl+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("copy") }
     Shortcut { sequence: "Ctrl+Shift+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("cut") }
     Shortcut { sequence: "M"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "rect"; side.tab = "pixels"; } }
@@ -709,6 +714,13 @@ Item {
         }
     }
 
+    // Pełne tło: w programie graficznym nic nie może prześwitywać i udawać kolorów projektu
+    Rectangle {
+        anchors.fill: parent
+        radius: ed.radius
+        color: Theme.dark ? "#1E1F24" : "#F3F4F7"
+    }
+
     // ——— Układ jak w programach graficznych: pasek u góry, warstwy z lewej, płótno, narzędzia i ich panel z prawej ———
     readonly property real barH: 52
     readonly property alias side: side
@@ -756,6 +768,11 @@ Item {
     function usePaintTool(t) { side.paintTool = t; side.tab = "paint"; }
     function addPixelLayer() { stage.select(project.newPixelLayer()); }
     Connections { target: Retouch; function onFailed(message) { ed.app.toast(message, ""); } }
+    function startWarp() {
+        if (sel === "" || stage.current.type === "adjust" || stage.current.locked) return;
+        side.tab = "select";
+        stage.warpEdit = sel;
+    }
     function addAdjustment() {
         const id = project.add({ type: "adjust", x: 0, y: 0, w: project.pageWidth, h: project.pageHeight });
         if (Selection.active) { Selection.maskLayer(project, id); Selection.clear(); }      // korekcja tylko w zaznaczeniu
@@ -804,6 +821,12 @@ Item {
         if (a === "extract") {
             const id = Selection.toLayer(project, imageLayer(), false);
             if (id !== "") { stage.select(id); app.toast("Wyodrębniono na nową warstwę — zdjęcie zostało bez zmian", ""); }
+        }
+        else if (a === "crop") {
+            const b = Selection.bounds();
+            project.cropPage(b.x, b.y, b.w, b.h);
+            Selection.clear();
+            stage.fit = true;
         }
         else if (a === "invert") Selection.invert(project);
         else if (a === "clear") Selection.clear();
@@ -1359,7 +1382,7 @@ Item {
                                          ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Ctrl+Shift+A", "Odznacz piksele"], ["Ctrl+Shift+I", "Odwróć zaznaczenie"], ["Ctrl+J", "Zaznaczenie na warstwę"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
             { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B / E", "Pędzel / gumka"], ["G / I", "Wypełnij / pipeta"], ["J / S", "Korektor / stempel"], ["[ / ]", "Rozmiar pędzla"],
                                          ["P", "Rysowanie linii"], ["M / L / W", "Zaznacz: prostokąt, lasso, różdżka"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
-                                         ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
+                                         ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+T", "Przekształć rogami"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],
                                                ["Spacja+przeciąganie", "Przesuń widok"], ["Ctrl+R", "Linijki i prowadnice"],

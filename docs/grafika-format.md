@@ -46,6 +46,8 @@ Zaznaczenie pikseli nie trafia do pliku: należy do otwartego projektu w program
 
 Każdy element to warstwa. Oprócz `opacity` i `hidden` może mieć:
 
+- `warp` — swobodne przekształcenie: osiem liczb `x, y` dla czterech rogów pola (lewy górny, prawy górny, prawy dolny, lewy
+  dolny) w układzie elementu. Strona z taką warstwą składa się na obrazie, tak jak przy trybach mieszania.
 - `blend` — tryb mieszania z tym, co pod spodem: `multiply`, `screen`, `overlay`, `darken`, `lighten`, `colorDodge`,
   `colorBurn`, `hardLight`, `softLight`, `difference`, `exclusion` (brak pola — zwykły). Strona z takim trybem składa się
   na obrazie, więc w PDF jest wtedy jednym obrazem (ok. 300 dpi, najwyżej 60 Mpx), a nie wektorami.

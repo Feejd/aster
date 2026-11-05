@@ -339,6 +339,12 @@ static QRect solidBounds(const QImage &alpha)
     return x1 < 0 ? QRect() : QRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
 }
 
+QVariantMap Selection::bounds() const
+{
+    const QRect b = m_mask.isNull() ? QRect() : solidBounds(m_mask);
+    return {{QStringLiteral("x"), b.x() / m_k}, {QStringLiteral("y"), b.y() / m_k}, {QStringLiteral("w"), b.width() / m_k}, {QStringLiteral("h"), b.height() / m_k}};
+}
+
 // Kopia zaznaczonego fragmentu jako nowa warstwa pikselowa, tuż nad warstwą źródłową
 QString Selection::toLayer(Project *project, const QString &id, bool cut)
 {

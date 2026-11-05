@@ -89,7 +89,8 @@ public:
     Q_INVOKABLE bool applyTemplate(const QString &file);  // zastąp zawartość strony (z cofaniem)
     Q_INVOKABLE bool open(const QString &path);
     Q_INVOKABLE bool save();                               // bez ścieżki — do Dokumenty/Grafiki
-    Q_INVOKABLE void setPageSize(qreal width, qreal height, bool fit = false);   // fit — przeskaluj treść do nowej strony
+    Q_INVOKABLE void setPageSize(qreal width, qreal height, bool fit = false);
+    Q_INVOKABLE void cropPage(qreal x, qreal y, qreal width, qreal height);   // przycięcie wszystkich stron do prostokąta   // fit — przeskaluj treść do nowej strony
     // Element powiększony k razy względem punktu (ox, oy) — rozmiar, pozycja, czcionka, grubości, cień
     Q_INVOKABLE QVariantMap scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) const;
     Q_INVOKABLE QVariantMap document() const;              // bieżąca strona (background, elements) i wszystkie (pages)

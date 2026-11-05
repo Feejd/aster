@@ -1217,6 +1217,7 @@ Item {
                     suffix: "°"
                     onMoved: (v, done) => ins.set({ rotation: v }, done)
                 }
+                Btn { width: parent.width; icon: "crop"; text: "Przekształć rogami"; tip: "Perspektywa i zniekształcenie (Ctrl+T)"; onClicked: ins.editor.startWarp() }
             }
             Section {
                 collapsible: true; divider: true

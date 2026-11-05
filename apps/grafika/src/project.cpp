@@ -557,6 +557,51 @@ QVariantMap Project::scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) 
     return out;
 }
 
+void Project::cropPage(qreal x, qreal y, qreal width, qreal height)
+{
+    commit();
+    x = std::round(x);
+    y = std::round(y);
+    width = qMax(16.0, std::round(width));
+    height = qMax(16.0, std::round(height));
+    // Strony mają wspólny rozmiar, więc przesuwa się treść każdej; rozmiar do druku maleje razem ze stroną
+    storePage();
+    for (QVariant &pv : m_pages) {
+        QVariantMap p = pv.toMap();
+        QVariantList elements = p.value(QStringLiteral("elements")).toList();
+        for (QVariant &v : elements) {
+            QVariantMap el = v.toMap();
+            if (el.value(QStringLiteral("type")).toString() != QLatin1String("adjust")) {
+                el[QStringLiteral("x")] = num(el, "x") - x;
+                el[QStringLiteral("y")] = num(el, "y") - y;
+            }
+            v = el;
+        }
+        p[QStringLiteral("elements")] = elements;
+        pv = p;
+    }
+    if (!m_guides.isEmpty()) {
+        QVariantMap g;
+        for (const auto &[axis, shift] : {std::pair{QStringLiteral("x"), x}, std::pair{QStringLiteral("y"), y}}) {
+            QVariantList list;
+            for (const QVariant &v : m_guides.value(axis).toList())
+                list.append(v.toDouble() - shift);
+            g[axis] = list;
+        }
+        m_guides = g;
+        Q_EMIT guidesChanged();
+    }
+    if (!m_print.isEmpty()) {
+        m_print[QStringLiteral("width")] = num(m_print, "width") * width / m_width;
+        m_print[QStringLiteral("height")] = num(m_print, "height") * height / m_height;
+    }
+    m_width = width;
+    m_height = height;
+    showPage(m_page);
+    Q_EMIT pageChanged();
+    commit();
+}
+
 void Project::setPageSize(qreal width, qreal height, bool fit)
 {
     commit();

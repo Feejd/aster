@@ -48,11 +48,28 @@ int main(int argc, char *argv[])
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
         QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] {
-            // drag:x0,y0,x1,y1[,alt] — prawdziwe zdarzenia myszy w oknie (punkty okna), jak ruch człowieka
+            // drag:x0,y0,x1,y1[,alt|shift] — prawdziwe zdarzenia myszy w oknie (punkty okna), jak ruch człowieka
+            // path:x,y,x,y,… — to samo po kilku punktach (lasso)
+            if (step.startsWith(QLatin1String("path:"))) {
+                const QStringList a = step.mid(5).split(QLatin1Char(','));
+                auto at = [&a](int i) { return QPointF(a.value(2 * i).toDouble(), a.value(2 * i + 1).toDouble()); };
+                auto send = [window](QEvent::Type type, const QPointF &p, Qt::MouseButton button, Qt::MouseButtons held) {
+                    QMouseEvent e(type, p, p, window->mapToGlobal(p), button, held, Qt::NoModifier);
+                    QCoreApplication::sendEvent(window, &e);
+                };
+                send(QEvent::MouseMove, at(0), Qt::NoButton, Qt::NoButton);
+                send(QEvent::MouseButtonPress, at(0), Qt::LeftButton, Qt::LeftButton);
+                const int n = int(a.size() / 2);
+                for (int i = 1; i < n; ++i)
+                    for (int k = 1; k <= 8; ++k)
+                        send(QEvent::MouseMove, at(i - 1) + (at(i) - at(i - 1)) * (k / 8.0), Qt::NoButton, Qt::LeftButton);
+                send(QEvent::MouseButtonRelease, at(n - 1), Qt::LeftButton, Qt::NoButton);
+                return;
+            }
             if (step.startsWith(QLatin1String("drag:"))) {
                 const QStringList a = step.mid(5).split(QLatin1Char(','));
                 const QPointF from(a.value(0).toDouble(), a.value(1).toDouble()), to(a.value(2).toDouble(), a.value(3).toDouble());
-                const Qt::KeyboardModifiers mods = a.size() > 4 ? Qt::AltModifier : Qt::NoModifier;
+                const Qt::KeyboardModifiers mods = a.value(4) == QLatin1String("shift") ? Qt::ShiftModifier : a.size() > 4 ? Qt::AltModifier : Qt::NoModifier;
                 auto send = [window, mods](QEvent::Type type, const QPointF &p, Qt::MouseButton button, Qt::MouseButtons held) {
                     QMouseEvent e(type, p, p, window->mapToGlobal(p), button, held, mods);
                     QCoreApplication::sendEvent(window, &e);
