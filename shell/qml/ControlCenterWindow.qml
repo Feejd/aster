@@ -18,6 +18,10 @@ Window {
     title: "Centrum sterowania"
 
     property bool open: false
+    // Strona panelu: "" (kafelki), "wifi", "bluetooth" albo "audio"
+    property string page: ""
+    property string passwordFor: ""
+    onPageChanged: { passwordFor = ""; blurTimer.restart(); }
     readonly property int pad: 14
     readonly property int gap: 10
     readonly property real unit: (panel.width - 2 * pad - gap) / 2
@@ -36,20 +40,45 @@ Window {
     function close() {
         if (!open) return;
         open = false;
+        page = "";
         ControlCenter.active = false;
         hideTimer.restart();
     }
     Timer { id: hideTimer; interval: 110; onTriggered: cc.visible = false }
+    Binding { target: Connectivity; property: "page"; value: cc.open ? cc.page : "" }
+    // Urządzenie prosi o parowanie: kod musi być widoczny, nawet gdy centrum jest zamknięte
+    Connections {
+        target: Connectivity
+        function onPairingChanged() {
+            if (Connectivity.pairingKind === "") return;
+            cc.page = "bluetooth";
+            cc.show();
+        }
+    }
+    function iconFor(device) {
+        const icon = device.icon || "";
+        if (icon.indexOf("keyboard") !== -1) return "keyboard";
+        if (icon.indexOf("mouse") !== -1) return "mouse";
+        if (icon.indexOf("headset") !== -1 || icon.indexOf("headphone") !== -1) return "headphones";
+        if (icon.indexOf("audio") !== -1) return "speaker";
+        return "bluetooth";
+    }
+    function chooseNetwork(n) {
+        if (n.active || Connectivity.wifiConnecting !== "") return;
+        if (n.enterprise) { Platform.openUrl("aster-settings:wifi"); cc.close(); }
+        else if (n.saved || !n.secure) Connectivity.connectWifi(n.ssid, "");
+        else cc.passwordFor = cc.passwordFor === n.ssid ? "" : n.ssid;
+    }
 
     // Klik obok panelu
     MouseArea { anchors.fill: parent; onClicked: cc.close() }
-    Item { id: keys; focus: true; Keys.onEscapePressed: cc.close() }
+    Item { id: keys; focus: true; Keys.onEscapePressed: { if (cc.page !== "") cc.page = ""; else cc.close(); } }
 
     // ——— Panel ———
     Item {
         id: panel
         width: 384
-        height: content.height + 2 * cc.pad
+        height: (cc.page === "" ? content.height : detail.height) + 2 * cc.pad
         x: cc.width - width - 10
         y: 4
         onHeightChanged: blurTimer.restart()
@@ -95,11 +124,12 @@ Window {
         Rectangle {
             anchors.fill: parent
             radius: 30
-            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.38) : Qt.rgba(1, 1, 1, 0.30)
+            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.68) : Qt.rgba(1, 1, 1, 0.68)
         }
 
         Column {
             id: content
+            visible: cc.page === ""
             x: cc.pad; y: cc.pad
             width: panel.width - 2 * cc.pad
             spacing: cc.gap
@@ -121,7 +151,9 @@ Window {
                             on: ControlCenter.wifiAvailable ? ControlCenter.wifiOn : ControlCenter.wired
                             status: ControlCenter.networkName !== "" ? ControlCenter.networkName
                                   : ControlCenter.wifiAvailable ? (ControlCenter.wifiOn ? "Brak połączenia" : "Wyłączone") : "Brak sieci"
+                            hasDetails: ControlCenter.wifiAvailable && ControlCenter.wifiOn
                             onClicked: if (ControlCenter.wifiAvailable) ControlCenter.setWifi(!ControlCenter.wifiOn); else Platform.openUrl("aster-settings:wifi")
+                            onDetails: cc.page = "wifi"
                         }
                         Toggle {
                             width: parent.width
@@ -132,7 +164,9 @@ Window {
                             status: !ControlCenter.bluetoothAvailable ? "Niedostępny"
                                   : ControlCenter.bluetoothDevice !== "" ? ControlCenter.bluetoothDevice
                                   : ControlCenter.bluetoothOn ? "Włączony" : "Wyłączony"
+                            hasDetails: ControlCenter.bluetoothOn
                             onClicked: ControlCenter.setBluetooth(!ControlCenter.bluetoothOn)
+                            onDetails: cc.page = "bluetooth"
                         }
                     }
                 }
@@ -187,6 +221,14 @@ Window {
                 visible: ControlCenter.audioAvailable
                 width: content.width; height: 74
                 Caption { text: "Dźwięk" }
+                MediaButton {
+                    anchors.right: parent.right; anchors.rightMargin: 8
+                    y: 3
+                    width: 30
+                    icon: "chevronRight"
+                    outline: true
+                    onClicked: cc.page = "audio"
+                }
                 LevelSlider {
                     x: 12; y: 34; width: parent.width - 24
                     icon: ControlCenter.muted || ControlCenter.volume === 0 ? "volumeOff" : ControlCenter.volume < 0.5 ? "volumeLow" : "volume"
@@ -295,6 +337,343 @@ Window {
                 }
             }
         }
+
+        // ——— Listy: sieci Wi‑Fi, urządzenia Bluetooth, wyjścia dźwięku ———
+        Column {
+            id: detail
+            visible: cc.page !== ""
+            x: cc.pad; y: cc.pad
+            width: panel.width - 2 * cc.pad
+            spacing: cc.gap
+
+            Item {
+                width: parent.width; height: 34
+                MediaButton {
+                    width: 34
+                    icon: "back"
+                    outline: true
+                    onClicked: cc.page = ""
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: cc.page === "wifi" ? "Wi-Fi" : cc.page === "bluetooth" ? "Bluetooth" : "Dźwięk"
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.DemiBold
+                }
+            }
+
+            // Parowanie: kod do przepisania albo pytanie o zgodę
+            Tile {
+                visible: cc.page === "bluetooth" && Connectivity.pairingKind !== ""
+                opacity: 1
+                width: parent.width
+                height: pairingBody.height + 28
+                Column {
+                    id: pairingBody
+                    x: 14; y: 14
+                    width: parent.width - 28
+                    spacing: 10
+                    Text {
+                        width: parent.width
+                        text: Connectivity.pairingDevice
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    }
+                    Row {
+                        visible: Connectivity.pairingCode !== ""
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 6
+                        Repeater {
+                            model: Connectivity.pairingCode.split("")
+                            delegate: Rectangle {
+                                id: digit
+                                required property string modelData
+                                required property int index
+                                readonly property bool typed: index < Connectivity.pairingEntered
+                                width: 38; height: 48; radius: 12
+                                color: typed ? Theme.accent : Theme.fill
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: digit.modelData
+                                    color: digit.typed ? "white" : Theme.text
+                                    font.family: Theme.font; font.pixelSize: 24; font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Connectivity.pairingKind === "show" ? "Wpisz ten kod na klawiaturze i naciśnij Enter."
+                            : Connectivity.pairingCode !== "" ? "Sprawdź, czy na urządzeniu widać ten sam kod."
+                            : "To urządzenie chce połączyć się z komputerem."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                    }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 8
+                        PanelButton { label: "Anuluj"; onClicked: Connectivity.answerPairing(false) }
+                        PanelButton {
+                            visible: Connectivity.pairingKind === "confirm"
+                            label: "Połącz"
+                            primary: true
+                            onClicked: Connectivity.answerPairing(true)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                visible: text !== ""
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: cc.page === "wifi" ? Connectivity.wifiError : cc.page === "bluetooth" ? Connectivity.bluetoothError : ""
+                color: Theme.danger; font.family: Theme.font; font.pixelSize: 13
+            }
+
+            Flickable {
+                id: listArea
+                width: parent.width
+                height: Math.min(contentHeight, 430)
+                contentHeight: rows.height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                Column {
+                    id: rows
+                    width: parent.width
+                    spacing: 4
+
+                    Repeater {
+                        model: cc.page === "wifi" ? Connectivity.wifiNetworks : []
+                        delegate: Column {
+                            id: netItem
+                            required property var modelData
+                            readonly property bool connecting: Connectivity.wifiConnecting === modelData.ssid
+                            width: rows.width
+                            spacing: 4
+                            ListRow {
+                                width: parent.width
+                                icon: "wifi"
+                                signalLevel: netItem.modelData.signal
+                                title: netItem.modelData.ssid
+                                subtitle: netItem.connecting ? "Łączenie…" : netItem.modelData.active ? "Połączono" : netItem.modelData.saved ? "Zapisana" : ""
+                                checked: netItem.modelData.active
+                                locked: netItem.modelData.secure
+                                action: netItem.modelData.active ? "Rozłącz" : netItem.modelData.saved ? "Zapomnij" : ""
+                                onClicked: cc.chooseNetwork(netItem.modelData)
+                                onActionClicked: {
+                                    if (netItem.modelData.active) Connectivity.disconnectWifi(netItem.modelData.ssid);
+                                    else Connectivity.forgetWifi(netItem.modelData.ssid);
+                                }
+                            }
+                            Rectangle {
+                                visible: cc.passwordFor === netItem.modelData.ssid
+                                onVisibleChanged: if (visible) password.forceActiveFocus()
+                                width: parent.width; height: 44; radius: 14
+                                color: Theme.fill
+                                TextInput {
+                                    id: password
+                                    x: 14
+                                    width: parent.width - 28 - connectButton.width - 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    echoMode: TextInput.Password
+                                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14
+                                    selectByMouse: true
+                                    clip: true
+                                    function submit() {
+                                        if (text === "") return;
+                                        Connectivity.connectWifi(netItem.modelData.ssid, text);
+                                        clear();
+                                        cc.passwordFor = "";
+                                    }
+                                    onAccepted: submit()
+                                    Keys.onEscapePressed: cc.passwordFor = ""
+                                    Text {
+                                        visible: parent.text === ""
+                                        text: "Hasło sieci"
+                                        color: Theme.text2; font: parent.font
+                                    }
+                                }
+                                PanelButton {
+                                    id: connectButton
+                                    anchors.right: parent.right; anchors.rightMargin: 7
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    label: "Połącz"
+                                    primary: true
+                                    onClicked: password.submit()
+                                }
+                            }
+                        }
+                    }
+
+                    Repeater {
+                        model: cc.page === "bluetooth" ? Connectivity.bluetoothDevices : []
+                        delegate: ListRow {
+                            required property var modelData
+                            readonly property bool busy: Connectivity.bluetoothBusy === modelData.path
+                            width: rows.width
+                            icon: cc.iconFor(modelData)
+                            title: modelData.name
+                            subtitle: busy ? "Chwileczkę…" : modelData.connected ? "Połączono" : modelData.paired ? "Sparowano" : "Kliknij, aby sparować"
+                            checked: modelData.connected
+                            action: modelData.paired ? "Zapomnij" : ""
+                            onClicked: Connectivity.toggleDevice(modelData.path)
+                            onActionClicked: Connectivity.forgetDevice(modelData.path)
+                        }
+                    }
+
+                    SectionLabel { visible: cc.page === "audio"; text: "Wyjście" }
+                    Repeater {
+                        model: cc.page === "audio" ? Connectivity.audioOutputs : []
+                        delegate: ListRow {
+                            required property var modelData
+                            width: rows.width
+                            icon: "volume"
+                            title: modelData.name
+                            checked: modelData.active
+                            onClicked: Connectivity.setAudioDefault(modelData.id)
+                        }
+                    }
+                    SectionLabel { visible: cc.page === "audio" && Connectivity.audioInputs.length > 0; text: "Wejście" }
+                    Repeater {
+                        model: cc.page === "audio" ? Connectivity.audioInputs : []
+                        delegate: ListRow {
+                            required property var modelData
+                            width: rows.width
+                            icon: "mic"
+                            title: modelData.name
+                            checked: modelData.active
+                            onClicked: Connectivity.setAudioDefault(modelData.id)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                visible: (cc.page === "wifi" && Connectivity.wifiNetworks.length === 0)
+                      || (cc.page === "bluetooth" && Connectivity.bluetoothDevices.length === 0)
+                      || (cc.page === "audio" && Connectivity.audioOutputs.length === 0)
+                width: parent.width; height: 70
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.WordWrap
+                text: cc.page === "wifi" ? "Szukam sieci…"
+                    : cc.page === "bluetooth" ? "Szukam urządzeń…\nWłącz w urządzeniu tryb parowania."
+                    : "Nie znaleziono urządzeń dźwiękowych"
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+            }
+        }
+    }
+
+    component SectionLabel: Text {
+        x: 8
+        height: 26
+        verticalAlignment: Text.AlignVCenter
+        color: Theme.text2
+        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+    }
+
+    component PanelButton: Rectangle {
+        id: pb
+        property string label
+        property bool primary: false
+        signal clicked()
+        width: pbText.implicitWidth + 24; height: 30; radius: 15
+        color: primary ? Theme.accent : pbArea.containsMouse ? Theme.hover : Theme.fill
+        scale: pbArea.pressed ? 0.95 : 1
+        Behavior on scale { NumberAnimation { duration: 100 } }
+        Text {
+            id: pbText
+            anchors.centerIn: parent
+            text: pb.label
+            color: pb.primary ? "white" : Theme.text
+            font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+        }
+        MouseArea { id: pbArea; anchors.fill: parent; hoverEnabled: true; onClicked: pb.clicked() }
+    }
+
+    // Wiersz listy: ikona, nazwa, stan; akcja poboczna pojawia się po najechaniu
+    component ListRow: Rectangle {
+        id: lr
+        property string icon
+        property string title
+        property string subtitle
+        property string action
+        property bool checked: false
+        property bool locked: false
+        property int signalLevel: -1
+        signal clicked()
+        signal actionClicked()
+        height: 50
+        radius: 14
+        color: rowHover.hovered ? Theme.hover : "transparent"
+        HoverHandler { id: rowHover }
+        MouseArea { anchors.fill: parent; onClicked: lr.clicked() }
+        Rectangle {
+            id: lrIcon
+            x: 8; anchors.verticalCenter: parent.verticalCenter
+            width: 34; height: 34; radius: 17
+            color: lr.checked ? Theme.accent : Theme.fill
+            Icon { anchors.centerIn: parent; d: Icons[lr.icon] || ""; size: 17; stroke: 2; color: lr.checked ? "white" : Theme.text }
+        }
+        Column {
+            anchors.left: lrIcon.right; anchors.leftMargin: 10
+            anchors.right: trailing.left; anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            Text {
+                width: parent.width
+                text: lr.title
+                elide: Text.ElideRight
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium
+            }
+            Text {
+                visible: lr.subtitle !== ""
+                width: parent.width
+                text: lr.subtitle
+                elide: Text.ElideRight
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            }
+        }
+        Row {
+            id: trailing
+            anchors.right: parent.right; anchors.rightMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 8
+            PanelButton {
+                visible: lr.action !== "" && rowHover.hovered
+                anchors.verticalCenter: parent.verticalCenter
+                label: lr.action
+                onClicked: lr.actionClicked()
+            }
+            Icon {
+                visible: lr.locked
+                anchors.verticalCenter: parent.verticalCenter
+                d: Icons.lock; size: 14; stroke: 2; color: Theme.text2
+            }
+            // Siła sygnału: trzy kreski
+            Row {
+                visible: lr.signalLevel >= 0
+                height: 13
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+                Repeater {
+                    model: 3
+                    delegate: Rectangle {
+                        required property int index
+                        anchors.bottom: parent.bottom
+                        width: 3; height: 5 + index * 4; radius: 1.5
+                        color: lr.signalLevel > index * 30 + 5 ? Theme.text : Theme.fill
+                    }
+                }
+            }
+            Icon {
+                visible: lr.checked
+                anchors.verticalCenter: parent.verticalCenter
+                d: Icons.check; size: 16; stroke: 2.4; color: Theme.accentText
+            }
+        }
     }
 
     // ——— Elementy ———
@@ -325,7 +704,10 @@ Window {
         property string label
         property string status
         property bool on: false
+        // Kółko przełącza, a podpis otwiera listę sieci lub urządzeń
+        property bool hasDetails: false
         signal clicked()
+        signal details()
         height: 40
         opacity: enabled ? 1 : 0.45
         Rectangle {
@@ -351,7 +733,11 @@ Window {
             }
             Text { width: parent.width; text: tg.status; elide: Text.ElideRight; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
         }
-        MouseArea { id: tgArea; anchors.fill: parent; onClicked: tg.clicked() }
+        MouseArea {
+            id: tgArea
+            anchors.fill: parent
+            onClicked: m => { if (tg.hasDetails && m.x > circle.width + 3) tg.details(); else tg.clicked(); }
+        }
     }
 
     // Suwak jak w macOS: gruba ścieżka, biała część do wartości z gałką, ikona w środku po lewej
@@ -406,6 +792,7 @@ Window {
         id: mb
         property string icon
         property bool big: false
+        property bool outline: false
         signal clicked()
         width: big ? 40 : 34; height: width; radius: width / 2
         color: mbArea.containsMouse ? Theme.hover : "transparent"
@@ -415,9 +802,9 @@ Window {
             anchors.centerIn: parent
             d: Icons[mb.icon] || ""
             size: mb.big ? 22 : 18
-            stroke: mb.icon === "pause" ? 3 : 1.6
+            stroke: mb.icon === "pause" ? 3 : mb.outline ? 2 : 1.6
             color: Theme.text
-            fill: mb.icon === "pause" ? "transparent" : Theme.text
+            fill: mb.icon === "pause" || mb.outline ? "transparent" : Theme.text
         }
         MouseArea { id: mbArea; anchors.fill: parent; hoverEnabled: true; onClicked: mb.clicked() }
     }

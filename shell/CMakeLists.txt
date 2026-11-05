@@ -6,6 +6,8 @@ qt_add_executable(aster-shell
     src/platform.h
     src/controlcenter.cpp
     src/controlcenter.h
+    src/connectivity.cpp
+    src/connectivity.h
     src/polkitagent.cpp
     src/polkitagent.h
     src/assistant.cpp

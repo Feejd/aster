@@ -13,7 +13,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       blokada/wyłączanie. Dane z KDE (lista aplikacji, ostatnie dokumenty), uruchamianie przez KIO.
 - [x] **Centrum sterowania** (prawa wyspa doku): Wi‑Fi/sieć (nmcli), Bluetooth (bluetoothctl), „Nie przeszkadzać”,
       ciemny motyw, jasność (PowerDevil), głośność (PipeWire), odtwarzacz (MPRIS), zrzut ekranu, ustawienia, bateria
-- [ ] Centrum sterowania: lista sieci Wi‑Fi i urządzeń Bluetooth do wyboru, wybór wyjścia dźwięku
+- [x] Centrum sterowania: listy sieci Wi‑Fi (z hasłem) i urządzeń Bluetooth (kody parowania w panelu), wybór wyjścia i wejścia dźwięku; do sprawdzenia na prawdziwym Wi‑Fi i Bluetooth
 - [x] Powiadomienia systemowe pod górną wyspą (powłoka jest serwerem powiadomień)
 - [x] **Nowy układ powłoki**: górny pasek z trzech wysp (aktywny program z tytułem okna, dynamiczna wyspa, stan systemu),
       jeden dok z powiększaniem ikon, podskakiwaniem przy uruchamianiu i Koszem, widżety na pulpicie (kalendarz, bateria, teraz gra)

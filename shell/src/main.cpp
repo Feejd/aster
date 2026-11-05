@@ -102,12 +102,14 @@ int main(int argc, char *argv[])
             });
     }
 
-    // Do testów: ASTER_OPEN_CONTROL=1 otwiera centrum sterowania (np. razem z ASTER_SHOT_DESKTOP)
+    // Do testów: ASTER_OPEN_CONTROL=1 otwiera centrum sterowania (np. razem z ASTER_SHOT_DESKTOP), a =wifi, =bluetooth lub =audio od razu jego listę
     if (!qEnvironmentVariableIsEmpty("ASTER_OPEN_CONTROL"))
         QTimer::singleShot(1000, &app, [] {
             for (QWindow *w : QGuiApplication::topLevelWindows())
-                if (w->title() == QLatin1String("Centrum sterowania"))
+                if (w->title() == QLatin1String("Centrum sterowania")) {
                     QMetaObject::invokeMethod(w, "toggle");
+                    w->setProperty("page", qEnvironmentVariable("ASTER_OPEN_CONTROL").remove(QLatin1Char('1')));
+                }
         });
 
     // Do testów: ASTER_OPEN_ASSISTANT=1 otwiera panel asystenta (pusty albo z ASTER_SHOT_ASK)
