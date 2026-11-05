@@ -13,6 +13,7 @@ import Aster.Ui
 // Ustawienia → Pulpit i dok → „Zegar na pulpicie” chowa całość.
 Window {
     id: cw
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     title: "Zegar"
     visible: false

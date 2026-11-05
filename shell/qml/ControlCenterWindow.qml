@@ -10,6 +10,7 @@ import Aster.Ui
 // i szybkie przyciski. Stan i działania — ControlCenter (C++). Klik obok panelu albo Esc zamyka.
 Window {
     id: cc
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     visible: false
     width: Screen.width

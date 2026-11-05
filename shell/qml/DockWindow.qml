@@ -11,6 +11,7 @@ import Aster.Ui
 // Stan systemu i zegar są na górnym pasku (HorizonWindow).
 Window {
     id: dock
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     title: "Dok"
     visible: false

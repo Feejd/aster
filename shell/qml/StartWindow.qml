@@ -14,6 +14,7 @@ import Aster.Ui
 // Okno-warstwa przykrywa cały ekran nad dokiem: klik obok panelu zamyka Start.
 Window {
     id: start
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     visible: false
     width: Screen.width

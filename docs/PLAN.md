@@ -21,7 +21,7 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [ ] Dynamiczna wyspa: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
 - [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
 - [x] Super = Start
-- [ ] Super+A = centrum sterowania
+- [x] Super+A = centrum sterowania
 
 ## Etap 3 — spójny wygląd całego systemu
 - [x] **Ramki okien** (dekoracja KWin, `shell/decoration`): kolorowe przyciski i wygląd jak w programach Aster dla programów bez własnego paska.

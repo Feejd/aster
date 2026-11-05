@@ -10,6 +10,7 @@ import Aster.Ui
 // Każda odpowiedź ma znaczek: „Na tym komputerze” albo „Chmura: <dostawca>”.
 Window {
     id: aw
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     visible: false
     width: Screen.width
