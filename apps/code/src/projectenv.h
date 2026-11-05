@@ -38,6 +38,8 @@ public:
     QStringList hostShell(const QString &command, const QString &cwd) const;
     // Program z argumentami (serwer języka, debuger) w środowisku projektu
     QStringList program(const QStringList &argv) const;
+    // Program w systemie (git): z Flatpaka przez flatpak-spawn, env — zmienne do przekazania
+    QStringList hostProgram(const QStringList &argv, const QString &cwd, const QStringList &env = QStringList()) const;
     // Czy program jest dostępny w środowisku projektu (wynik zapamiętany do zmiany środowiska)
     bool has(const QString &name) const;
     // Terminal: polecenie zamiast domyślnej powłoki (pusty — domyślna)

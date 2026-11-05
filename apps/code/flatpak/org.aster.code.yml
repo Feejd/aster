@@ -17,6 +17,8 @@ finish-args:
   - --filesystem=home
   - --filesystem=/tmp
   - --talk-name=org.freedesktop.Flatpak       # git, kompilatory i serwery języków z systemu
+  - --talk-name=org.freedesktop.secrets       # sekrety projektu i token GitHuba w portfelu
+  - --talk-name=org.aster.Assistant           # agent (usługa Aster Intelligence)
 cleanup:
   - /include
   - /lib/cmake

@@ -115,6 +115,18 @@ QStringList ProjectEnv::hostShell(const QString &command, const QString &cwd) co
     return {QStringLiteral("flatpak-spawn"), QStringLiteral("--host"), QStringLiteral("--directory=") + cwd, QStringLiteral("sh"), QStringLiteral("-c"), command};
 }
 
+QStringList ProjectEnv::hostProgram(const QStringList &argv, const QString &cwd, const QStringList &env) const
+{
+    if (!m_flatpak)
+        return argv;
+    QStringList a{QStringLiteral("flatpak-spawn"), QStringLiteral("--host")};
+    if (!cwd.isEmpty())
+        a << QStringLiteral("--directory=") + cwd;
+    for (const QString &e : env)
+        a << QStringLiteral("--env=") + e;
+    return a + argv;
+}
+
 QStringList ProjectEnv::shell(const QString &command, const QString &cwd) const
 {
     if (m_state != QLatin1String("ready"))

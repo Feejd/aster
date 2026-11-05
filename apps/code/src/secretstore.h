@@ -33,6 +33,7 @@ public:
     Q_INVOKABLE QString reveal(const QString &name) const;          // wartość do pokazania na żądanie
     Q_INVOKABLE QVariantMap env() const;
     Q_INVOKABLE QString redact(const QString &text) const;
+    Q_INVOKABLE bool touchesSecrets(const QString &command) const;  // polecenie czyta .env, klucze albo środowisko
     Q_INVOKABLE QVariantList envFiles() const;                      // pliki .env w projekcie: [{ name, path, count }]
     Q_INVOKABLE int importEnv(const QString &path, bool clearFile); // liczba zmiennych, −1 — błąd portfela
     Q_INVOKABLE void reload() { m_loaded = false; Q_EMIT changed(); }
@@ -43,7 +44,7 @@ public:
     static QString globalGet(const QString &name);
     static bool globalSet(const QString &name, const QString &value);
     // Plik „export NAZWA='wartość'” dla powłoki (pusty — brak sekretów)
-    QString writeEnvFile(const QVariantMap &extra = QVariantMap()) const;
+    QString writeEnvFile(const QVariantMap &extra = QVariantMap(), bool onlyExtra = false) const;
 
 Q_SIGNALS:
     void changed();

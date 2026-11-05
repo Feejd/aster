@@ -33,6 +33,8 @@ public:
     // Polecenie agenta w środowisku projektu; wynik idzie do usługi (ActionResult) i do commandDone
     Q_INVOKABLE void runCommand(const QString &conversation, const QString &action, const QString &command, const QString &cwd);
     Q_INVOKABLE void decline(const QString &conversation, const QString &action);
+    // Polecenie sięga po sekrety — nie uruchamia się, model dostaje powód
+    Q_INVOKABLE void refuse(const QString &conversation, const QString &action);
     Q_INVOKABLE void stopCommand();
 
     // Bloki zmian z odpowiedzi: [{ path, kind: edit | file, blocks: [{ search, replace }], content }]

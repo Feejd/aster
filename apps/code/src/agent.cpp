@@ -1,5 +1,6 @@
 #include "agent.h"
 #include "projectenv.h"
+#include "secretstore.h"
 
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
@@ -104,6 +105,8 @@ void Agent::runCommand(const QString &conversation, const QString &action, const
         if (o.size() > MaxOutput)
             o = o.left(MaxOutput / 2) + QStringLiteral("\n… (wycięte) …\n") + o.right(MaxOutput / 2);
         const int exit = st == QProcess::NormalExit ? code : 130;
+        // Do modelu idzie wynik bez sekretów; w rozmowie użytkownik też widzi wersję oczyszczoną
+        o = SecretStore::instance()->redact(o);
         call(QStringLiteral("ActionResult"), {conversation, action, exit, o}, 4000);
         Q_EMIT commandDone(conversation, action, exit, o);
     });
@@ -118,6 +121,12 @@ void Agent::runCommand(const QString &conversation, const QString &action, const
 void Agent::decline(const QString &conversation, const QString &action)
 {
     call(QStringLiteral("ActionResult"), {conversation, action, -2, QString()}, 4000);
+}
+
+void Agent::refuse(const QString &conversation, const QString &action)
+{
+    call(QStringLiteral("ActionResult"), {conversation, action, 126,
+         QStringLiteral("Aster Code nie uruchomił tego polecenia: sięga po sekrety (.env, klucze, środowisko). Sekrety nie są dostępne dla agenta — nie próbuj ich odczytać.")}, 4000);
 }
 
 void Agent::stopCommand()

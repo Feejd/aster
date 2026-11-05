@@ -62,6 +62,12 @@ Window {
         interval: 1000
         onTriggered: { for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified && !tabs.get(i).readOnly) win.save(i, null, true); }
     }
+    // Kopie niezapisanych kart (bez plików z sekretami) — po awarii wracają przy otwarciu projektu
+    Timer {
+        id: backupTimer
+        interval: 2000
+        onTriggered: { for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified && !Secrets.secretFile(tabs.get(i).path)) Project.backupWrite(tabs.get(i).path, win.page(i).edit.text); }
+    }
     // Sprawdzanie serwera gita w tle
     Timer {
         interval: 5 * 60 * 1000; repeat: true
@@ -278,6 +284,7 @@ Window {
             return;
         }
         const g = tabs.get(i).group, uid = tabs.get(i).uid, path = tabs.get(i).path;
+        if (force && p && p.modified) Project.backupRemove(path);        // „Nie zapisuj”
         // Duplikat tego pliku w drugiej grupie przejmuje dokument w serwerze języka
         const wasPrimary = p ? p.lspPrimary : false;
         const wasFocused = i === current;
@@ -328,12 +335,30 @@ Window {
         whenSaved(() => { saveSession(); closeAllTabs(); terminalShown = false; Project.close(); });
     }
     function restoreSession() {
+        // Kopie odczytane przed otwarciem kart — wczytanie pliku ustawia stan „bez zmian” i kasuje jego kopię
+        const saved = Project.backups();
         const list = Project.sessionTabs();
         list.forEach(p => openFile(p));
         if (tabs.count) activate(Math.min(Project.sessionCurrent(), tabs.count - 1));
         const l = Project.sessionLayout();
         sidebarView = l.sidebarView || 0;
         terminalShown = !!l.terminal;
+        restoreBackups(saved);
+    }
+    // Program zakończył się bez zapisu (awaria, zanik zasilania) — niezapisana treść wraca do kart
+    function restoreBackups(saved) {
+        let n = 0;
+        for (const b of saved) {
+            if (!Project.exists(b.path)) continue;
+            openFile(b.path, { preview: false });
+            const i = indexOfPath(b.path);
+            if (i < 0) continue;
+            const e = page(i).edit;
+            if (e.text === b.text) { Project.backupRemove(b.path); continue; }
+            TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [b.text], 0);
+            n++;
+        }
+        if (n) toast("Przywrócono niezapisane zmiany: " + n + (n === 1 ? " plik" : " pliki") + " (Ctrl+Z wraca do wersji z dysku)");
     }
     function saveSession() {
         if (!hasProject) return;
@@ -1364,6 +1389,7 @@ Window {
         else if (what === "agent") agentPanel.open();
         else if (what.startsWith("ask:")) askAgent(arg);
         else if (what === "acceptall") agentPanel.acceptAll();
+        else if (what.startsWith("replaceline:")) { if (cur) { const kv = arg.split("=>"); const t = cur.edit.text.replace(kv[0], kv[1]); TextOps.multiEdit(cur.edit.textDocument, [{ a: 0, b: cur.edit.length }], [t], 0); } }
         else if (what === "sidebyside") prefs.diffSideBySide = true;
         else if (what === "deployview") deployView.open();
         else if (what.startsWith("deploycfg:")) { Project.save(Project.root + "/.aster/wdrozenie.json", arg, "UTF-8", "LF"); }
@@ -1694,13 +1720,13 @@ Window {
                         autoClose: prefs.autoClose
                         autoComplete: prefs.autoComplete
                         defaultIndent: prefs.defaultIndent
-                        onEdited: if (prefs.autoSave === "delay") autoSaveTimer.restart()
+                        onEdited: { if (prefs.autoSave === "delay") autoSaveTimer.restart(); backupTimer.restart(); }
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)
                         onQuickFixRequested: win.quickFix()
                         onContextMenuRequested: (item, x, y) => win.showEditorMenu(item, x, y)
-                        onModifiedChanged: { if (modified) win.pin(index); win.revision++; }
+                        onModifiedChanged: { if (modified) win.pin(index); else Project.backupRemove(path); win.revision++; }
                         Component.onCompleted: {
                             if (win.pendingPrimary[uid] === false) lspPrimary = false;
                             delete win.pendingPrimary[uid];

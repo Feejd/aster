@@ -350,15 +350,82 @@ QVariantMap SecretStore::env() const
     return out;
 }
 
+namespace {
+
+// Nazwy zmiennych z tajną treścią (w portfelu, w .env, w wyjściu env)
+bool sensitiveName(const QString &name)
+{
+    static const QRegularExpression re(QStringLiteral("KEY|TOKEN|SECRET|PASS|PWD|CREDENTIAL|AUTH|DATABASE_URL|_DSN|PRIVATE"), QRegularExpression::CaseInsensitiveOption);
+    return re.match(name).hasMatch();
+}
+
+// Wycinana wartość: tajna z nazwy (od 4 znaków) albo dość długa, żeby nie psuć zwykłego tekstu („true”, „1”, „dev”)
+bool worthCutting(const QString &name, const QString &value)
+{
+    return value.size() >= 8 || (value.size() >= 4 && sensitiveName(name));
+}
+
+} // namespace
+
 QString SecretStore::redact(const QString &text) const
 {
-    // Wartości sekretów (od 4 znaków) zamieniane na ••• — tekst idący do modelu nie zawiera ich nigdy
+    // Tekst idący do modelu: wartości z portfela i z plików .env projektu, przypisania do zmiennych
+    // o tajnych nazwach oraz rozpoznawalne klucze (wyjście env, cat przez wzorzec nazwy pliku itp.)
     load();
     QString t = text;
-    for (const QString &v : std::as_const(m_vars))
-        if (v.size() >= 4)
-            t.replace(v, QStringLiteral("•••"));
-    return t;
+    QStringList values;
+    for (auto it = m_vars.cbegin(); it != m_vars.cend(); ++it)
+        if (worthCutting(it.key(), it.value()))
+            values << it.value();
+    QStringList dirs{m_root};
+    const QFileInfoList subs = m_root.isEmpty() ? QFileInfoList() : QDir(m_root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QFileInfo &d : subs)
+        if (d.fileName() != QLatin1String("node_modules"))
+            dirs << d.absoluteFilePath();
+    for (const QString &dir : std::as_const(dirs)) {
+        if (dir.isEmpty())
+            continue;
+        for (const QString &n : QDir(dir).entryList({QStringLiteral(".env"), QStringLiteral(".env.*")}, QDir::Files | QDir::Hidden)) {
+            if (!isSecretFile(n))
+                continue;
+            const QVariantMap vars = parseEnv(dir + QLatin1Char('/') + n);
+            for (auto it = vars.cbegin(); it != vars.cend(); ++it)
+                if (worthCutting(it.key(), it.value().toString()))
+                    values << it.value().toString();
+        }
+    }
+    // Dłuższe najpierw — wartość zawarta w innej nie zostawia kawałka
+    std::sort(values.begin(), values.end(), [](const QString &a, const QString &b) { return a.size() > b.size(); });
+    for (const QString &v : std::as_const(values))
+        t.replace(v, QStringLiteral("•••"));
+    static const QRegularExpression assign(QStringLiteral("(?m)^(\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*[=:]\\s*)(\\S.*)$"));
+    QString out;
+    int last = 0;
+    auto it = assign.globalMatch(t);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        if (!sensitiveName(m.captured(2)) || m.captured(3).startsWith(QStringLiteral("•")))
+            continue;
+        out += QStringView(t).mid(last, m.capturedStart(3) - last) + QStringLiteral("•••");
+        last = int(m.capturedEnd(3));
+    }
+    out += QStringView(t).mid(last);
+    static const QRegularExpression shapes(QStringLiteral(
+        "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----"
+        "|\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}"
+        "|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,})\\b"));
+    out.replace(shapes, QStringLiteral("•••"));
+    return out;
+}
+
+bool SecretStore::touchesSecrets(const QString &command) const
+{
+    // Polecenia agenta, które czytają pliki z sekretami, klucze albo całe środowisko — nie uruchamiają się
+    static const QRegularExpression envFile(QStringLiteral("(?:^|[\\s/'\"=<>|;&(])\\.env(?!\\.(?:example|sample|template)\\b)(?:[\\s'\"|;&)<>.*?\\[]|$)"));
+    static const QRegularExpression other(QStringLiteral(
+        "\\.ssh\\b|\\bid_(?:rsa|ed25519|ecdsa)\\b|\\.pem\\b|\\.key\\b|\\.netrc\\b|\\.git-credentials\\b|\\.aws/|\\.docker/config|\\.config/gh\\b"
+        "|\\bsecret-tool\\b|\\bkwallet|\\bgh\\s+auth\\s+token\\b|/proc/[^\\s]*/environ|(?:^|[\\s;&|(])(?:printenv|env|export\\s+-p|declare\\s+-x|set)(?:\\s*(?:$|[;&|)>]))"));
+    return envFile.match(command).hasMatch() || other.match(command).hasMatch();
 }
 
 bool SecretStore::isSecretFile(const QString &path)
@@ -425,11 +492,12 @@ int SecretStore::importEnv(const QString &path, bool clearFile)
     return int(vars.size());
 }
 
-QString SecretStore::writeEnvFile(const QVariantMap &extra) const
+QString SecretStore::writeEnvFile(const QVariantMap &extra, bool onlyExtra) const
 {
     // Plik dla powłoki w kontenerze / systemie: tylko dla właściciela, kasowany zaraz po wczytaniu
-    load();
-    QHash<QString, QString> vars = m_vars;
+    if (!onlyExtra)
+        load();
+    QHash<QString, QString> vars = onlyExtra ? QHash<QString, QString>() : m_vars;
     for (auto it = extra.cbegin(); it != extra.cend(); ++it)
         vars.insert(it.key(), it.value().toString());
     if (vars.isEmpty())

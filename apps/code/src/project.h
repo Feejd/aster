@@ -104,6 +104,10 @@ public:
     Q_INVOKABLE void watch(const QStringList &paths);
     Q_INVOKABLE void showInFiles(const QString &path) const;
     Q_INVOKABLE void copyText(const QString &text) const;
+    // Kopia niezapisanej treści na wypadek awarii; backups() — kopie plików tego projektu: [{ path, text }]
+    Q_INVOKABLE void backupWrite(const QString &path, const QString &text);
+    Q_INVOKABLE void backupRemove(const QString &path);
+    Q_INVOKABLE QVariantList backups() const;
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE QString number(int n) const;                     // „12 345”
 

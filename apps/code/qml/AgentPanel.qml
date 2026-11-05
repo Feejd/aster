@@ -82,7 +82,7 @@ Rectangle {
             const abs = p.path.startsWith("/") ? p.path : root + "/" + p.path.replace(/^\.\//, "");
             const old = fileText(abs);
             let res = p.kind === "file" ? { ok: true, text: p.content } : Agent.applyBlocks(old, p.blocks);
-            const e = { path: abs, rel: p.path, kind: p.kind, oldText: old, newText: res.ok ? res.text : old,
+            const e = { path: abs, rel: p.path, kind: p.kind, blocks: p.blocks, oldText: old, newText: res.ok ? res.text : old,
                         state: res.ok ? "pending" : "failed", error: res.ok ? "" : res.error, added: 0, removed: 0, isNew: p.kind === "file" && !old };
             if (res.ok) {
                 const rows = Agent.lineDiff(old, e.newText);
@@ -104,8 +104,20 @@ Rectangle {
         edits = es;
         if (!pendingEdits && phase === "review") phase = "";
     }
+    // Plik mógł się zmienić od propozycji — zmiana liczona na nowo na aktualnej treści, nigdy nie nadpisuje Twoich poprawek
+    function refreshEdit(path) {
+        const i = editIndex(path);
+        if (i < 0) return null;
+        const e = edits[i], cur = fileText(e.path);
+        if (cur === e.oldText) return e;
+        const res = e.kind === "edit" ? Agent.applyBlocks(cur, e.blocks) : { ok: false };
+        const es = edits.slice();
+        es[i] = Object.assign({}, e, res.ok ? { oldText: cur, newText: res.text } : { state: "failed", error: "Plik zmienił się od propozycji — poproś agenta o ponowienie" });
+        edits = es;
+        return es[i];
+    }
     function accept(path) {
-        const e = edits[editIndex(path)];
+        const e = refreshEdit(path);
         if (!e || e.state !== "pending") return;
         applyEdit(e.path, e.newText);
         setEditState(path, "applied");
@@ -113,8 +125,8 @@ Rectangle {
     function reject(path) { setEditState(path, "rejected"); }
     function acceptAll() { for (const e of edits) if (e.state === "pending") accept(e.path); }
     function review(path) {
-        const e = edits[editIndex(path)];
-        if (e) showEdit(e.path, "Zmiana od agenta" + (e.isNew ? " (nowy plik)" : ""), Agent.lineDiff(e.oldText, e.newText));
+        const e = refreshEdit(path);
+        if (e && e.state === "pending") showEdit(e.path, "Zmiana od agenta" + (e.isNew ? " (nowy plik)" : ""), Agent.lineDiff(e.oldText, e.newText));
     }
 
     Connections {
@@ -144,6 +156,12 @@ Rectangle {
                 m.text = Agent.stripEdits(m.text).replace(/```(?:bash|sh|shell)[\s\S]*$/, "").trim();
                 if (m.text === description.trim()) m.text = "";
             });
+            // Sięga po sekrety — nie uruchamia się nawet po kliknięciu
+            if (Secrets.touchesSecrets(command)) {
+                ap.push({ role: "action", action: action, command: command, text: "Polecenie sięga po sekrety (.env, klucze albo środowisko), więc nie zostało uruchomione.", state: "blocked", output: "", exit: 126 });
+                Agent.refuse(c, action);
+                return;
+            }
             ap.push({ role: "action", action: action, command: command, text: description, state: safe ? "running" : "ask", output: "", exit: 0 });
             if (safe) ap.runAction(action, command);
             else ap.phase = "approval";
@@ -440,6 +458,7 @@ Rectangle {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: acm.m.state === "ask" ? "Agent chce uruchomić" : acm.m.state === "running" ? "Uruchamiam…"
+                            : acm.m.state === "blocked" ? "Zablokowane"
                             : acm.m.state === "declined" ? "Pominięte" : acm.m.exit === 0 ? "Gotowe" : "Zakończone z kodem " + acm.m.exit
                         color: acm.m.state === "done" && acm.m.exit !== 0 ? Theme.danger : Theme.text2
                         font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold

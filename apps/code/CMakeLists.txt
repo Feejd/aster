@@ -111,6 +111,12 @@ qt_add_resources(aster-code "code-templates"
         templates/frontend-vite-react/vite.config.js
 )
 
+# Kroki testowe i zrzuty (ASTER_OPEN, ASTER_SHOT) — tylko w buildzie deweloperskim
+option(ASTER_CODE_TEST_HOOKS "Aster Code: haki do testów automatycznych" OFF)
+if(ASTER_CODE_TEST_HOOKS)
+    target_compile_definitions(aster-code PRIVATE ASTER_CODE_TEST_HOOKS)
+endif()
+
 target_link_libraries(aster-code PRIVATE
     Qt6::Gui
     Qt6::Quick
