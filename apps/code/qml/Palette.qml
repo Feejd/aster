@@ -170,7 +170,7 @@ Item {
         y: 8
         width: Math.min(640, parent.width - 40)
         height: 54 + (list.count ? Math.min(list.contentHeight, 420) + 8 : (pal.mode === "line" || empty.visible ? 40 : 0))
-        radius: 14
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         clip: true

@@ -1947,7 +1947,7 @@ Window {
                     visible: !prefs.welcomed && win.hasProject
                     anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 14
                     width: Math.min(360, parent.width - 28); height: welCol.implicitHeight + 28
-                    radius: 14; z: 7
+                    radius: 12; z: 7
                     color: Theme.surface
                     border.width: 1; border.color: Theme.edge
                     Column {
@@ -1981,10 +1981,10 @@ Window {
                 Rectangle {
                     id: prepareCard
                     readonly property var items: ProjectEnv.readiness.items || []
-                    visible: items.length > 0 && !win.prepareDismissed
+                    visible: items.length > 0 && !win.prepareDismissed && prefs.welcomed
                     anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 14
                     width: Math.min(400, parent.width - 28); height: prepCol.implicitHeight + 24
-                    radius: 14; z: 7
+                    radius: 12; z: 7
                     color: Theme.surface
                     border.width: 1; border.color: Theme.edge
                     Column {
@@ -2026,7 +2026,7 @@ Window {
                     // Bez animacji w rendererze programowym (zostawiał ślady ikon w poprzednim położeniu)
                     Behavior on y { enabled: findBar.GraphicsInfo.api !== GraphicsInfo.Software; NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
                     z: 10
-                    width: 430; height: replace ? 92 : 46; radius: 14
+                    width: 430; height: replace ? 92 : 46; radius: 10
                     color: Theme.surface
                     border.width: 1; border.color: Theme.edge
                     Column {
@@ -2472,7 +2472,7 @@ Window {
             Rectangle {
                 anchors.centerIn: parent
                 width: 440; height: dlgCol.implicitHeight + 44
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -2564,7 +2564,7 @@ Window {
             y: parent.height - (shown ? height + 44 : 0)
             opacity: shown ? 1 : 0
             z: 700
-            width: toastText.implicitWidth + 36; height: 38; radius: 19
+            width: toastText.implicitWidth + 36; height: 38; radius: 10
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -2786,7 +2786,7 @@ Window {
         property string text
         property bool danger: false
         property bool primary: false
-        width: pillText.implicitWidth + 26; height: 32; radius: 16
+        width: pillText.implicitWidth + 26; height: 32; radius: 8
         baseColor: danger ? "transparent" : primary ? Theme.accent : Theme.fill
         color: hovered ? (primary ? Qt.darker(Theme.accent, 1.1) : Theme.hover) : baseColor
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: pill.primary ? "white" : pill.danger ? Theme.danger : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }

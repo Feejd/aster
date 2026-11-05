@@ -45,7 +45,7 @@ Rectangle {
     signal agentReject(string path)
 
     visible: shown
-    color: Theme.dark ? "#090A0D" : "#FFFFFF"
+    color: Theme.paneGlass
     // Kliknięcia i kółko nie przechodzą do edytora pod spodem
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: (w) => w.accepted = true }
 
@@ -296,7 +296,7 @@ Rectangle {
     component Pill: HoverButton {
         id: pill
         property string text
-        width: pillText.implicitWidth + 24; height: 30; radius: 15
+        width: pillText.implicitWidth + 24; height: 30; radius: 8
         baseColor: Theme.fill
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
     }
