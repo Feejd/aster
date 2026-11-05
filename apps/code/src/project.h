@@ -108,6 +108,13 @@ public:
     Q_INVOKABLE void backupWrite(const QString &path, const QString &text);
     Q_INVOKABLE void backupRemove(const QString &path);
     Q_INVOKABLE QVariantList backups() const;
+    // Historia lokalna: każdy zapis pliku, także bez gita (bez plików z sekretami)
+    Q_INVOKABLE QVariantList localHistory(const QString &path) const;   // [{ id, time }] od najnowszego
+    Q_INVOKABLE QString localVersion(const QString &path, const QString &id) const;
+    // Git bez terminala
+    Q_INVOKABLE bool initGit();
+    Q_INVOKABLE bool hasRemote() const;
+    Q_INVOKABLE bool setGitIdentity(const QString &name, const QString &email);
     Q_INVOKABLE QString clipboardText() const;
     Q_INVOKABLE QString number(int n) const;                     // „12 345”
 
@@ -163,6 +170,8 @@ Q_SIGNALS:
     void fileChanged(const QString &path);
     void baseReady(const QString &path, const QString &text, bool ok);
     void gitDone(const QString &op, bool ok, const QString &message);
+    void localHistoryChanged(const QString &path);
+    void gitIdentityNeeded();
     void gitBusyChanged();
     void blameReady(const QString &path, const QVariantList &commits, const QVariantList &lines);
     void historyReady(const QString &path, const QVariantList &entries);

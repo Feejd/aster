@@ -7,6 +7,7 @@ import Aster.Code
 Item {
     id: pv
     signal openProblem(string path, int line, int col)
+    signal fixProblem(string path, int line, int col, string message)
     property var collapsed: ({})
 
     function severityColor(s) { return s === 1 ? Theme.danger : s === 2 ? (Theme.dark ? "#E3B341" : "#9A6700") : Theme.accentText; }
@@ -92,6 +93,21 @@ Item {
                     } else {
                         pv.openProblem(row.modelData.path, row.modelData.line, row.modelData.col);
                     }
+                }
+            }
+            HoverButton {
+                visible: row.modelData.kind === "item" && (rowArea.containsMouse || hovered)
+                anchors.right: parent.right; anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                width: fixRow.implicitWidth + 16; height: 20; radius: 6
+                baseColor: Theme.accentSoft
+                onClicked: pv.fixProblem(row.modelData.path, row.modelData.line, row.modelData.col, row.modelData.message)
+                Row {
+                    id: fixRow
+                    anchors.centerIn: parent
+                    spacing: 4
+                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.sparkles; size: 11; color: Theme.accentText }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: "Napraw"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium }
                 }
             }
         }

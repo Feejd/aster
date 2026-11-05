@@ -45,7 +45,7 @@ Rectangle {
     signal agentReject(string path)
 
     visible: shown
-    color: Theme.dark ? "#090A0D" : "#FFFFFF"
+    color: Theme.paneGlass
     // Kliknięcia i kółko nie przechodzą do edytora pod spodem
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: (w) => w.accepted = true }
 
@@ -64,6 +64,17 @@ Rectangle {
         path = p;
         staged = isStaged;
         reload();
+        shown = true;
+        list.positionViewAtBeginning();
+    }
+    // Zapis z historii lokalnej: różnice względem obecnej treści
+    function openLocal(p, id, title, r) {
+        agentMode = false;
+        commit = "local:" + id;
+        commitRel = "";
+        commitTitle = title;
+        path = p;
+        rows = r;
         shown = true;
         list.positionViewAtBeginning();
     }
@@ -103,7 +114,7 @@ Rectangle {
             }
             Text {
                 textFormat: Text.StyledText
-                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + (dv.commit ? dv.commit.slice(0, 8) + "  ·  " : "") + Project.relative(dv.path)
+                text: "<font color=\"" + (Theme.dark ? "#3FB950" : "#1A7F37") + "\">+" + dv.added + "</font>  <font color=\"" + Theme.danger + "\">−" + dv.removed + "</font>  ·  " + (dv.commit && !dv.commit.startsWith("local:") ? dv.commit.slice(0, 8) + "  ·  " : "") + Project.relative(dv.path)
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
             }
         }
@@ -285,7 +296,7 @@ Rectangle {
     component Pill: HoverButton {
         id: pill
         property string text
-        width: pillText.implicitWidth + 24; height: 30; radius: 15
+        width: pillText.implicitWidth + 24; height: 30; radius: 8
         baseColor: Theme.fill
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
     }

@@ -35,7 +35,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 10
         width: Math.min(520, parent.width - 40); height: col.implicitHeight + 20
-        radius: 14
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         MouseArea { anchors.fill: parent }

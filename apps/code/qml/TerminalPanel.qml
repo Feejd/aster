@@ -20,6 +20,9 @@ Item {
     signal openLocation(string path, int line, int col)
     signal openFrame(int index)
     signal openPreview(string url)
+    signal fixProblem(string path, int line, int col, string message)
+    signal explainFailure(string title, string output)
+    signal installTool(var packages)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -38,9 +41,9 @@ Item {
     }
 
     readonly property var colors: Theme.dark
-        ? { fg: "#E6E8EE", bg: "#090A0D", palette: ["#1C1E26", "#FF6B7A", "#7EE0A0", "#F5D07A", "#6EA8FF", "#C79BFF", "#67E1E6", "#C9CED8",
+        ? { fg: Theme.text, bg: Theme.paneGlass, palette: ["#1C1E26", "#FF6B7A", "#7EE0A0", "#F5D07A", "#6EA8FF", "#C79BFF", "#67E1E6", "#C9CED8",
                                                      "#5C6370", "#FF8B96", "#9BF0B8", "#FFE09A", "#8DBBFF", "#D8B4FF", "#8EEBEE", "#F4F6FA"] }
-        : { fg: "#1E2128", bg: "#FFFFFF", palette: ["#1E2128", "#D7263D", "#1A8F4C", "#A86A00", "#2459D6", "#8E3FD1", "#0B8796", "#8A909C",
+        : { fg: Theme.text, bg: Theme.paneGlass, palette: ["#1E2128", "#D7263D", "#1A8F4C", "#A86A00", "#2459D6", "#8E3FD1", "#0B8796", "#8A909C",
                                                      "#5C6370", "#E5484D", "#22A35A", "#C27C00", "#3B6EF0", "#A855F7", "#0E9FB0", "#B5BAC4"] }
 
     Rectangle { width: parent.width; height: 1; color: Theme.line }
@@ -113,11 +116,63 @@ Item {
     }
 
     TaskOutput {
+        id: taskOut
         visible: tp.tab === 3
         anchors.fill: parent
         anchors.topMargin: header.height + 1
         onOpenLocation: (path, line, col) => tp.openLocation(path, line, col)
         onOpenPreview: (url) => tp.openPreview(url)
+        onExplainFailure: (title, output) => tp.explainFailure(title, output)
+        onInstallTool: (packages) => tp.installTool(packages)
+    }
+
+    // Powłoka zgłosiła brak programu — przycisk zamiast szukania pakietu
+    property string missingTool: ""
+    property string missingLine: ""
+    property string missingDismissed: ""
+    Timer {
+        interval: 1200; repeat: true
+        running: tp.visible && tp.tab === 0 && !!tp.term
+        onTriggered: {
+            const lines = tp.term.tailText(4).split("\n");
+            for (let i = lines.length - 1; i >= 0; --i) {
+                const m = lines[i].match(/(?:command not found: ([\w.+-]+)|: ([\w.+-]+): (?:command )?not found)/);
+                if (m) {
+                    const name = m[1] || m[2];
+                    tp.missingLine = lines[i];
+                    tp.missingTool = lines[i] !== tp.missingDismissed && taskOut.toolPackages[name] ? name : "";
+                    return;
+                }
+            }
+            tp.missingTool = "";
+        }
+    }
+    Rectangle {
+        visible: tp.tab === 0 && !!tp.missingTool
+        z: 3
+        anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 12
+        width: missRow.implicitWidth + 24; height: 40; radius: 10
+        color: Theme.surface
+        border.width: 1; border.color: Theme.edge
+        Row {
+            id: missRow
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Brakuje programu " + tp.missingTool; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            HoverButton {
+                anchors.verticalCenter: parent.verticalCenter
+                width: missT.implicitWidth + 20; height: 26; radius: 7
+                baseColor: Theme.accent
+                onClicked: { tp.installTool(taskOut.toolPackages[tp.missingTool]); tp.missingDismissed = tp.missingLine; tp.missingTool = ""; }
+                Text { id: missT; anchors.centerIn: parent; text: "Zainstaluj"; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+            }
+            HoverButton {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 26; height: 26; radius: 7
+                onClicked: { tp.missingDismissed = tp.missingLine; tp.missingTool = ""; }
+                Icon { anchors.centerIn: parent; d: Icons.close; size: 11; stroke: 2; color: Theme.text2 }
+            }
+        }
     }
 
     ReferencesView {
@@ -134,6 +189,7 @@ Item {
         anchors.fill: parent
         anchors.topMargin: header.height + 1
         onOpenProblem: (path, line, col) => tp.openProblem(path, line, col)
+        onFixProblem: (path, line, col, message) => tp.fixProblem(path, line, col, message)
     }
 
     Loader {

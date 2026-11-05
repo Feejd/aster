@@ -34,7 +34,7 @@ const QList<ServerDef> &definitions()
         {"python", "Python", {"py", "pyi"},
          {{"pylsp"}, {"pyright-langserver", "--stdio"}, {"basedpyright-langserver", "--stdio"}}, "sudo dnf install python3-lsp-server"},
         {"typescript", "TypeScript", {"js", "mjs", "cjs", "jsx", "ts", "mts", "cts", "tsx"},
-         {{"typescript-language-server", "--stdio"}}, "npm install -g typescript-language-server typescript"},
+         {{"typescript-language-server", "--stdio"}}, "npm install -g typescript-language-server typescript@5"},
         {"rust", "rust-analyzer", {"rs"}, {{"rust-analyzer"}}, "sudo dnf install rust-analyzer"},
         {"go", "gopls", {"go"}, {{"gopls"}}, "sudo dnf install golang-x-tools-gopls"},
         {"bash", "bash-language-server", {"sh", "bash"}, {{"bash-language-server", "start"}}, "npm install -g bash-language-server"},

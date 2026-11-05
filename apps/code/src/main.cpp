@@ -13,6 +13,10 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QUrl>
+#include <QKeyEvent>
+#include <QKeySequence>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <QtQml/qqmlextensionplugin.h>
 #include "typography.h"
@@ -67,7 +71,66 @@ int main(int argc, char *argv[])
     // ASTER_SHOT=plik.png zapisuje zrzut okna (po ASTER_SHOT_DELAY ms, domyślnie 3 s) i kończy program
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
-        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] { QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step)); });
+        QTimer::singleShot(1200 * (i + 1), window, [window, step = steps.at(i)] {
+            // wheel:X,Y,DY[,shift] — prawdziwe zdarzenie kółka w oknie (DY w jednostkach kąta, 120 = jeden ząbek)
+            if (step.startsWith(QLatin1String("wheel:"))) {
+                const QStringList a = step.mid(6).split(QLatin1Char(','));
+                const QPointF pos(a.value(0).toDouble(), a.value(1).toDouble());
+                const bool shift = a.value(3) == QLatin1String("shift");
+                QWheelEvent ev(pos, window->mapToGlobal(pos), QPoint(), QPoint(0, a.value(2).toInt()), Qt::NoButton,
+                               shift ? Qt::ShiftModifier : Qt::NoModifier, Qt::NoScrollPhase, false);
+                QCoreApplication::sendEvent(window, &ev);
+                return;
+            }
+            // wheelpx:X,Y,DY — jak touchpad (delta w pikselach); key:NAZWA — klawisz (PageDown…); drag:X1,Y1,X2,Y2 — przeciągnięcie
+            if (step.startsWith(QLatin1String("wheelpx:"))) {
+                const QStringList a = step.mid(8).split(QLatin1Char(','));
+                const QPointF pos(a.value(0).toDouble(), a.value(1).toDouble());
+                const int dy = a.value(2).toInt();
+                QWheelEvent ev(pos, window->mapToGlobal(pos), QPoint(0, dy), QPoint(0, dy * 2), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+                QCoreApplication::sendEvent(window, &ev);
+                return;
+            }
+            // hover:X,Y — ruch myszy bez przycisku (podpisy przycisków)
+            if (step.startsWith(QLatin1String("hover:"))) {
+                const QStringList a = step.mid(6).split(QLatin1Char(','));
+                const QPointF p(a.value(0).toDouble(), a.value(1).toDouble());
+                QMouseEvent ev(QEvent::MouseMove, p, window->mapToGlobal(p), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &ev);
+                return;
+            }
+            // keys:TEKST — zwykłe klawisze, znak po znaku
+            if (step.startsWith(QLatin1String("keys:"))) {
+                for (const QChar c : step.mid(5)) {
+                    QKeyEvent press(QEvent::KeyPress, c.toUpper().unicode(), Qt::NoModifier, QString(c)), release(QEvent::KeyRelease, c.toUpper().unicode(), Qt::NoModifier, QString(c));
+                    QCoreApplication::sendEvent(window, &press);
+                    QCoreApplication::sendEvent(window, &release);
+                }
+                return;
+            }
+            if (step.startsWith(QLatin1String("key:"))) {
+                const QKeySequence seq(step.mid(4));
+                const int k = seq.isEmpty() ? 0 : seq[0].key();
+                QKeyEvent press(QEvent::KeyPress, k, Qt::NoModifier), release(QEvent::KeyRelease, k, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &press);
+                QCoreApplication::sendEvent(window, &release);
+                return;
+            }
+            if (step.startsWith(QLatin1String("drag:"))) {
+                const QStringList a = step.mid(5).split(QLatin1Char(','));
+                const QPointF p1(a.value(0).toDouble(), a.value(1).toDouble()), p2(a.value(2).toDouble(), a.value(3).toDouble());
+                const auto send = [window](QEvent::Type t, QPointF p, Qt::MouseButton b, Qt::MouseButtons bs) {
+                    QMouseEvent ev(t, p, window->mapToGlobal(p), b, bs, Qt::NoModifier);
+                    QCoreApplication::sendEvent(window, &ev);
+                };
+                send(QEvent::MouseButtonPress, p1, Qt::LeftButton, Qt::LeftButton);
+                for (int i = 1; i <= 8; ++i)
+                    send(QEvent::MouseMove, p1 + (p2 - p1) * (i / 8.0), Qt::NoButton, Qt::LeftButton);
+                send(QEvent::MouseButtonRelease, p2, Qt::LeftButton, Qt::NoButton);
+                return;
+            }
+            QMetaObject::invokeMethod(window, "testOpen", Q_ARG(QVariant, step));
+        });
     const QString shot = qEnvironmentVariable("ASTER_SHOT");
     if (!shot.isEmpty()) {
         const int delay = qEnvironmentVariableIntValue("ASTER_SHOT_DELAY");
