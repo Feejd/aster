@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "engine.h"
+#include "vst3host.h"
 #include "midiinput.h"
 
 #include <QDateTime>
@@ -62,6 +63,7 @@ class Studio : public QObject
     Q_PROPERTY(QVariantList rhythms READ rhythms CONSTANT)
     Q_PROPERTY(QVariantList progressions READ progressions CONSTANT)
     Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
+    Q_PROPERTY(QVariantList plugins READ plugins NOTIFY pluginsChanged)    // znalezione wtyczki VST3
     // Głośność, panorama, wycisz, solo ścieżek — osobno, żeby ruch suwaka nie przebudowywał listy ścieżek
     Q_PROPERTY(QVariantList mix READ mix NOTIFY mixChanged)
     Q_PROPERTY(int selectedTrack READ selectedTrack WRITE setSelectedTrack NOTIFY selectionChanged)
@@ -152,6 +154,7 @@ public:
     QVariantList progressions() const;
     void setMasterVolume(double db);
     QVariantList tracks() const { return m_tracksView; }
+    QVariantList plugins() const;
     QVariantList mix() const { return m_mixView; }
     int selectedTrack() const { return m_selTrack; }
     void setSelectedTrack(int i);
@@ -255,6 +258,12 @@ public:
     // Wers `line` (numer wiersza tekstu) zaczyna się w `seconds` (do 1/16 nuty); seconds < 0 — znów według taktów
     Q_INVOKABLE void markLyric(int line, double seconds);
     Q_INVOKABLE void clearLyricMarks();
+    // Wtyczki VST3 na ścieżce (po efektach Studia). slot — numer z mix[ścieżka].plugins[…].id
+    Q_INVOKABLE void scanPlugins();
+    Q_INVOKABLE void addPlugin(int track, const QString &uid);
+    Q_INVOKABLE void removePlugin(int track, int slot);
+    Q_INVOKABLE void setPluginBypass(int track, int slot, bool on);
+    Q_INVOKABLE void openPlugin(int track, int slot);
     // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
     Q_INVOKABLE void denoiseTrack(int index, int level);
     Q_INVOKABLE int lyricAt(double seconds) const;   // wiersz tekstu, który właśnie leci (−1 — przed pierwszym)
@@ -316,6 +325,7 @@ signals:
     void artistChanged();
     void sharingChanged();
     void lyricsChanged();
+    void pluginsChanged();
     void shareReady(const QString &path, const QString &kind);
     void shareFailed(const QString &error);
     void midiNote(int pitch, int velocity, bool on);            // nuta z klawiatury MIDI (siła 1…127)
@@ -336,6 +346,14 @@ private:
         QList<long long> takes;
         int take = 0;
         QString origFile;               // odszumiony klip: plik przed odszumianiem (powrót i ponowne odszumianie)
+    };
+    struct Slot
+    {
+        int id = 0;
+        Vst3::Info info;
+        bool bypass = false;
+        QByteArray state;               // ostatni znany stan (także gdy wtyczki brakuje na tym komputerze)
+        std::shared_ptr<Vst3::Plugin> plugin;
     };
     struct Track
     {
@@ -358,6 +376,7 @@ private:
         QString role;                   // "main" | "double" | "adlib" — ścieżki wokalu rapera (zob. vocalTrack)
         QJsonObject pattern;
         QList<Clip> clips;
+        QList<Slot> slots_;             // wtyczki VST3
     };
     struct Mastering
     {
@@ -372,13 +391,14 @@ private:
     void carve(int track, long long a, long long b, int keepId);   // wytnij [a, b) z klipów ścieżki
     static QList<Clip> carved(const QList<Clip> &clips, long long a, long long b, int keepId, int *nextId);
 
-    QJsonObject toJson() const;
+    QJsonObject toJson(bool pluginStates = true) const;     // false — do cofania: stan wtyczek zostaje w nich samych
+    std::shared_ptr<Vst3::Plugin> makePlugin(const Slot &s, bool applyState);
     void fromJson(const QJsonObject &o);
     void checkpoint();                         // stan przed zmianą → cofanie
     void changed(bool structure = true);       // po zmianie: widok QML, migawka dla silnika, „niezapisany”
     void rebuildView();
     void rebuildMix();
-    Snapshot *buildSnapshot() const;
+    Snapshot *buildSnapshot(bool forExport = false);        // eksport: własne kopie wtyczek (na żywo grają dalej)
     void tick();
     Clip *findClip(int id, int *track = nullptr);
     long long frames(double seconds) const { return llround(seconds * Engine::Rate); }
@@ -423,6 +443,9 @@ private:
     int m_lyricsStart = 1, m_lyricsBars = 1;
     QVariantList m_lyricView;
     void rebuildLyrics();
+    QList<Vst3::Info> m_pluginList;
+    QHash<int, QByteArray> m_slotMemo;                     // stan usuniętych wtyczek — na wypadek cofnięcia
+    bool m_pluginsScanned = false;
     // Odszumia pliki (obecny plik klipu → oryginał) i podmienia je w klipach ścieżki o numerze id
     void startDenoise(int trackId, const QHash<QString, QString> &files, int level, bool quiet);
     void resetLyrics();

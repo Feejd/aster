@@ -433,7 +433,7 @@ void Studio::setDirty(bool d)
     emit dirtyChanged();
 }
 
-QJsonObject Studio::toJson() const
+QJsonObject Studio::toJson(bool pluginStates) const
 {
     QVariantList marks;
     for (double m : m_lyricMarks)
@@ -485,6 +485,23 @@ QJsonObject Studio::toJson() const
                                                                           {QStringLiteral("double"), t.dbl},
                                                                           {QStringLiteral("deess"), t.deess},
                                                                           {QStringLiteral("denoise"), t.denoise}}},
+                                  {QStringLiteral("plugins"), [&] {
+                                       QJsonArray a;
+                                       for (const Slot &s : t.slots_) {
+                                           QJsonObject o{{QStringLiteral("id"), s.id},
+                                                         {QStringLiteral("path"), s.info.path},
+                                                         {QStringLiteral("uid"), s.info.uid},
+                                                         {QStringLiteral("name"), s.info.name},
+                                                         {QStringLiteral("vendor"), s.info.vendor},
+                                                         {QStringLiteral("bypass"), s.bypass}};
+                                           if (pluginStates) {
+                                               const QByteArray st = s.plugin ? s.plugin->state() : s.state;
+                                               o.insert(QStringLiteral("state"), QString::fromLatin1(st.toBase64()));
+                                           }
+                                           a.append(o);
+                                       }
+                                       return a;
+                                   }()},
                                   {QStringLiteral("kind"), t.kind},
                                   {QStringLiteral("pattern"), t.pattern},
                                   {QStringLiteral("clips"), clips}});
@@ -557,9 +574,13 @@ void Studio::fromJson(const QJsonObject &o)
     const double scale = double(Engine::Rate) / o.value(QStringLiteral("sampleRate")).toInt(Engine::Rate);
     auto fr = [scale](const QJsonValue &v) { return llround(v.toDouble() * scale); };
     QList<int> armed;
-    for (const Track &t : m_tracks)
+    QHash<int, Slot> oldSlots;                  // cofanie: te same wtyczki grają dalej, bez ponownego wczytywania
+    for (const Track &t : m_tracks) {
         if (t.armed)
             armed << t.id;
+        for (const Slot &s : t.slots_)
+            oldSlots.insert(s.id, s);
+    }
     m_tracks.clear();
     for (const QJsonValue &tv : o.value(QStringLiteral("tracks")).toArray()) {
         const QJsonObject to = tv.toObject();
@@ -594,6 +615,30 @@ void Studio::fromJson(const QJsonObject &o)
         t.kind = to.value(QStringLiteral("kind")).toString(QStringLiteral("audio"));
         t.pattern = to.value(QStringLiteral("pattern")).toObject();
         t.armed = armed.contains(t.id);
+        for (const QJsonValue &sv : to.value(QStringLiteral("plugins")).toArray()) {
+            const QJsonObject so = sv.toObject();
+            Slot s;
+            s.id = so.value(QStringLiteral("id")).toInt();
+            s.info.path = so.value(QStringLiteral("path")).toString();
+            s.info.uid = so.value(QStringLiteral("uid")).toString();
+            s.info.name = so.value(QStringLiteral("name")).toString();
+            s.info.vendor = so.value(QStringLiteral("vendor")).toString();
+            s.bypass = so.value(QStringLiteral("bypass")).toBool();
+            const bool hasState = so.contains(QStringLiteral("state"));
+            if (hasState)
+                s.state = QByteArray::fromBase64(so.value(QStringLiteral("state")).toString().toLatin1());
+            else if (m_slotMemo.contains(s.id))
+                s.state = m_slotMemo.value(s.id);
+            if (const auto it = oldSlots.constFind(s.id); it != oldSlots.constEnd() && it->plugin && !hasState) {
+                s.plugin = it->plugin;
+            } else {
+                s.plugin = makePlugin(s, true);
+                if (!s.plugin)
+                    emit message(QStringLiteral("Nie ma wtyczki „%1” — ścieżka gra bez niej, jej ustawienia zostają w projekcie.").arg(s.info.name));
+            }
+            m_nextId = std::max(m_nextId, s.id + 1);
+            t.slots_.append(s);
+        }
         for (const QJsonValue &cv : to.value(QStringLiteral("clips")).toArray()) {
             const QJsonObject co = cv.toObject();
             Clip c;
@@ -630,7 +675,7 @@ void Studio::checkpoint()
 {
     if (!isOpen())
         return;
-    m_undo.append(toJson());
+    m_undo.append(toJson(false));
     if (m_undo.size() > 100)
         m_undo.removeFirst();
     m_redo.clear();
@@ -641,7 +686,7 @@ void Studio::undo()
 {
     if (m_undo.isEmpty() || recording())
         return;
-    m_redo.append(toJson());
+    m_redo.append(toJson(false));
     const QString text = m_lyrics;
     const QList<double> marks = m_lyricMarks;
     const int ls = m_lyricsStart, lb = m_lyricsBars;
@@ -658,7 +703,7 @@ void Studio::redo()
 {
     if (m_redo.isEmpty() || recording())
         return;
-    m_undo.append(toJson());
+    m_undo.append(toJson(false));
     const QString text = m_lyrics;
     const QList<double> marks = m_lyricMarks;
     const int ls = m_lyricsStart, lb = m_lyricsBars;
@@ -760,11 +805,21 @@ void Studio::rebuildMix()
                                      {QStringLiteral("double"), t.dbl},
                                      {QStringLiteral("deess"), t.deess},
                                      {QStringLiteral("denoise"), t.denoise},
+                                     {QStringLiteral("plugins"), [&] {
+                                          QVariantList l;
+                                          for (const Slot &s : t.slots_)
+                                              l.append(QVariantMap{{QStringLiteral("id"), s.id},
+                                                                   {QStringLiteral("name"), s.info.name},
+                                                                   {QStringLiteral("vendor"), s.info.vendor},
+                                                                   {QStringLiteral("bypass"), s.bypass},
+                                                                   {QStringLiteral("missing"), !s.plugin}});
+                                          return l;
+                                      }()},
                                      {QStringLiteral("preset"), t.preset}});
     emit mixChanged();
 }
 
-Snapshot *Studio::buildSnapshot() const
+Snapshot *Studio::buildSnapshot(bool forExport)
 {
     auto *s = new Snapshot;
     s->bpm = m_bpm;
@@ -823,6 +878,20 @@ Snapshot *Studio::buildSnapshot() const
             rt.tune.on = true;
             rt.tune.amount = float(t.tune);
             rt.tune.scale = mask;
+        }
+        for (const Slot &sl : t.slots_) {
+            if (sl.bypass || !sl.plugin)
+                continue;
+            std::shared_ptr<Vst3::Plugin> p = sl.plugin;
+            if (forExport) {
+                Slot copy = sl;
+                copy.state = sl.plugin->state();
+                p = makePlugin(copy, true);
+                if (!p)
+                    continue;
+            }
+            s->plugins.push_back(p);
+            rt.fx.push_back(p.get());
         }
         const bool punched = m_punchOut > m_punchIn && m_recTrack >= 0 && m_recTrack < m_tracks.size() && &t == &m_tracks[m_recTrack];
         for (const Clip &c : punched ? carved(t.clips, m_punchIn, m_punchOut, -1, nullptr) : t.clips) {
@@ -1806,7 +1875,7 @@ void Studio::startExport(const QString &ext, const QString &path, ExportDone don
             emit exportFinished(false, QString(), err);
         return;
     }
-    std::shared_ptr<Snapshot> snap(buildSnapshot());
+    std::shared_ptr<Snapshot> snap(buildSnapshot(true));
     m_exporting = true;
     m_exportProgress = 0;
     m_exportShared.store(0);
@@ -2157,6 +2226,102 @@ void Studio::cycleClip(int id)
 {
     if (Clip *c = findClip(id))
         setCycle(double(c->start) / Engine::Rate, double(c->start + c->length) / Engine::Rate);
+}
+
+// ——— Wtyczki VST3 ———
+
+QVariantList Studio::plugins() const
+{
+    QVariantList l;
+    for (const Vst3::Info &i : m_pluginList)
+        l.append(QVariantMap{{QStringLiteral("uid"), i.uid},
+                             {QStringLiteral("name"), i.name},
+                             {QStringLiteral("vendor"), i.vendor},
+                             {QStringLiteral("category"), i.category},
+                             {QStringLiteral("instrument"), i.instrument}});
+    return l;
+}
+
+void Studio::scanPlugins()
+{
+    m_pluginList = Vst3::scan();
+    m_pluginsScanned = true;
+    emit pluginsChanged();
+}
+
+std::shared_ptr<Vst3::Plugin> Studio::makePlugin(const Slot &s, bool applyState)
+{
+    QString err;
+    std::shared_ptr<Vst3::Plugin> p = Vst3::Plugin::load(s.info, Engine::Rate, Renderer::MaxBlock, &err);
+    if (p && applyState && !s.state.isEmpty())
+        p->setState(s.state);
+    return p;
+}
+
+void Studio::addPlugin(int track, const QString &uid)
+{
+    if (track < 0 || track >= m_tracks.size())
+        return;
+    for (const Vst3::Info &i : std::as_const(m_pluginList)) {
+        if (i.uid != uid)
+            continue;
+        if (i.instrument) {
+            emit message(QStringLiteral("„%1” to instrument — instrumenty dojdą razem z rackiem kanałów.").arg(i.name));
+            return;
+        }
+        checkpoint();
+        Slot s;
+        s.id = m_nextId++;
+        s.info = i;
+        s.plugin = makePlugin(s, false);
+        if (!s.plugin) {
+            emit message(QStringLiteral("Wtyczka „%1” nie chce się uruchomić.").arg(i.name));
+            return;
+        }
+        m_tracks[track].slots_.append(s);
+        changed(false);
+        s.plugin->openEditor();
+        return;
+    }
+}
+
+void Studio::removePlugin(int track, int slot)
+{
+    if (track < 0 || track >= m_tracks.size())
+        return;
+    QList<Slot> &l = m_tracks[track].slots_;
+    for (int i = 0; i < l.size(); ++i) {
+        if (l[i].id != slot)
+            continue;
+        checkpoint();
+        if (l[i].plugin) {
+            l[i].plugin->closeEditor();
+            m_slotMemo.insert(slot, l[i].plugin->state());
+        }
+        l.removeAt(i);
+        changed(false);
+        return;
+    }
+}
+
+void Studio::setPluginBypass(int track, int slot, bool on)
+{
+    if (track < 0 || track >= m_tracks.size())
+        return;
+    for (Slot &s : m_tracks[track].slots_)
+        if (s.id == slot) {
+            s.bypass = on;
+            changed(false);
+        }
+}
+
+void Studio::openPlugin(int track, int slot)
+{
+    if (track < 0 || track >= m_tracks.size())
+        return;
+    for (Slot &s : m_tracks[track].slots_)
+        if (s.id == slot && s.plugin && !s.plugin->openEditor())
+            emit message(QStringLiteral("Okno wtyczki „%1” się nie otworzyło (wymaga XWayland).").arg(s.info.name));
 }
 
 // ——— Odszumianie ———

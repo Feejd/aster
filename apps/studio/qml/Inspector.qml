@@ -37,6 +37,8 @@ Item {
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line; opacity: 0.6 }
     }
 
+    signal addPluginRequested()
+
     // Tekst piosenki — własny układ (pole do pisania, lista wersów), bez wspólnego przewijania
     property alias lyrics: lyricsPanel
     Lyrics {
@@ -214,6 +216,58 @@ Item {
                     FxSlider { label: "Pogłos"; hint: "Ile sali słychać wokół ścieżki"; from: 0; to: 1; value: insp.mx.reverb || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "reverb", v) }
                     FxSlider { label: "Echo"; hint: "Powtórzenia co " + Studio.echoTime.replace("3/16", "1/8 z kropką"); from: 0; to: 1; value: insp.mx.echo || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "echo", v) }
                     FxSlider { label: "Sztuczny dubel"; hint: "Dwie kopie głosu po bokach, jak nagrane drugi raz — szerzej i grubiej"; from: 0; to: 1; value: insp.mx["double"] || 0; shown: insp.pct(value); onMoved: (v) => Studio.setTrackFx(insp.ti, "double", v) }
+                }
+
+                // Wtyczki VST3: po efektach Studia, w kolejności od góry
+                Card {
+                    visible: !!insp.track
+                    title: "Wtyczki"
+                    action: "Dodaj"
+                    onActionClicked: insp.addPluginRequested()
+                    Text {
+                        visible: (insp.mx.plugins || []).length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Efekty VST3 zainstalowane w systemie. Wtyczka otwiera się we własnym oknie."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 11
+                    }
+                    Repeater {
+                        model: insp.mx.plugins || []
+                        delegate: Rectangle {
+                            id: slotRow
+                            required property var modelData
+                            width: parent ? parent.width : 0; height: 38; radius: 9
+                            color: Theme.fill
+                            opacity: modelData.bypass || modelData.missing ? 0.55 : 1
+                            HoverButton {
+                                x: 2; width: parent.width - 66; height: parent.height; radius: 8
+                                enabled: !slotRow.modelData.missing
+                                onClicked: Studio.openPlugin(insp.ti, slotRow.modelData.id)
+                                Text {
+                                    x: 8; width: parent.width - 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: slotRow.modelData.name + (slotRow.modelData.missing ? " — brak wtyczki" : "")
+                                    elide: Text.ElideRight
+                                    color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                                }
+                                Tip { shown: parent.hovered; text: "Otwórz okno wtyczki" }
+                            }
+                            HoverButton {
+                                x: parent.width - 62; anchors.verticalCenter: parent.verticalCenter
+                                width: 28; height: 28; radius: 7
+                                onClicked: Studio.setPluginBypass(insp.ti, slotRow.modelData.id, !slotRow.modelData.bypass)
+                                Icon { anchors.centerIn: parent; d: Icons.power; size: 14; stroke: 2; color: slotRow.modelData.bypass ? Theme.text2 : Theme.accentText }
+                                Tip { shown: parent.hovered; text: slotRow.modelData.bypass ? "Włącz wtyczkę" : "Pomiń wtyczkę" }
+                            }
+                            HoverButton {
+                                x: parent.width - 32; anchors.verticalCenter: parent.verticalCenter
+                                width: 28; height: 28; radius: 7
+                                onClicked: Studio.removePlugin(insp.ti, slotRow.modelData.id)
+                                Icon { anchors.centerIn: parent; d: Icons.close; size: 14; stroke: 2; color: Theme.text2 }
+                                Tip { shown: parent.hovered; text: "Usuń wtyczkę ze ścieżki" }
+                            }
+                        }
+                    }
                 }
             }
 

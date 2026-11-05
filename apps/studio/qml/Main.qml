@@ -187,6 +187,10 @@ Window {
         else if (what === "mixer") showMixer = true;
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
+        else if (what === "pluginSheet") pluginSheet.start();
+        else if (what.startsWith("vst:")) { const a = what.split(":"); Studio.scanPlugins(); const p = Studio.plugins.find((x) => x.name === a[2]); if (p) Studio.addPlugin(Number(a[1]), p.uid); else console.warn("BRAK", a[2]); }
+        else if (what.startsWith("vstbypass:")) { const t = Number(what.substring(10)); Studio.setPluginBypass(t, Studio.mix[t].plugins[0].id, true); }
+        else if (what.startsWith("vstopen:")) { const t = Number(what.substring(8)); Studio.openPlugin(t, Studio.mix[t].plugins[0].id); }
         else if (what.startsWith("denoise:")) { const a = what.split(":"); Studio.denoiseTrack(Number(a[1]), Number(a[2])); }
         else if (what.startsWith("lyrics:")) Studio.lyrics = what.substring(7).replace(/\|/g, "\n");
         else if (what.startsWith("lyricsMode:")) inspector.lyrics.mode = what.substring(11);
@@ -721,6 +725,7 @@ Window {
 
             Inspector {
                 id: inspector
+                onAddPluginRequested: pluginSheet.start()
                 x: parent.width - width
                 y: toolbar.height
                 width: win.showInspector ? 300 : 0
@@ -865,6 +870,51 @@ Window {
             }
         }
 
+        // Wybór wtyczki VST3 na zaznaczoną ścieżkę
+        Sheet {
+            id: pluginSheet
+            radius: win.r
+            title: "Dodaj wtyczkę"
+            cardWidth: 480
+            property string query: ""
+            function start() {
+                query = "";
+                pluginSearch.text = "";
+                open();
+                Qt.callLater(Studio.scanPlugins);        // wtyczki ładują się przy skanie — najpierw arkusz
+                pluginSearch.input.forceActiveFocus();
+            }
+            readonly property var found: Studio.plugins.filter((p) => !p.instrument && (p.name + " " + p.vendor).toLowerCase().includes(query.toLowerCase()))
+            Column {
+                width: parent.width
+                spacing: 10
+                Field { id: pluginSearch; width: parent.width; placeholder: "Szukaj wtyczki…"; input.onTextChanged: pluginSheet.query = input.text }
+                ListView {
+                    width: parent.width; height: 320
+                    clip: true
+                    model: pluginSheet.found
+                    spacing: 2
+                    delegate: HoverButton {
+                        id: pluginRow
+                        required property var modelData
+                        width: ListView.view.width; height: 44; radius: 9
+                        onClicked: { Studio.addPlugin(Studio.selectedTrack, modelData.uid); pluginSheet.close(); }
+                        Column {
+                            x: 10; anchors.verticalCenter: parent.verticalCenter
+                            Text { text: pluginRow.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                            Text { text: pluginRow.modelData.vendor; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                        }
+                    }
+                    Text {
+                        visible: pluginSheet.found.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Nie ma wtyczek VST3. Instaluje się je do katalogu ~/.vst3."
+                        color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
+                    }
+                }
+            }
+        }
         Sheet {
             id: tempoSheet
             radius: win.r

@@ -249,6 +249,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         −8/−14/−21 dB, głos ±0,4 dB; plik „· odszumione N.wav”, oryginał w klipie, nowe nagrania ścieżki od razu)
         i de-esser na żywo (zwrotnica LR4 4,5 kHz, udział góry w sygnale; „s” −9 dB przy 40%, głos bez zmian;
         gotowe brzmienia wokalu mają 40%)
+  - Kierunek od 2026-11-05: pełnoprawny DAW — plan i etapy w `docs/STUDIO-DAW.md`
   - [ ] Dalej (raperzy): podpowiedzi rymów (słownik hunspell-pl),
         znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
         separacja ścieżek (model AI lokalnie); automatyka głośności

@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "dsp.h"
+#include "vst3host.h"
 #include "tune.h"
 #include "synthvoice.h"
 
@@ -52,6 +53,7 @@ struct TrackRT
     float deess = 0;                      // de-esser (0 = brak)
     Biquad deessLp, deessHp;              // jego zwrotnica (dół / góra)
     TuneParams tune;                      // autotune
+    std::vector<Vst3::Plugin *> fx;       // wtyczki VST3 po efektach Studia (żyją w Snapshot::plugins)
 };
 
 struct Snapshot
@@ -66,6 +68,7 @@ struct Snapshot
     float echoFeedback = 0.35f;
     MasterParams mastering;
     std::vector<SourcePtr> keep;          // trzyma pliki przy życiu, dopóki migawka jest w użyciu
+    std::vector<std::shared_ptr<Vst3::Plugin>> plugins;   // i wtyczki (zwalnia je wątek interfejsu)
 };
 
 // Mikser: ten sam kod gra na żywo i eksportuje (eksport brzmi dokładnie tak jak odsłuch)

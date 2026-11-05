@@ -99,6 +99,12 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     m_tr[f - pos] += src.at(si, 1) * g;
                 }
             }
+            // Wtyczka gra też po końcu klipu (ogony pogłosu i echa)
+            if (!any && !t.fx.empty()) {
+                std::fill_n(m_tl, n, 0.f);
+                std::fill_n(m_tr, n, 0.f);
+                any = true;
+            }
             if (!any)
                 continue;
 
@@ -137,6 +143,11 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     m_dbl[ti].process(m_tl, m_tr, n, t.dbl, rate);
                 else
                     m_dbl[ti].idle();
+                if (!t.fx.empty()) {
+                    const Vst3::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
+                    for (Vst3::Plugin *p : t.fx)
+                        p->process(m_tl, m_tr, n, nullptr, 0, tp);
+                }
             }
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {

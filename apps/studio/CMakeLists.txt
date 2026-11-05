@@ -9,9 +9,15 @@ pkg_check_modules(SAMPLERATE REQUIRED IMPORTED_TARGET samplerate)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
 pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
+# Wtyczki VST3: pakiety vst3sdk-devel (Fedora); inny przedrostek, gdy SDK leży poza systemem
+set(STUDIO_VST3_PREFIX "/usr" CACHE PATH "Gdzie jest VST3 SDK")
+find_library(VST3_HOSTING vst3sdk_hosting HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
+find_library(VST3_COMMON vst3sdk_common HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
 
 qt_add_executable(aster-studio src/main.cpp)
-target_include_directories(aster-studio PRIVATE src)
+target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk)
+target_compile_definitions(aster-studio PRIVATE RELEASE=1)
 
 set(STUDIO_QML
     qml/Main.qml
@@ -40,7 +46,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
-        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h
+        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/vst3host.cpp src/vst3host.h
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
@@ -66,6 +72,10 @@ target_link_libraries(aster-studio PRIVATE
     Qt6::Qml
     Qt6::DBus
     PkgConfig::PIPEWIRE
+    PkgConfig::X11
+    ${VST3_HOSTING}
+    ${VST3_COMMON}
+    ${CMAKE_DL_LIBS}
     PkgConfig::SNDFILE
     PkgConfig::SAMPLERATE
     PkgConfig::ALSA
