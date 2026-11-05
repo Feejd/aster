@@ -54,6 +54,9 @@ public:
     Q_INVOKABLE void setSource(Project *project, const QString &id, qreal x, qreal y);
     // Wypełnienie obszaru podobnego koloru od klikniętego punktu; tolerance 0..1
     Q_INVOKABLE void fill(Project *project, const QString &id, qreal x, qreal y, qreal tolerance);
+    // Zaznaczenie: skasowanie albo wypełnienie zaznaczonych pikseli warstwy
+    Q_INVOKABLE void clearSelected(Project *project, const QString &id);
+    Q_INVOKABLE void fillSelected(Project *project, const QString &id);
 
 Q_SIGNALS:
     void settingsChanged();
@@ -83,6 +86,7 @@ private:
     QImage m_blurred;               // rozmyta kopia (narzędzie Rozmyj)
     QImage m_mask;                  // maska kreski
     QImage m_carry;                 // rozmazywanie: niesiona łata
+    QImage m_clip;                  // zaznaczenie w pikselach zdjęcia (puste — bez ograniczeń)
     QTransform m_toImage;           // strona → piksele zdjęcia
     qreal m_scale = 1;              // pikseli zdjęcia na piksel strony
     qreal m_radius = 20;

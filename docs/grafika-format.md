@@ -42,6 +42,8 @@ Szablony programu (`apps/grafika/templates/*.json`) to sam `project.json` bez zd
 
 ## Warstwy
 
+Zaznaczenie pikseli nie trafia do pliku: należy do otwartego projektu w programie i znika po jego zamknięciu.
+
 Każdy element to warstwa. Oprócz `opacity` i `hidden` może mieć:
 
 - `blend` — tryb mieszania z tym, co pod spodem: `multiply`, `screen`, `overlay`, `darken`, `lighten`, `colorDodge`,

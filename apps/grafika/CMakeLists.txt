@@ -52,6 +52,8 @@ qt_add_qml_module(aster-grafika
         src/magic.h
         src/retouch.cpp
         src/retouch.h
+        src/selection.cpp
+        src/selection.h
 )
 
 # Narzędzia AI (usuwanie tła, gumka, wyodrębnianie) — ONNX Runtime; bez niego program działa, tylko bez nich

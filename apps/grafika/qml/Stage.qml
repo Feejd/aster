@@ -33,6 +33,13 @@ Item {
     property real maskSize: 60                  // piksele ekranu
     property real maskSoft: 0.5
     readonly property bool maskOn: maskEdit !== "" && maskEdit === selected
+    // Zaznaczanie pikseli: rect | ellipse | lasso | wand | color | object ("" — inne narzędzie)
+    property string selTool: ""
+    property string selMode: "new"
+    property real selFeather: 0
+    property real selTolerance: 0.12
+    property bool selLayerOnly: false
+    readonly property bool selOn: selTool !== ""
     // Malowanie i retusz po pikselach: brush | eraser | fill | pick | heal | clone | dodge | burn | smudge | blur
     property string paintTool: ""
     property color paintColor: "#16181D"
@@ -143,6 +150,8 @@ Item {
     function cancel() {
         if (maskEdit !== "") maskEdit = "";
         else if (cellEdit) cellEdit = null;
+        else if (Selection.active) Selection.clear();
+        else if (selOn) drawFinished();
         else if (drawOn || paintOn) drawFinished();
         else if (magicOn) Magic.end();
         else if (cropping !== "") cropping = "";
@@ -910,7 +919,7 @@ Item {
                 id: sel
                 readonly property var el: stage.current
                 readonly property bool line: el.type === "shape" && (el.shape === "line" || el.shape === "arrow" || el.shape === "doubleArrow")
-                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn || stage.paintOn     // bez uchwytów
+                readonly property bool fixed: !!el.locked || stage.cropping !== "" || stage.magicOn || stage.maskOn || stage.paintOn || stage.selOn     // bez uchwytów
                 visible: stage.selected !== "" && el.id !== undefined && !el.hidden && el.type !== "adjust"
                 x: (el.x || 0) * stage.zoom
                 y: (el.y || 0) * stage.zoom
@@ -1057,7 +1066,7 @@ Item {
                 readonly property var el: stage.current
                 readonly property bool single: stage.selection.length === 1
                 visible: b.w !== undefined && stage.editing === "" && stage.cropping === "" && !stage.magicOn && !stage.dragging
-                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !(single && el.type === "adjust")
+                         && stage.hint === "" && !stage.marqueeOn && !(single && el.locked) && stage.dragGuide === null && !stage.drawOn && !stage.cellEdit && !stage.maskOn && !stage.paintOn && !stage.selOn && !(single && el.type === "adjust")
                 // Nad zaznaczeniem, a gdy brak miejsca (góra okna) — pod nim, za uchwytem obrotu
                 readonly property real above: (b.y || 0) * stage.zoom - height - 14
                 readonly property real roof: flick.contentY - page.y + 6
@@ -1288,6 +1297,110 @@ Item {
                     target: stage
                     function onCellEditChanged() { if (stage.cellEdit) Qt.callLater(cellInput.load); else stage.project.commit(); }
                 }
+            }
+
+            // ——— Zaznaczanie pikseli ———
+            Item {
+                id: selBox
+                anchors.fill: parent
+                visible: stage.selOn
+                z: 22
+                Rectangle {
+                    id: selRect
+                    visible: false
+                    color: "transparent"
+                    radius: selArea.kind === "ellipse" ? Math.max(width, height) : 0
+                    border.width: 1; border.color: "white"
+                    Rectangle { anchors.fill: parent; anchors.margins: -1; radius: parent.radius; color: "transparent"; border.width: 1; border.color: Qt.rgba(0, 0, 0, 0.6) }
+                }
+                Canvas {
+                    id: selCanvas
+                    anchors.fill: parent
+                    property var pts: []
+                    onPaint: {
+                        const c = getContext("2d");
+                        c.reset();
+                        if (pts.length < 2) return;
+                        c.beginPath();
+                        c.moveTo(pts[0][0], pts[0][1]);
+                        for (const q of pts) c.lineTo(q[0], q[1]);
+                        c.lineWidth = 3; c.strokeStyle = "rgba(0, 0, 0, 0.5)"; c.stroke();
+                        c.lineWidth = 1; c.strokeStyle = "white"; c.stroke();
+                    }
+                }
+                MouseArea {
+                    id: selArea
+                    anchors.fill: parent
+                    anchors.margins: -60
+                    enabled: !Magic.busy
+                    cursorShape: Qt.CrossCursor
+                    property string kind: ""
+                    property string mode: "new"
+                    property bool moving: false
+                    property point start
+                    function pos(e) { return Qt.point(e.x - 60, e.y - 60); }
+                    onPressed: (e) => {
+                        stage.forceActiveFocus();
+                        const p = pos(e), k = 1 / stage.zoom;
+                        const shift = !!(e.modifiers & Qt.ShiftModifier), alt = !!(e.modifiers & Qt.AltModifier);
+                        mode = shift && alt ? "intersect" : shift ? "add" : alt ? "subtract" : stage.selMode;
+                        kind = stage.selTool;
+                        start = p;
+                        moving = mode === "new" && (kind === "rect" || kind === "ellipse" || kind === "lasso") && Selection.contains(p.x * k, p.y * k);
+                        if (kind === "lasso" && !moving) { selCanvas.pts = [[p.x, p.y]]; selCanvas.requestPaint(); }
+                    }
+                    onPositionChanged: (e) => {
+                        if (!pressed) return;
+                        const p = pos(e);
+                        if (moving) { ants.x = p.x - start.x; ants.y = p.y - start.y; return; }
+                        if (kind === "rect" || kind === "ellipse") {
+                            selRect.x = Math.min(p.x, start.x); selRect.y = Math.min(p.y, start.y);
+                            selRect.width = Math.abs(p.x - start.x); selRect.height = Math.abs(p.y - start.y);
+                            selRect.visible = true;
+                        } else if (kind === "lasso") {
+                            const pts = selCanvas.pts, last = pts[pts.length - 1];
+                            if (Math.hypot(p.x - last[0], p.y - last[1]) < 2) return;
+                            selCanvas.pts = pts.concat([[p.x, p.y]]);
+                            selCanvas.requestPaint();
+                        }
+                    }
+                    onReleased: (e) => {
+                        const k = 1 / stage.zoom, p = pos(e);
+                        selRect.visible = false;
+                        if (moving) {
+                            ants.x = 0; ants.y = 0;
+                            moving = false;
+                            if (Math.hypot(p.x - start.x, p.y - start.y) >= 2) Selection.translate((p.x - start.x) * k, (p.y - start.y) * k);
+                            else Selection.clear();
+                            return;
+                        }
+                        if (kind === "rect" || kind === "ellipse") {
+                            const w = Math.abs(p.x - start.x), h = Math.abs(p.y - start.y);
+                            if (w >= 3 && h >= 3)
+                                Selection.shape(stage.project, Math.min(p.x, start.x) * k, Math.min(p.y, start.y) * k, w * k, h * k, kind === "ellipse", mode, stage.selFeather);
+                            else if (mode === "new") Selection.clear();
+                        } else if (kind === "lasso") {
+                            if (selCanvas.pts.length >= 3) Selection.lasso(stage.project, selCanvas.pts.map(q => [q[0] * k, q[1] * k]), mode, stage.selFeather);
+                            else if (mode === "new") Selection.clear();
+                            selCanvas.pts = [];
+                            selCanvas.requestPaint();
+                        } else if (kind === "wand" || kind === "color") {
+                            Selection.wand(stage.project, p.x * k, p.y * k, stage.selTolerance, kind === "wand", stage.selLayerOnly ? stage.selected : "", mode, 0);
+                        } else if (kind === "object") {
+                            const q = mapToItem(stage, e.x, e.y), o = stage.elementAt(q.x, q.y);
+                            if (o && o.type === "image" && o.src) Magic.selectObject(stage.project, o.id, p.x * k, p.y * k, mode);
+                            else stage.paintMessage("Kliknij zdjęcie — AI zaznacza rzeczy na zdjęciach");
+                        }
+                    }
+                }
+            }
+            // Maszerujące mrówki: widać je też przy malowaniu i korekcjach
+            SelectionView {
+                id: ants
+                width: page.width; height: page.height
+                visible: Selection.active
+                z: 30
+                Connections { target: Selection; function onChanged() { ants.rebuild(); } }
             }
 
             // ——— Malowanie i retusz ———
@@ -1674,6 +1787,25 @@ Item {
                 text: stage.drawTool === "eraser" ? "Przeciągnij po rysunku, żeby go zmazać" : "Rysuj po stronie · każda kreska to osobny element"
                 color: Theme.text; font.family: Theme.font; font.pixelSize: 13
             }
+            Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
+        }
+    }
+
+    // Zaznaczanie: podpowiedź i wyjście
+    Rectangle {
+        visible: stage.selOn && !Magic.busy
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 14
+        width: selPill.implicitWidth + 16; height: 44; radius: 22
+        color: Theme.surface
+        border.width: 1; border.color: Theme.line
+        z: 6
+        Row {
+            id: selPill
+            anchors.centerIn: parent
+            spacing: 10
+            Item { width: 4; height: 1 }
+            Text { anchors.verticalCenter: parent.verticalCenter; text: "Shift dodaje · Alt odejmuje · Esc odznacza"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
             Btn { anchors.verticalCenter: parent.verticalCenter; primary: true; text: "Gotowe"; height: 32; onClicked: stage.drawFinished() }
         }
     }

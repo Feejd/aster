@@ -101,8 +101,10 @@ Programy:
   - [x] malowanie po pikselach: warstwa pikselowa, pędzel z twardością i kryciem, gumka, wypełnianie, pipeta
   - [x] retusz: Korektor AI, stempel, rozjaśnianie i ściemnianie, rozmazywanie, rozmywanie
   - [ ] pędzle: nacisk tabletu, kształty pędzla, malowanie w trybach mieszania
-  - [ ] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, zaznaczenie AI wspólne dla wszystkich działań;
-        wytnij, wypełnij, wtapianie, maska z zaznaczenia, zaznaczenie obowiązuje przy malowaniu i korekcjach
+  - [x] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, główny obiekt i obiekt kliknięciem (AI), dodawanie,
+        odejmowanie, część wspólna, wtapianie, powiększanie, przesuwanie; kopia i wycięcie na warstwę, wypełnianie,
+        wypełnienie AI, maska z zaznaczenia; zaznaczenie obowiązuje przy malowaniu, retuszu i korekcjach
+  - [ ] zaznaczenia, dalej: tryb podglądu maski, zapisywanie zaznaczeń, przekształcanie zaznaczonych pikseli, wielokąt
   - [ ] przekształcenia: swobodne, perspektywa, zniekształcenie rogów, wypaczanie; przycinanie całego płótna
   - [ ] warstwy: foldery, maski przycinające, style warstw (obrys, poświata, faza), inteligentne filtry
   - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej

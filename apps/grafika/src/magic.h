@@ -55,6 +55,11 @@ public:
     // Korektor: zamalowany pędzlem kawałek (punkty strony, grubość w pikselach strony) znika, a tło uzupełnia się samo
     Q_INVOKABLE void heal(Project *project, const QString &id, const QVariantList &points, qreal width);
 
+    // Zaznaczenie pikseli z AI: główny obiekt zdjęcia albo rzecz pod kliknięciem (punkt strony); wypełnienie zaznaczenia
+    Q_INVOKABLE void selectSubject(Project *project, const QString &id, const QString &mode);
+    Q_INVOKABLE void selectObject(Project *project, const QString &id, qreal x, qreal y, const QString &mode);
+    Q_INVOKABLE void fillSelection(Project *project, const QString &id);
+
     Q_INVOKABLE void begin(Project *project, const QString &id);
     Q_INVOKABLE void end();
     // Współrzędne w ramce elementu (piksele elementu, bez obrotu); width — grubość pędzla

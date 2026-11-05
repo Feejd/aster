@@ -71,6 +71,7 @@ public:
     Q_INVOKABLE void maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft);
     Q_INVOKABLE void invertMask(const QString &id);
     Q_INVOKABLE void gradientMask(const QString &id, qreal angle);       // wygaszanie: od pełnego widoku do zera
+    QSize maskSizeFor(const QVariantMap &el) const;
     void setMaskImage(const QString &id, const QImage &mask);            // gotowa maska (np. zaznaczenie AI)                  // zdjęcie w pełnej rozdzielczości (do AI)
     // Podgląd malowania: zdjęcie `key` rysuje się na razie z `img`, plik w projekcie jeszcze się nie zmienia
     void setLive(const QString &key, const QImage &img);

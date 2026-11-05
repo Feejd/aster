@@ -24,7 +24,7 @@ Item {
     readonly property string sel: stage.selected
     readonly property var many: stage.selection           // zaznaczone (jeden albo kilka)
 
-    onVisibleChanged: if (visible) { stage.clearSelection(); stage.fit = true; side.tab = "select"; stage.forceActiveFocus(); }
+    onVisibleChanged: if (visible) { Selection.clear(); stage.clearSelection(); stage.fit = true; side.tab = "select"; stage.forceActiveFocus(); }
 
     Settings { id: viewSettings; category: "Grafika"; property bool rulers: false }
 
@@ -171,6 +171,7 @@ Item {
         project.commit();
     }
     function remove() {
+        if (Selection.active && sel !== "") { selAction("delete"); return; }
         if (many.length === 0) return;
         const ids = many.filter(id => !project.get(id).locked);
         if (ids.length === 0) return;
@@ -187,6 +188,7 @@ Item {
         stage.forceActiveFocus();
     }
     function undo() {
+        if (side.tab === "pixels" && Selection.canUndo) { Selection.undo(); return; }
         if (Magic.element !== "" && Magic.hasMask) { Magic.undoMask(); return; }
         project.undo();
         if (Magic.element !== "" && project.indexOf(Magic.element) >= 0) Magic.begin(project, Magic.element);
@@ -540,6 +542,14 @@ Item {
         else if (cmd === "maskgrad") project.gradientMask(sel, Number(arg));
         else if (cmd === "maskinvert") project.invertMask(sel);
         else if (cmd === "maskstroke") { const q = arg.split(","); project.maskStroke(sel, [[Number(q[0]), Number(q[1])], [Number(q[2]), Number(q[3])]], 0.15, false, 0.5); }
+        else if (cmd === "seltool") { side.selTool = arg; side.tab = "pixels"; }
+        else if (cmd === "selmode") side.selMode = arg;
+        else if (cmd === "selinvert") Selection.invert(project);
+        else if (cmd === "selfeather") Selection.feather(Number(arg));
+        else if (cmd === "selgrow") Selection.grow(Number(arg));
+        else if (cmd === "seldo") selAction(arg);
+        else if (cmd === "selsubject") selectSubject();
+        else if (cmd === "selclear") Selection.clear();
         else if (cmd === "painttool") usePaintTool(arg);
         else if (cmd === "paintcolor") side.paintColor = arg;
         else if (cmd === "pixellayer") addPixelLayer();
@@ -589,7 +599,14 @@ Item {
     Shortcut { sequences: [StandardKey.Cut]; enabled: ed.active && !ed.typing; onActivated: { ed.copy(); ed.remove(); } }
     Shortcut { sequences: [StandardKey.Paste]; enabled: ed.active && !ed.typing; onActivated: ed.paste() }
     Shortcut { sequence: "Ctrl+D"; enabled: ed.active && !ed.typing && ed.many.length > 0; onActivated: ed.duplicate() }
-    Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: stage.selectAll() }
+    Shortcut { sequences: [StandardKey.SelectAll]; enabled: ed.active && !ed.typing; onActivated: { if (side.tab === "pixels") Selection.all(ed.project); else stage.selectAll(); } }
+    Shortcut { sequence: "Ctrl+Shift+A"; enabled: ed.active && !ed.typing; onActivated: Selection.clear() }
+    Shortcut { sequence: "Ctrl+Shift+I"; enabled: ed.active && !ed.typing; onActivated: Selection.invert(ed.project) }
+    Shortcut { sequence: "Ctrl+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("copy") }
+    Shortcut { sequence: "Ctrl+Shift+J"; enabled: ed.active && !ed.typing && Selection.active; onActivated: ed.selAction("cut") }
+    Shortcut { sequence: "M"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "rect"; side.tab = "pixels"; } }
+    Shortcut { sequence: "L"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "lasso"; side.tab = "pixels"; } }
+    Shortcut { sequence: "W"; enabled: ed.active && !ed.typing; onActivated: { side.selTool = "wand"; side.tab = "pixels"; } }
     Shortcut { sequence: "PgDown"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.min(ed.project.pageCount - 1, ed.project.currentPage + 1)) }
     Shortcut { sequence: "PgUp"; enabled: ed.active && !ed.typing; onActivated: ed.goToPage(Math.max(0, ed.project.currentPage - 1)) }
     Shortcut { sequence: "Ctrl+Return"; enabled: ed.active && !ed.typing; onActivated: { stage.clearSelection(); ed.project.addPage(); } }
@@ -697,6 +714,7 @@ Item {
     // Narzędzia (kolejność w rzędzie po prawej); select — zaznaczanie i właściwości zaznaczonego
     readonly property var tools: [
         { id: "select", label: "Zaznacz i przesuń", icon: "cursor", key: "V" },
+        { id: "pixels", label: "Zaznaczanie", icon: "marquee", key: "M" },
         { id: "text", label: "Tekst", icon: "textT", key: "T" },
         { id: "shapes", label: "Kształty i grafiki", icon: "shapes", key: "U" },
         { id: "photos", label: "Zdjęcia", icon: "image", key: "" },
@@ -741,13 +759,51 @@ Item {
     Connections { target: Retouch; function onFailed(message) { ed.app.toast(message, ""); } }
     function addAdjustment() {
         const id = project.add({ type: "adjust", x: 0, y: 0, w: project.pageWidth, h: project.pageHeight });
+        if (Selection.active) { Selection.maskLayer(project, id); Selection.clear(); }      // korekcja tylko w zaznaczeniu
+        side.tab = "select";
         stage.select(id);
+    }
+    // ——— Zaznaczenie pikseli: działania ———
+    function imageLayer() {
+        // Zaznaczona warstwa-zdjęcie, a bez niej najwyższe zdjęcie na stronie
+        if (stage.current.type === "image" && stage.current.src) return stage.selected;
+        const all = project.document().elements;
+        for (let i = all.length - 1; i >= 0; --i) if (all[i].type === "image" && all[i].src && !all[i].hidden) return all[i].id;
+        return "";
+    }
+    function selectSubject() {
+        const id = imageLayer();
+        if (id === "") { app.toast("Na stronie nie ma zdjęcia", ""); return; }
+        Magic.selectSubject(project, id, side.selMode);
+    }
+    function selAction(a) {
+        const el = stage.current, isImage = el.type === "image" && !!el.src && !el.locked;
+        if (a === "copy" || a === "cut") { const id = Selection.toLayer(project, sel, a === "cut" && sel !== ""); if (id !== "") { stage.select(id); } }
+        else if (a === "delete") {
+            if (sel === "") { app.toast("Wybierz warstwę, z której usunąć", ""); return; }
+            if (isImage) Retouch.clearSelected(project, sel); else Selection.maskLayer(project, sel, true);
+        }
+        else if (a === "fill") {
+            const id = isImage ? sel : project.newPixelLayer();
+            if (id !== sel) stage.select(id);
+            Retouch.color = String(side.paintColor);
+            Retouch.fillSelected(project, id);
+        }
+        else if (a === "aifill") {
+            const id = imageLayer();
+            if (id === "") app.toast("Na stronie nie ma zdjęcia", ""); else Magic.fillSelection(project, id);
+        }
+        else if (a === "mask") {
+            if (sel === "") { app.toast("Wybierz warstwę, na której ma być maska", ""); return; }
+            Selection.maskLayer(project, sel);
+            Selection.clear();
+        }
     }
 
     // Zaznaczenie czegoś (na stronie albo w warstwach) pokazuje jego właściwości — jak narzędzie „Zaznacz”
     Connections {
         target: stage
-        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint") side.tab = "select"; }
+        function onSelectionChanged() { if (stage.selection.length > 0 && side.tab !== "draw" && side.tab !== "paint" && side.tab !== "pixels") side.tab = "select"; }
     }
 
     // ——— Pasek u góry ———
@@ -954,6 +1010,11 @@ Item {
         drawColor: side.drawColor
         drawWidth: side.drawWidth
         paintTool: side.tab === "paint" ? side.paintTool : ""
+        selTool: side.tab === "pixels" ? side.selTool : ""
+        selMode: side.selMode
+        selFeather: side.selFeather
+        selTolerance: side.selTolerance
+        selLayerOnly: side.selLayerOnly
         paintColor: side.paintColor
         paintSize: side.paintSize
         paintHardness: side.paintHardness
@@ -1263,9 +1324,9 @@ Item {
         z: 100
         readonly property var groups: [
             { title: "Podstawy", items: [["Ctrl+Z", "Cofnij"], ["Ctrl+Shift+Z", "Ponów"], ["Ctrl+C / Ctrl+V", "Kopiuj / wklej"], ["Ctrl+D", "Duplikuj"],
-                                         ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
+                                         ["Delete", "Usuń"], ["Ctrl+A", "Zaznacz wszystko"], ["Ctrl+Shift+A", "Odznacz piksele"], ["Ctrl+Shift+I", "Odwróć zaznaczenie"], ["Ctrl+J", "Zaznaczenie na warstwę"], ["Esc", "Odznacz, wyjdź z trybu"], ["Ctrl+S", "Zapisz"], ["Ctrl+E", "Eksportuj"]] },
             { title: "Elementy", items: [["V", "Narzędzie zaznaczania"], ["T", "Nowy tekst"], ["U", "Kształty i grafiki"], ["B / E", "Pędzel / gumka"], ["G / I", "Wypełnij / pipeta"], ["J / S", "Korektor / stempel"], ["[ / ]", "Rozmiar pędzla"],
-                                         ["P", "Rysowanie linii"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
+                                         ["P", "Rysowanie linii"], ["M / L / W", "Zaznacz: prostokąt, lasso, różdżka"], ["X", "Maska: ukryj / przywróć"], ["Enter", "Pisz w tekście"], ["Ctrl+B / I / U", "Pogrubienie, kursywa, podkreślenie"],
                                          ["Strzałki", "Przesuń (z Shiftem o 10)"], ["Ctrl+G", "Grupuj"], ["Ctrl+Shift+G", "Rozgrupuj"],
                                          ["Ctrl+] / Ctrl+[", "Do przodu / do tyłu"], ["Ctrl+Alt+C / V", "Kopiuj / wklej styl"], ["Shift+przeciąganie", "Zachowaj proporcje"]] },
             { title: "Widok i strony", items: [["Ctrl + / Ctrl −", "Powiększ / pomniejsz"], ["Ctrl+0", "Dopasuj do okna"], ["Ctrl+1", "100%"],

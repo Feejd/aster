@@ -1,6 +1,7 @@
 #include "magic.h"
 #include "art.h"
 #include "project.h"
+#include "selection.h"
 
 #include <QCoreApplication>
 #include <algorithm>
@@ -610,6 +611,92 @@ void Magic::blurBackground(Project *project, const QString &id, qreal strength)
     Q_UNUSED(project);
     Q_UNUSED(id);
     Q_UNUSED(strength);
+    Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
+#endif
+}
+
+void Magic::selectSubject(Project *project, const QString &id, const QString &mode)
+{
+#ifdef GRAFIKA_ONNX
+    if (!project)
+        return;
+    const QVariantMap el = project->get(id);
+    const QImage img = project->fullImage(el.value(QStringLiteral("src")).toString());
+    if (img.isNull())
+        return;
+    QPointer<Project> pr(project);
+    auto models = m_models;
+    run(QStringLiteral("Szukam głównego obiektu…"), featureModels(QStringLiteral("background")), [=]() -> std::function<void()> {
+        const QImage mask = models->foreground(img);
+        return [=] {
+            if (pr)
+                Selection::instance()->fromLayer(pr, el, mask, mode);
+        };
+    });
+#else
+    Q_UNUSED(project);
+    Q_UNUSED(id);
+    Q_UNUSED(mode);
+#endif
+}
+
+void Magic::selectObject(Project *project, const QString &id, qreal x, qreal y, const QString &mode)
+{
+#ifdef GRAFIKA_ONNX
+    if (!project)
+        return;
+    const QVariantMap el = project->get(id);
+    const QImage img = project->fullImage(el.value(QStringLiteral("src")).toString());
+    if (img.isNull())
+        return;
+    const QTransform toImage = Art::pageToFrame(el) * Art::frameTransform(el, img.size()).inverted();
+    const QPointF at = toImage.map(QPointF(x, y));
+    if (!img.rect().contains(at.toPoint()))
+        return;
+    QPointer<Project> pr(project);
+    auto models = m_models;
+    run(QStringLiteral("Szukam obiektu…"), featureModels(QStringLiteral("object")), [=]() -> std::function<void()> {
+        const QImage mask = models->object(img, {at}, {1.f});
+        return [=] {
+            if (pr)
+                Selection::instance()->fromLayer(pr, el, mask, mode);
+        };
+    });
+#else
+    Q_UNUSED(project);
+    Q_UNUSED(id);
+    Q_UNUSED(x);
+    Q_UNUSED(y);
+    Q_UNUSED(mode);
+#endif
+}
+
+void Magic::fillSelection(Project *project, const QString &id)
+{
+#ifdef GRAFIKA_ONNX
+    Selection *sel = Selection::instance();
+    if (!project || !sel->active())
+        return;
+    const QVariantMap el = project->get(id);
+    const QImage img = project->fullImage(el.value(QStringLiteral("src")).toString());
+    if (img.isNull())
+        return;
+    const QTransform toImage = Art::pageToFrame(el) * Art::frameTransform(el, img.size()).inverted();
+    const QImage mask = sel->mapped(toImage, img.size());
+    QPointer<Project> pr(project);
+    auto models = m_models;
+    run(QStringLiteral("Wypełniam zaznaczenie…"), featureModels(QStringLiteral("erase")), [=, this]() -> std::function<void()> {
+        const QImage filled = models->erase(img, mask);
+        return [=, this] {
+            if (pr && pr->indexOf(id) >= 0)
+                pr->change(id, {{QStringLiteral("src"), pr->addImage(filled)}});
+            Selection::instance()->clear();
+            Q_EMIT finished(QString(), {id});
+        };
+    });
+#else
+    Q_UNUSED(project);
+    Q_UNUSED(id);
     Q_EMIT failed(QStringLiteral("Ta wersja Aster Pixel nie ma narzędzi AI."));
 #endif
 }

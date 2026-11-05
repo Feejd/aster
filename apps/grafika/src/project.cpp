@@ -1284,6 +1284,11 @@ static QSize maskSize(const QVariantMap &el, qreal pageW, qreal pageH)
     return QSize(qMax(8, qRound(w * k)), qMax(8, qRound(h * k)));
 }
 
+QSize Project::maskSizeFor(const QVariantMap &el) const
+{
+    return maskSize(el, m_width, m_height);
+}
+
 void Project::setMaskImage(const QString &id, const QImage &mask)
 {
     change(id, {{QStringLiteral("layerMask"), addImage(mask)}});

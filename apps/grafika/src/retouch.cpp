@@ -1,6 +1,7 @@
 #include "retouch.h"
 #include "art.h"
 #include "project.h"
+#include "selection.h"
 
 #include <QBuffer>
 #include <QPainter>
@@ -87,6 +88,8 @@ bool Retouch::load(Project *project, const QString &id)
     const QTransform frame = Art::frameTransform(el, m_img.size());
     m_toImage = Art::pageToFrame(el) * frame.inverted();
     m_scale = qSqrt(qAbs(m_toImage.determinant()));
+    Selection *sel = Selection::instance();
+    m_clip = sel && sel->active() ? sel->mapped(m_toImage, m_img.size()) : QImage();
     return true;
 }
 
@@ -195,7 +198,10 @@ void Retouch::dab(const QPointF &c)
         uchar *mask = m_mask.scanLine(y);
         QRgb *out = reinterpret_cast<QRgb *>(m_img.scanLine(y));
         const QRgb *base = reinterpret_cast<const QRgb *>(m_base.constScanLine(y));
+        const uchar *clip = m_clip.isNull() ? nullptr : m_clip.constScanLine(y);
         for (int x = box.left(); x <= box.right(); ++x) {
+            if (clip && clip[x] == 0)
+                continue;
             const qreal d = std::hypot(x + 0.5 - c.x(), y + 0.5 - c.y()) / r;
             if (d >= 1)
                 continue;
@@ -208,7 +214,7 @@ void Retouch::dab(const QPointF &c)
             if (v <= mask[x])
                 continue;
             mask[x] = uchar(v);
-            const int t = v * power / 255;
+            const int t = clip ? v * power / 255 * clip[x] / 255 : v * power / 255;
             const QRgb px = base[x];
             switch (kind) {
             case Paint:
@@ -254,6 +260,7 @@ void Retouch::smudge(const QPointF &c)
             continue;
         QRgb *out = reinterpret_cast<QRgb *>(m_img.scanLine(y));
         QRgb *patch = reinterpret_cast<QRgb *>(m_carry.scanLine(j));
+        const uchar *clip = m_clip.isNull() ? nullptr : m_clip.constScanLine(y);
         for (int i = 0; i < side; ++i) {
             const int x = x0 + i;
             if (x < 0 || x >= m_img.width())
@@ -266,7 +273,7 @@ void Retouch::smudge(const QPointF &c)
                 const qreal t = (1 - d) / (1 - hard);
                 a = t * t * (3 - 2 * t);
             }
-            const int t = int(a * power);
+            const int t = clip ? int(a * power) * clip[x] / 255 : int(a * power);
             const QRgb mixed = lerp(out[x], patch[i], t);
             out[x] = mixed;
             patch[i] = mixed;
@@ -390,8 +397,40 @@ void Retouch::fill(Project *project, const QString &id, qreal x, qreal y, qreal 
         const uchar *mk = mark.constScanLine(y2);
         QRgb *o = reinterpret_cast<QRgb *>(m_img.scanLine(y2));
         for (int x2 = 0; x2 < W; ++x2)
-            if (mk[x2])
-                o[x2] = lerp(o[x2], color, t);
+            if (mk[x2] && (m_clip.isNull() || m_clip.constScanLine(y2)[x2]))
+                o[x2] = lerp(o[x2], color, m_clip.isNull() ? t : t * m_clip.constScanLine(y2)[x2] / 255);
+    }
+    m_project->setLive(m_key, m_img);
+    store(m_img);
+}
+
+void Retouch::clearSelected(Project *project, const QString &id)
+{
+    if (!load(project, id) || m_clip.isNull())
+        return;
+    for (int y = 0; y < m_img.height(); ++y) {
+        QRgb *o = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        const uchar *clip = m_clip.constScanLine(y);
+        for (int x = 0; x < m_img.width(); ++x)
+            if (clip[x])
+                o[x] = lerp(o[x], 0, clip[x]);
+    }
+    m_project->setLive(m_key, m_img);
+    store(m_img);
+}
+
+void Retouch::fillSelected(Project *project, const QString &id)
+{
+    if (!load(project, id) || m_clip.isNull())
+        return;
+    const QColor ink = QColor::fromString(m_color);
+    const QRgb color = ink.isValid() ? qPremultiply(ink.rgba()) : qRgba(0, 0, 0, 255);
+    for (int y = 0; y < m_img.height(); ++y) {
+        QRgb *o = reinterpret_cast<QRgb *>(m_img.scanLine(y));
+        const uchar *clip = m_clip.constScanLine(y);
+        for (int x = 0; x < m_img.width(); ++x)
+            if (clip[x])
+                o[x] = lerp(o[x], color, clip[x]);
     }
     m_project->setLive(m_key, m_img);
     store(m_img);
