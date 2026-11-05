@@ -9,7 +9,7 @@
 set -eu
 
 REPO="Feejd/aster"
-ALL="grafika montaz studio code editor calculator photos music video pdf camera"
+ALL="grafika montaz studio code editor calculator photos music video pdf camera launch harbor pulse vault"
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 fail() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }

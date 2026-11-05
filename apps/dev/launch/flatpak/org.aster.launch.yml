@@ -1,0 +1,52 @@
+# Aster Launch jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
+# Budowa: flatpak-builder --user --install-deps-from=flathub build apps/dev/launch/flatpak/org.aster.launch.yml
+# (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
+# instaluje ją tools/install-apps.sh launch.
+#
+# ssh, rsync, curl i programy hostingów (netlify, vercel, wrangler) są w systemie użytkownika — program woła je
+# przez flatpak-spawn --host (stąd org.freedesktop.Flatpak), z tymi samymi kluczami w ~/.ssh i tymi samymi
+# zalogowanymi kontami. Projekty mogą leżeć w dowolnym miejscu katalogu domowego, więc dostęp do niego.
+app-id: org.aster.launch
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: aster-launch
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --share=network                  # DNS domeny, sprawdzanie strony
+  - --filesystem=home                # foldery projektów (ścieżki takie same jak w systemie — dla rsync)
+  - --filesystem=~/.ssh              # klucze SSH (także nowe, tworzone w programie)
+  - --filesystem=xdg-config/aster:ro # motyw i akcent z ustawień Astera
+  - --talk-name=org.freedesktop.Flatpak     # ssh/rsync/curl/CLI hostingów z systemu (flatpak-spawn --host)
+  - --talk-name=org.freedesktop.portal.*
+  # D-Bus dla asystenta i polecenia aster-launch; Flatpak nie eksportuje usług spoza przestrzeni nazw aplikacji,
+  # więc w Flatpaku org.aster.Launch działa, gdy okno jest otwarte (w systemie Aster uruchamia je D-Bus)
+  - --own-name=org.aster.Launch
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+modules:
+  - name: launch
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DASTER_APPS=dev/launch
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../../../..
+        skip:
+          - .git
+          - build
+          - image
+          - prototype
+          - data/wallpapers
+    post-install:
+      - install -Dm644 apps/dev/launch/flatpak/org.aster.launch.svg /app/share/icons/hicolor/scalable/apps/org.aster.launch.svg
+      - install -Dm644 apps/dev/launch/flatpak/org.aster.launch.metainfo.xml /app/share/metainfo/org.aster.launch.metainfo.xml
+      - sed -i 's/^Icon=.*/Icon=org.aster.launch/' /app/share/applications/org.aster.launch.desktop

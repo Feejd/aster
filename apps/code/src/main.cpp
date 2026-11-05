@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QUrl>
+#include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <QtQml/qqmlextensionplugin.h>
 #include "typography.h"
 
@@ -20,6 +21,9 @@ Q_IMPORT_QML_PLUGIN(Aster_UiPlugin)
 
 int main(int argc, char *argv[])
 {
+    // Podgląd strony (QtWebEngine) — przed utworzeniem aplikacji
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    QtWebEngineQuick::initialize();
     QGuiApplication app(argc, argv);
     asterTypography();
     app.setApplicationName(QStringLiteral("aster-code"));
@@ -58,7 +62,8 @@ int main(int argc, char *argv[])
         return 1;
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
 
-    // Do testów: ASTER_OPEN=kroki po „;” (testOpen w Main.qml, co 1,2 s),
+#ifdef ASTER_CODE_TEST_HOOKS
+    // Do testów (tylko build z -DASTER_CODE_TEST_HOOKS=ON): ASTER_OPEN=kroki po „;” (testOpen w Main.qml, co 1,2 s),
     // ASTER_SHOT=plik.png zapisuje zrzut okna (po ASTER_SHOT_DELAY ms, domyślnie 3 s) i kończy program
     const QStringList steps = qEnvironmentVariable("ASTER_OPEN").split(QLatin1Char(';'), Qt::SkipEmptyParts);
     for (int i = 0; i < steps.size(); ++i)
@@ -71,5 +76,8 @@ int main(int argc, char *argv[])
             QCoreApplication::quit();
         });
     }
+#else
+    Q_UNUSED(window)
+#endif
     return app.exec();
 }

@@ -22,7 +22,7 @@ if [ "$1" = "--undo" ]; then
 fi
 
 # Budowanie (te same pakiety i katalog co dev-run.sh)
-rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel mlt-devel whisper-cpp-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
+rpm -q cmake kf6-kio-devel kf6-kservice-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel jetbrains-mono-fonts-all layer-shell-qt-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel mlt-devel whisper-cpp-devel kdecoration-devel librsvg2-tools xcursorgen >/dev/null 2>&1 || sh "$ROOT/tools/setup-vm.sh"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr >/dev/null
 cmake --build "$BUILD"
 
@@ -45,6 +45,13 @@ plasma-apply-cursortheme Aster >/dev/null 2>&1 || true
 # Przy otwieraniu programu sam kursor ładowania Aster — bez podskakującej ikony KDE (KWin startupfeedback)
 kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Bouncing false 2>/dev/null || true
 kwriteconfig6 --file klaunchrc --group BusyCursorSettings --key Blinking false 2>/dev/null || true
+# Ramka okien Aster, krótsze animacje i zasysanie do doku (w obrazie: /etc/xdg, zob. image/Containerfile)
+kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.aster.decoration 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled false 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Plugins --key asteroknaEnabled true 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled false 2>/dev/null || true
+kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled true 2>/dev/null || true
+kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0.7 2>/dev/null || true
 dbus-send --session --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/null || true
 gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
 

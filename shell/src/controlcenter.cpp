@@ -76,6 +76,7 @@ ControlCenter::ControlCenter(QObject *parent)
         fillPreview();
         return;
     }
+    migrateColors();
     refresh();
     m_poll.start();
 }
@@ -97,6 +98,47 @@ void ControlCenter::fillPreview()
     m_playerName = QStringLiteral("Spotify");
     m_title = QStringLiteral("Nocne miasto");
     m_artist = QStringLiteral("Aster Radio");
+    m_updateReady = !qEnvironmentVariableIsEmpty("ASTER_SHOT_UPDATE");
+}
+
+// Nową wersję systemu pobiera aster-update.service; ten plik oznacza, że czeka na restart
+void ControlCenter::readUpdate()
+{
+    const bool ready = QFile::exists(QStringLiteral("/run/ostree/staged-deployment"));
+    if (ready == m_updateReady)
+        return;
+    m_updateReady = ready;
+    Q_EMIT updateChanged();
+    if (ready)
+        QProcess::startDetached(QStringLiteral("notify-send"), {QStringLiteral("--app-name=Aster"), QStringLiteral("--icon=aster"), QStringLiteral("Aktualizacja gotowa"),
+                                                                QStringLiteral("Nowa wersja Astera zainstaluje się przy następnym restarcie.")});
+}
+
+void ControlCenter::restartForUpdate()
+{
+    if (m_preview)
+        return;
+    // Przez sesję KDE: programy kończą się po kolei i mogą zapisać stan
+    QDBusConnection::sessionBus().asyncCall(QDBusMessage::createMethodCall(QStringLiteral("org.kde.Shutdown"), QStringLiteral("/Shutdown"),
+                                                                           QStringLiteral("org.kde.Shutdown"), QStringLiteral("logoutAndReboot")));
+}
+
+// Konta założone przed schematami Aster mają kolory Breeze zapisane w kdeglobals: zmieniamy je raz, z zachowaniem trybu
+void ControlCenter::migrateColors()
+{
+    const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    const QString marker = config + QStringLiteral("/aster/kolory-aster");
+    if (QFile::exists(marker))
+        return;
+    QDir().mkpath(config + QStringLiteral("/aster"));
+    QFile(marker).open(QIODevice::WriteOnly);
+    QFile globals(config + QStringLiteral("/kdeglobals"));
+    if (!globals.open(QIODevice::ReadOnly))
+        return;
+    const QByteArray text = globals.readAll();
+    if (text.contains("Aster"))
+        return;
+    QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {text.contains("ColorScheme=BreezeDark") ? QStringLiteral("AsterDark") : QStringLiteral("AsterLight")});
 }
 
 void ControlCenter::setActive(bool active)
@@ -122,6 +164,7 @@ void ControlCenter::refresh()
     readBrightness();
     readBattery();
     readPlayer();
+    readUpdate();
 }
 
 void ControlCenter::query(const QString &key, const QString &program, const QStringList &args, std::function<void(const QString &)> done)
@@ -420,5 +463,5 @@ void ControlCenter::previous() { playerCall(QStringLiteral("Previous")); }
 void ControlCenter::setDarkMode(bool dark)
 {
     if (!m_preview)
-        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("BreezeDark") : QStringLiteral("BreezeLight")});
+        QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"), {dark ? QStringLiteral("AsterDark") : QStringLiteral("AsterLight")});
 }

@@ -9,6 +9,7 @@ import Aster.Ui
 // kto prosi i o co, zdjęcie użytkownika (przy kilku administratorach — wybór), hasło, Anuluj / Zezwól.
 Window {
     id: auth
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     visible: false
     width: Screen.width

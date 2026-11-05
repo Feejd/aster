@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Aster Launch
+GenericName=Wdrażanie aplikacji
+Comment=Wdróż stronę albo aplikację na własny serwer (SSH, HTTPS) lub do Netlify, Vercel i Cloudflare Pages
+Exec=aster-launch %f
+Icon=applications-development
+Terminal=false
+Categories=Development;
+Keywords=wdrożenie;deploy;serwer;ssh;hosting;https;caddy;netlify;vercel;cloudflare;produkcja;vps;
+StartupWMClass=aster-launch

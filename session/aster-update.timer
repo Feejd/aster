@@ -1,0 +1,10 @@
+[Unit]
+Description=Sprawdzanie aktualizacji systemu Aster
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=12h
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.aster.Assistant
+Exec=@CMAKE_INSTALL_FULL_LIBEXECDIR@/aster-assistant
+SystemdService=aster-assistant.service

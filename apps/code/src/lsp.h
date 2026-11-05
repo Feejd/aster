@@ -26,6 +26,8 @@ public:
     bool failed() const { return m_failed; }
     QString id() const { return m_id; }
     QString program() const { return m_program; }
+    QString displayName() const { return m_display.isEmpty() ? m_program : m_display; }
+    void setDisplayName(const QString &n) { m_display = n; }
     // Czy serwer to potrafi (klucz z capabilities, np. "signatureHelpProvider")
     bool supports(const QString &provider) const { const QJsonValue v = m_caps.value(provider); return !v.isUndefined() && !v.isNull() && v != QJsonValue(false); }
     void shutdown();
@@ -50,6 +52,7 @@ private:
     QList<QJsonObject> m_queue;                // wiadomości przed odpowiedzią na „initialize”
     QHash<int, Reply> m_replies;
     QJsonObject m_caps;
+    QString m_display;
 };
 
 // Serwery języków dla projektu w Aster Code: dobierane po rozszerzeniu pliku (clangd, qmlls, pylsp/pyright,
@@ -80,6 +83,8 @@ public:
     void setEnabled(bool on);
     // Wszystkie znane serwery do ustawień: [{ id, name, languages, available, running, package }]
     Q_INVOKABLE QVariantList servers() const;
+    // Środowisko projektu się zmieniło (kontener) — serwery startują od nowa, karty zgłaszają pliki
+    Q_INVOKABLE void restartServers();
     // { id, name, available, running, package } — serwer dla pliku (pusty id: język bez serwera)
     Q_INVOKABLE QVariantMap serverFor(const QString &path) const;
     Q_INVOKABLE void open(const QString &path, const QString &text);

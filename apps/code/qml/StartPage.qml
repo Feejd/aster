@@ -9,6 +9,7 @@ Item {
     id: start
     property real radius: 0
     signal openFolder()
+    signal newApp()
     signal openRecent(string path)
 
     // Lewa kolumna — na szkle okna
@@ -34,6 +35,7 @@ Item {
             }
             Item { width: 1; height: 30 }
             Action { width: parent.width; icon: "folder"; label: "Otwórz folder…"; hint: "Ctrl+O"; primary: true; onClicked: start.openFolder() }
+            Action { width: parent.width; icon: "sparkle"; label: "Nowa aplikacja…"; hint: "frontend, backend, baza"; onClicked: start.newApp() }
             Item { width: 1; height: 8 }
             Action {
                 width: parent.width; icon: "reload"; label: "Otwórz ostatni"; hint: Project.recent.length ? Project.recent[0].name : ""

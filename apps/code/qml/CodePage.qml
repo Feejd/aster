@@ -491,6 +491,8 @@ Item {
         modifiedColor: Theme.dark ? "#58A6FF" : "#3B7DDD"
         deletedColor: Theme.dark ? "#F85149" : "#CF222E"
         diagnostics: page.diagnostics
+        breakpoints: { Debugger.revision; return page.path ? Debugger.breakpoints(page.path) : []; }
+        stopLine: Debugger.stopPath === page.path ? Debugger.stopLine : -1
         errorColor: Theme.danger
         warningColor: Theme.dark ? "#E3B341" : "#BF8700"
         FontMetrics { id: fm; font: te.font }
@@ -502,6 +504,8 @@ Item {
             onPressed: (e) => {
                 const p = te.positionAt(0, e.y + flick.contentY);
                 const l = TextOps.lineColumn(te.textDocument, p).y;
+                // Lewy brzeg marginesu — punkt przerwania
+                if (e.x < 17) { Debugger.toggleBreakpoint(page.path, l); return; }
                 const a = TextOps.positionOfLine(te.textDocument, l);
                 const b = l + 1 < TextOps.lineCount(te.textDocument) ? TextOps.positionOfLine(te.textDocument, l + 1) : te.length;
                 te.forceActiveFocus();
@@ -600,6 +604,14 @@ Item {
                 border.width: 1
                 border.color: page.bracket.length === 2 ? Theme.accentAlpha(0.7) : Theme.danger
             }
+        }
+
+        // Wiersz, w którym zatrzymał się debuger
+        Rectangle {
+            visible: Debugger.stopPath === page.path && Debugger.stopLine >= 0
+            readonly property rect r: { te.length; page.folded; return te.positionToRectangle(TextOps.positionOfLine(te.textDocument, Math.max(0, Debugger.stopLine))); }
+            y: te.y + r.y; width: Math.max(flick.width, flick.contentWidth); height: r.height
+            color: Qt.rgba(0.96, 0.76, 0.24, Theme.dark ? 0.20 : 0.28)
         }
 
         // Konflikty łączenia: moja wersja na zielono, przychodząca na niebiesko, przyciski przy znaczniku <<<<<<<

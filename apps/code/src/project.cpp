@@ -1,9 +1,15 @@
 #include "project.h"
+#include "github.h"
+#include "projectenv.h"
+#include "secretstore.h"
 #include "searchregex.h"
 
 #include <QClipboard>
 #include <QCryptographicHash>
 #include <QDesktopServices>
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -17,6 +23,24 @@
 #include <QUrl>
 
 namespace {
+
+// Git zawsze z systemu: z Flatpaka przez flatpak-spawn --host (zmienne przekazane jawnie, token —
+// przez plik tylko dla właściciela, nie w argumentach)
+void startGit(QProcess *p, QStringList args)
+{
+    const QProcessEnvironment env = p->processEnvironment();
+    QStringList pass;
+    for (const QString &k : {QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("GIT_SSH_COMMAND"), QStringLiteral("LC_ALL")})
+        if (env.contains(k))
+            pass << k + QLatin1Char('=') + env.value(k);
+    QStringList argv{QStringLiteral("git")};
+    if (ProjectEnv::instance()->flatpak() && env.contains(QStringLiteral("ASTER_GITHUB_TOKEN"))) {
+        const QString f = SecretStore::instance()->writeEnvFile({{QStringLiteral("ASTER_GITHUB_TOKEN"), env.value(QStringLiteral("ASTER_GITHUB_TOKEN"))}}, true);
+        argv = {QStringLiteral("sh"), QStringLiteral("-c"), QStringLiteral(". '%1'; rm -f '%1'; exec git \"$@\"").arg(f), QStringLiteral("git")};
+    }
+    const QStringList a = ProjectEnv::instance()->hostProgram(argv + args, p->workingDirectory(), pass);
+    p->start(a.first(), a.mid(1));
+}
 
 constexpr int RecentLimit = 12;
 constexpr int MatchLimit = 20000;
@@ -133,14 +157,14 @@ bool Project::open(const QString &pathOrUrl)
     // Repozytorium gita (folder projektu może leżeć głębiej niż katalog główny repozytorium)
     m_gitTop.clear();
     QProcess p;
-    p.start(QStringLiteral("git"), {QStringLiteral("-C"), m_root, QStringLiteral("rev-parse"), QStringLiteral("--show-toplevel")});
+    startGit(&p, {QStringLiteral("-C"), m_root, QStringLiteral("rev-parse"), QStringLiteral("--show-toplevel")});
     if (p.waitForFinished(3000) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0)
         m_gitTop = QDir::cleanPath(QString::fromUtf8(p.readAllStandardOutput()).trimmed());
     // Katalog .git (w worktree to plik ze wskazaniem) — do sprawdzania, czy trwa łączenie
     m_gitDir.clear();
     if (!m_gitTop.isEmpty()) {
         QProcess d;
-        d.start(QStringLiteral("git"), {QStringLiteral("-C"), m_gitTop, QStringLiteral("rev-parse"), QStringLiteral("--absolute-git-dir")});
+        startGit(&d, {QStringLiteral("-C"), m_gitTop, QStringLiteral("rev-parse"), QStringLiteral("--absolute-git-dir")});
         if (d.waitForFinished(3000) && d.exitCode() == 0)
             m_gitDir = QString::fromUtf8(d.readAllStandardOutput()).trimmed();
     }
@@ -469,6 +493,47 @@ void Project::showInFiles(const QString &path) const
     QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).isDir() ? path : QFileInfo(path).absolutePath()));
 }
 
+// ——— Kopie niezapisanych plików (na wypadek awarii) ———
+
+static QString backupFile(const QString &path)
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/kopie/")
+         + QString::fromLatin1(QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex()) + QStringLiteral(".json");
+}
+
+void Project::backupWrite(const QString &path, const QString &text)
+{
+    const QString file = backupFile(path);
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    QSaveFile f(file);
+    if (!f.open(QIODevice::WriteOnly))
+        return;
+    f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    f.write(QJsonDocument(QJsonObject{{"path", path}, {"text", text}, {"time", QDateTime::currentSecsSinceEpoch()}}).toJson(QJsonDocument::Compact));
+    f.commit();
+}
+
+void Project::backupRemove(const QString &path)
+{
+    QFile::remove(backupFile(path));
+}
+
+QVariantList Project::backups() const
+{
+    QVariantList out;
+    const QString dir = QFileInfo(backupFile(QString())).absolutePath();
+    for (const QFileInfo &fi : QDir(dir).entryInfoList({QStringLiteral("*.json")}, QDir::Files)) {
+        QFile f(fi.absoluteFilePath());
+        if (!f.open(QIODevice::ReadOnly))
+            continue;
+        const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+        const QString p = o.value(QStringLiteral("path")).toString();
+        if (p.startsWith(m_root + QLatin1Char('/')))
+            out << QVariantMap{{QStringLiteral("path"), p}, {QStringLiteral("text"), o.value(QStringLiteral("text")).toString()}};
+    }
+    return out;
+}
+
 void Project::copyText(const QString &text) const
 {
     QGuiApplication::clipboard()->setText(text);
@@ -514,7 +579,7 @@ void Project::refreshGit()
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("GIT_OPTIONAL_LOCKS"), QStringLiteral("0"));
     p->setProcessEnvironment(env);
-    p->start(QStringLiteral("git"), {QStringLiteral("-C"), m_gitTop, QStringLiteral("status"), QStringLiteral("--porcelain=v2"),
+    startGit(p, {QStringLiteral("-C"), m_gitTop, QStringLiteral("status"), QStringLiteral("--porcelain=v2"),
                                      QStringLiteral("--branch"), QStringLiteral("-z"), QStringLiteral("--untracked-files=normal"),
                                      QStringLiteral("--ignored=traditional")});
 }
@@ -638,7 +703,7 @@ void Project::requestBase(const QString &path)
         Q_EMIT baseReady(path, ok ? QString::fromUtf8(p->readAllStandardOutput()) : QString(), ok);
     });
     connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
-    p->start(QStringLiteral("git"), {QStringLiteral("-C"), m_gitTop, QStringLiteral("show"), QStringLiteral("HEAD:") + gitRelative(path)});
+    startGit(p, {QStringLiteral("-C"), m_gitTop, QStringLiteral("show"), QStringLiteral("HEAD:") + gitRelative(path)});
 }
 
 // ——— Git: zatwierdzanie i synchronizacja ———
@@ -653,6 +718,17 @@ void Project::runGit(const QString &op, const QStringList &args, const QByteArra
     env.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
     env.insert(QStringLiteral("GIT_SSH_COMMAND"), QStringLiteral("ssh -o BatchMode=yes"));
     env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
+    // Wysyłanie i pobieranie z GitHuba tokenem z portfela (logowanie w Aster Code) — pomocnik haseł
+    // czyta go ze zmiennej środowiska, token nie trafia do argumentów ani do konfiguracji repozytorium
+    QStringList argv = args;
+    if (op == QLatin1String("push") || op == QLatin1String("pull") || op == QLatin1String("fetch")) {
+        if (const QString t = GitHub::token(); !t.isEmpty()) {
+            env.insert(QStringLiteral("ASTER_GITHUB_TOKEN"), t);
+            argv = QStringList{QStringLiteral("-c"), QStringLiteral("credential.https://github.com.helper="),
+                               QStringLiteral("-c"), QStringLiteral("credential.https://github.com.helper=!f() { test \"$1\" = get && echo username=x-access-token && echo \"password=$ASTER_GITHUB_TOKEN\"; }; f")}
+                   + args;
+        }
+    }
     p->setProcessEnvironment(env);
     p->setWorkingDirectory(m_gitTop);
     m_gitBusy = op;
@@ -676,7 +752,7 @@ void Project::runGit(const QString &op, const QStringList &args, const QByteArra
         Q_EMIT gitBusyChanged();
         Q_EMIT gitDone(op, false, QStringLiteral("Nie można uruchomić gita"));
     });
-    p->start(QStringLiteral("git"), args);
+    startGit(p, argv);
     if (!input.isEmpty())
         p->write(input);
     p->closeWriteChannel();
@@ -768,7 +844,7 @@ static QString syncError(const QString &msg)
 {
     if (msg.contains(QLatin1String("terminal prompts disabled")) || msg.contains(QLatin1String("Authentication failed"))
         || msg.contains(QLatin1String("Permission denied")) || msg.contains(QLatin1String("could not read Username")))
-        return QStringLiteral("Serwer wymaga logowania — wyślij raz z terminala (git push), potem zadziała tutaj");
+        return QStringLiteral("Serwer wymaga logowania — zaloguj się do GitHuba w Aster Code (Ctrl+Shift+P → GitHub) albo wyślij raz z terminala");
     if (msg.contains(QLatin1String("Could not resolve host")) || msg.contains(QLatin1String("unable to access")))
         return QStringLiteral("Brak połączenia z serwerem repozytorium");
     if (msg.contains(QLatin1String("rejected")) || msg.contains(QLatin1String("non-fast-forward")))
@@ -787,7 +863,7 @@ void Project::push()
         // Pierwsze wysłanie gałęzi: na pierwszy serwer (zwykle origin) z ustawieniem śledzenia
         QProcess r;
         r.setWorkingDirectory(m_gitTop);
-        r.start(QStringLiteral("git"), {QStringLiteral("remote")});
+        startGit(&r, {QStringLiteral("remote")});
         r.waitForFinished(2000);
         const QString remote = QString::fromUtf8(r.readAllStandardOutput()).section(QLatin1Char('\n'), 0, 0).trimmed();
         if (remote.isEmpty()) {
@@ -825,7 +901,7 @@ QString Project::lastCommitMessage() const
         return {};
     QProcess p;
     p.setWorkingDirectory(m_gitTop);
-    p.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%B")});
+    startGit(&p, {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%B")});
     p.waitForFinished(2000);
     return QString::fromUtf8(p.readAllStandardOutput()).trimmed();
 }
@@ -850,7 +926,7 @@ void Project::loadCommits()
         Q_EMIT gitChanged();
     });
     connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
-    p->start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-8"), QStringLiteral("--format=%h%x1f%s%x1f%an%x1f%ct")});
+    startGit(p, {QStringLiteral("log"), QStringLiteral("-8"), QStringLiteral("--format=%h%x1f%s%x1f%an%x1f%ct")});
 }
 
 QString Project::rawDiff(const QString &path, bool staged) const
@@ -862,10 +938,10 @@ QString Project::rawDiff(const QString &path, bool staged) const
         if (v.toMap().value(QStringLiteral("path")).toString() == path && v.toMap().value(QStringLiteral("work")).toString() == QLatin1String("U"))
             untracked = true;
     if (untracked && !staged)
-        p.start(QStringLiteral("git"), {QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("--no-index"), QStringLiteral("--"),
+        startGit(&p, {QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("--no-index"), QStringLiteral("--"),
                                         QStringLiteral("/dev/null"), gitRelative(path)});
     else
-        p.start(QStringLiteral("git"), QStringList{QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("-U3")}
+        startGit(&p, QStringList{QStringLiteral("diff"), QStringLiteral("--no-color"), QStringLiteral("-U3")}
                                            + (staged ? QStringList{QStringLiteral("--cached")} : QStringList())
                                            + QStringList{QStringLiteral("--"), gitRelative(path)});
     p.waitForFinished(5000);
@@ -877,11 +953,17 @@ QVariantList Project::diff(const QString &path, bool staged) const
     // Różnice jednego pliku jako wiersze: { kind: " " | "+" | "-" | "@", text, old, new, hunk }
     if (m_gitTop.isEmpty())
         return {};
+    return parseDiff(rawDiff(path, staged));
+}
+
+// Wyjście git diff / git show jednego pliku jako wiersze: { kind: " " | "+" | "-" | "@", text, old, new, hunk }
+QVariantList Project::parseDiff(const QString &raw)
+{
     QVariantList out;
     int oldNo = 0, newNo = 0, hunkNo = -1;
     bool body = false;
     static const QRegularExpression hunk(QStringLiteral("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@(.*)$"));
-    for (const QString &l : rawDiff(path, staged).split(QLatin1Char('\n'))) {
+    for (const QString &l : raw.split(QLatin1Char('\n'))) {
         if (const auto m = hunk.match(l); m.hasMatch()) {
             oldNo = m.captured(1).toInt();
             newNo = m.captured(2).toInt();
@@ -1022,10 +1104,111 @@ void Project::blame(const QString &path, const QString &text)
         Q_EMIT blameReady(path, commits, lines);
     });
     connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
-    p->start(QStringLiteral("git"), {QStringLiteral("blame"), QStringLiteral("--porcelain"), QStringLiteral("--contents"), QStringLiteral("-"),
+    startGit(p, {QStringLiteral("blame"), QStringLiteral("--porcelain"), QStringLiteral("--contents"), QStringLiteral("-"),
                                      QStringLiteral("--"), gitRelative(path)});
     p->write(text.toUtf8());
     p->closeWriteChannel();
+}
+
+// ——— Historia pliku i zatwierdzenia ———
+
+void Project::requestHistory(const QString &path)
+{
+    if (m_gitTop.isEmpty() || !path.startsWith(m_gitTop + QLatin1Char('/'))) {
+        Q_EMIT historyReady(path, {});
+        return;
+    }
+    auto *p = new QProcess(this);
+    p->setWorkingDirectory(m_gitTop);
+    connect(p, &QProcess::finished, this, [this, p, path] {
+        p->deleteLater();
+        // Wpis: nagłówek z %x1e na początku, potem wiersze numstat „dodane usunięte ścieżka”
+        QVariantList list;
+        for (const QString &entry : QString::fromUtf8(p->readAllStandardOutput()).split(QChar(0x1e), Qt::SkipEmptyParts)) {
+            const QStringList lines = entry.split(QLatin1Char('\n'));
+            const QStringList f = lines.value(0).split(QChar(0x1f));
+            if (f.size() < 6)
+                continue;
+            int added = 0, removed = 0;
+            QString rel = gitRelative(path);
+            for (int i = 1; i < lines.size(); ++i) {
+                const QStringList n = lines.at(i).split(QLatin1Char('\t'));
+                if (n.size() < 3)
+                    continue;
+                added += n[0].toInt();
+                removed += n[1].toInt();
+                rel = n[2].contains(QLatin1String(" => ")) ? n[2].section(QLatin1String(" => "), -1).remove(QLatin1Char('}')) : n[2];
+            }
+            list << QVariantMap{{QStringLiteral("hash"), f[0]}, {QStringLiteral("short"), f[1]}, {QStringLiteral("subject"), f[2]},
+                                {QStringLiteral("author"), f[3]}, {QStringLiteral("time"), f[4].toLongLong()}, {QStringLiteral("body"), f[5].trimmed()},
+                                {QStringLiteral("added"), added}, {QStringLiteral("removed"), removed}, {QStringLiteral("rel"), rel}};
+        }
+        Q_EMIT historyReady(path, list);
+    });
+    connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError e) { if (e == QProcess::FailedToStart) p->deleteLater(); });
+    startGit(p, {QStringLiteral("log"), QStringLiteral("--follow"), QStringLiteral("-n"), QStringLiteral("300"), QStringLiteral("--numstat"),
+                                     QStringLiteral("--format=%x1e%H%x1f%h%x1f%s%x1f%an%x1f%ct%x1f%b"), QStringLiteral("--"), gitRelative(path)});
+}
+
+QVariantMap Project::commitInfo(const QString &hash) const
+{
+    if (m_gitTop.isEmpty())
+        return {};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    startGit(&p, {QStringLiteral("show"), QStringLiteral("--no-color"), QStringLiteral("--numstat"), QStringLiteral("--find-renames"),
+                                    QStringLiteral("--format=%H%x1f%h%x1f%s%x1f%an%x1f%ct%x1f%b%x1e"), hash});
+    p.waitForFinished(5000);
+    const QString out = QString::fromUtf8(p.readAllStandardOutput());
+    const QStringList f = out.section(QChar(0x1e), 0, 0).split(QChar(0x1f));
+    if (f.size() < 6)
+        return {};
+    QVariantList files;
+    for (const QString &l : out.section(QChar(0x1e), 1).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        const QStringList n = l.split(QLatin1Char('\t'));
+        if (n.size() < 3)
+            continue;
+        QString rel = n[2];
+        // Zmiana nazwy: „stara => nowa” albo „folder/{a => b}/plik”
+        if (rel.contains(QLatin1String(" => "))) {
+            static const QRegularExpression brace(QStringLiteral("\\{[^}]* => ([^}]*)\\}"));
+            rel = rel.contains(QLatin1Char('{')) ? QString(rel).replace(brace, QStringLiteral("\\1")).replace(QLatin1String("//"), QLatin1String("/"))
+                                                 : rel.section(QLatin1String(" => "), -1);
+        }
+        const QString abs = m_gitTop + QLatin1Char('/') + rel;
+        files << QVariantMap{{QStringLiteral("path"), abs}, {QStringLiteral("rel"), rel}, {QStringLiteral("name"), QFileInfo(rel).fileName()},
+                             {QStringLiteral("dir"), QFileInfo(rel).path() == QLatin1String(".") ? QString() : QFileInfo(rel).path()},
+                             {QStringLiteral("added"), n[0] == QLatin1String("-") ? -1 : n[0].toInt()},
+                             {QStringLiteral("removed"), n[1] == QLatin1String("-") ? -1 : n[1].toInt()},
+                             {QStringLiteral("exists"), QFileInfo::exists(abs)}};
+    }
+    return {{QStringLiteral("hash"), f[0]}, {QStringLiteral("short"), f[1]}, {QStringLiteral("subject"), f[2]}, {QStringLiteral("author"), f[3]},
+            {QStringLiteral("time"), f[4].toLongLong()}, {QStringLiteral("body"), f[5].trimmed()}, {QStringLiteral("files"), files}};
+}
+
+QVariantList Project::commitDiff(const QString &hash, const QString &rel) const
+{
+    if (m_gitTop.isEmpty())
+        return {};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    // Pierwsze zatwierdzenie nie ma rodzica — git show radzi sobie z tym sam
+    startGit(&p, {QStringLiteral("show"), QStringLiteral("--no-color"), QStringLiteral("-U3"), QStringLiteral("--format="),
+                                    QStringLiteral("--find-renames"), hash, QStringLiteral("--"), rel});
+    p.waitForFinished(5000);
+    return parseDiff(QString::fromUtf8(p.readAllStandardOutput()));
+}
+
+QVariantMap Project::fileAt(const QString &hash, const QString &rel) const
+{
+    if (m_gitTop.isEmpty())
+        return {{QStringLiteral("ok"), false}};
+    QProcess p;
+    p.setWorkingDirectory(m_gitTop);
+    startGit(&p, {QStringLiteral("show"), hash + QLatin1Char(':') + rel});
+    p.waitForFinished(5000);
+    const bool ok = p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+    return {{QStringLiteral("ok"), ok}, {QStringLiteral("text"), ok ? QString::fromUtf8(p.readAllStandardOutput()) : QString()}};
 }
 
 // ——— Gałęzie i odkładanie zmian ———
@@ -1036,7 +1219,7 @@ QVariantList Project::branches() const
         return {};
     QProcess p;
     p.setWorkingDirectory(m_gitTop);
-    p.start(QStringLiteral("git"), {QStringLiteral("for-each-ref"), QStringLiteral("--sort=-committerdate"),
+    startGit(&p, {QStringLiteral("for-each-ref"), QStringLiteral("--sort=-committerdate"),
                                     QStringLiteral("--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(committerdate:unix)%1f%(subject)"),
                                     QStringLiteral("refs/heads"), QStringLiteral("refs/remotes")});
     p.waitForFinished(3000);
@@ -1154,7 +1337,7 @@ QStringList Project::listFiles(const QString &root, bool git)
     if (git) {
         // Pliki śledzone i nowe, bez pomijanych przez .gitignore
         QProcess p;
-        p.start(QStringLiteral("git"), {QStringLiteral("-C"), root, QStringLiteral("ls-files"), QStringLiteral("-co"),
+        startGit(&p, {QStringLiteral("-C"), root, QStringLiteral("ls-files"), QStringLiteral("-co"),
                                         QStringLiteral("--exclude-standard"), QStringLiteral("-z")});
         if (p.waitForFinished(15000) && p.exitCode() == 0) {
             for (const QByteArray &f : p.readAllStandardOutput().split('\0'))

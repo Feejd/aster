@@ -1,0 +1,14 @@
+[Unit]
+Description=Aster Intelligence — model na tym komputerze (llama-server)
+# Włącza i wyłącza ją usługa aster-assistant: model zajmuje pamięć tylko wtedy, gdy ktoś pyta.
+# Model i parametry: ~/.config/aster/llama.env (pisze go Aster Intelligence po wyborze modelu w Ustawieniach).
+# Ręczne nadpisania (np. LLAMA_SERVER=/inna/ścieżka/llama-server): ~/.config/aster/llama-local.env
+
+[Service]
+Type=exec
+Environment=LLAMA_SERVER=llama-server
+EnvironmentFile=%h/.config/aster/llama.env
+EnvironmentFile=-%h/.config/aster/llama-local.env
+ExecStart=/bin/sh -c 'exec "$LLAMA_SERVER" -m "$LLAMA_MODEL" --host 127.0.0.1 --port 8080 $LLAMA_ARGS'
+# Pulpit ma pierwszeństwo przed liczeniem odpowiedzi
+Nice=5

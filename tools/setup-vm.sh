@@ -16,7 +16,7 @@ sudo dnf install -y --skip-unavailable --allowerasing \
     git cmake ninja-build gcc-c++ extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
     layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel \
-    qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel mlt-devel mlt-qt6 whisper-cpp-devel librsvg2-tools xcursorgen kf6-kimageformats qt6-qtimageformats \
+    qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel mlt-devel mlt-qt6 whisper-cpp-devel kdecoration-devel librsvg2-tools xcursorgen kf6-kimageformats qt6-qtimageformats qt6-qtbase-postgresql qt6-qtbase-mysql \
     rsms-inter-fonts google-roboto-fonts jetbrains-mono-fonts-all open-vm-tools-desktop
 
 # Folder udostępniony z Maca montowany przy każdym starcie

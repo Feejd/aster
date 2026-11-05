@@ -75,6 +75,16 @@ void Gutter::setDiagnostics(const QVariantList &list)
     Q_EMIT changed();
 }
 
+void Gutter::setBreakpoints(const QVariantList &list)
+{
+    m_bpList = list;
+    m_bps.clear();
+    for (const QVariant &v : list)
+        m_bps.insert(v.toInt());
+    update();
+    Q_EMIT changed();
+}
+
 int Gutter::lineCount() const
 {
     return m_document && m_document->textDocument() ? m_document->textDocument()->blockCount() : 0;
@@ -207,6 +217,22 @@ void Gutter::paint(QPainter *painter)
             painter->setPen(Qt::NoPen);
             painter->setBrush(sev == 1 ? m_error : m_warning);
             painter->drawEllipse(QPointF(7, y + lineH / 2), 3, 3);
+        }
+
+        // Punkt przerwania (czerwone kółko) i wiersz zatrzymania debugera (żółta strzałka)
+        if (m_bps.contains(n)) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(QColor(0xE5, 0x48, 0x4D));
+            painter->drawEllipse(QPointF(8, y + lineH / 2), 5, 5);
+        }
+        if (n == m_stopLine) {
+            QPainterPath arrow;
+            const qreal cy = y + lineH / 2;
+            arrow.moveTo(2, cy - 4); arrow.lineTo(8, cy - 4); arrow.lineTo(13, cy); arrow.lineTo(8, cy + 4); arrow.lineTo(2, cy + 4);
+            arrow.closeSubpath();
+            painter->setPen(QPen(QColor(0x7A, 0x5A, 0x00), 1));
+            painter->setBrush(QColor(0xF5, 0xC2, 0x3D));
+            painter->drawPath(arrow);
         }
 
         if (n < marked && m_marks[n]) {

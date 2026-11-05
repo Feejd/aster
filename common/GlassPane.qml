@@ -1,7 +1,7 @@
 import QtQuick
 
-// Panel treści w oknie Aster: pasek boczny leży na lekko przezroczystym szkle okna,
-// a treść — na tym panelu w głębokim, prawie nieprzezroczystym kolorze (w ciemnym motywie
+// Panel treści w oknie Aster: pasek boczny leży na ledwie przezroczystym szkle okna,
+// a treść — na tym panelu w głębokim, nieprzezroczystym kolorze (w ciemnym motywie
 // niemal czerń). Panel dochodzi do krawędzi okna; zaokrąglone są tylko rogi, które się z nimi stykają.
 Item {
     id: gp
