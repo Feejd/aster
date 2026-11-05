@@ -18,7 +18,7 @@ Rectangle {
     signal closed()
 
     visible: shown
-    color: Theme.dark ? "#101114" : "#F3F4F6"
+    color: Theme.windowGlass
 
     function open(u) {
         if (u) url = u;

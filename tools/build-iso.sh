@@ -111,7 +111,8 @@ mcopy -i "$efiimg" "$WORK/iso/EFI/BOOT/grub.cfg" ::/EFI/fedora/
 
 echo "==> ISO"
 out="$WORK/aster-install-$ARCH.iso"
-xorriso -as mkisofs -R -J -joliet-long -V "$LABEL" \
+# iso-level 3: obraz systemu przekracza 4 GiB, a niższe poziomy tego nie dopuszczają
+xorriso -as mkisofs -iso-level 3 -R -J -joliet-long -V "$LABEL" \
     -e boot/efiboot.img -no-emul-boot -append_partition 2 0xef "$efiimg" -appended_part_as_gpt \
     -o "$out" "$WORK/iso"
 rm -rf "${WORK:?}/rootfs" "${WORK:?}/run"

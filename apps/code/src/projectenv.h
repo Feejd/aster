@@ -2,6 +2,9 @@
 
 #include <QHash>
 #include <QObject>
+#include <QPointer>
+#include <QProcess>
+#include <QVariantMap>
 #include <QQmlEngine>
 #include <QStringList>
 
@@ -20,6 +23,7 @@ class ProjectEnv : public QObject
     Q_PROPERTY(QString state READ state NOTIFY changed)                  // off | missing | none | ready
     Q_PROPERTY(QString tool READ tool NOTIFY changed)                    // toolbox | distrobox | ""
     Q_PROPERTY(bool flatpak READ flatpak CONSTANT)
+    Q_PROPERTY(QVariantMap readiness READ readiness NOTIFY readinessChanged)  // { items: [co brakuje, po ludzku], packages, setup: [{ label, command, cwd }] }
 
 public:
     static ProjectEnv *instance();
@@ -31,6 +35,7 @@ public:
     QString state() const { return m_state; }
     QString tool() const { return m_tool; }
     bool flatpak() const { return m_flatpak; }
+    QVariantMap readiness() const { return m_readiness; }
 
     // Polecenie powłoki w środowisku projektu: argv dla QProcess (pusty — zwykłe /bin/sh)
     QStringList shell(const QString &command, const QString &cwd) const;
@@ -54,9 +59,12 @@ public:
     Q_INVOKABLE void useContainer(bool on);           // przypisuje (albo odpina) kontener do projektu
     Q_INVOKABLE void refresh();                       // ponownie sprawdza, czy kontener istnieje
     Q_INVOKABLE bool toolAvailable() const { return !m_tool.isEmpty(); }
+    // Czego brakuje, żeby projekt działał: języki, serwery języków, zależności (w tle — wynik w readiness)
+    Q_INVOKABLE void checkReadiness();
 
 Q_SIGNALS:
     void changed();
+    void readinessChanged();
 
 private:
     explicit ProjectEnv(QObject *parent = nullptr);
@@ -67,4 +75,6 @@ private:
     QString m_root, m_container, m_state = QStringLiteral("off"), m_tool;
     bool m_flatpak = false;
     mutable QHash<QString, bool> m_has;
+    QVariantMap m_readiness;
+    QPointer<QProcess> m_check;
 };

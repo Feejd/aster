@@ -13,12 +13,12 @@ Item {
     readonly property real fillW: height + (width - height) * value
     Rectangle {
         anchors.fill: parent
-        radius: height / 2
+        radius: 8
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.09)
     }
     Rectangle {
         width: sl.fillW; height: parent.height
-        radius: height / 2
+        radius: 8
         color: Theme.dark ? "#E8EAF0" : Theme.accentAlpha(0.18)
         Behavior on width { enabled: !drag.pressed; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
     }

@@ -29,7 +29,7 @@ Item {
     signal clipMenu(var clip, int track, Item item, real x, real y, real at)
     signal trackMenu(int track, Item item, real x, real y)
     signal addTrackRequested(Item item, real x, real y)
-    signal editPattern(int track)
+    signal openPattern(int id)
 
     onScrollXChanged: if (scrollX > maxScroll || scrollX < 0) scrollX = Math.max(0, Math.min(maxScroll, scrollX))
 
@@ -110,8 +110,9 @@ Item {
             visible: Studio.cycleEnd > Studio.cycleStart
             x: x0; y: 2
             width: (Studio.cycleEnd - Studio.cycleStart) * tl.pps; height: 10; radius: 4
-            color: Studio.cycle ? "#F5B83D" : Theme.fill
-            border.width: 1; border.color: Studio.cycle ? "#D9961A" : Theme.edge
+            // Wymiana fragmentu — czerwony (tu nagranie zastąpi stare), pętla — żółty
+            color: Studio.punch ? "#F07C7F" : Studio.cycle ? "#F5B83D" : Theme.fill
+            border.width: 1; border.color: Studio.punch ? "#E5484D" : Studio.cycle ? "#D9961A" : Theme.edge
         }
         MouseArea {
             id: rulerArea
@@ -245,6 +246,18 @@ Item {
                         y: index * tl.trackH
                         width: lanes.width; height: tl.trackH
                         z: 2
+                        // Dwuklik w puste miejsce: bieżący wzór na playlistę
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton
+                            propagateComposedEvents: true
+                            onPressed: (e) => e.accepted = false
+                            onDoubleClicked: (e) => {
+                                if (!Studio.patterns.length) return;
+                                Studio.patternMode = false;
+                                Studio.addPatternClip(lane.index, Studio.currentPattern, tl.snapAbs(e.x / tl.pps, e.modifiers), 0);
+                            }
+                        }
                         Repeater {
                             model: lane.modelData.clips
                             delegate: ClipItem {
@@ -268,7 +281,7 @@ Item {
                             border.width: 1; border.color: "#E5484D"
                             Text {
                                 x: 8; y: 3
-                                text: "● Nagrywanie"
+                                text: Studio.recordTake > 0 ? "● Nagrywanie — podejście " + Studio.recordTake : "● Nagrywanie"
                                 color: "#E5484D"
                                 font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
                             }
@@ -278,7 +291,7 @@ Item {
                                 width: Math.max(0, Math.min(liveClip.width, tl.scrollX + tl.viewW - liveClip.x) - leftPx)
                                 height: parent.height - 22
                                 live: true
-                                from: leftPx / tl.pps
+                                from: Studio.recordTakeOffset + leftPx / tl.pps
                                 pxPerSec: tl.pps
                                 color: "#E5484D"
                                 version: Math.floor(Studio.position * 15)
@@ -428,11 +441,28 @@ Item {
             onDoubleClicked: nameEdit.start()
         }
 
+        readonly property var kindInfo: ({
+            audio: { icon: "mic", label: "Nagranie" },
+            beat: { icon: "audioTrack", label: "Bit z pliku" },
+            drums: { icon: "grid", label: "Bit" },
+            bass: { icon: "audioTrack", label: "Bas 808" },
+            keys: { icon: "music", label: "Akordy" },
+            melody: { icon: "keyboard", label: "Melodia" }
+        })[th.track.beat ? "beat" : th.track.kind] || { icon: "music", label: "" }
+        readonly property string presetLabel: th.mix.preset ? (Studio.presets.find(p => p.id === th.mix.preset) || { label: "" }).label : ""
+
+        // Ikona rodzaju ścieżki w kolorze ścieżki
+        Rectangle {
+            x: 14; y: 10
+            width: 30; height: 30; radius: 9
+            color: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, Theme.dark ? 0.28 : 0.2)
+            Icon { anchors.centerIn: parent; d: Icons[th.kindInfo.icon] || ""; size: 16; stroke: 2; color: Theme.text }
+        }
         Text {
             id: nameText
             visible: !nameEdit.visible
-            x: 16; y: 12
-            width: parent.width - 56
+            x: 52; y: 9
+            width: parent.width - 90
             text: th.track.name
             elide: Text.ElideRight
             color: Theme.text
@@ -441,8 +471,8 @@ Item {
         TextInput {
             id: nameEdit
             visible: false
-            x: 16; y: 12
-            width: parent.width - 56
+            x: 52; y: 9
+            width: parent.width - 90
             color: Theme.text
             selectionColor: Theme.accentSoft
             font: nameText.font
@@ -451,39 +481,28 @@ Item {
             onActiveFocusChanged: if (!activeFocus && visible) { Studio.renameTrack(th.trackIndex, text); visible = false; }
             Keys.onEscapePressed: visible = false
         }
+        Text {
+            x: 52; y: 27
+            width: parent.width - 90
+            text: th.track.armed ? th.kindInfo.label + " · " + ["wejście L+P", "wejście L", "wejście P"][th.track.input]
+                                 : th.kindInfo.label + (th.presetLabel && !th.kindInfo.label.includes(th.presetLabel) ? " · " + th.presetLabel : "")
+            elide: Text.ElideRight
+            color: Theme.text2
+            font.family: Theme.font; font.pixelSize: 11
+        }
         HoverButton {
             anchors.right: parent.right; anchors.rightMargin: 8
-            y: 8
+            y: 10
             width: 26; height: 26; radius: 7
             onClicked: { const p = mapToItem(th, 0, height); tl.trackMenu(th.trackIndex, th, p.x, p.y + 2); }
             Icon { anchors.centerIn: parent; d: Icons.more; size: 15; color: Theme.text2 }
+            Tip { shown: parent.hovered; text: "Więcej" }
         }
 
+        // M i S zawsze w tym samym miejscu; z prawej nagrywanie albo edycja wzoru
         Row {
-            x: 14; y: 40
+            x: 14; y: 48
             spacing: 6
-            // Ścieżka Beat Makera: zamiast nagrywania — edycja wzoru
-            HoverButton {
-                visible: th.track.kind !== "audio"
-                width: editRow.implicitWidth + 16; height: 24; radius: 7
-                baseColor: Qt.rgba(th.tint.r, th.tint.g, th.tint.b, 0.3)
-                onClicked: tl.editPattern(th.trackIndex)
-                Row {
-                    id: editRow
-                    x: 8; anchors.verticalCenter: parent.verticalCenter
-                    spacing: 5
-                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.grid; size: 13; stroke: 2; color: Theme.text }
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: th.track.kind === "bass" ? "Nuty 808" : th.track.kind === "keys" ? "Akordy" : th.track.kind === "melody" ? "Piano roll" : "Beat Maker"; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
-                }
-            }
-            MiniBtn {
-                visible: th.track.kind === "audio"
-                tip: th.track.armed ? "Gotowa do nagrania" : "Nagrywaj na tę ścieżkę"
-                on: th.track.armed
-                onColor: "#E5484D"
-                onClicked: Studio.setTrackArmed(th.trackIndex, !th.track.armed)
-                Rectangle { anchors.centerIn: parent; width: 10; height: 10; radius: 5; color: th.track.armed ? "white" : "#E5484D" }
-            }
             MiniBtn {
                 tip: "Wycisz (M)"
                 on: !!th.mix.mute
@@ -498,20 +517,43 @@ Item {
                 label: "S"
                 onClicked: Studio.setTrackSolo(th.trackIndex, !th.mix.solo)
             }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                leftPadding: 4
-                visible: th.track.armed
-                text: ["Wejście: oba", "Wejście: L", "Wejście: P"][th.track.input]
-                color: Theme.text2
-                font.family: Theme.font; font.pixelSize: 11
+        }
+        // Odsłuch w słuchawkach (z efektami ścieżki) — przy ścieżce gotowej do nagrania
+        MiniBtn {
+            id: monBtn
+            visible: th.track.armed
+            anchors.right: armBtn.left; anchors.rightMargin: 6
+            y: 48
+            tip: Studio.monitor ? "Słyszysz siebie w słuchawkach z efektami ścieżki — kliknij, żeby wyłączyć"
+                                : "Słysz siebie w słuchawkach z efektami (np. autotune). Tylko w słuchawkach — w głośnikach zapiszczy"
+            on: Studio.monitor
+            onColor: Theme.accent
+            onClicked: Studio.monitor = !Studio.monitor
+            Icon { anchors.centerIn: parent; d: Icons.headphones; size: 14; stroke: 2; color: Studio.monitor ? "white" : Theme.text }
+        }
+        MiniBtn {
+            id: armBtn
+            visible: th.track.kind === "audio" && !th.track.beat
+            anchors.right: parent.right; anchors.rightMargin: 14
+            y: 48
+            width: armRow.implicitWidth + 16
+            tip: th.track.armed ? "Gotowa do nagrania — kliknij, żeby wyłączyć" : "Nagrywaj na tę ścieżkę"
+            on: th.track.armed
+            onColor: "#E5484D"
+            onClicked: Studio.setTrackArmed(th.trackIndex, !th.track.armed)
+            Row {
+                id: armRow
+                anchors.centerIn: parent
+                spacing: 5
+                Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 9; height: 9; radius: 4.5; color: th.track.armed ? "white" : "#E5484D" }
+                Text { anchors.verticalCenter: parent.verticalCenter; text: "Nagrywaj"; color: th.track.armed ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
             }
         }
 
         // Poziom: wejście, gdy ścieżka czeka na nagranie, inaczej to, co gra
         Rectangle {
-            x: 16; y: tl.trackH - 16
-            width: parent.width - 32; height: 4; radius: 2
+            x: 14; y: tl.trackH - 12
+            width: parent.width - 28; height: 3; radius: 1.5
             color: Theme.fill
             readonly property real level: th.track.armed ? Studio.inputLevel : (Studio.levels[th.trackIndex] || 0)
             readonly property real pos: level <= 0 ? 0 : Math.max(0, Math.min(1, (20 * Math.log(level) / Math.LN10 + 60) / 60))
@@ -576,13 +618,42 @@ Item {
                 spacing: 4
                 Icon { visible: ci.cl.loop; anchors.verticalCenter: parent.verticalCenter; d: Icons.repeat; size: 11; stroke: 2; color: Theme.dark ? "white" : "#16181D" }
                 Text {
-                    width: Math.max(0, ci.width - 30)
+                    width: Math.max(0, ci.width - 30 - (takeBadge.visible ? takeBadge.width + 4 : 0))
                     text: ci.cl.missing ? ci.cl.name + " (brak pliku)" : ci.cl.name
                     elide: Text.ElideRight
                     color: Theme.dark ? "white" : "#16181D"
                     font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
                 }
             }
+        }
+        // Podejścia z nagrywania w pętli: klik — następne, które obejmuje ten kawałek
+        Rectangle {
+            id: takeBadge
+            visible: (ci.cl.takes || 0) > 1 && ci.width > 70
+            anchors.right: parent.right; anchors.rightMargin: 3
+            y: 2
+            width: takeText.implicitWidth + 12; height: 14; radius: 7
+            color: takeArea.containsMouse ? "white" : Qt.rgba(1, 1, 1, Theme.dark ? 0.25 : 0.7)
+            Text {
+                id: takeText
+                anchors.centerIn: parent
+                text: "podejście " + ((ci.cl.take || 0) + 1) + "/" + (ci.cl.takes || 0)
+                color: "#16181D"
+                font.family: Theme.font; font.pixelSize: 9; font.weight: Font.Bold
+            }
+            MouseArea {
+                id: takeArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    const n = ci.cl.takes, ok = ci.cl.takeOk || [];
+                    for (let i = 1; i < n; ++i) {
+                        const k = (ci.cl.take + i) % n;
+                        if (ok[k]) { Studio.setClipTake(ci.cl.id, k); break; }
+                    }
+                }
+            }
+            Tip { shown: takeArea.containsMouse; text: "Następne podejście (prawy przycisk — lista)" }
         }
         Waveform {
             readonly property real leftPx: Math.max(0, tl.scrollX - ci.x)
@@ -630,6 +701,115 @@ Item {
             }
         }
 
+        // Klip automatyki: krzywa. Klik dodaje punkt, przeciąganie go przesuwa, prawy przycisk usuwa
+        Item {
+            id: curve
+            visible: !!ci.cl.autoTarget
+            x: 0; y: 19; z: 6
+            width: ci.width; height: ci.height - 21
+            property var pts: []
+            property int grabbed: -1
+            function reload() { pts = (ci.cl.autoPoints || []).map((p) => ({ t: p.t, v: p.v })); }
+            Component.onCompleted: reload()
+            Connections { target: ci; function onClChanged() { if (curve.grabbed < 0) curve.reload(); } }
+            onPtsChanged: line.requestPaint()
+            onWidthChanged: line.requestPaint()
+            function px(p) { return p.t * tl.pps; }
+            function py(p) { return (1 - p.v) * (height - 8) + 4; }
+            Canvas {
+                id: line
+                anchors.fill: parent
+                onPaint: {
+                    const c = getContext("2d");
+                    c.reset();
+                    const pts = curve.pts;
+                    if (!pts.length) return;
+                    c.strokeStyle = Qt.darker(ci.tint, 1.5);
+                    c.lineWidth = 1.6;
+                    c.beginPath();
+                    c.moveTo(0, curve.py(pts[0]));
+                    for (const p of pts) c.lineTo(curve.px(p), curve.py(p));
+                    c.lineTo(width, curve.py(pts[pts.length - 1]));
+                    c.stroke();
+                    c.fillStyle = Theme.dark ? "white" : "#16181D";
+                    for (const p of pts) {
+                        c.beginPath();
+                        c.arc(curve.px(p), curve.py(p), 3.2, 0, 6.3);
+                        c.fill();
+                    }
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                function hit(x, y) {
+                    for (let i = 0; i < curve.pts.length; ++i)
+                        if (Math.abs(curve.px(curve.pts[i]) - x) < 8 && Math.abs(curve.py(curve.pts[i]) - y) < 8) return i;
+                    return -1;
+                }
+                function point(x, y) { return { t: Math.max(0, Math.min(ci.cl.length, x / tl.pps)), v: Math.max(0, Math.min(1, 1 - (y - 4) / (curve.height - 8))) }; }
+                onPressed: (e) => {
+                    Studio.selectedClip = ci.cl.id;
+                    const i = hit(e.x, e.y);
+                    const list = curve.pts.slice();
+                    if (e.button === Qt.RightButton) {
+                        if (i >= 0 && list.length > 1) {
+                            list.splice(i, 1);
+                            Studio.setAutoPoints(ci.cl.id, list);
+                        }
+                        return;
+                    }
+                    if (i >= 0) {
+                        curve.grabbed = i;
+                    } else {
+                        const p = point(e.x, e.y);
+                        let at = list.findIndex((q) => q.t > p.t);
+                        if (at < 0) at = list.length;
+                        list.splice(at, 0, p);
+                        curve.pts = list;
+                        curve.grabbed = at;
+                    }
+                }
+                onPositionChanged: (e) => {
+                    if (curve.grabbed < 0) return;
+                    const list = curve.pts.slice();
+                    const p = point(e.x, e.y);
+                    // Punkt nie przeskakuje sąsiadów
+                    const lo = curve.grabbed > 0 ? list[curve.grabbed - 1].t : 0;
+                    const hi = curve.grabbed < list.length - 1 ? list[curve.grabbed + 1].t : ci.cl.length;
+                    p.t = Math.max(lo, Math.min(hi, p.t));
+                    list[curve.grabbed] = p;
+                    curve.pts = list;
+                }
+                onReleased: {
+                    if (curve.grabbed < 0) return;
+                    curve.grabbed = -1;
+                    Studio.setAutoPoints(ci.cl.id, curve.pts);
+                }
+            }
+        }
+
+        // Klip wzoru: nuty w każdym powtórzeniu
+        Canvas {
+            visible: !!ci.cl.pattern
+            x: 0; y: 20
+            width: Math.min(ci.width, 4000); height: ci.height - 24
+            readonly property var notes: ci.cl.pattern && Studio.channels ? Studio.patternPreview(ci.cl.pattern) : []
+            readonly property real loopPx: ci.cl.srcLength * tl.pps
+            onNotesChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onLoopPxChanged: requestPaint()
+            onPaint: {
+                const c = getContext("2d");
+                c.reset();
+                c.fillStyle = Theme.dark ? "rgba(255,255,255,0.75)" : "rgba(20,24,30,0.6)";
+                if (loopPx <= 1) return;
+                for (let k = -1; k * loopPx < width; ++k)
+                    for (const n of notes)
+                        c.fillRect((k + n.x) * loopPx - ci.cl.loopOffset * tl.pps, n.y * (height - 3), Math.max(1.5, n.w * loopPx), 3);
+            }
+        }
+
         // Granice powtórzeń pętli
         Repeater {
             model: ci.cl.loop && ci.cl.srcLength * tl.pps > 6 ? Math.min(128, Math.floor((ci.len + ci.cl.loopOffset) / ci.cl.srcLength)) : 0
@@ -666,7 +846,7 @@ Item {
                 if (ci.dragging) Studio.moveClip(ci.cl.id, ci.trackIndex + ci.dTrack, ci.cl.start + ci.dx);
                 ci.dragging = false; ci.dx = 0; ci.dTrack = 0;
             }
-            onDoubleClicked: { if (Studio.tracks[ci.trackIndex] && Studio.tracks[ci.trackIndex].kind !== "audio") tl.editPattern(ci.trackIndex); }
+            onDoubleClicked: { if (ci.cl.pattern) tl.openPattern(ci.cl.pattern); }
             onClicked: (e) => {
                 if (e.button === Qt.RightButton)
                     tl.clipMenu(ci.cl, ci.trackIndex, ci, e.x + 8, e.y, ci.cl.start + (e.x + 8) / tl.pps);

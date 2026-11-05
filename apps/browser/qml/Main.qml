@@ -35,7 +35,7 @@ Window {
     property bool wasMaximized: false
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     // ——— Karty ———
     ListModel { id: tabs }
@@ -313,7 +313,7 @@ Window {
                     Rectangle {
                         visible: win.privateMode
                         anchors.verticalCenter: parent.verticalCenter
-                        width: privText.implicitWidth + 40; height: 30; radius: 15
+                        width: privText.implicitWidth + 40; height: 30; radius: 10
                         color: Qt.rgba(0.42, 0.31, 0.85, Theme.dark ? 0.5 : 0.18)
                         Icon { x: 11; anchors.verticalCenter: parent.verticalCenter; d: Icons.eye; size: 14; color: Theme.dark ? "white" : "#4B33B5" }
                         Text { id: privText; x: 31; anchors.verticalCenter: parent.verticalCenter; text: "Prywatne"; color: Theme.dark ? "white" : "#4B33B5"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
@@ -335,7 +335,7 @@ Window {
                     width: Math.max(220, Math.min(720, room))
                     height: 38
                     anchors.centerIn: parent
-                    radius: 19
+                    radius: 10
                     color: field.activeFocus ? Theme.paneGlass : Theme.fill
                     border.width: field.activeFocus ? 1.5 : 0
                     border.color: Theme.accent
@@ -357,7 +357,7 @@ Window {
                     HoverButton {
                         id: siteButton
                         x: 5; anchors.verticalCenter: parent.verticalCenter
-                        width: siteRow.implicitWidth + 16; height: 30; radius: 15
+                        width: siteRow.implicitWidth + 16; height: 30; radius: 10
                         enabled: !!win.cur && !win.cur.blank && !win.cur.internal && !field.activeFocus
                         onClicked: siteInfo.shown = !siteInfo.shown
                         Row {
@@ -461,7 +461,7 @@ Window {
                         // Powiększenie inne niż 100% (kliknięcie przywraca)
                         HoverButton {
                             visible: addrButtons.page && (win.zoomShown > 0 || Math.abs(win.cur.view.zoomFactor - 1) > 0.01)
-                            width: zoomText.implicitWidth + 16; height: 28; radius: 14
+                            width: zoomText.implicitWidth + 16; height: 28; radius: 10
                             baseColor: Theme.accentSoft
                             onClicked: win.zoom(0)
                             Text { id: zoomText; anchors.centerIn: parent; text: win.cur ? Math.round(win.cur.view.zoomFactor * 100) + "%" : ""; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
@@ -630,7 +630,7 @@ Window {
             x: 10; y: chrome.height + 2
             width: parent.width - 20
             height: win.pendingPermission ? 50 : 0
-            radius: 14
+            radius: 10
             visible: height > 0
             clip: true
             z: 5
@@ -769,7 +769,7 @@ Window {
                 y: shown ? 12 : -height - 10
                 visible: y > -height
                 Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
-                width: 360; height: 46; radius: 23
+                width: 360; height: 46; radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
@@ -816,7 +816,7 @@ Window {
                 y: parent.height - (shown ? height + 22 : -10)
                 visible: y < parent.height
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-                width: toastRow.implicitWidth + 28; height: 42; radius: 21
+                width: toastRow.implicitWidth + 28; height: 42; radius: 12
                 color: Theme.dark ? "#F2F3F6" : "#17181D"
                 Row {
                     id: toastRow
@@ -841,7 +841,7 @@ Window {
                 function show() { opacity = 1; fsTimer.restart(); }
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: 24
-                width: fsText.implicitWidth + 36; height: 44; radius: 22
+                width: fsText.implicitWidth + 36; height: 44; radius: 12
                 color: Qt.rgba(0.08, 0.08, 0.1, 0.88)
                 opacity: 0
                 visible: opacity > 0
@@ -969,7 +969,7 @@ Window {
             y: address.mapToItem(frame, 0, 0).y + address.height + 6
             width: address.width
             height: sugCol.implicitHeight + 12
-            radius: 18
+            radius: 10
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             z: 50
@@ -1265,7 +1265,7 @@ Window {
             id: box
             width: pop.contentWidth + 28
             height: popBody.childrenRect.height + 28
-            radius: 20
+            radius: 12
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             opacity: pop.shown ? 1 : 0

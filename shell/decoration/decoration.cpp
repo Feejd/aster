@@ -15,28 +15,11 @@ namespace Aster {
 namespace {
 // Pasek jest niższy niż w programach Aster (44 px), bo tam mieści się w nim też ich pasek narzędzi
 constexpr qreal TitleHeight = 40;
-constexpr qreal CornerRadius = 18;
-constexpr qreal ButtonSize = 28;
-constexpr qreal ButtonSpacing = 4;
-constexpr qreal DotSize = 16;
+constexpr qreal CornerRadius = 12;
+constexpr qreal ButtonSize = 30;
+constexpr qreal ButtonSpacing = 2;
 constexpr qreal SideMargin = 8;
 constexpr qreal ResizeMargin = 6;
-
-struct DotColors {
-    QColor top, bottom;
-};
-
-DotColors dotColors(DecorationButtonType type)
-{
-    switch (type) {
-    case DecorationButtonType::Minimize:
-        return {QColor(0xFF, 0xD1, 0x5C), QColor(0xF5, 0xA6, 0x23)};
-    case DecorationButtonType::Maximize:
-        return {QColor(0x5E, 0xDB, 0x8A), QColor(0x21, 0xB3, 0x5A)};
-    default:
-        return {QColor(0xFF, 0x7A, 0x72), QColor(0xEE, 0x3B, 0x32)};
-    }
-}
 
 // Cień: 9‑segmentowy obraz, wspólny dla okien o tym samym stanie (kilka warstw jak w WindowShadow.qml)
 std::shared_ptr<DecorationShadow> makeShadow(bool active, bool dark)
@@ -103,81 +86,66 @@ Button::Button(DecorationButtonType type, Decoration *decoration)
     connect(this, &DecorationButton::pressedChanged, this, [this] { update(); });
 }
 
-void Button::setGroupHovered(qreal progress)
-{
-    m_group = progress;
-    update();
-}
-
 void Button::paint(QPainter *painter, const QRectF &)
 {
     if (!isVisible())
         return;
     const auto *win = decoration()->window();
-    const bool dark = win->palette().window().color().lightnessF() < 0.5;
-    const bool lit = win->isActive() || m_group > 0;
-    const DotColors c = dotColors(type());
-    const QPointF center = geometry().center();
+    const bool closing = type() == DecorationButtonType::Close;
+    const QRectF box = geometry().adjusted(1, 1, -1, -1);
+    const QPointF center = box.center();
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setPen(Qt::NoPen);
 
-    // Poświata w kolorze przycisku
-    if (m_hover > 0) {
-        QColor glow = c.bottom;
-        glow.setAlphaF(0.28 * m_hover);
-        painter->setBrush(glow);
-        const qreal r = 13 * (0.6 + 0.4 * m_hover);
-        painter->drawEllipse(center, r, r);
+    // Płytka widoczna w aktywnym oknie; po najechaniu ciemnieje, a zamknięcie czerwienieje
+    QColor back = win->palette().windowText().color();
+    back.setAlphaF(win->isActive() ? 0.07 + 0.07 * m_hover : 0.1 * m_hover);
+    if (closing && m_hover > 0) {
+        back = QColor(0xD9, 0x3B, 0x40);
+        back.setAlphaF(m_hover);
     }
+    painter->setBrush(back);
+    painter->drawRoundedRect(box, 8, 8);
 
-    const qreal r = DotSize / 2 * (isPressed() ? 0.85 : 1 + 0.18 * m_hover);
-    const QRectF dot(center.x() - r, center.y() - r, 2 * r, 2 * r);
-    if (lit) {
-        QLinearGradient g(dot.topLeft(), dot.bottomLeft());
-        g.setColorAt(0, c.top);
-        g.setColorAt(1, c.bottom);
-        painter->setBrush(g);
-        painter->setPen(QPen(c.bottom.darker(125), 1));
-    } else {
-        painter->setBrush(dark ? QColor(255, 255, 255, 20) : QColor(16, 24, 40, 15));
-        painter->setPen(QPen(dark ? QColor(0, 0, 0, 51) : QColor(0, 0, 0, 20), 1));
-    }
-    painter->drawEllipse(dot.adjusted(0.5, 0.5, -0.5, -0.5));
-
-    // Połysk
-    if (lit) {
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(255, 255, 255, 89));
-        painter->drawRoundedRect(QRectF(dot.x() + 3, dot.y() + 1.5, dot.width() - 6, dot.height() * 0.45), r * 0.45, r * 0.45);
-    }
-
-    // Znak na kropce
-    if (m_group > 0) {
-        QColor ink = lit ? QColor(0, 0, 0, 140) : win->palette().windowText().color();
-        ink.setAlphaF(ink.alphaF() * m_group);
-        QPen pen(ink, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter->setPen(pen);
-        painter->setBrush(Qt::NoBrush);
-        const qreal s = 3.2;
-        switch (type()) {
-        case DecorationButtonType::Minimize:
-            painter->drawLine(center + QPointF(-s, 0), center + QPointF(s, 0));
-            break;
-        case DecorationButtonType::Maximize:
-            if (win->isMaximized()) {
-                const qreal m = s * 0.6;
-                painter->drawRoundedRect(QRectF(center.x() - m, center.y() - m, 2 * m, 2 * m), 1, 1);
-            } else {
-                painter->drawRoundedRect(QRectF(center.x() - s, center.y() - s, 2 * s, 2 * s), 1, 1);
-            }
-            break;
-        default:
-            painter->drawLine(center + QPointF(-s, -s), center + QPointF(s, s));
-            painter->drawLine(center + QPointF(-s, s), center + QPointF(s, -s));
-            break;
+    QColor ink = closing && m_hover > 0.5 ? QColor(Qt::white) : win->palette().windowText().color();
+    if (!win->isActive() && m_hover == 0)
+        ink.setAlphaF(0.5);
+    painter->setPen(QPen(ink, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter->setBrush(Qt::NoBrush);
+    // Te same znaki co w programach Aster (common/Icons.js), w siatce 24 × 24
+    const qreal k = 15.0 / 24.0;
+    const auto at = [&](qreal x, qreal y) { return center + QPointF((x - 12) * k, (y - 12) * k); };
+    const auto line = [&](std::initializer_list<QPointF> points) {
+        QPainterPath path;
+        bool first = true;
+        for (const QPointF &p : points) {
+            if (first)
+                path.moveTo(at(p.x(), p.y()));
+            else
+                path.lineTo(at(p.x(), p.y()));
+            first = false;
         }
+        painter->drawPath(path);
+    };
+    if (type() == DecorationButtonType::Minimize) {
+        line({{12, 4}, {12, 15}});
+        line({{7.5, 10.5}, {12, 15}, {16.5, 10.5}});
+        line({{6, 20}, {18, 20}});
+    } else if (type() == DecorationButtonType::Maximize && win->isMaximized()) {
+        line({{9, 4}, {9, 9}, {4, 9}});
+        line({{20, 9}, {15, 9}, {15, 4}});
+        line({{15, 20}, {15, 15}, {20, 15}});
+        line({{4, 15}, {9, 15}, {9, 20}});
+    } else if (type() == DecorationButtonType::Maximize) {
+        line({{4, 9}, {4, 4}, {9, 4}});
+        line({{15, 4}, {20, 4}, {20, 9}});
+        line({{20, 15}, {20, 20}, {15, 20}});
+        line({{9, 20}, {4, 20}, {4, 15}});
+    } else {
+        line({{6, 6}, {18, 18}});
+        line({{18, 6}, {6, 18}});
     }
     painter->restore();
 }
@@ -196,17 +164,9 @@ bool Decoration::init()
 {
     auto *win = window();
 
-    m_groupAnim.setDuration(120);
-    connect(&m_groupAnim, &QVariantAnimation::valueChanged, this, [this](const QVariant &v) {
-        m_group = v.toReal();
-        for (Button *b : std::as_const(m_buttons))
-            b->setGroupHovered(m_group);
-    });
-
     for (auto type : {DecorationButtonType::Minimize, DecorationButtonType::Maximize, DecorationButtonType::Close}) {
         auto *b = new Button(type, this);
         m_buttons.append(b);
-        connect(b, &DecorationButton::hoveredChanged, this, &Decoration::updateGroupHover);
         connect(b, &DecorationButton::clicked, this, [this, type](Qt::MouseButton button) {
             if (type == DecorationButtonType::Minimize)
                 requestMinimize();
@@ -230,17 +190,6 @@ bool Decoration::init()
     updateLayout();
     updateShadow();
     return true;
-}
-
-void Decoration::updateGroupHover()
-{
-    bool any = false;
-    for (const Button *b : std::as_const(m_buttons))
-        any = any || b->isHovered();
-    m_groupAnim.stop();
-    m_groupAnim.setStartValue(m_group);
-    m_groupAnim.setEndValue(any ? 1.0 : 0.0);
-    m_groupAnim.start();
 }
 
 void Decoration::updateShadow()

@@ -1,7 +1,7 @@
 import QtQuick
 import Aster.Ui
 
-// Wiersz ustawienia: plakietka albo ikona, tytuł i opis, po prawej kontrolka (przełącznik, przycisk, wartość)
+// Wiersz ustawienia: tytuł i opis, po prawej kontrolka (przełącznik, przycisk, wartość)
 // i opcjonalna strzałka. Linię oddzielającą rysuje każdy wiersz poza pierwszym.
 Item {
     id: row
@@ -17,7 +17,7 @@ Item {
     signal clicked()
 
     width: parent ? parent.width : 0
-    height: subtitle !== "" ? 58 : 46
+    height: subtitle !== "" ? 60 : 46
 
     readonly property bool first: {
         const c = parent ? parent.children : [];
@@ -25,16 +25,16 @@ Item {
             if (c[i].visible && c[i].height > 0) return c[i] === row;
         return true;
     }
-    readonly property real textX: colors.length ? 52 : (icon !== "" ? 46 : 16)
+    readonly property real textX: 16
 
     Rectangle {
         visible: !row.first
-        x: row.textX; width: parent.width - x; height: 1
+        width: parent.width; height: 1
         color: Theme.line
     }
     Rectangle {
         anchors.fill: parent; anchors.margins: 3
-        radius: 10
+        radius: 6
         color: Theme.hover
         opacity: row.clickable && area.containsMouse ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 100 } }
@@ -46,18 +46,6 @@ Item {
         hoverEnabled: true
         cursorShape: row.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: row.clicked()
-    }
-    Badge {
-        visible: row.colors.length > 0
-        x: 14; anchors.verticalCenter: parent.verticalCenter
-        icon: row.icon
-        colors: row.colors.length ? row.colors : ["#000", "#000"]
-    }
-    Icon {
-        visible: row.colors.length === 0 && row.icon !== ""
-        x: 16; anchors.verticalCenter: parent.verticalCenter
-        d: Icons[row.icon] || ""; size: 18
-        color: Theme.text2
     }
     Column {
         x: row.textX

@@ -296,7 +296,7 @@ Rectangle {
                     id: sug
                     required property string modelData
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: sugText.implicitWidth + 24; height: 30; radius: 15
+                    width: sugText.implicitWidth + 24; height: 30; radius: 8
                     baseColor: Theme.fill
                     onClicked: ap.send(modelData)
                     Text { id: sugText; anchors.centerIn: parent; text: sug.modelData; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
@@ -376,7 +376,7 @@ Rectangle {
                             e.accepted = true;
                         } else if (e.key === Qt.Key_Escape) { ap.close(); e.accepted = true; }
                     }
-                    Text { visible: !input.text; text: ap.busy ? "Agent pracuje…" : "Napisz, co zrobić (Enter — wyślij, Shift+Enter — nowy wiersz)"; color: Theme.text2; font: input.font; width: parent.width; wrapMode: Text.Wrap }
+                    Text { visible: !input.text; text: ap.busy ? "Agent pracuje…" : "Napisz, co zrobić"; color: Theme.text2; font: input.font; width: parent.width; wrapMode: Text.Wrap }
                 }
             }
             HoverButton {
@@ -404,7 +404,7 @@ Rectangle {
                 id: ub
                 anchors.right: parent.right
                 width: Math.min(parent.width * 0.88, ut.implicitWidth + 24); height: ut.implicitHeight + 16
-                radius: 14
+                radius: 12
                 color: Theme.accentSoft
                 Text { id: ut; x: 12; y: 8; width: Math.min(implicitWidth, um.width * 0.88 - 24); wrapMode: Text.Wrap; text: um.m.text || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
             }
@@ -467,7 +467,7 @@ Rectangle {
                 Text { visible: !!acm.m.text; width: parent.width; wrapMode: Text.Wrap; text: acm.m.text || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
                 Rectangle {
                     width: parent.width; height: cmdText.implicitHeight + 12; radius: 7
-                    color: Theme.dark ? "#0B0C10" : "#F3F4F6"
+                    color: Theme.windowGlass
                     Text { id: cmdText; x: 8; y: 6; width: parent.width - 16; wrapMode: Text.WrapAnywhere; text: acm.m.command || ""; color: Theme.text; font.family: "JetBrains Mono"; font.pixelSize: 12 }
                 }
                 Row {

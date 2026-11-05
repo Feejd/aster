@@ -912,6 +912,18 @@ void TerminalView::clear()
     update();
 }
 
+QString TerminalView::tailText(int lines) const
+{
+    // Od dołu: puste wiersze pod kursorem nie liczą się do „ostatnich”
+    QStringList out;
+    for (qint64 ln = m_session->endAbsolute() - 1; ln >= m_session->firstAbsolute() && out.size() < lines; --ln) {
+        const QString t = rowText(ln).trimmed();
+        if (!t.isEmpty())
+            out.prepend(t);
+    }
+    return out.join(QLatin1Char('\n'));
+}
+
 QString TerminalView::historyText() const
 {
     QString out;

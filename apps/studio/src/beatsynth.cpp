@@ -592,6 +592,52 @@ QJsonArray chordNotes(const QJsonObject &p)
     return out;
 }
 
+std::shared_ptr<AudioSource> kitSample(const QString &kitId, const QString &row, int rate)
+{
+    const Kit &k = kit(kitId);
+    Noise rnd;
+    std::vector<float> l, r;
+    float gain = 1;
+    if (row == QLatin1String("kick")) {
+        l = kickVoice(k, rate, rnd);
+        gain = 0.95f;
+    } else if (row == QLatin1String("snare")) {
+        l = snareVoice(k, rate, rnd);
+        gain = 0.7f;
+    } else if (row == QLatin1String("clap")) {
+        l = clapVoice(k, rate, rnd);
+        r = clapVoice(k, rate, rnd);
+        gain = 0.8f;
+    } else if (row == QLatin1String("hat")) {
+        l = hatVoice(k, rate, k.hatDecay, rate, rnd);
+        gain = float(k.hatLevel);
+    } else if (row == QLatin1String("openhat")) {
+        l = hatVoice(k, rate, k.ohatDecay, rate, rnd);
+        gain = float(k.hatLevel) * 0.8f;
+    } else {
+        l = percVoice(k, rate, rnd);
+        gain = 0.35f;
+    }
+    if (r.size() != l.size())
+        r = l;
+    auto src = std::make_shared<AudioSource>();
+    src->channels = 2;
+    src->frames = (long long)l.size();
+    src->data.resize(l.size() * 2);
+    for (size_t i = 0; i < l.size(); ++i) {
+        src->data[2 * i] = l[i] * gain;
+        src->data[2 * i + 1] = r[i] * gain;
+    }
+    src->computePeaks();
+    return src;
+}
+
+BassParams bassParams(const QString &kitId)
+{
+    const Kit &k = kit(kitId);
+    return {k.bassDecay, k.bassGlide, k.bassDrive};
+}
+
 std::shared_ptr<AudioSource> render(const QJsonObject &p, Kind kind, double bpm, int rate)
 {
     const Kit &k = kit(p.value(QStringLiteral("kit")).toString());

@@ -34,7 +34,7 @@ Item {
         spacing: 10
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 72; height: 72; radius: 22
+            width: 72; height: 72; radius: 12
             gradient: Gradient {
                 GradientStop { position: 0; color: "#5EE7DF" }
                 GradientStop { position: 1; color: "#2E9BEF" }

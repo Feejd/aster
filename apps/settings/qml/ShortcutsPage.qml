@@ -12,7 +12,7 @@ Page {
     property int newMods: 0
 
     Rectangle {
-        width: parent.width; height: 38; radius: 19
+        width: parent.width; height: 38; radius: 10
         color: Theme.fill
         border.width: q.activeFocus ? 1.5 : 0; border.color: Theme.accent
         Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 15; color: Theme.text2 }
@@ -76,7 +76,7 @@ Page {
         onShownChanged: if (shown) catcher.forceActiveFocus()
         onAccepted: Shortcuts.setKeys(sp.editing.group, sp.editing.action, [sp.newKey | sp.newMods])
         Rectangle {
-            width: parent.width; height: 64; radius: 14
+            width: parent.width; height: 64; radius: 10
             color: Theme.fill
             border.width: 1.5; border.color: catcher.activeFocus ? Theme.accent : Theme.line
             Text {

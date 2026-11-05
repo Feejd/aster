@@ -18,8 +18,8 @@ Column {
         Text {
             x: 4; anchors.verticalCenter: parent.verticalCenter
             text: sec.title
-            color: Theme.text
-            font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+            color: Theme.text2
+            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
         }
         Row { id: headerRow; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; spacing: 8 }
     }
@@ -27,8 +27,8 @@ Column {
         width: parent.width
         height: body.height
         visible: body.height > 0
-        radius: 16
-        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.78)
+        radius: 9
+        color: Theme.dark ? "#1E1F23" : "#FFFFFF"
         border.width: 1
         border.color: Theme.line
         Column { id: body; width: parent.width }

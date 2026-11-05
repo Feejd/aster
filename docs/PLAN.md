@@ -21,7 +21,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Dok chowa się, gdy okno na niego zachodzi, i wraca od dolnej krawędzi (do wyłączenia w Ustawieniach); lista okien programu po najechaniu i menu pod prawym przyciskiem
 - [ ] Dok: miniatury okien (PipeWire), przypinanie programów z menu
 - [x] Nowe okna na środku ekranu, kolejne schodkowo (`shell/kwinscripts/asteruklad`), Super+góra/dół jak w Windowsie
-- [ ] Dynamiczna wyspa: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
+- [x] Żywy pasek zamiast dynamicznej wyspy: zegar na belce, powiadomienia i pytania jako karta spod paska, linia postępu na dolnej krawędzi
+- [ ] Żywy pasek: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
 - [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
 - [x] Super = Start
 - [x] Super+A = centrum sterowania
@@ -185,7 +186,18 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
 - [ ] Aplikacje z Androida (APK) przez Waydroid jako zwykłe programy w Starcie i doku
 - [ ] Aplikacje webowe: działanie w tle po zamknięciu okna (komunikatory), kilka kont jednej aplikacji, ustawienia aplikacji
 - [x] Sklep — Flathub przez flatpak (bez hasła): Odkrywaj (polecenie dnia, odpowiedniki programów z Windowsa, ranking, nowości), kategorie, wyszukiwanie, strona aplikacji, instalacja z postępem, zainstalowane, aktualizacje
-- [ ] Sklep: aplikacje webowe i z Androida w jednym miejscu, oceny i recenzje, programy systemowe (RPM)
+- [x] Sklep Aster od nowa: własny, szeroki katalog ponad 300 znanych programów na półkach (najbardziej znane pierwsze), nie nakładka na Flathub; to, co nieznane, pojawia się tylko w wyszukiwaniu i tylko popularne
+- [x] Sklep: programy spoza Flatpaka prosto od producenta przez `aster-get` (paczki .deb, AppImage, tar i oficjalne skrypty, do katalogu domowego, bez hasła): Claude, Claude Code, Cursor, Warp, Ollama, Codex, JetBrains Toolbox i inne; aktualizacje i usuwanie w Sklepie
+- [x] Sklep: Gry jako osobna zakładka: launchery i sklepy (także Battle.net, EA, Ubisoft, Rockstar, GOG przez Lutris), Roblox i Minecraft, granie w chmurze, emulatory, narzędzia, darmowe gry
+- [x] Sklep: pierwszy ekran „Chcę…” i wyszukiwanie po tym, co chcesz zrobić (po polsku, z odmianą, po rozszerzeniu pliku i po nazwie programu z Windowsa), Aster Intelligence jako dodatek
+- [x] Sklep: przewodniki po 17 zadaniach z instalacją całego zestawu i prawdziwym rachunkiem za dysk
+- [x] Sklep: przesiadka z Windowsa (zaznaczasz programy, dostajesz zestaw i prawdę o swoich plikach, albo zostajesz przy oryginale w wersji webowej)
+- [x] Sklep: jedna lista dla programów, aplikacji Aster (wbudowane albo paczki z wydania „aplikacje”) i aplikacji webowych; lżejsza wersja webowa podpowiadana przy ciężkich programach
+- [x] Sklep: karta programu liczona z prawdziwych uprawnień (pliki, sieć, urządzenia, izolacja, data aktualizacji, wydawca, kod, ten komputer), „nie sprawdziliśmy” zamiast zgadywania, porównanie obok siebie
+- [x] Sklep: opinie użytkowników z ODRS jako „X% poleca”
+- [x] Sklep: Twój komputer: aktualizacje, cofanie do poprzedniej wersji, usuwanie z informacją, ile miejsca wróci, porządki (biblioteki bez programów, programy nieużywane od 3 miesięcy)
+- [x] Sklep: dane katalogu i obrazki w pamięci na dysku, otwiera się od razu i działa bez internetu
+- [ ] Sklep: pisanie własnych opinii (ODRS), aplikacje z Androida (po Waydroidzie), programy systemowe (RPM), aktualizacja systemu z jednego miejsca, fakty o telemetrii i wysyłaniu danych dla całego katalogu, werdykty dla wszystkich programów
 - [ ] Aster Intelligence (dawniej Asystent Aster) — rozpisany niżej; gotowe A1 (usługa, `aster` w terminalu, Ustawienia),
       A2 (wyspa, panel), A2.5 (wygląd jak Apple Intelligence, narzędzia do pisania) i A3 (agent, który sam działa).
 
@@ -340,8 +352,31 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
         na wolnej licencji), ścieżki MIDI z edytorem nut
   - [ ] Dalej: biblioteka pętli i sampli na wolnych licencjach (CC0 / CC-BY, np. własne nagrania), dopasowanie pętli
         do tempa projektu (rubberband — jest w Fedorze), podgląd pętli przed wstawieniem
-  - [ ] Dalej: odsłuch wejścia (z ostrzeżeniem o sprzężeniu), nagrywanie w pętli z wieloma podejściami (comping),
-        automatyka głośności
+  - [x] praca raperów na gotowym bicie: „Na swoim bicie” (ekran startowy) i „Bit z pliku” (menu ścieżek) —
+        `src/analysis.*` rozpoznaje tempo (strumień nastąpień, autokorelacja do 16 uderzeń; trafia co do 0,1 BPM),
+        fazę uderzeń (pełne i dolne pasmo, pierwszeństwo pierwszego dźwięku) i tonację (szczyty widma 30–1000 Hz,
+        profile Krumhansla); projekt dostaje tempo i tonację bitu, bit ląduje na siatce (cisza przed „raz” przycięta).
+        Próby na 6 szablonach: tempo 10/11 (drill bez akordów — połowa), tonacja 7/11 (pomyłki o kwartę), faza 11/11
+  - [x] odsłuch głosu w słuchawkach z efektami uzbrojonej ścieżki (autotune na żywo), ostrzeżenie o sprzężeniu
+  - [x] nagrywanie w pętli: każde przejście regionu to podejście (jeden plik, przesunięcia w klipie), domyślnie
+        ostatnie pełne; wybór w zakładce Klip, menu klipu albo plakietką na klipie; comping = podziel i wybierz
+  - [x] wymiana fragmentu (punch-in, P): nagranie tylko w regionie na linijce, rozbieg ok. 3 s (pełne takty) z bitem
+        i starym nagraniem, w regionie stare milknie; po regionie koniec sam, 10 ms przenikania na brzegach
+  - [x] role ścieżek rapera (Wokal / Dubel / Ad-libsy, klawisze 1–3, „nagrywasz na” przy przycisku nagrywania;
+        brakującą ścieżkę Studio zakłada z brzmieniem); w menu klipu „Nagraj dubel / ad-libsy do tego fragmentu”;
+        efekt „Sztuczny dubel” (dwie pływające kopie 19 i 27 ms po bokach) w karcie Przestrzeń
+  - [x] tekst piosenki (zakładka Tekst, T): pisanie, czytanie z kolorowymi rymami (`src/lyrics.*`: od przedostatniej
+        sylaby, wymowa ó/u, rz/ż, ubezdźwięcznienie; asonanse i rymy męskie; para do 3 wersów odstępu), czas wersów
+        od taktu co 1–2 takty albo ustawiany ↓ w trakcie grania (miary, do szesnastki), prompter nad osią przy nagrywaniu
+  - [x] czystość głosu (karta w zakładce Ścieżka): odszumianie nagrań w tle (`src/denoise.*`: profil szumu
+        z 10% najcichszych ramek, bramka widmowa STFT 2048/512 z wygładzaniem; lekko/średnio/mocno: szum w pauzach
+        −8/−14/−21 dB, głos ±0,4 dB; plik „· odszumione N.wav”, oryginał w klipie, nowe nagrania ścieżki od razu)
+        i de-esser na żywo (zwrotnica LR4 4,5 kHz, udział góry w sygnale; „s” −9 dB przy 40%, głos bez zmian;
+        gotowe brzmienia wokalu mają 40%)
+  - Kierunek od 2026-11-05: pełnoprawny DAW — plan i etapy w `docs/STUDIO-DAW.md`
+  - [ ] Dalej (raperzy): podpowiedzi rymów (słownik hunspell-pl),
+        znaczniki części (zwrotka/refren), sampler w Beat Makerze, miernik LUFS, fragment pionowy na TikToka,
+        separacja ścieżek (model AI lokalnie); automatyka głośności
   - [ ] Dalej: kilka ścieżek nagrywanych naraz z interfejsu wielokanałowego, zmiana tempa w trakcie piosenki,
         stroik do gitary, eksport pojedynczych ścieżek, udostępnianie (wysłanie e-mailem/do telefonu)
   - [ ] Sprawdzić w maszynie wirtualnej i na laptopie: nagrywanie z prawdziwego mikrofonu i interfejsu USB,
@@ -401,6 +436,7 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [x] Aster Code: gałęzie (wybór z paska stanu i widoku zmian: przełącz — także zdalną, nowa z wpisanej nazwy, połącz z bieżącą, usuń), odkładanie i przywracanie zmian (stash), pojedyncze fragmenty w podglądzie różnic (dodaj, wycofaj, odrzuć z potwierdzeniem)
 - [x] Aster Code: konflikty łączenia — bloki w edytorze (moja wersja zielona, przychodząca niebieska) z przyciskami „Zostaw moją / Weź przychodzącą / Obie”, sekcja Konflikty i baner łączenia w widoku zmian (opis z MERGE_MSG, „Przerwij łączenie”, blokada zatwierdzenia z nierozwiązanymi konfliktami); autor wiersza przy kursorze (git blame z treścią edytora, także niezapisaną; włączany w menu)
 - [x] Aster Code: historia pliku w pasku bocznym (git log --follow, +/− na wpis): zmiany pliku w zatwierdzeniu, „Przywróć tę wersję” do edytora (bez zapisu), lista plików zatwierdzenia (także z ostatnich zatwierdzeń w widoku zmian), kopiowanie skrótu; z menu karty, drzewa i palety
+- [x] Aster Code: historia lokalna — każdy zapis pliku (także bez gita, do 100 wersji, bez plików z sekretami) na osi czasu razem z zatwierdzeniami, porównanie i „Przywróć tę wersję”; git bez poleceń: „Włącz wersje”, podpis autora w dwóch polach przy pierwszym zatwierdzeniu, „Opublikuj” bez zdalnego repozytorium prowadzi do logowania GitHub; terminal: „Brakuje programu X” z przyciskiem Zainstaluj; karta powitalna przy pierwszym uruchomieniu
 - [ ] Aster Code: git dalej — porównanie dwóch dowolnych wersji, zatwierdzenia łączące w historii pliku, logowanie do GitHuba bez terminala
 - [x] Aster Code: wiele kursorów — Ctrl+D (następne wystąpienie), Ctrl+Shift+L (wszystkie), Alt+klik, Ctrl+Alt+↑/↓; pisanie, kasowanie, strzałki, Home/End, Enter, Tab i nawiasy przy wszystkich naraz (jeden krok cofania); kopiowanie i wklejanie po jednym wierszu na kursor; licznik kursorów na pasku stanu; domykanie nawiasów
 - [x] Aster Code: zamiana w całym projekcie — pole „Zamień na” w szukaniu (grupy $1 przy wyrażeniach), podgląd w wynikach, zamiana wszystkiego (z potwierdzeniem), w pliku i pojedynczego trafienia; otwarte karty zmieniane w edytorze (do cofnięcia), pozostałe pliki na dysku z zachowaniem kodowania; szukanie widzi treść niezapisanych kart
@@ -419,6 +455,8 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [x] Aster Code: wdrożenie jednym kliknięciem (⇪ na pasku kart, paleta) — własny serwer przez SSH (budowanie, rsync z wykluczeniem node_modules/.venv/.git/.env, polecenie po wdrożeniu), GitHub Pages, Netlify, Vercel, Cloudflare Pages (klucze z Sekretów projektu); ustawienia w .aster/wdrozenie.json, wdrożenie jako zadanie z logami, adres strony po zakończeniu (sprawdzone: SSH na localhost; hostingi — niesprawdzone, bez kont)
 - [x] Aster Code: logowanie do GitHuba bez terminala — przez przeglądarkę (gh auth login --web: kod jednorazowy w Aster Code, gh auth setup-git) albo tokenem w portfelu (pomocnik haseł gita z tokenem przy wysyłaniu i pobieraniu, także dla gh-pages); nowe repozytorium na GitHubie i pierwsze wysłanie jednym kliknięciem
 - [x] Aster Code: poprawki przed wydaniem — wynik poleceń agenta bez sekretów (wartości z portfela i .env, zmienne o tajnych nazwach, znane kształty kluczy), polecenia czytające .env, klucze i środowisko nie uruchamiają się; Flatpak: dostęp do portfela i usługi asystenta, git przez flatpak-spawn; zmiana od agenta liczona na aktualnej treści pliku; kopie niezapisanych kart przywracane po awarii; haki testowe tylko z -DASTER_CODE_TEST_HOOKS=ON
+- [x] Aster Code, kierunek „najbardziej intuicyjny edytor” (miara: nie trzeba znać skrótu, nazwy funkcji ani polecenia): pole „Co chcesz zrobić?” — pliki, polecenia, ustawienia, szukanie w kodzie, wiersz, agent (zdanie idzie najpierw do agenta), bez polskich znaków; podpisy przycisków z ikoną; pusty edytor z działaniami; „Przygotuj projekt” (języki, serwery języków, zależności w kontenerze jednym kliknięciem); „Napraw” przy problemach i w żarówce, „Wyjaśnij i napraw” oraz „Zainstaluj” przy nieudanych zadaniach
+- [ ] Aster Code, intuicyjność dalej: historia lokalna (cofnięcie do dowolnego zapisu bez gita), pierwsze uruchomienie, zrozumiałe błędy w terminalu, język git po ludzku
 - [ ] Aster Code: debugowanie dalej — warunkowe punkty przerwania, obserwowane wyrażenia, podgląd wartości po najechaniu, punkty przerwania zapamiętane i przesuwane przy edycji, przekazanie wejścia do programu; zadania z pliku .aster/zadania.json, kilka zadań naraz, serwer deweloperski w tle
 - [ ] Aster Code: więcej grup i podział w pionie, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie), zwijanie z serwera języka (foldingRange), zwinięte bloki w minimapie, przeciąganie kart między grupami
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)

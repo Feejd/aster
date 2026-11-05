@@ -19,7 +19,7 @@ IntensityAmount=0
 IntensityEffect=0
 
 [Colors:Button]
-BackgroundAlternate=238,240,245
+BackgroundAlternate=241,241,238
 BackgroundNormal=255,255,255
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
@@ -33,8 +33,8 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:Complementary]
-BackgroundAlternate=238,240,245
-BackgroundNormal=30,31,38
+BackgroundAlternate=241,241,238
+BackgroundNormal=35,36,40
 DecorationFocus=138,160,255
 DecorationHover=138,160,255
 ForegroundActive=138,160,255
@@ -47,8 +47,8 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:Header]
-BackgroundAlternate=246,247,250
-BackgroundNormal=238,240,245
+BackgroundAlternate=247,247,245
+BackgroundNormal=241,241,238
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
 ForegroundActive=52,86,232
@@ -61,8 +61,8 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:Header][Inactive]
-BackgroundAlternate=246,247,250
-BackgroundNormal=238,240,245
+BackgroundAlternate=247,247,245
+BackgroundNormal=241,241,238
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
 ForegroundActive=52,86,232
@@ -89,7 +89,7 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:Tooltip]
-BackgroundAlternate=238,240,245
+BackgroundAlternate=241,241,238
 BackgroundNormal=255,255,255
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
@@ -103,7 +103,7 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:View]
-BackgroundAlternate=246,247,250
+BackgroundAlternate=247,247,245
 BackgroundNormal=255,255,255
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
@@ -117,8 +117,8 @@ ForegroundPositive=22,163,74
 ForegroundVisited=124,58,237
 
 [Colors:Window]
-BackgroundAlternate=246,247,250
-BackgroundNormal=238,240,245
+BackgroundAlternate=247,247,245
+BackgroundNormal=241,241,238
 DecorationFocus=52,86,232
 DecorationHover=52,86,232
 ForegroundActive=52,86,232
@@ -139,9 +139,9 @@ shadeSortColumn=true
 contrast=4
 
 [WM]
-activeBackground=238,240,245
-activeBlend=238,240,245
+activeBackground=241,241,238
+activeBlend=241,241,238
 activeForeground=22,24,29
-inactiveBackground=238,240,245
-inactiveBlend=238,240,245
+inactiveBackground=241,241,238
+inactiveBlend=241,241,238
 inactiveForeground=91,98,112

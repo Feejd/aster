@@ -168,7 +168,8 @@ QVariantMap System::about() const
             memKb = line.section(QLatin1Char(':'), 1).simplified().section(QLatin1Char(' '), 0, 0).toLongLong();
     m.insert(QStringLiteral("memory"), QString::number(qRound(memKb / 1024.0 / 1024.0)) + QStringLiteral(" GB"));
 
-    const QStorageInfo root = QStorageInfo::root();
+    // Na atomowym systemie „/” to mały obraz tylko do odczytu; prawdziwe miejsce jest tam, gdzie katalog domowy
+    const QStorageInfo root(QDir::homePath());
     m.insert(QStringLiteral("diskTotal"), gigabytes(root.bytesTotal()));
     m.insert(QStringLiteral("diskFree"), gigabytes(root.bytesAvailable()));
     m.insert(QStringLiteral("diskUsed"), root.bytesTotal() > 0 ? 1.0 - double(root.bytesAvailable()) / root.bytesTotal() : 0.0);

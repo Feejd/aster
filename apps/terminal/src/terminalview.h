@@ -112,6 +112,7 @@ public:
     Q_INVOKABLE void searchNext(bool backwards);
     Q_INVOKABLE void endSearch();
     Q_INVOKABLE QString historyText() const;              // cała zawartość (zapis do pliku)
+    Q_INVOKABLE QString tailText(int lines) const;        // ostatnie wiersze (bez czytania całej historii)
 
 signals:
     void fontChanged();

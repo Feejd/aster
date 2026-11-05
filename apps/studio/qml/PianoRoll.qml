@@ -3,18 +3,19 @@ import QtQuick
 import Aster.Ui
 import Aster.Studio
 
-// Piano roll ścieżki Melodia: z lewej klawiatura, w siatce nuty (wiersz = wysokość, kolumna = szesnastka).
+// Piano roll kanału w bieżącym wzorze: z lewej klawiatura, w siatce nuty (wiersz = wysokość, kolumna = szesnastka).
 // Klik w puste miejsce — nowa nuta, przeciągnięcie nuty — przesuwa, prawy brzeg — długość, prawy klik — usuwa.
 // Wiersze tonacji piosenki są jaśniejsze; „Tylko nuty skali” nie pozwala trafić w fałszywą nutę.
 // Klawiatura komputera gra jak pianino (A S D F G H J K — białe, W E T Y U O — czarne, Z/X — oktawa);
 // przy odtwarzaniu z „Nagrywaj nuty” zagrane dźwięki trafiają do siatki (wyrównane do szesnastek).
 Item {
     id: pr
-    property int track: -1
+    property int channel: 0
     property var colors: []
     signal closeRequested()
 
-    readonly property var tr: Studio.tracks[track] || null
+    readonly property var tr: Studio.channels.find((c) => c.id === channel) || null
+    readonly property var patInfo: Studio.patterns.find((p) => p.id === Studio.currentPattern) || null
     property var pat: null
     property int noteLen: 2                       // długość nowej nuty (kroki)
     property bool scaleOnly: true
@@ -25,7 +26,7 @@ Item {
     readonly property var keyMap: ({ "A": 0, "W": 1, "S": 2, "E": 3, "D": 4, "F": 5, "T": 6, "G": 7, "Y": 8, "H": 9, "U": 10, "J": 11, "K": 12, "O": 13, "L": 14, "P": 15 })
     readonly property var heldPitches: Object.keys(held).map(k => held[k].pitch)
     focus: visible && keysActive
-    onVisibleChanged: if (visible) forceActiveFocus()
+    onVisibleChanged: if (visible) { reload(); forceActiveFocus(); }
 
     function absStep() { return Math.round(Math.max(0, Studio.position) / stepSec); }
     Keys.onPressed: (e) => { if (!e.isAutoRepeat && keyDown(e.text.toUpperCase())) e.accepted = true; }
@@ -41,7 +42,7 @@ Item {
     function midiDown(pitch, velocity) { if (pat) noteDown("m" + pitch, pitch, velocity / 127); }
     function midiUp(pitch) { keyUp("m" + pitch); }
     function noteDown(id, pitch, vel) {
-        Studio.liveNoteOn(track, pitch, vel);
+        Studio.channelNoteOn(channel, pitch, vel);
         const h = Object.assign({}, held);
         h[id] = { pitch: pitch, start: absStep(), vel: vel };
         held = h;
@@ -53,7 +54,7 @@ Item {
         const h = Object.assign({}, held);
         delete h[ch];
         held = h;
-        Studio.liveNoteOff(n.pitch);
+        Studio.channelNoteOff(channel, n.pitch);
         if (!recNotes || !Studio.playing) return true;
         // Nagranie: początek i długość wyrównane do szesnastek, w pętli wzoru
         const len = Math.max(1, Math.min(steps, absStep() - n.start));
@@ -65,7 +66,7 @@ Item {
         commit();
         return true;
     }
-    readonly property int steps: pat ? (pat.bars || 4) * 16 : 64
+    readonly property int steps: pat ? pat.bars * Studio.beatsPerBar * 4 : 16
     readonly property int lowest: 36             // C2
     readonly property int highest: 96            // C7
     readonly property int rowH: 14
@@ -76,12 +77,25 @@ Item {
     readonly property color tint: tr && colors.length ? colors[tr.color % colors.length] : Theme.accent
     readonly property var names: ["C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"]
 
-    function reload() { pat = tr && tr.kind === "melody" ? JSON.parse(JSON.stringify(tr.pattern)) : null; }
-    onTrChanged: reload()
+    function reload() {
+        pat = tr && patInfo ? { bars: patInfo.bars, notes: Studio.patternData(patInfo.id, channel).notes } : null;
+    }
+    onChannelChanged: { centered.done = false; reload(); }
+    onPatInfoChanged: if (!mouse.editing) { if (patId !== (patInfo ? patInfo.id : 0)) { patId = patInfo ? patInfo.id : 0; centered.done = false; } reload(); }
+    property int patId: 0
+    onTrChanged: if (!mouse.editing) reload()
     Component.onCompleted: reload()
-    Connections { target: Studio; function onTracksChanged() { if (!mouse.editing) pr.reload(); } }
-    function commit() { Studio.setPattern(track, pat); }
-    function setKey(key, value) { const p = JSON.parse(JSON.stringify(pat)); p[key] = value; pat = p; commit(); }
+    Connections { target: Studio; function onRackChanged() { if (!mouse.editing) pr.reload(); } }
+    function commit() { Studio.setPatternNotes(Studio.currentPattern, channel, pat.notes); }
+    // Podgląd nuty: krótkie uderzenie przez instrument kanału
+    property int previewPitch: -1
+    function preview(pitch) {
+        if (previewPitch >= 0) Studio.channelNoteOff(channel, previewPitch);
+        previewPitch = pitch;
+        Studio.channelNoteOn(channel, pitch, 0.8);
+        previewOff.restart();
+    }
+    Timer { id: previewOff; interval: 260; onTriggered: { Studio.channelNoteOff(pr.channel, pr.previewPitch); pr.previewPitch = -1; } }
     function black(m) { return [1, 3, 6, 8, 10].indexOf(((m % 12) + 12) % 12) >= 0; }
     function name(m) { return names[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); }
     function snapPitch(m) {
@@ -94,11 +108,10 @@ Item {
         if (pat && pat.notes.length) top = Math.max(...pat.notes.map(n => n.pitch)) + 4;
         area.contentY = Math.max(0, Math.min(area.contentHeight - area.height, (highest - top) * rowH));
     }
-    onPatChanged: if (pat && !centered.done) { centered.done = true; Qt.callLater(center); }
+    onPatChanged: if (pat && pat.notes.length && !centered.done) { centered.done = true; Qt.callLater(center); }
     QtObject { id: centered; property bool done: false }
-    onTrackChanged: centered.done = false
 
-    Rectangle { anchors.fill: parent; color: Theme.dark ? "#16171C" : "#F1F2F6" }
+    Rectangle { anchors.fill: parent; color: Theme.windowGlass }
     Rectangle { width: parent.width; height: 1; color: Theme.line }
 
     // ——— Pasek ———
@@ -123,22 +136,6 @@ Item {
                     font.family: Theme.font; font.pixelSize: 11
                 }
             }
-            Item { width: 8; height: 1 }
-            Repeater {
-                model: Studio.instruments
-                delegate: HoverButton {
-                    id: chip
-                    required property var modelData
-                    readonly property bool on: !!pr.pat && pr.pat.instrument === modelData.id
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: chipText.implicitWidth + 22; height: 30; radius: 15
-                    baseColor: on ? Theme.accent : Theme.fill
-                    color: on ? baseColor : (hovered ? Theme.hover : baseColor)
-                    onClicked: pr.setKey("instrument", modelData.id)
-                    Text { id: chipText; anchors.centerIn: parent; text: chip.modelData.label; color: chip.on ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
-                    Tip { shown: chip.hovered; text: chip.modelData.hint }
-                }
-            }
         }
         HoverButton {
             anchors.right: parent.right; anchors.rightMargin: 14
@@ -158,13 +155,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             model: [{ label: "1", value: 1 }, { label: "2", value: 2 }, { label: "4", value: 4 }, { label: "8", value: 8 }]
             value: pr.pat ? pr.pat.bars : 4
-            onPicked: (v) => {
-                const p = JSON.parse(JSON.stringify(pr.pat));
-                p.bars = v;
-                p.notes = p.notes.filter(n => n.step < v * 16).map(n => Object.assign(n, { len: Math.min(n.len, v * 16 - n.step) }));
-                pr.pat = p;
-                pr.commit();
-            }
+            onPicked: (v) => Studio.setPatternBars(Studio.currentPattern, v)
         }
         Text { anchors.verticalCenter: parent.verticalCenter; text: "Nowa nuta"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
         Segmented {
@@ -191,7 +182,7 @@ Item {
                 Text { anchors.verticalCenter: parent.verticalCenter; text: "Tylko nuty skali (" + Studio.keyName + ")"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12 }
             }
         }
-        Pill { anchors.verticalCenter: parent.verticalCenter; height: 28; text: "Wyczyść"; icon: "trash"; onClicked: pr.setKey("notes", []) }
+        Pill { anchors.verticalCenter: parent.verticalCenter; height: 28; text: "Wyczyść"; icon: "trash"; onClicked: Studio.setPatternNotes(Studio.currentPattern, pr.channel, []) }
         Pill {
             anchors.verticalCenter: parent.verticalCenter; height: 28
             text: pr.keysActive ? "Klawiatura: oktawa " + pr.octave : "Klawiatura wył."
@@ -233,9 +224,9 @@ Item {
                         MouseArea {
                             id: keyArea
                             anchors.fill: parent
-                            onPressed: { Studio.liveNoteOn(pr.track, key.midi, 0.85); pr.forceActiveFocus(); }
-                            onReleased: Studio.liveNoteOff(key.midi)
-                            onCanceled: Studio.liveNoteOff(key.midi)
+                            onPressed: { Studio.channelNoteOn(pr.channel, key.midi, 0.85); pr.forceActiveFocus(); }
+                            onReleased: Studio.channelNoteOff(pr.channel, key.midi)
+                            onCanceled: Studio.channelNoteOff(pr.channel, key.midi)
                         }
                         border.width: 1; border.color: Theme.dark ? Qt.rgba(0, 0, 0, 0.5) : Qt.rgba(0, 0, 0, 0.12)
                         Text {
@@ -356,10 +347,10 @@ Item {
                         mode = e.x > (n.step + n.len) * pr.stepW - 7 ? "resize" : "move";
                         grabStep = stepAt(e.x) - n.step;
                         pr.noteLen = n.len;               // następne nuty takie same jak ta
-                        if (mode === "move") Studio.previewNote(pr.track, n.pitch);
+                        if (mode === "move") pr.preview(n.pitch);
                     } else {
                         p.notes.push({ step: stepAt(e.x), len: Math.min(pr.noteLen, pr.steps - stepAt(e.x)), pitch: pr.snapPitch(pitchAt(e.y)), vel: 0.85 });
-                        Studio.previewNote(pr.track, p.notes[p.notes.length - 1].pitch);
+                        pr.preview(p.notes[p.notes.length - 1].pitch);
                         index = p.notes.length - 1;
                         mode = "resize";
                         pr.pat = p;
@@ -372,7 +363,7 @@ Item {
                     if (mode === "move") {
                         n.step = Math.max(0, Math.min(pr.steps - n.len, stepAt(e.x) - grabStep));
                         const np = pr.snapPitch(pitchAt(e.y));
-                        if (np !== n.pitch) Studio.previewNote(pr.track, np);
+                        if (np !== n.pitch) pr.preview(np);
                         n.pitch = np;
                     } else {
                         n.len = Math.max(1, Math.min(pr.steps - n.step, stepAt(e.x) - n.step + 1));

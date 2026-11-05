@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     property string page: startPage
     readonly property var groups: [
@@ -117,13 +117,13 @@ Window {
         // ——— Pasek boczny ———
         Item {
             id: side
-            width: 262; height: parent.height
+            width: 236; height: parent.height
             DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
 
             Rectangle {
                 id: searchBox
                 x: 14; y: 16
-                width: parent.width - 28; height: 34; radius: 10
+                width: parent.width - 28; height: 32; radius: 7
                 color: Theme.fill
                 border.width: field.activeFocus ? 1.5 : 0
                 border.color: Theme.accent
@@ -160,23 +160,20 @@ Window {
                     // Konto
                     Rectangle {
                         visible: !field.text
-                        width: parent.width; height: 62
-                        radius: 12
+                        width: parent.width; height: 44
+                        radius: 7
                         color: win.page === "account" ? Theme.accentSoft : (accArea.containsMouse ? Theme.hover : "transparent")
                         Rectangle {
                             id: avatar
                             x: 8; anchors.verticalCenter: parent.verticalCenter
-                            width: 44; height: 44; radius: 22
-                            gradient: Gradient {
-                                GradientStop { position: 0; color: "#7C9BFF" }
-                                GradientStop { position: 1; color: "#8B5CF6" }
-                            }
+                            width: 30; height: 30; radius: 15
+                            color: Theme.accent
                             clip: true
                             Text { anchors.centerIn: parent; visible: avatarImg.status !== Image.Ready; text: win.accountName.charAt(0).toUpperCase(); color: "white"; font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold }
                             Image { id: avatarImg; anchors.fill: parent; source: Accounts.iconUrl; fillMode: Image.PreserveAspectCrop; sourceSize: Qt.size(88, 88); visible: status === Image.Ready }
                         }
                         Column {
-                            anchors.left: avatar.right; anchors.leftMargin: 11
+                            anchors.left: avatar.right; anchors.leftMargin: 10
                             anchors.right: parent.right; anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 1
@@ -232,7 +229,7 @@ Window {
                     x: 32; anchors.verticalCenter: parent.verticalCenter
                     text: win.current.name
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.4
+                    font.family: Theme.font; font.pixelSize: 24; font.weight: Font.DemiBold; font.letterSpacing: -0.3
                 }
                 WindowButtons {
                     window: win
@@ -268,7 +265,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
-                width: toastText.implicitWidth + 36; height: 40; radius: 20
+                width: toastText.implicitWidth + 36; height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -286,12 +283,17 @@ Window {
         signal activated()
         readonly property bool active: !external && win.page === item.id
         width: navCol.width; height: 34
-        radius: 9
+        radius: 7
         color: active ? Theme.accent : (navArea.containsMouse ? Theme.hover : "transparent")
-        Badge { x: 8; anchors.verticalCenter: parent.verticalCenter; size: 24; icon: nav.item.icon; colors: nav.item.colors }
+        // Znacznik działu: mały kwadrat w jego kolorze
+        Rectangle {
+            x: 10; anchors.verticalCenter: parent.verticalCenter
+            width: 8; height: 8; radius: 2
+            color: nav.active ? "white" : nav.item.colors[0]
+        }
         Text {
-            x: 42; anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - 50
+            x: 28; anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - 36
             text: nav.item.name
             elide: Text.ElideRight
             color: nav.active ? "white" : Theme.text

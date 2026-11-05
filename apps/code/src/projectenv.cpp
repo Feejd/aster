@@ -93,6 +93,114 @@ void ProjectEnv::refresh()
         m_state = hostRun({QStringLiteral("podman"), QStringLiteral("container"), QStringLiteral("exists"), m_container})
                       ? QStringLiteral("ready") : QStringLiteral("none");
     Q_EMIT changed();
+    checkReadiness();
+}
+
+void ProjectEnv::checkReadiness()
+{
+    if (m_check) {
+        m_check->disconnect(this);
+        m_check->kill();
+        m_check->deleteLater();
+    }
+    if (m_root.isEmpty()) {
+        m_readiness.clear();
+        Q_EMIT readinessChanged();
+        return;
+    }
+    // Czego potrzebuje projekt: program → co to dla człowieka i pakiet Fedory
+    struct Need { QString program, label, package; };
+    QList<Need> needs;
+    QVariantList setup;
+    QStringList items;
+    QStringList dirs{m_root};
+    for (const QFileInfo &f : QDir(m_root).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot))
+        if (!f.fileName().startsWith(QLatin1Char('.')) && f.fileName() != QLatin1String("node_modules"))
+            dirs << f.absoluteFilePath();
+    const auto has = [](const QString &dir, const QString &file) { return QFileInfo::exists(dir + QLatin1Char('/') + file); };
+    const auto step = [&](const QString &label, const QString &cmd, const QString &cwd) {
+        const QString name = cwd == m_root ? label : QFileInfo(cwd).fileName() + QStringLiteral(": ") + label;
+        setup << QVariantMap{{QStringLiteral("label"), name}, {QStringLiteral("command"), cmd}, {QStringLiteral("cwd"), cwd}};
+    };
+    bool node = false, python = false;
+    for (const QString &d : std::as_const(dirs)) {
+        if (has(d, QStringLiteral("package.json"))) {
+            node = true;
+            if (!has(d, QStringLiteral("node_modules")))
+                step(QStringLiteral("zależności npm"), QStringLiteral("npm install --no-fund --no-audit"), d);
+        }
+        if (has(d, QStringLiteral("requirements.txt")) || has(d, QStringLiteral("pyproject.toml"))) {
+            python = true;
+            if (!has(d, QStringLiteral(".venv")))
+                step(QStringLiteral("zależności Pythona"),
+                     has(d, QStringLiteral("requirements.txt")) ? QStringLiteral("python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt")
+                                                                : QStringLiteral("python3 -m venv .venv && .venv/bin/pip install -q -e ."), d);
+        }
+        if (has(d, QStringLiteral("main.py")) || has(d, QStringLiteral("app.py")))
+            python = true;
+        if (has(d, QStringLiteral("Cargo.toml")))
+            needs << Need{QStringLiteral("cargo"), QStringLiteral("Rust"), QStringLiteral("cargo")} << Need{QStringLiteral("rust-analyzer"), QStringLiteral("podpowiedzi Rust"), QStringLiteral("rust-analyzer")};
+        if (has(d, QStringLiteral("go.mod")))
+            needs << Need{QStringLiteral("go"), QStringLiteral("Go"), QStringLiteral("golang")} << Need{QStringLiteral("gopls"), QStringLiteral("podpowiedzi Go"), QStringLiteral("golang-x-tools-gopls")};
+        if (has(d, QStringLiteral("CMakeLists.txt")) || has(d, QStringLiteral("Makefile")) || has(d, QStringLiteral("meson.build")))
+            needs << Need{QStringLiteral("g++"), QStringLiteral("kompilator C/C++"), QStringLiteral("gcc-c++")} << Need{QStringLiteral("make"), QStringLiteral("make"), QStringLiteral("make")}
+                  << Need{QStringLiteral("clangd"), QStringLiteral("podpowiedzi C/C++"), QStringLiteral("clang-tools-extra")} << Need{QStringLiteral("gdb"), QStringLiteral("debuger"), QStringLiteral("gdb")};
+        if (has(d, QStringLiteral("CMakeLists.txt")))
+            needs << Need{QStringLiteral("cmake"), QStringLiteral("CMake"), QStringLiteral("cmake")};
+    }
+    if (node)
+        needs << Need{QStringLiteral("npm"), QStringLiteral("Node.js"), QStringLiteral("nodejs npm")};
+    if (python)
+        needs << Need{QStringLiteral("python3"), QStringLiteral("Python"), QStringLiteral("python3 python3-pip")}
+              << Need{QStringLiteral("pylsp"), QStringLiteral("podpowiedzi Python"), QStringLiteral("python3-lsp-server")};
+    if (needs.isEmpty() && setup.isEmpty()) {
+        m_readiness.clear();
+        Q_EMIT readinessChanged();
+        return;
+    }
+    QStringList names;
+    for (const Need &n : std::as_const(needs))
+        if (!names.contains(n.program))
+            names << n.program;
+    if (node)
+        names << QStringLiteral("typescript-language-server");
+    // Jedno polecenie na wszystko — w kontenerze każde uruchomienie kosztuje sekundę
+    QString cmd = QStringLiteral("for p in ") + names.join(QLatin1Char(' ')) + QStringLiteral("; do command -v \"$p\" >/dev/null 2>&1 && echo \"$p\"; done; true");
+    QStringList argv = shell(cmd, m_root);
+    if (argv.isEmpty())
+        argv = {QStringLiteral("/bin/sh"), QStringLiteral("-c"), cmd};
+    auto *p = new QProcess(this);
+    m_check = p;
+    connect(p, &QProcess::finished, this, [this, p, needs, names, setup, items, node]() mutable {
+        p->deleteLater();
+        const QStringList found = QString::fromUtf8(p->readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        for (const QString &n : names)
+            m_has.insert(n, found.contains(n));
+        QStringList packages;
+        for (const Need &n : std::as_const(needs))
+            if (!found.contains(n.program)) {
+                if (!items.contains(n.label))
+                    items << n.label;
+                packages += n.package.split(QLatin1Char(' '));
+            }
+        if (node && !found.contains(QStringLiteral("typescript-language-server"))) {
+            items << QStringLiteral("podpowiedzi JavaScript");
+            setup << QVariantMap{{QStringLiteral("label"), QStringLiteral("serwer języka JavaScript")},
+                                 {QStringLiteral("command"), QStringLiteral("sudo npm install -g --no-fund --no-audit typescript-language-server typescript@5")},
+                                 {QStringLiteral("cwd"), m_root}};
+        }
+        for (const QVariant &v : std::as_const(setup)) {
+            const QString l = v.toMap().value(QStringLiteral("label")).toString();
+            if (l.contains(QStringLiteral("zależności")) && !items.contains(QStringLiteral("zależności projektu")))
+                items << QStringLiteral("zależności projektu");
+        }
+        packages.removeDuplicates();
+        m_readiness = items.isEmpty() ? QVariantMap()
+                                      : QVariantMap{{QStringLiteral("items"), items}, {QStringLiteral("packages"), packages}, {QStringLiteral("setup"), setup}};
+        Q_EMIT readinessChanged();
+    });
+    p->setWorkingDirectory(m_root);
+    p->start(argv.first(), argv.mid(1));
 }
 
 void ProjectEnv::useContainer(bool on)
@@ -215,11 +323,11 @@ QStringList ProjectEnv::suggestPackages() const
     if (any(QStringLiteral("pnpm-lock.yaml")))
         pk << QStringLiteral("pnpm");
     if (any(QStringLiteral("pyproject.toml")) || any(QStringLiteral("requirements.txt")) || any(QStringLiteral("main.py")))
-        pk << QStringLiteral("python3") << QStringLiteral("python3-pip") << QStringLiteral("python3-devel");
+        pk << QStringLiteral("python3") << QStringLiteral("python3-pip") << QStringLiteral("python3-devel") << QStringLiteral("python3-lsp-server");
     if (any(QStringLiteral("Cargo.toml")))
         pk << QStringLiteral("cargo") << QStringLiteral("rust-analyzer");
     if (any(QStringLiteral("go.mod")))
-        pk << QStringLiteral("golang") << QStringLiteral("gopls");
+        pk << QStringLiteral("golang") << QStringLiteral("golang-x-tools-gopls");
     if (any(QStringLiteral("CMakeLists.txt")) || any(QStringLiteral("Makefile")) || any(QStringLiteral("meson.build")))
         pk << QStringLiteral("gcc-c++") << QStringLiteral("make") << QStringLiteral("cmake") << QStringLiteral("gdb") << QStringLiteral("clang-tools-extra");
     if (any(QStringLiteral("meson.build")))

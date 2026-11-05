@@ -12,6 +12,7 @@ Item {
     signal showDiff(string path, bool staged)
     signal discardRequested(var paths)
     signal pickBranch()
+    signal publishRequested()
     signal showCommit(string hash)
     property bool amend: false
 
@@ -123,7 +124,11 @@ Item {
                 width: syncRow.implicitWidth + 16; height: 30; radius: 8
                 enabled: !Project.gitBusy
                 readonly property string mode: Project.behind > 0 ? "pull" : (Project.ahead > 0 || !Project.upstream) ? "push" : "fetch"
-                onClicked: { if (mode === "pull") Project.pull(); else if (mode === "push") Project.push(); else Project.fetch(); }
+                onClicked: {
+                    if (mode === "pull") Project.pull();
+                    else if (mode === "push") { if (Project.hasRemote()) Project.push(); else cv.publishRequested(); }
+                    else Project.fetch();
+                }
                 Row {
                     id: syncRow
                     anchors.centerIn: parent
@@ -376,8 +381,15 @@ Item {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; d: Icons.gitBranch; size: 34; stroke: 1.4; color: Theme.text2; opacity: 0.6 }
         Text {
             width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-            text: "Ten folder nie jest repozytorium gita.\nW terminalu: git init"
+            text: "Git zapamiętuje wersje projektu i pozwala je publikować. Zmiany pojawią się tutaj."
             color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.2
+        }
+        HoverButton {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: initText.implicitWidth + 28; height: 34; radius: 9
+            baseColor: Theme.accent
+            onClicked: if (!Project.initGit()) Project.message("Nie udało się włączyć gita — czy jest zainstalowany?")
+            Text { id: initText; anchors.centerIn: parent; text: "Włącz wersje (git)"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
         }
     }
 

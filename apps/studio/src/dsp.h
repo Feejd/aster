@@ -49,6 +49,16 @@ struct Biquad
         const double A = std::pow(10.0, db / 40), w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * q);
         return make(1 + al * A, -2 * cs, 1 - al * A, 1 + al / A, -2 * cs, 1 - al / A);
     }
+    static Biquad lowPassQ(double f, double q, double rate)
+    {
+        const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * q);
+        return make((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + al, -2 * cs, 1 - al);
+    }
+    static Biquad lowPass(double f, double rate)
+    {
+        const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * 0.7071);
+        return make((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + al, -2 * cs, 1 - al);
+    }
     static Biquad highPass(double f, double rate)
     {
         const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * 0.7071);
@@ -65,6 +75,39 @@ struct BiquadState
         z1 = q.b1 * x - q.a1 * y + z2;
         z2 = q.b2 * x - q.a2 * y;
         return y;
+    }
+};
+
+// De-esser: ścisza tylko górę pasma (od ok. 4,5 kHz), gdy przeważa w niej syczenie („s”, „sz”, „c”).
+// Miarą jest udział góry w całym sygnale — nie zależy od głośności nagrania. Zwrotnica Linkwitza-Rileya
+// (24 dB/okt.): dół + góra składają się z powrotem w ten sam dźwięk, więc poza syczeniem nic się nie zmienia.
+struct DeEsser
+{
+    BiquadState lp[2][2], hp[2][2];       // [kanał][stopień]
+    float envHi = 0, envAll = 0, g = 1;
+    void process(float *l, float *r, int n, const Biquad &lpq, const Biquad &hpq, float amount, int rate)
+    {
+        const float sr = float(rate);
+        const float att = 1.f - std::exp(-1.f / (0.0005f * sr)), rel = 1.f - std::exp(-1.f / (0.03f * sr));
+        const float gDown = 1.f - std::exp(-1.f / (0.0005f * sr)), gUp = 1.f - std::exp(-1.f / (0.05f * sr));
+        const float target = 0.5f - 0.3f * amount, power = 0.6f + 1.6f * amount;
+        float *io[2] = {l, r};
+        for (int i = 0; i < n; ++i) {
+            float lo[2], hi[2];
+            for (int c = 0; c < 2; ++c) {
+                const float x = io[c][i];
+                lo[c] = lp[c][1].run(lpq, lp[c][0].run(lpq, x));
+                hi[c] = hp[c][1].run(hpq, hp[c][0].run(hpq, x));
+            }
+            const float h = 0.5f * std::fabs(hi[0] + hi[1]), all = 0.5f * std::fabs(l[i] + r[i]);
+            envHi += (h > envHi ? att : rel) * (h - envHi);
+            envAll += (all > envAll ? att : rel) * (all - envAll);
+            const float ratio = envHi / (envAll + 1e-5f);
+            const float want = ratio > target ? std::max(0.08f, std::pow(target / ratio, power)) : 1.f;
+            g += (want < g ? gDown : gUp) * (want - g);
+            l[i] = lo[0] + hi[0] * g;
+            r[i] = lo[1] + hi[1] * g;
+        }
     }
 };
 
@@ -204,6 +247,58 @@ private:
     std::vector<float> m_l, m_r;
     int m_pos = 0;
     float m_lpL = 0, m_lpR = 0;
+};
+
+// Sztuczny dubel (ADT): dwie kopie głosu opóźnione o ok. 19 i 27 ms, każda z wolno pływającym opóźnieniem —
+// lekko inne wejście i wysokość (kilka centów), jak drugie nagranie tego samego tekstu. Kopie idą na boki,
+// oryginał zostaje na środku. Bufor przydzielany raz, poza wątkiem audio.
+class Doubler
+{
+public:
+    static constexpr int Size = 8192;               // > 80 ms przy 96 kHz
+    Doubler() : m_buf(Size, 0.f) {}
+    void process(float *l, float *r, int n, float amount, int rate)
+    {
+        if (!m_used) {
+            std::fill(m_buf.begin(), m_buf.end(), 0.f);
+            m_used = true;
+        }
+        const float sr = float(rate), dry = 1.f - 0.25f * amount, wet = 0.7f * amount;
+        const float incA = 6.2831853f * 0.37f / sr, incB = 6.2831853f * 0.29f / sr;
+        for (int i = 0; i < n; ++i) {
+            m_buf[size_t(m_pos)] = 0.5f * (l[i] + r[i]);
+            const float a = tap((0.019f + 0.0022f * std::sin(m_phA)) * sr);
+            const float b = tap((0.027f + 0.0026f * std::sin(m_phB)) * sr);
+            m_phA += incA;
+            m_phB += incB;
+            if (m_phA > 6.2831853f)
+                m_phA -= 6.2831853f;
+            if (m_phB > 6.2831853f)
+                m_phB -= 6.2831853f;
+            if (++m_pos >= Size)
+                m_pos = 0;
+            l[i] = l[i] * dry + a * wet;
+            r[i] = r[i] * dry + b * wet;
+        }
+    }
+    // Nieużywany — przy ponownym włączeniu bez starego dźwięku w buforze
+    void idle() { m_used = false; }
+
+private:
+    float tap(float delay) const
+    {
+        float p = float(m_pos) - delay;
+        if (p < 0)
+            p += Size;
+        const int i = int(p);
+        const float f = p - float(i);
+        const float x0 = m_buf[size_t(i % Size)], x1 = m_buf[size_t((i + 1) % Size)];
+        return x0 + (x1 - x0) * f;
+    }
+    std::vector<float> m_buf;
+    int m_pos = 0;
+    float m_phA = 0, m_phB = 1.7f;
+    bool m_used = false;
 };
 
 // Ogranicznik z wyprzedzeniem (~1,3 ms): widzi szczyt, zanim ten dojdzie do wyjścia, i łagodnie ścisza,

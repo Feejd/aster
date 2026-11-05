@@ -172,7 +172,7 @@ Window {
         onYChanged: dock.updateRegion()
         width: row.width + 18
         height: 66
-        radius: 24
+        radius: 16
         spot: dock.hoverAmt * 0.9
         spotX: dock.pointerX - x
         spotY: dock.pointerY - y
@@ -296,7 +296,7 @@ Window {
         }
 
         visible: open
-        radius: 18
+        radius: 12
         width: 280
         height: popupList.height + 16
         x: {
@@ -307,13 +307,6 @@ Window {
         y: island.y - height - 10
         onHeightChanged: dock.updateRegion()
         onXChanged: dock.updateRegion()
-
-        // Gęstsze tło niż wyspa: na karcie czyta się tekst
-        Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.72) : Qt.rgba(1, 1, 1, 0.72)
-        }
 
         Column {
             id: popupList

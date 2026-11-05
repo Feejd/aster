@@ -12,7 +12,7 @@ HoverButton {
     property bool active: false            // włączony przełącznik (np. metronom)
     property string tip
     readonly property color fg: primary || danger ? "white" : (active ? Theme.accentText : Theme.text)
-    width: pillRow.implicitWidth + (text ? 30 : 18); height: 34; radius: 17
+    width: pillRow.implicitWidth + (text ? 30 : 18); height: 34; radius: 8
     baseColor: primary ? Theme.accent : danger ? "#E5484D" : active ? Theme.accentSoft : Theme.fill
     color: primary || danger ? (hovered ? Qt.lighter(baseColor, 1.12) : baseColor) : (hovered ? (active ? Theme.accentAlpha(Theme.dark ? 0.42 : 0.22) : Theme.hover) : baseColor)
     opacity: enabled ? 1 : 0.4

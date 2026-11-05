@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     property bool watching: false
     // Maski (zaokrąglone rogi obrazu) wymagają shaderów — nie ma ich w renderowaniu programowym
     readonly property bool shaders: GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
@@ -236,7 +236,7 @@ Window {
                     id: openBtn
                     anchors.right: winButtons.left; anchors.rightMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    width: openRow.implicitWidth + 28; height: 34; radius: 17
+                    width: openRow.implicitWidth + 28; height: 34; radius: 10
                     baseColor: Theme.accent
                     color: hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor
                     onClicked: fileDialog.open()
@@ -324,7 +324,7 @@ Window {
                         spacing: 12
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            width: 76; height: 76; radius: 22
+                            width: 76; height: 76; radius: 12
                             color: Theme.fill
                             Icon { anchors.centerIn: parent; d: Icons.film; size: 36; stroke: 1.6; color: Theme.text2 }
                         }
@@ -382,7 +382,7 @@ Window {
             y: shown ? 76 : -height - 10
             opacity: shown ? 1 : 0
             z: 300
-            width: toastRow.implicitWidth + 36; height: 40; radius: 20
+            width: toastRow.implicitWidth + 36; height: 40; radius: 12
             color: Theme.dark || win.watching ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }

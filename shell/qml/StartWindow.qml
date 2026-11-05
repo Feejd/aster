@@ -19,8 +19,8 @@ Window {
     visible: false
     width: Screen.width
     // Okno wypełnia miejsce między górnym paskiem a dokiem (ich rezerwacje)
-    height: Screen.height - 46 - 84
-    readonly property int shotY: 46
+    height: Screen.height - 32 - 84
+    readonly property int shotY: 32
     title: "Start"
 
     property bool open: false
@@ -165,12 +165,12 @@ Window {
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają Startu
 
         // To samo ciekłe szkło co wyspy doku
-        Island { anchors.fill: parent; radius: 30 }
+        Island { anchors.fill: parent; radius: 16 }
         // Gęstsze szkło niż w doku: Start leży na oknach, tekst musi być czytelny
         Rectangle {
             anchors.fill: parent
-            radius: 30
-            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.38) : Qt.rgba(1, 1, 1, 0.34)
+            radius: 16
+            color: "transparent"
         }
 
         // ——— Lewy panel: pływający pasek boczny z logo, kategoriami i kontem ———
@@ -178,7 +178,7 @@ Window {
             id: side
             x: 10; y: 10
             width: 236; height: parent.height - 20
-            radius: 22
+            radius: 10
             color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.45)
             border.width: 1
             border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.8)
@@ -329,14 +329,14 @@ Window {
                 id: searchBox
                 x: 24; y: 20
                 width: main.width - 48; height: 44
-                radius: 22
+                radius: 10
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
                 border.color: field.activeFocus ? Theme.accentAlpha(0.55) : "transparent"
                 Behavior on color { ColorAnimation { duration: 140 } }
                 Rectangle {
                     anchors.fill: parent; anchors.margins: -4
-                    radius: 26
+                    radius: 12
                     color: "transparent"
                     border.width: 4; border.color: Theme.accentAlpha(0.12)
                     visible: field.activeFocus

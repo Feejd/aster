@@ -3,7 +3,9 @@ import QtQuick
 import Aster.Ui
 import Aster.Code
 
-// Paleta u góry okna (jak w VS Code): bez przedrostka — szybkie otwieranie pliku (Ctrl+P),
+// Pole „Co chcesz zrobić?” u góry okna: jedno miejsce na pliki, polecenia, ustawienia, szukanie w kodzie
+// i pytanie do agenta — wystarczy pisać, bez znajomości skrótów i przedrostków. Zdanie idzie najpierw do agenta,
+// liczba — do wiersza. Przedrostki dla wprawnych (Ctrl+P):
 // „>” — polecenia (Ctrl+Shift+P), „:” — przejście do wiersza (Ctrl+G), „@” — symbole pliku (Ctrl+Shift+O),
 // „#” — symbole projektu (Ctrl+T, z serwera języka); osobno wybór gałęzi gita
 // (przełącz albo utwórz nową, połącz z bieżącą, usuń).
@@ -11,6 +13,11 @@ Item {
     id: pal
     property bool shown: false
     property var commands: []            // [{ label, shortcut, action, icon }]
+    property var settings: []            // ustawienia ([{ section, label, desc }]) — też do znalezienia
+    property int currentLine: 0          // > 0: otwarty plik, liczba przenosi do wiersza
+    // Bez wielkości liter i polskich znaków: „ustawienia” = „Ustawienia”, „zolty” = „żółty”
+    function norm(s) { return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l"); }
+    function matches(text, q) { const h = norm(text); return norm(q).split(/\s+/).filter(w => !!w).every(w => h.indexOf(w) >= 0); }
     property var recentPaths: []         // otwarte karty — pierwsze przy pustym zapytaniu
     property var items: []
     property int current: 0
@@ -110,7 +117,20 @@ Item {
                                 return { path: p, rel: rel, name: rel.slice(i + 1), dir: i > 0 ? rel.slice(0, i) : "", html: "", opened: true }; });
                 list = open.concat(list.filter(f => recentPaths.indexOf(f.path) < 0));
             }
-            items = list.map(f => Object.assign({ kind: "file" }, f));
+            const files = list.map(f => Object.assign({ kind: "file" }, f));
+            const q = t.trim();
+            if (!q) { items = files; return; }
+            const cmd = (label, action, icon, right) => ({ kind: "command", label: label, shortcut: right || "", action: action, icon: icon });
+            const cmds = commands.filter(c => matches(c.label, q)).slice(0, 5).map(c => cmd(c.label, c.action, c.icon || "", c.shortcut));
+            const sets = settings.filter(s => s.type !== "servers" && matches(s.section + " " + s.label + " " + s.desc, q)).slice(0, 3)
+                                 .map(s => cmd(s.label, "setting:" + s.label, "gear", "ustawienie"));
+            const ask = cmd("Zapytaj agenta: " + q, "ask:" + q, "sparkles", "agent");
+            const find = cmd("Szukaj w kodzie: " + q, "searchtext:" + q, "search", "");
+            const line = /^\d+$/.test(q) && currentLine > 0 ? [cmd("Przejdź do wiersza " + q, "gotoline:" + q, "arrow", "")] : [];
+            // Zdanie to pytanie albo prośba — najpierw agent; krótkie hasło — najpierw pliki i polecenia
+            const sentence = q.split(/\s+/).length >= 3 || q.endsWith("?");
+            items = sentence ? [ask].concat(cmds, sets, files.slice(0, 5), [find])
+                             : line.concat(files.slice(0, 6), cmds, sets, [find, ask]);
         }
     }
     function accept() {
@@ -150,7 +170,7 @@ Item {
         y: 8
         width: Math.min(640, parent.width - 40)
         height: 54 + (list.count ? Math.min(list.contentHeight, 420) + 8 : (pal.mode === "line" || empty.visible ? 40 : 0))
-        radius: 14
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         clip: true
@@ -189,7 +209,7 @@ Item {
                         : pal.special === "checkout" ? "Wybierz gałąź albo wpisz nazwę nowej"
                         : pal.special === "merge" ? "Którą gałąź połączyć z bieżącą?"
                         : pal.special === "delete" ? "Którą gałąź usunąć?"
-                        : "Szukaj pliku po nazwie (> polecenia, : wiersz)"
+                        : "Plik, polecenie, ustawienie albo pytanie do agenta"
                     color: Theme.text2; font: field.font
                 }
             }
