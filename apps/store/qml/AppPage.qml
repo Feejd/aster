@@ -1,244 +1,450 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import Aster.Ui
 import Aster.Store
+import "Catalog.js" as Catalog
+import "Facts.js" as Facts
 
-// Strona aplikacji (wsuwa się z prawej): nagłówek z ikoną i przyciskiem, liczby, zrzuty ekranu,
-// opis i „Co nowego”. Dane prosto z Flathub.
-Rectangle {
+// Strona programu: po lewej nasza opinia, zrzuty, opis i głosy użytkowników, po prawej karta programu
+// z uczciwymi faktami i rachunkiem za dysk. Tak samo dla programów, aplikacji webowych i aplikacji Aster.
+Item {
     id: page
-    property string appId
-    property var app: null              // appstream
-    property var sum: null              // rozmiar
-    property var stats: null            // instalacje
-    signal back()
-    signal message(string text)
+    property var window
+    readonly property alias flick: flickable
 
-    color: Theme.dark ? "#1E1E22" : "#FFFFFF"
+    property string ref
+    property var sum: null
+    property var stats: null
+    property var rate: null
+    property var reviewList: []
+    property var bigShot: null
 
-    function load(id) {
-        appId = id;
-        app = null; sum = null; stats = null;
-        flick.contentY = 0;
-        const base = "https://flathub.org/api/v2/";
-        fetch(base + "appstream/" + id + "?locale=pl", (d) => { if (page.appId === id) page.app = d; });
-        fetch(base + "summary/" + id, (d) => { if (page.appId === id) page.sum = d; });
-        fetch(base + "stats/" + id, (d) => { if (page.appId === id) page.stats = d; });
+    function setRoute(r) {
+        ref = r;
+        sum = null; stats = null; rate = null; reviewList = [];
+        if (kind !== "app") return;
+        Store.item(r);
+        Store.summary(r, (d) => { if (page.ref === r) page.sum = d; });
+        Store.rating(r, (d) => { if (page.ref === r) page.rate = d; });
+        Net.get(Store.api + "stats/" + r, 86400, (d) => { if (page.ref === r) page.stats = d; });
+        Store.reviews(r, (d) => {
+            if (page.ref !== r || !Array.isArray(d)) return;
+            // Polskie opinie na górę, wyżej te, które inni uznali za pomocne
+            const pl = (x) => String(x.locale || "").indexOf("pl") === 0 ? 1 : 0;
+            page.reviewList = d.filter(x => x.description).sort((a, b) => pl(b) - pl(a) || (b.score || 0) - (a.score || 0)).slice(0, 4);
+        });
     }
-    function fetch(url, cb) {
-        const x = new XMLHttpRequest();
-        x.onreadystatechange = () => {
-            if (x.readyState !== XMLHttpRequest.DONE) return;
-            try { cb(x.status === 200 ? JSON.parse(x.responseText) : null); } catch (e) { cb(null); }
-        };
-        x.open("GET", url);
-        x.send();
+
+    readonly property string kind: Store.kindOf(ref)
+    readonly property var info: { Store.version; return ref ? Store.item(ref) : null; }
+    readonly property var appData: info ? info.app || null : null
+    readonly property var meta: info ? info.meta : null
+    readonly property bool installed: { Flatpak.installed; Flatpak.webApps; return !!ref && Store.isInstalled(ref); }
+    readonly property bool removable: { Flatpak.installed; Flatpak.webApps; return !!ref && Store.state(ref) === "installed"; }
+    readonly property bool hasRuntime: sum && sum.metadata ? Facts.runtimeInstalled(sum.metadata.runtime, Flatpak.runtimes) : false
+    readonly property var bill: Facts.diskBill(sum, hasRuntime)
+    readonly property var lines: {
+        if (!info) return [];
+        return Facts.cardLines({ kind: kind, summary: sum, app: appData, meta: meta, arch: Flatpak.arch, memoryGb: Flatpak.memoryGb });
     }
-    // Zrzut w rozsądnym rozmiarze (ok. 750 px szerokości)
+    readonly property var cardVerdict: Facts.verdict(lines)
+    readonly property var ratingInfo: Facts.rating(rate)
+    readonly property var release: appData && appData.releases && appData.releases.length ? appData.releases[0] : null
+    readonly property var webAlternative: meta && meta.web ? "web:" + meta.web : ""
+    // Gdzie jeszcze ten program występuje w przewodnikach
+    readonly property var related: Catalog.tasks.filter(t => t.picks.some(p => p.ref === ref))
+
+    // Sąsiedzi z tej samej półki katalogu
+    readonly property var neighbours: {
+        for (const cat in Catalog.shelves)
+            for (const shelf of Catalog.shelves[cat])
+                if (shelf.refs.indexOf(ref) >= 0)
+                    return { title: shelf.title, refs: shelf.refs.filter(r => r !== ref).slice(0, 6) };
+        return { title: "", refs: [] };
+    }
+
+    readonly property bool wide: page.width > 960
+
     function shot(s) {
         const sizes = (s.sizes || []).slice().sort((a, b) => parseInt(a.width) - parseInt(b.width));
-        const pick = sizes.find(z => parseInt(z.width) >= 700) || sizes[sizes.length - 1];
+        const pick = sizes.find(z => parseInt(z.width) >= 620) || sizes[sizes.length - 1];
         return pick ? pick.src : "";
+    }
+    function bestShot(s) {
+        const sizes = (s.sizes || []).slice().sort((a, b) => parseInt(b.width) - parseInt(a.width));
+        return sizes.length ? sizes[0].src : "";
     }
     // Opis z Flathub (HTML) → to, co umie Text.StyledText
     function cleanHtml(h) {
         return (h || "").replace(/\s+/g, " ").replace(/<\/p>\s*<p>/g, "</p><br><p>").replace(/<ul>/g, "<br>").replace(/<\/ul>/g, "")
-                        .replace(/<li>/g, "  •  ").replace(/<\/li>/g, "<br>").replace(/<code>|<\/code>/g, "");
+                        .replace(/<ol>/g, "<br>").replace(/<\/ol>/g, "")
+                        .replace(/<li>/g, "  •  ").replace(/<\/li>/g, "<br>").replace(/<code>|<\/code>|<em>|<\/em>/g, "");
     }
-    readonly property bool installed: Flatpak.installed.indexOf(appId) >= 0
-    readonly property var release: app && app.releases && app.releases.length ? app.releases[0] : null
-
-    MouseArea { anchors.fill: parent }    // nic nie przechodzi do strony pod spodem
 
     Flickable {
-        id: flick
+        id: flickable
         anchors.fill: parent
-        contentHeight: col.height + 60
+        contentHeight: Math.max(mainCol.height, page.wide ? side.height : 0) + 70
         boundsBehavior: Flickable.StopAtBounds
         clip: true
 
-        Column {
-            id: col
-            x: 36; y: 18
-            width: page.width - 72
-            spacing: 22
+        Item {
+            id: body
+            width: Math.min(page.width - 2 * Ui.gutter, Ui.maxWidth)
+            x: (page.width - width) / 2
 
-            // Wróć
-            Rectangle {
-                width: backRow.implicitWidth + 20; height: 32; radius: 9
-                color: backArea.containsMouse ? Theme.hover : "transparent"
+            Column {
+                id: mainCol
+                y: 30
+                width: page.wide ? parent.width - 340 - 40 : parent.width
+                spacing: 26
+
+                // Nagłówek
                 Row {
-                    id: backRow
-                    anchors.centerIn: parent
-                    spacing: 4
-                    Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 16; color: Theme.accentText }
-                    Text { anchors.verticalCenter: parent.verticalCenter; text: "Wróć"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
-                }
-                MouseArea { id: backArea; anchors.fill: parent; hoverEnabled: true; onClicked: page.back() }
-            }
-
-            // Nagłówek
-            Row {
-                spacing: 24
-                Image {
-                    width: 128; height: 128
-                    source: page.app ? page.app.icon : ""
-                    sourceSize: Qt.size(256, 256)
-                    smooth: true; mipmap: true
-                    Rectangle { anchors.fill: parent; radius: 28; color: Theme.fill; visible: parent.status !== Image.Ready }
-                }
-                Column {
-                    width: col.width - 152
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
-                    Text {
-                        width: parent.width
-                        text: page.app ? page.app.name : " "
-                        elide: Text.ElideRight
-                        color: Theme.text
-                        font.family: Theme.font; font.pixelSize: 30; font.weight: Font.Bold
-                        font.letterSpacing: -0.8
-                    }
-                    Text {
-                        width: parent.width
-                        text: page.app ? (page.app.summary || "") : ""
-                        elide: Text.ElideRight
-                        color: Theme.text2
-                        font.family: Theme.font; font.pixelSize: 15
-                    }
-                    Text {
-                        text: page.app ? (page.app.developer_name || "") : ""
-                        color: Theme.accentText
-                        font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
-                    }
-                    Item { width: 1; height: 6 }
-                    Row {
-                        spacing: 10
-                        GetButton { appId: page.appId; big: true }
-                        HoverButton {
-                            visible: page.installed
-                            width: rmText.implicitWidth + 28; height: 36; radius: 18
-                            baseColor: Theme.fill
-                            onClicked: Flatpak.uninstall(page.appId)
-                            Text { id: rmText; anchors.centerIn: parent; text: "Usuń"; color: Theme.danger; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                    width: parent.width
+                    spacing: 20
+                    AppGlyph { id: headIcon; ref: page.ref; size: 92 }
+                    Column {
+                        width: parent.width - 112
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4
+                        Txt {
+                            width: parent.width
+                            text: page.info ? page.info.name : ""
+                            wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
+                            font.pixelSize: 34; font.weight: Font.Bold; font.letterSpacing: -1
+                        }
+                        Txt {
+                            width: parent.width
+                            text: page.info ? page.info.summary : ""
+                            wrapMode: Text.Wrap
+                            color: Theme.text2
+                            font.pixelSize: 16; lineHeight: 1.15
+                        }
+                        Txt {
+                            visible: !page.meta
+                            text: "Opis pochodzi od autora programu"
+                            color: Theme.text2
+                            font.pixelSize: 13
                         }
                     }
                 }
-            }
 
-            // Liczby
-            Rectangle {
-                width: col.width; height: 76; radius: 16
-                color: Theme.fill
-                Row {
-                    anchors.fill: parent
-                    Repeater {
-                        model: [
-                            { label: "POBRANIA", value: page.stats ? Curated.count(page.stats.installs_total) : "—" },
-                            { label: "ROZMIAR", value: page.sum ? Curated.size(page.sum.download_size) : "—" },
-                            { label: "LICENCJA", value: page.app ? (page.app.is_free_license ? "Wolna" : "Własnościowa") : "—" },
-                            { label: "WERSJA", value: page.release ? (page.release.version || "—") : "—" }
-                        ]
-                        delegate: Item {
-                            id: stat
-                            required property var modelData
-                            required property int index
-                            width: col.width / 4; height: 76
-                            Rectangle { visible: stat.index > 0; width: 1; height: 36; anchors.verticalCenter: parent.verticalCenter; color: Theme.line }
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.label; color: Theme.text2; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 0.6 }
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: stat.modelData.value; color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.letterSpacing: -0.2; font.weight: Font.Bold; elide: Text.ElideRight; width: Math.min(implicitWidth, col.width / 4 - 20) }
+                // Na wąskim oknie karta idzie pod nagłówek
+                Loader { active: !page.wide; width: parent.width; visible: active; sourceComponent: cardComponent }
+
+                // Nasza opinia
+                Rectangle {
+                    visible: !!page.meta && !!page.meta.good
+                    width: parent.width
+                    height: visible ? opinion.implicitHeight + 36 : 0
+                    radius: 12
+                    color: Theme.fill
+                    Column {
+                        id: opinion
+                        x: 18; y: 18
+                        width: parent.width - 36
+                        spacing: 12
+                        Txt { text: "Nasza opinia"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4 }
+                        Row {
+                            width: parent.width
+                            spacing: 22
+                            Repeater {
+                                model: [{ t: "Co dobre", k: "good", c: "ok" }, { t: "Co słabe", k: "bad", c: "warn" }]
+                                delegate: Column {
+                                    id: side2
+                                    required property var modelData
+                                    width: (opinion.width - 22) / 2
+                                    spacing: 5
+                                    Txt { text: side2.modelData.t; color: Ui.tone(side2.modelData.c); font.pixelSize: 13; font.weight: Font.DemiBold }
+                                    Repeater {
+                                        model: page.meta ? (page.meta[side2.modelData.k] || []) : []
+                                        delegate: Txt { required property string modelData; width: side2.width; text: modelData; wrapMode: Text.Wrap; font.pixelSize: 14; lineHeight: 1.1 }
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Zrzuty ekranu
-            ListView {
-                width: col.width
-                height: 340
-                visible: !!page.app && (page.app.screenshots || []).length > 0
-                orientation: ListView.Horizontal
-                spacing: 16
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                model: page.app ? (page.app.screenshots || []) : []
-                delegate: Item {
-                    id: shotItem
-                    required property var modelData
-                    width: Math.round(340 * 16 / 9); height: 340
-                    Rectangle { anchors.fill: parent; radius: 16; color: Theme.fill }
-                    Image {
-                        id: shotImg
-                        anchors.fill: parent
-                        source: page.shot(shotItem.modelData)
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                        visible: false
-                    }
-                    Rectangle { id: shotMask; anchors.fill: parent; radius: 16; visible: false; layer.enabled: true }
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: shotImg
-                        maskEnabled: true
-                        maskSource: shotMask
-                        visible: GraphicsInfo.api !== GraphicsInfo.Software
-                    }
-                    Image {
-                        anchors.fill: parent
-                        visible: GraphicsInfo.api === GraphicsInfo.Software
-                        source: shotImg.source
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                    }
-                }
-            }
-
-            // Opis
-            Text {
-                width: col.width
-                visible: !!page.app
-                text: page.app ? page.cleanHtml(page.app.description) : ""
-                textFormat: Text.StyledText
-                wrapMode: Text.Wrap
-                color: Theme.text
-                lineHeight: 1.35
-                font.family: Theme.font; font.pixelSize: 14
-            }
-
-            // Co nowego
-            Column {
-                width: col.width
-                visible: !!page.release
-                spacing: 8
-                Text { text: "Co nowego"; color: Theme.text; font.family: Theme.font; font.pixelSize: 20; font.letterSpacing: -0.4; font.weight: Font.Bold }
-                Text {
-                    text: page.release ? "Wersja " + (page.release.version || "") + (page.release.timestamp ? " · " + new Date(page.release.timestamp * 1000).toLocaleDateString(Qt.locale("pl_PL"), "d MMMM yyyy") : "") : ""
-                    color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
-                }
-                Text {
+                // Lżejsza wersja: jedna z rzeczy, których zwykły sklep nie powie
+                Rectangle {
+                    visible: !!page.webAlternative && !page.installed
                     width: parent.width
-                    text: page.release ? page.cleanHtml(page.release.description || "") : ""
-                    visible: text !== ""
-                    textFormat: Text.StyledText
+                    height: visible ? 74 : 0
+                    radius: 10
+                    border.width: 1; border.color: Theme.line
+                    color: "transparent"
+                    AppGlyph { id: altIcon; x: 14; anchors.verticalCenter: parent.verticalCenter; ref: page.webAlternative || ""; size: 42 }
+                    Column {
+                        anchors.left: altIcon.right; anchors.leftMargin: 12
+                        anchors.right: altGet.left; anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        Txt { text: "Jest lżejsza droga"; font.pixelSize: 15; font.weight: Font.DemiBold }
+                        Txt { width: parent.width; text: "To samo konto w osobnym oknie, bez programu na dysku."; elide: Text.ElideRight; color: Theme.text2; font.pixelSize: 13 }
+                    }
+                    GetButton { id: altGet; anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter; ref: page.webAlternative || "" }
+                }
+
+                // Zrzuty ekranu
+                ListView {
+                    id: shots
+                    width: parent.width
+                    height: 270
+                    visible: !!page.appData && (page.appData.screenshots || []).length > 0
+                    orientation: ListView.Horizontal
+                    spacing: 12
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    cacheBuffer: 0
+                    model: page.appData ? (page.appData.screenshots || []).slice(0, 6) : []
+                    delegate: Rectangle {
+                        id: shotItem
+                        required property var modelData
+                        width: 480; height: 270
+                        color: Theme.fill
+                        border.width: 1; border.color: Theme.line
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            source: page.shot(shotItem.modelData)
+                            sourceSize.width: 960
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                        }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: page.bigShot = page.bestShot(shotItem.modelData) }
+                    }
+                }
+
+                // Zadania, do których polecamy
+                Flow {
+                    visible: page.related.length > 0
+                    width: parent.width
+                    spacing: 6
+                    Repeater {
+                        model: page.related
+                        delegate: Chip {
+                            required property var modelData
+                            text: modelData.title
+                            onClicked: page.window.go("task", modelData.id)
+                        }
+                    }
+                }
+
+                // Opis autora
+                Column {
+                    visible: !!page.appData
+                    width: parent.width
+                    spacing: 8
+                    Txt { text: "Od autora"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4 }
+                    Txt {
+                        width: parent.width
+                        text: page.appData ? page.cleanHtml(page.appData.description) : ""
+                        textFormat: Text.StyledText
+                        wrapMode: Text.Wrap
+                        lineHeight: 1.3
+                    }
+                }
+
+                // Co nowego
+                Column {
+                    width: parent.width
+                    visible: !!page.release && !!page.release.description
+                    spacing: 6
+                    Txt { text: "Co nowego"; font.pixelSize: 20; font.letterSpacing: -0.4; font.weight: Font.Bold }
+                    Txt {
+                        text: page.release ? "Wersja " + (page.release.version || "") + (page.release.timestamp ? " · " + Facts.ago(Number(page.release.timestamp)) : "") : ""
+                        color: Theme.text2; font.pixelSize: 13
+                    }
+                    Txt {
+                        width: parent.width
+                        text: page.release ? page.cleanHtml(page.release.description || "") : ""
+                        textFormat: Text.StyledText
+                        wrapMode: Text.Wrap
+                        lineHeight: 1.3
+                        font.pixelSize: 13
+                    }
+                }
+
+                // Co jeszcze jest na tej półce
+                Column {
+                    visible: page.neighbours.refs.length > 0
+                    width: parent.width
+                    spacing: 2
+                    Txt { text: page.neighbours.title; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4; bottomPadding: 4 }
+                    Repeater {
+                        model: page.neighbours.refs
+                        delegate: AppRow { required property string modelData; width: mainCol.width; ref: modelData }
+                    }
+                }
+
+                // Głosy użytkowników
+                Column {
+                    visible: !!page.ratingInfo || page.reviewList.length > 0
+                    width: parent.width
+                    spacing: 12
+                    Row {
+                        spacing: 12
+                        Txt { anchors.baseline: rateText.baseline; text: "Co mówią ludzie"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4 }
+                        Txt {
+                            id: rateText
+                            visible: !!page.ratingInfo
+                            text: page.ratingInfo ? page.ratingInfo.percent + "% poleca · " + page.ratingInfo.total + " " + Facts.plural(page.ratingInfo.total, "ocena", "oceny", "ocen") : ""
+                            color: Theme.text2; font.pixelSize: 14
+                        }
+                    }
+                    Repeater {
+                        model: page.reviewList
+                        delegate: Column {
+                            id: rev
+                            required property var modelData
+                            width: mainCol.width
+                            spacing: 3
+                            Row {
+                                spacing: 8
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 8; height: 8; radius: 4
+                                    color: Ui.tone(rev.modelData.rating >= 80 ? "ok" : rev.modelData.rating >= 60 ? "warn" : "bad")
+                                }
+                                Txt { text: rev.modelData.summary || ""; font.pixelSize: 14; font.weight: Font.DemiBold }
+                            }
+                            Txt { width: parent.width; text: rev.modelData.description; wrapMode: Text.Wrap; maximumLineCount: 5; elide: Text.ElideRight; font.pixelSize: 14; lineHeight: 1.15 }
+                            Txt { text: (rev.modelData.user_display || "Anonim") + (rev.modelData.date_created ? " · " + Facts.ago(rev.modelData.date_created) : ""); color: Theme.text2; font.pixelSize: 12; bottomPadding: 6 }
+                        }
+                    }
+                }
+            }
+
+            // Karta z prawej
+            Loader {
+                id: side
+                visible: active
+                active: page.wide
+                x: parent.width - 340
+                // Karta przewija się do końca, a potem jedzie razem z czytaniem
+                y: 30 + Math.max(0, Math.min(flickable.contentY - Math.max(0, height + 60 - flickable.height), mainCol.height - height))
+                width: 340
+                sourceComponent: cardComponent
+            }
+        }
+    }
+
+    Component {
+        id: cardComponent
+        Rectangle {
+            width: parent ? parent.width : 340
+            height: cardCol.implicitHeight + 36
+            radius: 12
+            color: Theme.fill
+            Column {
+                id: cardCol
+                x: 18; y: 18
+                width: parent.width - 36
+                spacing: 12
+                Row {
+                    spacing: 8
+                    GetButton { ref: page.ref; big: true }
+                    Btn {
+                        visible: page.removable && page.kind !== "via"
+                        height: 44
+                        text: "Usuń"; danger: true
+                        onClicked: {
+                            if (page.kind === "web") Flatpak.removeWebApp(page.ref, Flatpak.webApps[page.meta.url]);
+                            else if (page.kind === "get") Flatpak.removeGet(page.ref);
+                            else Store.requestRemoval(page.kind === "aster" ? page.meta.id : page.ref);
+                        }
+                    }
+                }
+                Txt {
+                    width: parent.width
+                    visible: !page.installed
                     wrapMode: Text.Wrap
-                    color: Theme.text
-                    lineHeight: 1.3
-                    font.family: Theme.font; font.pixelSize: 13
+                    color: Theme.text2; font.pixelSize: 13
+                    text: page.kind === "web" ? "Bez hasła. Pojawi się w Starcie jak zwykły program."
+                        : page.kind === "get" ? "Bez hasła. Pobierze około " + Facts.size((page.meta.mb || 0) * 1e6) + " ze strony producenta."
+                        : page.kind === "via" ? "Najpierw zainstaluje Lutris, potem kliknij Otwórz, a uruchomi się instalator."
+                        : page.bill ? "Bez hasła. Zajmie " + (page.bill.extra > 0 ? "około " : "") + Facts.billText(page.bill) + "."
+                        : "Bez hasła."
+                }
+                Txt {
+                    width: parent.width
+                    visible: !!page.bill && page.bill.extra > 0 && !page.installed
+                    wrapMode: Text.Wrap
+                    color: Theme.text2; font.pixelSize: 12
+                    text: "Biblioteki są wspólne: następne programy ich nie pobiorą."
+                }
+
+                Rectangle { width: parent.width; height: 1; color: Theme.line }
+
+                Row {
+                    spacing: 8
+                    Txt { text: "Karta programu"; font.pixelSize: 16; font.weight: Font.Bold; font.letterSpacing: -0.2 }
+                    Txt {
+                        anchors.baseline: parent.children[0].baseline
+                        text: page.cardVerdict.text
+                        color: Ui.tone(page.cardVerdict.tone)
+                        font.pixelSize: 13; font.weight: Font.Medium
+                    }
+                }
+                Column {
+                    width: parent.width
+                    Repeater {
+                        model: page.lines
+                        delegate: FactLine {
+                            required property var modelData
+                            tone: modelData.tone; title: modelData.title; text: modelData.text
+                        }
+                    }
+                }
+
+                // Dokładnie to, co się stanie: bez ukrytych kroków
+                Column {
+                    visible: page.kind === "get"
+                    width: parent.width
+                    spacing: 4
+                    Txt { text: "Co zrobi sklep"; color: Theme.text2; font.pixelSize: 11; font.weight: Font.DemiBold }
+                    Txt {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        font.pixelSize: 12
+                        text: page.meta && page.meta.command ? page.meta.command : page.meta ? "Pobierze paczkę z " + page.meta.site + " i rozpakuje ją do ~/.local/share/aster-get" : ""
+                    }
+                }
+                Rectangle { visible: !!page.stats || !!page.appData; width: parent.width; height: 1; color: Theme.line }
+                Txt {
+                    width: parent.width
+                    visible: !!page.stats
+                    wrapMode: Text.Wrap
+                    color: Theme.text2; font.pixelSize: 12
+                    text: {
+                        const bits = [];
+                        if (page.stats && page.stats.installs_total) bits.push(Facts.count(page.stats.installs_total) + " instalacji");
+                        if (page.info && page.info.dev) bits.push(page.info.dev);
+                        return bits.join(" · ");
+                    }
+                }
+                Btn {
+                    text: Store.compare.indexOf(page.ref) >= 0 ? "W porównaniu" : "Dodaj do porównania"
+                    icon: Store.compare.indexOf(page.ref) >= 0 ? "check" : "plus"
+                    onClicked: Store.toggleCompare(page.ref)
                 }
             }
         }
     }
 
-    Text {
-        anchors.centerIn: parent
-        visible: !page.app
-        text: "Wczytuję…"
-        color: Theme.text2
-        font.family: Theme.font; font.pixelSize: 14
+    // Zrzut na całe okno
+    Rectangle {
+        visible: !!page.bigShot
+        anchors.fill: parent
+        z: 5
+        color: Qt.rgba(0, 0, 0, 0.85)
+        Image {
+            anchors.fill: parent; anchors.margins: 30
+            source: page.bigShot || ""
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+        }
+        MouseArea { anchors.fill: parent; onClicked: page.bigShot = null }
     }
 }
