@@ -49,7 +49,7 @@ struct SendRT
 
 struct InsertRT
 {
-    float gainL = 1.f, gainR = 1.f;      // głośność × panorama
+    float gain = 1.f, pan = 0.f;          // suwak i panorama (automatyka je zastępuje)
     bool audible = true;                  // po uwzględnieniu wycisz/solo
     bool toMaster = true;                 // grupa bez wyjścia na master gra tylko przez wysyłki
     Biquad eq[4];                         // usuwanie dudnienia, niskie, średnie, wysokie
@@ -63,6 +63,41 @@ struct InsertRT
     TuneParams tune;                      // autotune
     std::vector<Vst3::Plugin *> fx;       // wtyczki VST3 po efektach Studia (żyją w Snapshot::plugins)
     std::vector<SendRT> sends;            // po suwaku, do insertów dalej w Snapshot::order
+};
+
+// Automatyka: krzywa jednego parametru w czasie utworu
+struct AutoRT
+{
+    enum Kind { Volume, Pan, Reverb, Echo, Drive, Double, Deess, Kinds, ChannelVolume, Master, Param };
+    Kind kind = Volume;
+    int index = 0;                        // insert albo kanał
+    Vst3::Plugin *plugin = nullptr;       // Param
+    unsigned param = 0;
+    long long start = 0, end = 0;
+    std::vector<std::pair<long long, float>> points;   // ramki od początku utworu, wartość 0…1
+    float at(long long pos) const
+    {
+        if (points.empty())
+            return 0;
+        if (pos <= points.front().first)
+            return points.front().second;
+        if (pos >= points.back().first)
+            return points.back().second;
+        for (size_t i = 1; i < points.size(); ++i)
+            if (pos < points[i].first) {
+                const auto &a = points[i - 1], &b = points[i];
+                return a.second + (b.second - a.second) * float(pos - a.first) / float(std::max(1LL, b.first - a.first));
+            }
+        return points.back().second;
+    }
+    // Fader: te same pozycje co suwak miksera (0 dB przy ~71%, +6 dB na górze)
+    static float gainOf(float v)
+    {
+        if (v <= 0.001f)
+            return 0;
+        const float db = 6.f + 40.f * std::log10(v);
+        return std::pow(10.f, db / 20.f);
+    }
 };
 
 // Pas playlisty: klipy audio i insert, do którego grają
@@ -96,6 +131,7 @@ struct Snapshot
     std::vector<LaneRT> lanes;
     std::vector<InsertRT> inserts;
     std::vector<ChannelRT> channels;
+    std::vector<AutoRT> autos;
     std::vector<int> order;               // inserty w kolejności liczenia: źródła wysyłek przed celami
     std::vector<std::shared_ptr<Instrument>> instruments;
     double bpm = 120;
@@ -150,6 +186,12 @@ private:
     const Snapshot *m_seqSnap = nullptr;
     bool m_wasPlaying = false;
     Vst3::Note m_ev[512];
+    float m_autoVal[MaxTracks][AutoRT::Kinds];
+    bool m_autoSet[MaxTracks][AutoRT::Kinds];
+    float m_gainL[MaxTracks], m_gainR[MaxTracks];      // poprzedni blok: głośność płynie, bez trzasków
+    bool m_gainKnown[MaxTracks] = {};
+    float m_autoMaster = -1;
+    std::vector<float> m_autoLast;                     // ostatnio wysłana wartość parametru wtyczki
     // Stan efektów ścieżek (po indeksie ścieżki) i wspólny pogłos
     BiquadState m_eq[MaxTracks][4][2];
     CompState m_comp[MaxTracks];

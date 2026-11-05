@@ -75,6 +75,33 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             }
         };
 
+        // Automatyka: wartości na ten blok
+        for (int i = 0; i < inserts; ++i)
+            std::fill_n(m_autoSet[i], int(AutoRT::Kinds), false);
+        float autoMaster = -1;
+        if (m_autoLast.size() < s->autos.size())
+            m_autoLast.resize(std::min<size_t>(s->autos.size(), 4096), -1.f);
+        if (clips) {
+            for (size_t k = 0; k < s->autos.size() && k < m_autoLast.size(); ++k) {
+                const AutoRT &a = s->autos[k];
+                if (pos < a.start || pos >= a.end)
+                    continue;
+                const float v = a.at(pos);
+                if (a.kind == AutoRT::Param) {
+                    if (a.plugin && std::fabs(v - m_autoLast[k]) > 1e-4f) {
+                        a.plugin->automate(a.param, v);
+                        m_autoLast[k] = v;
+                    }
+                } else if (a.kind == AutoRT::Master) {
+                    autoMaster = v;
+                } else if (a.kind < AutoRT::Kinds && a.index >= 0 && a.index < inserts) {
+                    m_autoVal[a.index][a.kind] = v;
+                    m_autoSet[a.index][a.kind] = true;
+                }
+            }
+        }
+        m_autoMaster = autoMaster;
+
         // Kanały: nuty tego bloku do instrumentów, ich dźwięk do insertów
         sequence(s, pos, n, clips);
         const Vst3::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
@@ -100,11 +127,16 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             ch.inst->process(m_cl, m_cr, n, m_ev, count, tp);
             if (!ch.audible)
                 continue;
+            float cg = 1.f;
+            if (clips)
+                for (const AutoRT &a : s->autos)
+                    if (a.kind == AutoRT::ChannelVolume && a.index == c && pos >= a.start && pos < a.end)
+                        cg = AutoRT::gainOf(a.at(pos));
             open(ch.insert);
             float *bl = busL(ch.insert), *br = busR(ch.insert);
             for (int i = 0; i < n; ++i) {
-                bl[i] += m_cl[i] * ch.gainL;
-                br[i] += m_cr[i] * ch.gainR;
+                bl[i] += m_cl[i] * ch.gainL * cg;
+                br[i] += m_cr[i] * ch.gainR * cg;
             }
         }
 
@@ -160,8 +192,11 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
             if (ii < 0 || ii >= inserts)
                 continue;
             const InsertRT &t = s->inserts[size_t(ii)];
-            reverb |= t.send > 0;
-            echo |= t.echo > 0;
+            auto fxValue = [&](AutoRT::Kind k, float base) { return m_autoSet[ii][k] ? m_autoVal[ii][k] : base; };
+            const float tSend = fxValue(AutoRT::Reverb, t.send / 0.6f) * 0.6f, tEcho = fxValue(AutoRT::Echo, t.echo / 0.7f) * 0.7f;
+            const float tDrive = fxValue(AutoRT::Drive, t.drive), tDbl = fxValue(AutoRT::Double, t.dbl), tDeess = fxValue(AutoRT::Deess, t.deess);
+            reverb |= tSend > 0;
+            echo |= tEcho > 0;
             if (!t.audible)
                 continue;
             if (!m_any[ii] && t.fx.empty())         // wtyczka gra też po końcu klipu (ogony pogłosu i echa)
@@ -181,14 +216,14 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     tr[i] = zr.run(t.eq[k], tr[i]);
                 }
             }
-            if (t.deess > 0)
-                m_deess[ii].process(tl, tr, n, t.deessLp, t.deessHp, t.deess, rate);
-            if (t.drive > 0) {
+            if (tDeess > 0 && !t.deessLp.flat())
+                m_deess[ii].process(tl, tr, n, t.deessLp, t.deessHp, tDeess, rate);
+            if (tDrive > 0) {
                 // Ciepło / przester: miękkie nasycenie, poziom wyrównany do wejścia
-                const float k = 1.f + 6.f * t.drive, norm = 1.f / std::tanh(k);
+                const float k = 1.f + 6.f * tDrive, norm = 1.f / std::tanh(k);
                 for (int i = 0; i < n; ++i) {
-                    tl[i] = std::tanh(tl[i] * k) * norm * (1.f - 0.35f * t.drive) + tl[i] * 0.35f * t.drive;
-                    tr[i] = std::tanh(tr[i] * k) * norm * (1.f - 0.35f * t.drive) + tr[i] * 0.35f * t.drive;
+                    tl[i] = std::tanh(tl[i] * k) * norm * (1.f - 0.35f * tDrive) + tl[i] * 0.35f * tDrive;
+                    tr[i] = std::tanh(tr[i] * k) * norm * (1.f - 0.35f * tDrive) + tr[i] * 0.35f * tDrive;
                 }
             }
             if (t.comp.on) {
@@ -199,39 +234,56 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     tr[i] *= g;
                 }
             }
-            if (t.dbl > 0)
-                m_dbl[size_t(ii)].process(tl, tr, n, t.dbl, rate);
+            if (tDbl > 0)
+                m_dbl[size_t(ii)].process(tl, tr, n, tDbl, rate);
             else
                 m_dbl[size_t(ii)].idle();
             for (Vst3::Plugin *p : t.fx)
                 p->process(tl, tr, n, nullptr, 0, tp);
 
+            // Głośność i panorama: rampa z poprzedniego bloku (automatyka i ruch suwaka bez trzasków)
+            const float gNow = m_autoSet[ii][AutoRT::Volume] ? AutoRT::gainOf(m_autoVal[ii][AutoRT::Volume]) : t.gain;
+            const float pNow = m_autoSet[ii][AutoRT::Pan] ? m_autoVal[ii][AutoRT::Pan] * 2 - 1 : t.pan;
+            const float endL = gNow * (pNow > 0 ? 1.f - pNow : 1.f), endR = gNow * (pNow < 0 ? 1.f + pNow : 1.f);
+            if (!m_gainKnown[ii]) {
+                m_gainL[ii] = endL;
+                m_gainR[ii] = endR;
+                m_gainKnown[ii] = true;
+            }
+            const float stepL = (endL - m_gainL[ii]) / n, stepR = (endR - m_gainR[ii]) / n;
+            float gl = m_gainL[ii], gr = m_gainR[ii];
             float pl = 0.f, pr = 0.f;
             for (int i = 0; i < n; ++i) {
-                const float l = tl[i] * t.gainL, r = tr[i] * t.gainR;
+                gl += stepL;
+                gr += stepR;
+                const float l = tl[i] * gl, r = tr[i] * gr;
+                tl[i] = l;
+                tr[i] = r;
                 if (t.toMaster) {
                     m_l[i] += l;
                     m_r[i] += r;
                 }
-                if (t.send > 0) {
-                    m_rl[i] += l * t.send;
-                    m_rr[i] += r * t.send;
+                if (tSend > 0) {
+                    m_rl[i] += l * tSend;
+                    m_rr[i] += r * tSend;
                 }
-                if (t.echo > 0) {
-                    m_el[i] += l * t.echo;
-                    m_er[i] += r * t.echo;
+                if (tEcho > 0) {
+                    m_el[i] += l * tEcho;
+                    m_er[i] += r * tEcho;
                 }
                 pl = std::max(pl, std::fabs(l));
                 pr = std::max(pr, std::fabs(r));
             }
+            m_gainL[ii] = endL;
+            m_gainR[ii] = endR;
             for (const SendRT &sd : t.sends) {
                 if (sd.to < 0 || sd.to >= inserts)
                     continue;
                 open(sd.to);
                 float *dl = busL(sd.to), *dr = busR(sd.to);
                 for (int i = 0; i < n; ++i) {
-                    dl[i] += tl[i] * t.gainL * sd.gain;
-                    dr[i] += tr[i] * t.gainR * sd.gain;
+                    dl[i] += tl[i] * sd.gain;
+                    dr[i] += tr[i] * sd.gain;
                 }
             }
             if (meters) {
@@ -259,7 +311,7 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
     }
 
     // Suma: głośność → mastering (korektor, kompresor, szerokość, dociśnięcie) → ogranicznik z wyprzedzeniem
-    const float master = s ? s->master : 1.f;
+    const float master = s ? (m_autoMaster >= 0 ? AutoRT::gainOf(m_autoMaster) : s->master) : 1.f;
     const MasterParams mp = s ? s->mastering : MasterParams{};
     const float release = 1.f - std::exp(-1.f / (0.15f * rate));
     float pl = 0.f, pr = 0.f;

@@ -348,17 +348,26 @@ Window {
     }
     function channelMenu(id, item, x, y) {
         menu.channel = id;
+        menu.anchorItem = item;
         const c = Studio.channels.find((k) => k.id === id);
         const p = item.mapToItem(frame, x, y);
         menu.openAt(p.x, p.y, [
             { label: "Piano roll", icon: "keyboard", shortcut: "F7", action: "chPiano" }
         ].concat(c.kind === "vst" ? [{ label: "Okno wtyczki", icon: "sliders", action: "chPlugin" }] : []).concat([
+            { label: "Automatyka…", icon: "activity", action: "chAuto" },
             { label: "Zmień nazwę…", icon: "pencil", action: "chRename" },
             { separator: true }
         ]).concat(Studio.inserts.map((i) => ({ label: "Gra na: " + i.name, icon: i.id === c.insert ? "check" : "", action: "chIns:" + i.id }))).concat([
             { separator: true },
             { label: "Usuń kanał", icon: "trash", action: "chRemove", danger: true }
         ]));
+    }
+    function autoMenu(item, targets) {
+        menu.autoTargets = targets;
+        const p = item.mapToItem(frame, 0, 0);
+        // Wtyczki mają setki parametrów: bez przewijania menu pokazuje początek listy
+        const shown = targets.slice(0, 18);
+        menu.openAt(p.x, Math.max(60, p.y - shown.length * 34), shown.map((t, i) => ({ label: t.label, icon: "activity", action: "autoT:" + i })));
     }
     function patternMenu(item) {
         const p = item.mapToItem(frame, 0, item.height + 6);
@@ -394,6 +403,8 @@ Window {
         else if (a.startsWith("over:")) Studio.recordOver(menu.clipId, a.substring(5));
         else if (a.startsWith("role:")) recordOn(a.substring(5));
         else if (a.startsWith("pat:")) { Studio.currentPattern = Number(a.substring(4)); }
+        else if (a.startsWith("autoT:")) { const t = menu.autoTargets[Number(a.substring(6))]; Studio.addAutomation(t.target, t.label); toast("Krzywa na playliście: klik dodaje punkt, prawy przycisk usuwa"); }
+        else if (a === "chAuto") Qt.callLater(() => autoMenu(menu.anchorItem, Studio.channelAutoTargets(menu.channel)));
         else if (a === "chPiano") { Studio.selectedChannel = menu.channel; dock = "piano"; }
         else if (a === "chPlugin") Studio.openChannelPlugin(menu.channel);
         else if (a === "chRemove") Studio.removeChannel(menu.channel);
@@ -823,6 +834,7 @@ Window {
                     visible: win.dock === "mixer"
                     colors: win.trackColors
                     onAddPluginRequested: pluginSheet.start()
+                    onAutomateRequested: (item) => win.autoMenu(item, Studio.autoTargets(Studio.selectedInsert))
                 }
             }
         }
@@ -1331,6 +1343,8 @@ Window {
             property int track
             property string folder
             property int channel
+            property var autoTargets: []
+            property Item anchorItem: null
             onTriggered: (a) => win.runMenu(a)
         }
     }

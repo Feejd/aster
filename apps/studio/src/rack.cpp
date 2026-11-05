@@ -151,6 +151,7 @@ QVariantList Studio::inserts() const
                              {QStringLiteral("echo"), in.echo}, {QStringLiteral("drive"), in.drive}, {QStringLiteral("tune"), in.tune},
                              {QStringLiteral("double"), in.dbl}, {QStringLiteral("deess"), in.deess}, {QStringLiteral("denoise"), in.denoise},
                              {QStringLiteral("preset"), in.preset},
+                             {QStringLiteral("hidden"), std::any_of(m_tracks.begin(), m_tracks.end(), [&in](const Track &t) { return t.insert == in.id && t.role == QLatin1String("auto"); })},
                              {QStringLiteral("track"), [&] {
                                   for (int i = 0; i < m_tracks.size(); ++i)
                                       if (m_tracks[i].insert == in.id)
@@ -608,8 +609,12 @@ void Studio::compileChannels(Snapshot *s, bool forExport)
                 copy.vst.plugin.reset();
             }
             inst = makeInstrument(copy);
-            if (copy.vst.plugin)
+            if (copy.vst.plugin) {
                 s->plugins.push_back(copy.vst.plugin);
+                m_snapPlugins.insert(c.id, copy.vst.plugin.get());
+            }
+        } else if (c.vst.plugin) {
+            m_snapPlugins.insert(c.id, c.vst.plugin.get());
         }
         if (inst) {
             s->instruments.push_back(inst);
@@ -646,6 +651,144 @@ void Studio::compileChannels(Snapshot *s, bool forExport)
         std::stable_sort(rt.events.begin(), rt.events.end(), [](const SeqEvent &a, const SeqEvent &b) { return a.at != b.at ? a.at < b.at : !a.on && b.on; });
         s->channels.push_back(std::move(rt));
     }
+}
+
+// ——— Automatyka ———
+
+QVariantList Studio::autoTargets(int insert) const
+{
+    QVariantList out;
+    auto add = [&out](const QString &t, const QString &l) { out.append(QVariantMap{{QStringLiteral("target"), t}, {QStringLiteral("label"), l}}); };
+    for (const Insert &in : m_inserts) {
+        if (in.id != insert)
+            continue;
+        const QString id = QString::number(in.id);
+        add(QStringLiteral("vol:") + id, in.name + QStringLiteral(" — głośność"));
+        add(QStringLiteral("pan:") + id, in.name + QStringLiteral(" — panorama"));
+        add(QStringLiteral("reverb:") + id, in.name + QStringLiteral(" — pogłos"));
+        add(QStringLiteral("echo:") + id, in.name + QStringLiteral(" — echo"));
+        add(QStringLiteral("drive:") + id, in.name + QStringLiteral(" — przester"));
+        add(QStringLiteral("double:") + id, in.name + QStringLiteral(" — dubel"));
+        for (const Slot &s : in.slots_)
+            if (s.plugin)
+                for (const Vst3::Param &p : s.plugin->params())
+                    if (p.automatable)
+                        add(QStringLiteral("plug:%1:%2").arg(s.id).arg(p.id), s.info.name + QStringLiteral(" — ") + p.name);
+    }
+    return out;
+}
+
+QVariantList Studio::channelAutoTargets(int channel) const
+{
+    QVariantList out;
+    auto add = [&out](const QString &t, const QString &l) { out.append(QVariantMap{{QStringLiteral("target"), t}, {QStringLiteral("label"), l}}); };
+    for (const Channel &c : m_channels) {
+        if (c.id != channel)
+            continue;
+        add(QStringLiteral("chvol:%1").arg(c.id), c.name + QStringLiteral(" — głośność kanału"));
+        if (c.vst.plugin)
+            for (const Vst3::Param &p : c.vst.plugin->params())
+                if (p.automatable)
+                    add(QStringLiteral("chplug:%1:%2").arg(c.id).arg(p.id), c.name + QStringLiteral(" — ") + p.name);
+    }
+    return out;
+}
+
+int Studio::addAutomation(const QString &target, const QString &label)
+{
+    if (!isOpen() || target.isEmpty())
+        return 0;
+    // Własny pas, żeby krzywe nie mieszały się z nagraniami
+    int lane = -1;
+    for (int i = 0; i < m_tracks.size() && lane < 0; ++i)
+        if (m_tracks[i].role == QLatin1String("auto"))
+            lane = i;
+    bool freeSpot = false;
+    if (lane >= 0)
+        freeSpot = !std::any_of(m_tracks[lane].clips.begin(), m_tracks[lane].clips.end(), [&](const Clip &c) { return c.autoTarget != target; });
+    if (lane < 0 || !freeSpot) {
+        addTrack(QStringLiteral("Automatyka"));
+        lane = int(m_tracks.size()) - 1;
+        m_tracks[lane].role = QStringLiteral("auto");
+    } else {
+        checkpoint();
+    }
+    const long long bar = llround(60.0 / m_bpm * m_beatsPerBar * Engine::Rate);
+    Clip c;
+    c.id = m_nextId++;
+    c.name = label;
+    c.autoTarget = target;
+    c.length = c.srcLen = std::max(8 * bar, (frames(duration()) + bar - 1) / bar * bar);
+    c.autoPts = {{0, 0.7}, {double(c.length), 0.7}};
+    m_tracks[lane].clips.append(c);
+    m_selClip = c.id;
+    emit selectionChanged();
+    changed();
+    return c.id;
+}
+
+void Studio::setAutoPoints(int clip, const QVariantList &points)
+{
+    Clip *c = findClip(clip);
+    if (!c || c->autoTarget.isEmpty())
+        return;
+    checkpoint();
+    c = findClip(clip);
+    QList<QPointF> pts;
+    for (const QVariant &v : points) {
+        const QVariantMap m = v.toMap();
+        pts.append({std::clamp(m.value(QStringLiteral("t")).toDouble() * Engine::Rate, 0.0, double(c->length)),
+                    std::clamp(m.value(QStringLiteral("v")).toDouble(), 0.0, 1.0)});
+    }
+    std::stable_sort(pts.begin(), pts.end(), [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
+    c->autoPts = pts;
+    changed();
+}
+
+void Studio::compileAutos(Snapshot *s)
+{
+    static const QHash<QString, AutoRT::Kind> kinds{{QStringLiteral("vol"), AutoRT::Volume}, {QStringLiteral("pan"), AutoRT::Pan},
+                                                    {QStringLiteral("reverb"), AutoRT::Reverb}, {QStringLiteral("echo"), AutoRT::Echo},
+                                                    {QStringLiteral("drive"), AutoRT::Drive}, {QStringLiteral("double"), AutoRT::Double},
+                                                    {QStringLiteral("deess"), AutoRT::Deess}};
+    if (m_patMode) {
+        m_snapPlugins.clear();
+        return;
+    }
+    for (const Track &t : std::as_const(m_tracks)) {
+        for (const Clip &c : t.clips) {
+            if (c.autoTarget.isEmpty() || c.autoPts.isEmpty())
+                continue;
+            const QStringList p = c.autoTarget.split(QLatin1Char(':'));
+            AutoRT a;
+            if (p[0] == QLatin1String("master")) {
+                a.kind = AutoRT::Master;
+            } else if (p[0] == QLatin1String("plug") || p[0] == QLatin1String("chplug")) {
+                a.kind = AutoRT::Param;
+                a.plugin = m_snapPlugins.value(p.value(1).toInt());
+                a.param = p.value(2).toUInt();
+                if (!a.plugin)
+                    continue;
+            } else if (p[0] == QLatin1String("chvol")) {
+                a.kind = AutoRT::ChannelVolume;
+                a.index = -1;
+                for (int i = 0; i < m_channels.size(); ++i)
+                    if (m_channels[i].id == p.value(1).toInt())
+                        a.index = i;
+            } else if (kinds.contains(p[0])) {
+                a.kind = kinds.value(p[0]);
+                a.index = insertIndex(p.value(1).toInt());
+            } else {
+                continue;
+            }
+            a.start = c.start;
+            a.end = c.start + c.length;
+            for (const QPointF &q : c.autoPts)
+                a.points.push_back({c.start + llround(q.x()), float(q.y())});
+            s->autos.push_back(std::move(a));
+        }
+    }
+    m_snapPlugins.clear();
 }
 
 // ——— Beat Maker → kanały ———

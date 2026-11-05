@@ -2,6 +2,7 @@
 
 #include "audiosource.h"
 #include "engine.h"
+#include <QPointF>
 #include "vst3host.h"
 #include "midiinput.h"
 
@@ -313,6 +314,12 @@ public:
     Q_INVOKABLE int duplicatePattern(int id);
     Q_INVOKABLE void channelNoteOn(int id, int pitch, double velocity = 0.85);    // gra teraz (klawiatura, MIDI, podgląd)
     Q_INVOKABLE void channelNoteOff(int id, int pitch);
+    // Automatyka. Cel: vol:<insert> pan:<insert> reverb|echo|drive|double|deess:<insert> chvol:<kanał>
+    // master plug:<slot>:<parametr> chplug:<kanał>:<parametr>
+    Q_INVOKABLE QVariantList autoTargets(int insert) const;       // [{ target, label }] insertu
+    Q_INVOKABLE QVariantList channelAutoTargets(int channel) const;
+    Q_INVOKABLE int addAutomation(const QString &target, const QString &label);   // klip na pasie Automatyka: cały utwór
+    Q_INVOKABLE void setAutoPoints(int clip, const QVariantList &points);         // [{ t (s od początku klipu), v }]
     Q_INVOKABLE QVariantList patternPreview(int id) const;       // nuty wzoru dla klipu: [{ x, w, y }] w 0…1
     Q_INVOKABLE QStringList projectSounds() const;               // pliki z audio/ do samplera
     // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
@@ -397,6 +404,8 @@ private:
         // podejścia k jest dalej w pliku niż podejścia 0 (stałe przy przesuwaniu, przycinaniu i dzieleniu klipu)
         QList<long long> takes;
         int take = 0;
+        QString autoTarget;             // klip automatyki: co steruje (zob. compileAutos), bez pliku
+        QList<QPointF> autoPts;         // punkty: ramki od początku klipu, wartość 0…1
         int pattern = 0;                // klip wzoru (id): zapętlony, bez pliku; srcLen — długość wzoru
         QString origFile;               // odszumiony klip: plik przed odszumianiem (powrót i ponowne odszumianie)
     };
@@ -577,6 +586,8 @@ private:
     void rackFromJson(const QJsonObject &o, const QHash<int, Channel> &oldChannels);
     std::shared_ptr<Instrument> makeInstrument(Channel &c);
     void compileChannels(Snapshot *s, bool forExport);
+    void compileAutos(Snapshot *s);
+    QHash<int, Vst3::Plugin *> m_snapPlugins;   // slot → instancja w budowanej migawce (eksport ma własne)
     QList<int> insertOrder() const;
     long long patternFrames(const Pattern &p) const;
     Pattern *findPattern(int id);

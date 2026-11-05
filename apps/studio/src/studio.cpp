@@ -85,11 +85,13 @@ void Studio::setBpm(double v)
     // Klipy wzorów na playliście też: te same takty
     for (Track &t : m_tracks)
         for (Clip &c : t.clips)
-            if (c.pattern) {
+            if (c.pattern || !c.autoTarget.isEmpty()) {
                 c.start = llround(c.start * ratio);
                 c.length = llround(c.length * ratio);
                 c.offset = llround(c.offset * ratio);
                 c.srcLen = llround(c.srcLen * ratio);
+                for (QPointF &p : c.autoPts)
+                    p.setX(p.x() * ratio);
             }
     applyPatternLoop();
     emit settingsChanged();
@@ -467,6 +469,13 @@ QJsonObject Studio::toJson(bool pluginStates) const
                                       }()},
                                      {QStringLiteral("take"), c.take},
                                      {QStringLiteral("pattern"), c.pattern},
+                                     {QStringLiteral("autoTarget"), c.autoTarget},
+                                     {QStringLiteral("autoPoints"), [&] {
+                                          QJsonArray a;
+                                          for (const QPointF &p : c.autoPts)
+                                              a.append(QJsonArray{p.x(), p.y()});
+                                          return a;
+                                      }()},
                                      {QStringLiteral("origFile"), c.origFile}});
         tracks.append(QJsonObject{{QStringLiteral("id"), t.id},
                                   {QStringLiteral("name"), t.name},
@@ -609,7 +618,10 @@ void Studio::fromJson(const QJsonObject &o)
             c.take = c.takes.isEmpty() ? 0 : std::clamp(co.value(QStringLiteral("take")).toInt(), 0, int(c.takes.size()) - 1);
             c.origFile = co.value(QStringLiteral("origFile")).toString();
             c.pattern = co.value(QStringLiteral("pattern")).toInt();
-            if ((c.file.isEmpty() && !c.pattern) || c.length <= 0 || c.srcLen <= 0)
+            c.autoTarget = co.value(QStringLiteral("autoTarget")).toString();
+            for (const QJsonValue &v : co.value(QStringLiteral("autoPoints")).toArray())
+                c.autoPts.append({v.toArray().at(0).toDouble(), v.toArray().at(1).toDouble()});
+            if ((c.file.isEmpty() && !c.pattern && c.autoTarget.isEmpty()) || c.length <= 0 || c.srcLen <= 0)
                 continue;
             t.clips.append(c);
         }
@@ -725,7 +737,14 @@ void Studio::rebuildView()
                                      {QStringLiteral("fadeOut"), c.fadeOut / R},
                                      {QStringLiteral("gain"), c.gain},
                                      {QStringLiteral("pattern"), c.pattern},
-                                     {QStringLiteral("missing"), !src && !c.pattern && m_loading == 0}});
+                                     {QStringLiteral("autoTarget"), c.autoTarget},
+                                     {QStringLiteral("autoPoints"), [&] {
+                                          QVariantList l;
+                                          for (const QPointF &p : c.autoPts)
+                                              l.append(QVariantMap{{QStringLiteral("t"), p.x() / R}, {QStringLiteral("v"), p.y()}});
+                                          return l;
+                                      }()},
+                                     {QStringLiteral("missing"), !src && !c.pattern && c.autoTarget.isEmpty() && m_loading == 0}});
         }
         const Insert &in = ins(t);
         m_tracksView.append(QVariantMap{{QStringLiteral("id"), t.id},
@@ -832,10 +851,8 @@ Snapshot *Studio::buildSnapshot(bool forExport)
     const bool anySolo = !soloed.isEmpty();
     for (const Insert &t : m_inserts) {
         InsertRT rt;
-        const float g = float(dbToGain(t.volume));
-        const float p = float(std::clamp(t.pan, -1.0, 1.0));
-        rt.gainL = g * (p > 0 ? 1.f - p : 1.f);
-        rt.gainR = g * (p < 0 ? 1.f + p : 1.f);
+        rt.gain = float(dbToGain(t.volume));
+        rt.pan = float(std::clamp(t.pan, -1.0, 1.0));
         rt.audible = anySolo ? soloed.contains(t.id) && !t.mute : !t.mute;
         rt.toMaster = t.toMaster;
         for (const Send &sd : t.sends)
@@ -878,6 +895,7 @@ Snapshot *Studio::buildSnapshot(bool forExport)
             }
             s->plugins.push_back(p);
             rt.fx.push_back(p.get());
+            m_snapPlugins.insert(sl.id, p.get());
         }
         s->inserts.push_back(std::move(rt));
     }
@@ -910,6 +928,7 @@ Snapshot *Studio::buildSnapshot(bool forExport)
             s->lanes.push_back(std::move(rt));
     }
     compileChannels(s, forExport);
+    compileAutos(s);
     return s;
 }
 
@@ -1227,6 +1246,8 @@ void Studio::cutStart(Clip &c, long long d)
 {
     c.start += d;
     c.length -= d;
+    for (QPointF &p : c.autoPts)
+        p.setX(p.x() - double(d));
     if (c.loop) {
         // Treść zostaje na miejscu — przesuwa się tylko faza pętli
         c.offset = ((c.offset + d) % c.srcLen + c.srcLen) % c.srcLen;

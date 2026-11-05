@@ -174,6 +174,8 @@ struct Plugin::Impl
     int inBuses = 0, outBuses = 0;
     int maxBlock = 2048;
     double rate = 48000;
+    ParamMsg rtParams[64];                         // automatyka z wątku audio
+    int rtCount = 0;
     std::atomic_flag busy = ATOMIC_FLAG_INIT;      // wczytywanie stanu: wątek audio przepuszcza dźwięk bez wtyczki
     ParamMsg queue[QueueSize];
     std::atomic<unsigned> qw{0}, qr{0};
@@ -348,6 +350,12 @@ void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount
             q->addPoint(0, m.value, pt);
     }
     i->qr.store(rd, std::memory_order_release);
+    for (int k = 0; k < i->rtCount; ++k) {
+        int32 idx = 0, pt = 0;
+        if (IParamValueQueue *q = i->inChanges.addParameterData(i->rtParams[k].id, idx))
+            q->addPoint(0, i->rtParams[k].value, pt);
+    }
+    i->rtCount = 0;
     i->outChanges.clearQueue();
     // Nuty
     i->events.clear();
@@ -401,6 +409,12 @@ void Plugin::process(float *l, float *r, int n, const Note *notes, int noteCount
             std::memcpy(r, l, size_t(n) * sizeof(float));
     }
     i->busy.clear(std::memory_order_release);
+}
+
+void Plugin::automate(unsigned id, double value)
+{
+    if (d->rtCount < 64)
+        d->rtParams[d->rtCount++] = {id, std::clamp(value, 0.0, 1.0)};
 }
 
 QList<Param> Plugin::params() const

@@ -10,6 +10,7 @@ Item {
     id: mx
     property var colors: []
     signal addPluginRequested()
+    signal automateRequested(Item item)
     function color(i) { return colors.length ? colors[i % colors.length] : Theme.accent; }
 
     // Suwak: pozycja 0…1 ↔ decybele (0 dB przy ~71%, +6 dB na górze)
@@ -38,6 +39,7 @@ Item {
                 delegate: Strip {
                     required property int index
                     readonly property var m: Studio.inserts[index] || ({})
+                    visible: !m.hidden                   // pas samej automatyki nie gra
                     label: m.name || ""
                     tint: mx.color(m.color || 0)
                     volume: m.volume || 0
@@ -118,6 +120,18 @@ Item {
                     }
                 }
                 Text { visible: !!side.sel && side.sel.plugins.length === 0; width: parent.width; wrapMode: Text.WordWrap; text: "Brak wtyczek. Efekty Studia są w panelu Efekty (E)."; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11 }
+                HoverButton {
+                    id: autoBtn
+                    width: sideCol.width; height: 26; radius: 7
+                    onClicked: mx.automateRequested(autoBtn)
+                    Row {
+                        x: 6; anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.activity; size: 13; stroke: 2; color: Theme.accentText }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: "Automatyka…"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
+                    }
+                    Tip { shown: parent.hovered; text: "Krzywa głośności, efektu albo parametru wtyczki na playliście" }
+                }
                 Text { text: "Wysyłki"; topPadding: 6; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
                 Repeater {
                     model: Studio.inserts.length

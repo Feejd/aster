@@ -701,6 +701,94 @@ Item {
             }
         }
 
+        // Klip automatyki: krzywa. Klik dodaje punkt, przeciąganie go przesuwa, prawy przycisk usuwa
+        Item {
+            id: curve
+            visible: !!ci.cl.autoTarget
+            x: 0; y: 19; z: 6
+            width: ci.width; height: ci.height - 21
+            property var pts: []
+            property int grabbed: -1
+            function reload() { pts = (ci.cl.autoPoints || []).map((p) => ({ t: p.t, v: p.v })); }
+            Component.onCompleted: reload()
+            Connections { target: ci; function onClChanged() { if (curve.grabbed < 0) curve.reload(); } }
+            onPtsChanged: line.requestPaint()
+            onWidthChanged: line.requestPaint()
+            function px(p) { return p.t * tl.pps; }
+            function py(p) { return (1 - p.v) * (height - 8) + 4; }
+            Canvas {
+                id: line
+                anchors.fill: parent
+                onPaint: {
+                    const c = getContext("2d");
+                    c.reset();
+                    const pts = curve.pts;
+                    if (!pts.length) return;
+                    c.strokeStyle = Qt.darker(ci.tint, 1.5);
+                    c.lineWidth = 1.6;
+                    c.beginPath();
+                    c.moveTo(0, curve.py(pts[0]));
+                    for (const p of pts) c.lineTo(curve.px(p), curve.py(p));
+                    c.lineTo(width, curve.py(pts[pts.length - 1]));
+                    c.stroke();
+                    c.fillStyle = Theme.dark ? "white" : "#16181D";
+                    for (const p of pts) {
+                        c.beginPath();
+                        c.arc(curve.px(p), curve.py(p), 3.2, 0, 6.3);
+                        c.fill();
+                    }
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                function hit(x, y) {
+                    for (let i = 0; i < curve.pts.length; ++i)
+                        if (Math.abs(curve.px(curve.pts[i]) - x) < 8 && Math.abs(curve.py(curve.pts[i]) - y) < 8) return i;
+                    return -1;
+                }
+                function point(x, y) { return { t: Math.max(0, Math.min(ci.cl.length, x / tl.pps)), v: Math.max(0, Math.min(1, 1 - (y - 4) / (curve.height - 8))) }; }
+                onPressed: (e) => {
+                    Studio.selectedClip = ci.cl.id;
+                    const i = hit(e.x, e.y);
+                    const list = curve.pts.slice();
+                    if (e.button === Qt.RightButton) {
+                        if (i >= 0 && list.length > 1) {
+                            list.splice(i, 1);
+                            Studio.setAutoPoints(ci.cl.id, list);
+                        }
+                        return;
+                    }
+                    if (i >= 0) {
+                        curve.grabbed = i;
+                    } else {
+                        const p = point(e.x, e.y);
+                        let at = list.findIndex((q) => q.t > p.t);
+                        if (at < 0) at = list.length;
+                        list.splice(at, 0, p);
+                        curve.pts = list;
+                        curve.grabbed = at;
+                    }
+                }
+                onPositionChanged: (e) => {
+                    if (curve.grabbed < 0) return;
+                    const list = curve.pts.slice();
+                    const p = point(e.x, e.y);
+                    // Punkt nie przeskakuje sąsiadów
+                    const lo = curve.grabbed > 0 ? list[curve.grabbed - 1].t : 0;
+                    const hi = curve.grabbed < list.length - 1 ? list[curve.grabbed + 1].t : ci.cl.length;
+                    p.t = Math.max(lo, Math.min(hi, p.t));
+                    list[curve.grabbed] = p;
+                    curve.pts = list;
+                }
+                onReleased: {
+                    if (curve.grabbed < 0) return;
+                    curve.grabbed = -1;
+                    Studio.setAutoPoints(ci.cl.id, curve.pts);
+                }
+            }
+        }
+
         // Klip wzoru: nuty w każdym powtórzeniu
         Canvas {
             visible: !!ci.cl.pattern

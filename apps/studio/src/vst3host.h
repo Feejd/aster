@@ -54,6 +54,7 @@ public:
 
     // Wątek audio: l, r — wejście i wyjście w miejscu (n ≤ maxBlock)
     void process(float *l, float *r, int n, const Note *notes, int noteCount, const Transport &t);
+    void automate(unsigned id, double value);      // wątek audio: wartość parametru na początek następnego process()
     int latency() const { return m_latency.load(); }
 
     // Wątek interfejsu
