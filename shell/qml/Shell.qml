@@ -68,6 +68,9 @@ QtObject {
     // Super+Spacja: pole pytania w wyspie głównego ekranu (albo zamknięcie otwartego panelu)
     property var assistantKey: Connections {
         target: Assistant
+        function onControlRequested() {
+            startWin.close(); assistWin.close(); controlWin.toggle();
+        }
         function onToggleRequested() {
             const h = shell.horizons.objectAt(0);
             if (assistWin.open) assistWin.close();

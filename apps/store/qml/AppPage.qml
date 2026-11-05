@@ -138,7 +138,7 @@ Item {
                     visible: !!page.meta && !!page.meta.good
                     width: parent.width
                     height: visible ? opinion.implicitHeight + 36 : 0
-                    radius: 16
+                    radius: 12
                     color: Theme.fill
                     Column {
                         id: opinion
@@ -172,7 +172,7 @@ Item {
                     visible: !!page.webAlternative && !page.installed
                     width: parent.width
                     height: visible ? 74 : 0
-                    radius: 14
+                    radius: 10
                     border.width: 1; border.color: Theme.line
                     color: "transparent"
                     AppGlyph { id: altIcon; x: 14; anchors.verticalCenter: parent.verticalCenter; ref: page.webAlternative || ""; size: 42 }
@@ -335,7 +335,7 @@ Item {
         Rectangle {
             width: parent ? parent.width : 340
             height: cardCol.implicitHeight + 36
-            radius: 18
+            radius: 12
             color: Theme.fill
             Column {
                 id: cardCol

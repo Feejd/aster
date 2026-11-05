@@ -6,7 +6,7 @@ Rectangle {
     id: ps
     property alias text: input.text
     property string placeholder
-    width: 240; height: 38; radius: 19
+    width: 240; height: 38; radius: 10
     color: Theme.fill
     border.width: input.activeFocus ? 1.5 : 0
     border.color: Theme.accent

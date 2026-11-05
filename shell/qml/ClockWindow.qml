@@ -13,6 +13,7 @@ import Aster.Ui
 // Ustawienia → Pulpit i dok → „Zegar na pulpicie” chowa całość.
 Window {
     id: cw
+    property bool followsPrimary: true   // po zmianie głównego ekranu main.cpp przenosi okno
     color: "transparent"
     title: "Zegar"
     visible: false
@@ -271,7 +272,7 @@ Window {
         id: card
         readonly property bool isCard: true
         onVisibleChanged: regionTimer.restart()
-        radius: 26
+        radius: 14
         shadowStrength: 0.7
         spot: cardHover.hovered ? 0.8 : 0
         spotX: cardHover.point.position.x

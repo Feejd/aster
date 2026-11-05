@@ -12,12 +12,14 @@ Item {
     property bool maximized: false
     property bool started: false          // powłoka startuje dopiero przy pierwszym pokazaniu panelu
     property bool reloading: false
-    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania, 3 zadanie
+    property int tab: 0                    // 0 terminal, 1 problemy, 2 odwołania, 3 zadanie, 4 debugowanie
     property var refGroups: []
     property string refTitle
     signal openProblem(string path, int line, int col)
     signal openReference(string path, int line, int col, int length)
     signal openLocation(string path, int line, int col)
+    signal openFrame(int index)
+    signal openPreview(string url)
     readonly property var term: loader.item
     signal hideRequested()
     signal maximizeRequested()
@@ -30,6 +32,10 @@ Item {
     onVisibleChanged: if (visible && tab === 0) started = true
     onTabChanged: if (visible && tab === 0) started = true
     onDirChanged: if (started) restart()
+    Connections {
+        target: ProjectEnv
+        function onChanged() { if (tp.started) tp.restart(); }
+    }
 
     readonly property var colors: Theme.dark
         ? { fg: "#E6E8EE", bg: "#090A0D", palette: ["#1C1E26", "#FF6B7A", "#7EE0A0", "#F5D07A", "#6EA8FF", "#C79BFF", "#67E1E6", "#C9CED8",
@@ -52,9 +58,15 @@ Item {
                 onClicked: tp.tab = 1
             }
             PanelTab {
-                visible: Tasks.lines.length > 0 || Tasks.running
-                label: "ZADANIE"; icon: Tasks.running ? "reload" : "play"; on: tp.tab === 3
+                visible: Tasks.processes.length > 0
+                label: "ZADANIA"; icon: Tasks.runningCount ? "reload" : "play"; on: tp.tab === 3
+                badge: Tasks.processes.length > 1 ? Tasks.runningCount : 0
                 onClicked: tp.tab = 3
+            }
+            PanelTab {
+                visible: !!Debugger.state || Debugger.console.length > 0
+                label: "DEBUGOWANIE"; icon: "bug"; on: tp.tab === 4
+                onClicked: tp.tab = 4
             }
             PanelTab {
                 visible: tp.refGroups.length > 0
@@ -76,10 +88,13 @@ Item {
             Text {
                 visible: tp.tab === 3 && !!Tasks.title
                 anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, Math.max(80, tp.width - 560))
+                elide: Text.ElideRight
                 rightPadding: 6
                 text: Tasks.title
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
             }
+            PanelBtn { visible: tp.tab === 4 && !Debugger.state; icon: "trash"; onClicked: Debugger.clearConsole() }
             PanelBtn { visible: tp.tab === 3 && Tasks.running; icon: "stop"; onClicked: Tasks.stop() }
             PanelBtn { visible: tp.tab === 3 && !Tasks.running && !!Tasks.title; icon: "reload"; onClicked: Tasks.rerun() }
             PanelBtn { visible: tp.tab === 3 && !Tasks.running; icon: "trash"; onClicked: Tasks.clear() }
@@ -90,11 +105,19 @@ Item {
         }
     }
 
+    DebugView {
+        visible: tp.tab === 4
+        anchors.fill: parent
+        anchors.topMargin: header.height + 1
+        onOpenFrame: (i) => tp.openFrame(i)
+    }
+
     TaskOutput {
         visible: tp.tab === 3
         anchors.fill: parent
         anchors.topMargin: header.height + 1
         onOpenLocation: (path, line, col) => tp.openLocation(path, line, col)
+        onOpenPreview: (url) => tp.openPreview(url)
     }
 
     ReferencesView {
@@ -122,6 +145,8 @@ Item {
         anchors.leftMargin: 16; anchors.rightMargin: 10; anchors.bottomMargin: 6
         sourceComponent: CodeTerminal {
             workingDirectory: tp.dir
+            // Powłoka w kontenerze projektu (toolbox enter) albo w systemie
+            command: { ProjectEnv.state; return ProjectEnv.terminalCommand(); }
             fontFamily: "JetBrains Mono"
             fontSize: 13
             lineHeight: 1.2

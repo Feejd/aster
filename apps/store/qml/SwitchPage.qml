@@ -133,7 +133,7 @@ Item {
                         required property var modelData
                         width: right.width
                         height: entryCol.implicitHeight + 28
-                        radius: 14
+                        radius: 12
                         color: Theme.fill
                         readonly property string ref: page.target(modelData)
                         readonly property var info: { Store.version; return Store.item(ref); }

@@ -19,7 +19,7 @@ Item {
         sourceSize: Qt.size(g.size * 2, g.size * 2)
         asynchronous: true
         smooth: true; mipmap: g.size < 64
-        Rectangle { anchors.fill: parent; radius: g.size / 4; visible: parent.status !== Image.Ready; color: Theme.fill }
+        Rectangle { anchors.fill: parent; radius: g.size * 0.2; visible: parent.status !== Image.Ready; color: Theme.fill }
     }
     Loader {
         active: g.kind === "aster"
@@ -29,7 +29,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: g.kind === "web" || g.kind === "get" || g.kind === "via"
-        radius: g.size * 0.24
+        radius: g.size * 0.2
         readonly property bool logo: mark.status === Image.Ready && mark.implicitWidth >= 32
         color: logo ? "white" : (g.info && g.info.color ? g.info.color : Theme.accent)
         border.width: logo && !Theme.dark ? 1 : 0

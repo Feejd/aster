@@ -121,7 +121,7 @@ Item {
                         Rectangle {
                             id: box
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 24; height: 24; radius: 7
+                            width: 24; height: 24; radius: 5
                             visible: !pick.installed
                             color: pick.picked ? Theme.accent : "transparent"
                             border.width: pick.picked ? 0 : 1.5

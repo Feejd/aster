@@ -55,7 +55,8 @@ Scan run()
 {
     Scan s;
     const QString home = QDir::homePath();
-    const QStorageInfo root = QStorageInfo::root();
+    // Na atomowym systemie „/” to mały obraz tylko do odczytu; prawdziwe miejsce jest tam, gdzie katalog domowy
+    const QStorageInfo root(QDir::homePath());
     s.total = root.bytesTotal();
     s.used = root.bytesTotal() - root.bytesFree();
     struct stat hs;

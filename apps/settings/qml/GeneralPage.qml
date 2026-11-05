@@ -10,12 +10,8 @@ Page {
     // Karta z logo
     Rectangle {
         width: parent.width; height: 168
-        radius: 18
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0; color: Theme.dark ? "#1B2340" : "#EEF2FF" }
-            GradientStop { position: 1; color: Theme.dark ? "#2A1B40" : "#F5EEFF" }
-        }
+        radius: 10
+        color: Theme.paneGlass
         border.width: 1; border.color: Theme.line
         Row {
             x: 28; anchors.verticalCenter: parent.verticalCenter
@@ -25,8 +21,7 @@ Page {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
                 Text { text: "Aster"; color: Theme.text; font.family: Theme.font; font.pixelSize: 34; font.weight: Font.Bold; font.letterSpacing: -0.9 }
-                Text { text: "Wersja 0.1 „Świt”"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 14 }
-                Text { text: "na bazie " + gp.a.os; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
+                Text { text: "Wersja 1.0 „Świt”"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 14 }
             }
         }
     }
@@ -68,7 +63,7 @@ Page {
 
     Section {
         SettingRow { title: "Pamięć — co zajmuje miejsce"; icon: "drive"; chevron: true; onClicked: gp.navigate("storage") }
-        SettingRow { title: "Aktualizacje oprogramowania"; icon: "download"; chevron: true; onClicked: System.run("aster-store") }
+        SettingRow { title: "Aktualizacje oprogramowania"; icon: "download"; chevron: true; onClicked: gp.navigate("updates") }
         SettingRow { title: "Data i czas"; icon: "clock"; chevron: true; onClicked: gp.navigate("datetime") }
         SettingRow { title: "Język i region"; icon: "translate"; chevron: true; onClicked: gp.navigate("language") }
         SettingRow { title: "Aplikacje domyślne"; icon: "apps"; chevron: true; onClicked: gp.navigate("apps") }

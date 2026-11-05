@@ -13,25 +13,29 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
       blokada/wyłączanie. Dane z KDE (lista aplikacji, ostatnie dokumenty), uruchamianie przez KIO.
 - [x] **Centrum sterowania** (prawa wyspa doku): Wi‑Fi/sieć (nmcli), Bluetooth (bluetoothctl), „Nie przeszkadzać”,
       ciemny motyw, jasność (PowerDevil), głośność (PipeWire), odtwarzacz (MPRIS), zrzut ekranu, ustawienia, bateria
-- [ ] Centrum sterowania: lista sieci Wi‑Fi i urządzeń Bluetooth do wyboru, wybór wyjścia dźwięku
+- [x] Centrum sterowania: listy sieci Wi‑Fi (z hasłem) i urządzeń Bluetooth (kody parowania w panelu), wybór wyjścia i wejścia dźwięku; do sprawdzenia na prawdziwym Wi‑Fi i Bluetooth
 - [x] Powiadomienia systemowe pod górną wyspą (powłoka jest serwerem powiadomień)
 - [x] **Nowy układ powłoki**: górny pasek z trzech wysp (aktywny program z tytułem okna, dynamiczna wyspa, stan systemu),
       jeden dok z powiększaniem ikon, podskakiwaniem przy uruchamianiu i Koszem, widżety na pulpicie (kalendarz, bateria, teraz gra)
 - [x] Dynamiczna wyspa: godzina, okładka i korektor przy muzyce, data po najechaniu, powiadomienie rozlewa wyspę w kartę
-- [ ] Dynamiczna wyspa: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
+- [x] Dok chowa się, gdy okno na niego zachodzi, i wraca od dolnej krawędzi (do wyłączenia w Ustawieniach); lista okien programu po najechaniu i menu pod prawym przyciskiem
+- [ ] Dok: miniatury okien (PipeWire), przypinanie programów z menu
+- [x] Nowe okna na środku ekranu, kolejne schodkowo (`shell/kwinscripts/asteruklad`), Super+góra/dół jak w Windowsie
+- [x] Żywy pasek zamiast dynamicznej wyspy: zegar na belce, powiadomienia i pytania jako karta spod paska, linia postępu na dolnej krawędzi
+- [ ] Żywy pasek: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
 - [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
 - [x] Super = Start
-- [ ] Super+A = centrum sterowania
+- [x] Super+A = centrum sterowania
 
 ## Etap 3 — spójny wygląd całego systemu
-- [ ] **Ramki okien** (dekoracja KWin): okrągłe kolorowe przyciski, pasek tytułu jak w prototypie.
-- [ ] **Efekty KWin**: zasysanie do doku (Magic Lamp), szybsze animacje, przyciąganie do krawędzi.
+- [x] **Ramki okien** (dekoracja KWin, `shell/decoration`): kolorowe przyciski i wygląd jak w programach Aster dla programów bez własnego paska.
+- [x] **Efekty KWin** (`shell/effects/asterokna`): spójne otwieranie i zamykanie okien, zasysanie do doku (Magic Lamp), krótsze animacje; do sprawdzenia na prawdziwym GPU (VM renderuje programowo i KWin wyłącza tam animacje).
 - [x] Okna aplikacji Aster: trójwarstwowy cień zależny od fokusu, szklany rant i odblask, „zorza” w kolorze akcentu,
       kolorowe przyciski okna, sprężyste otwieranie (wspólne WindowShadow / WindowSheen / WindowButtons w Aster.Ui)
 - [x] Okna jak w profesjonalnych systemach: pasek boczny na lekko przezroczystym szkle, treść na głębokim,
       prawie nieprzezroczystym panelu (w ciemnym motywie niemal czerń; GlassPane), rogi 24 px, bez „zorzy”
 - [x] Okna aplikacji webowych: pasek tytułu jako szkło w kolorze serwisu
-- [ ] **Kolory i styl aplikacji Qt/KDE**: akcent, zaokrąglenia, czcionka Geist w całym systemie.
+- [x] **Kolory i czcionka programów Qt/KDE i GTK**: schematy Aster (`data/color-schemes`), Geist i JetBrains Mono w całym systemie; zaokrąglenia kontrolek wciąż z Breeze.
 - [x] Start jak w macOS: ekran Plymouth ze znakiem Aster i paskiem postępu, bez tekstu jądra i systemd, ukryte menu GRUB,
       nazwa systemu „Aster 1.0”, od razu sesja Aster (`tools/install-vm.sh` w maszynie wirtualnej, `image/` w obrazie)
 - [x] Ekran logowania Aster (motyw SDDM: rozmyta tapeta, zegar, karta użytkownika, inne osoby, zasilanie);
@@ -95,7 +99,30 @@ Programy:
       tło (kolor, przejście, zdjęcie); przeciąganie z przyciąganiem do środka i krawędzi, uchwyty, obrót, warstwy,
       cofnij/ponów, skróty; zapis sam (Dokumenty/Grafiki, `.grafika` = ZIP z JSON), eksport PNG/JPG (1×, 2×) i PDF
       (wektorowy, w formacie do druku); jedno rysowanie (QPainter) dla ekranu i eksportu
-- [ ] Grafika, dalej: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
+- [x] Aster Pixel: układ programu graficznego, warstwy z trybami mieszania, krycie, maski warstw (pędzel, wygaszanie,
+      zaznaczenie AI), warstwy korekcyjne, krzywe, tony i kolor na zdjęciach
+- [ ] Aster Pixel, kierunek Photoshop z prostszym interfejsem. Zasada: proste działa od razu (gotowe wyglądy, „Popraw
+      automatycznie”, AI), a pełna kontrola czeka w zwijanych sekcjach i panelu warstw, nigdy na drodze. Kolejność:
+  - [x] malowanie po pikselach: warstwa pikselowa, pędzel z twardością i kryciem, gumka, wypełnianie, pipeta
+  - [x] retusz: Korektor AI, stempel, rozjaśnianie i ściemnianie, rozmazywanie, rozmywanie
+  - [ ] pędzle: nacisk tabletu, kształty pędzla, malowanie w trybach mieszania
+  - [x] prawdziwe zaznaczenia: prostokąt, elipsa, lasso, różdżka, kolor, główny obiekt i obiekt kliknięciem (AI), dodawanie,
+        odejmowanie, część wspólna, wtapianie, powiększanie, przesuwanie; kopia i wycięcie na warstwę, wypełnianie,
+        wypełnienie AI, maska z zaznaczenia; zaznaczenie obowiązuje przy malowaniu, retuszu i korekcjach
+  - [ ] zaznaczenia, dalej: tryb podglądu maski, zapisywanie zaznaczeń, przekształcanie zaznaczonych pikseli, wielokąt
+  - [x] przekształcenia: perspektywa i zniekształcenie czterema rogami (Ctrl+T), przycinanie strony do zaznaczenia
+  - [ ] przekształcenia, dalej: siatka wypaczania, narzędzie kadrowania płótna, obrót i skala w jednym trybie
+  - [ ] warstwy: foldery, maski przycinające, style warstw (obrys, poświata, faza), inteligentne filtry
+  - [ ] filtry: wyostrzanie, rozmycie gaussowskie i ruchu, szum, histogram przy krzywej
+  - [ ] pliki: import i eksport PSD, zapis WebP, TIFF, profile kolorów, 16 bitów
+  - [x] AI po ludzku: karta Magia AI (wyodrębnij, usuń, zaznacz, rozmyj), kliknięcie w rzecz, pasek działań przy zaznaczeniu
+  - [x] wypełnianie z opisu: stable-diffusion.cpp (`aster-pixel-gen`) z DreamShaper 8 Inpainting (GGUF, 1,9 GB). Przy częściowej
+        masce oba sprawdzone modele ignorują opis, więc: obiekt powstaje na czystym tle i wycina go ISNet, duży obszar to cały kadr
+        z opisu, a pusty opis to uzupełnienie z otoczenia (cfg 2)
+  - [ ] wypełnianie z opisu, dalej: model w wydaniu „modele”, próba Vulkana na RX 6500 XT i czas na Acerze, tłumaczenie opisów
+        przez Aster Intelligence (dziś słownik najczęstszych słów), dopasowanie światła obiektu do zdjęcia, opcja w chmurze
+  - [ ] AI: powiększanie zdjęć
+- [ ] Stare pomysły: usuwanie tła ze zdjęć bez internetu (rembg / U²-Net przez ONNX Runtime), paczki szablonów
       i grafik do pobrania ze Sklepu Aster, wiele stron w projekcie (karuzela, prezentacja), zaznaczanie kilku elementów
       i grupy, przycinanie zdjęć i filtry, przyciąganie przy zmianie rozmiaru, własne kolory marki, Flatpak w Sklepie Aster
 - [x] Telefon (okna KDE Connect) — `apps/phone`, jak „Łącze z telefonem” w Windows, przez D-Bus z kdeconnectd:
@@ -125,7 +152,7 @@ Usuwanie z obrazu (`image/debloat.sh`, wołany z `image/Containerfile`):
       Konto i wygląd zakłada `aster-firstboot` przy pierwszym starcie. ISO: `sudo tools/build-iso.sh [skąd aktualizacje]`
 - [ ] Zbudować i przetestować ISO (Linux z ~30 GB miejsca albo GitHub Actions): rozruch, instalacja, pierwszy start
 - [ ] Instalator, dalej: szyfrowanie dysku, instalacja obok Windows, „Przesiadasz się z Windowsa?” (przeniesienie plików)
-- [ ] Aktualizacje w tle z możliwością cofnięcia (atomowa Fedora).
+- [x] Aktualizacje w tle bez samoczynnego restartu (`aster-update.timer`), powiadomienie i centrum sterowania, strona w Ustawieniach z powrotem do poprzedniej wersji; sklep aplikacji z Flathub.
 - [ ] Test na prawdziwym laptopie (x86_64).
 
 ## Etap 5 — własne aplikacje
@@ -385,14 +412,26 @@ Zasady w kodzie (`apps/studio/src/engine.*`):
 - [x] Aster Code: git w widoku zmian — pliki dodane do zatwierdzenia i pozostałe (+ dodaj, − wycofaj, ↶ odrzuć z potwierdzeniem, nowe pliki do Kosza), opis i „Zatwierdź” (Ctrl+Enter; bez dodanych — wszystkie zmiany), poprawienie ostatniego zatwierdzenia, wysyłanie/pobieranie/synchronizacja (pierwsza gałąź — „Opublikuj”), zrozumiałe komunikaty błędów (logowanie, brak serwera, rozbieżne zmiany), podgląd różnic pliku, ostatnie zatwierdzenia
 - [x] Aster Code: gałęzie (wybór z paska stanu i widoku zmian: przełącz — także zdalną, nowa z wpisanej nazwy, połącz z bieżącą, usuń), odkładanie i przywracanie zmian (stash), pojedyncze fragmenty w podglądzie różnic (dodaj, wycofaj, odrzuć z potwierdzeniem)
 - [x] Aster Code: konflikty łączenia — bloki w edytorze (moja wersja zielona, przychodząca niebieska) z przyciskami „Zostaw moją / Weź przychodzącą / Obie”, sekcja Konflikty i baner łączenia w widoku zmian (opis z MERGE_MSG, „Przerwij łączenie”, blokada zatwierdzenia z nierozwiązanymi konfliktami); autor wiersza przy kursorze (git blame z treścią edytora, także niezapisaną; włączany w menu)
-- [ ] Aster Code: git dalej — różnice obok siebie, historia pliku i zatwierdzenia z podglądem, logowanie do GitHuba bez terminala
+- [x] Aster Code: historia pliku w pasku bocznym (git log --follow, +/− na wpis): zmiany pliku w zatwierdzeniu, „Przywróć tę wersję” do edytora (bez zapisu), lista plików zatwierdzenia (także z ostatnich zatwierdzeń w widoku zmian), kopiowanie skrótu; z menu karty, drzewa i palety
+- [ ] Aster Code: git dalej — porównanie dwóch dowolnych wersji, zatwierdzenia łączące w historii pliku, logowanie do GitHuba bez terminala
 - [x] Aster Code: wiele kursorów — Ctrl+D (następne wystąpienie), Ctrl+Shift+L (wszystkie), Alt+klik, Ctrl+Alt+↑/↓; pisanie, kasowanie, strzałki, Home/End, Enter, Tab i nawiasy przy wszystkich naraz (jeden krok cofania); kopiowanie i wklejanie po jednym wierszu na kursor; licznik kursorów na pasku stanu; domykanie nawiasów
 - [x] Aster Code: zamiana w całym projekcie — pole „Zamień na” w szukaniu (grupy $1 przy wyrażeniach), podgląd w wynikach, zamiana wszystkiego (z potwierdzeniem), w pliku i pojedynczego trafienia; otwarte karty zmieniane w edytorze (do cofnięcia), pozostałe pliki na dysku z zachowaniem kodowania; szukanie widzi treść niezapisanych kart
 - [x] Aster Code: zwijanie bloków (z wcięć, klamra w osobnym wierszu — nagłówkiem wiersz nad nią): strzałki w marginesie, „⋯” za zwiniętym wierszem, Ctrl+Shift+[ / ], Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J, rozwijanie przy wejściu kursorem; minimapa w kolorach składni z widoczną częścią, błędami i trafieniami szukania (klik i przeciąganie przewijają)
 - [x] Aster Code: podział edytora na dwie grupy kart (Ctrl+\\, Ctrl+1/Ctrl+2, „Podziel w prawo” i „Przenieś do drugiej grupy” w menu karty): osobne paski kart i ścieżki, ten sam plik w obu grupach zsynchronizowany na bieżąco (TextOps.link), wspólny zapis i serwer języka
 - [x] Aster Code: ustawienia (Ctrl+,, menu, paleta) z szukaniem: rozmiar i czcionka, zawijanie, minimapa, domykanie nawiasów, podpowiedzi przy pisaniu, wcięcie nowych plików; samozapis (po chwili / przy zmianie okna), formatowanie, usuwanie spacji i końcowy wiersz przy zapisie; autor wiersza, sprawdzanie serwera gita co 5 minut; serwery języków (włącz/wyłącz, stan każdego, polecenie instalacji do schowka)
 - [x] Aster Code: zadania (Ctrl+Shift+B, paleta „Uruchom zadanie…”) wykrywane z package.json (npm/pnpm/yarn/bun), Makefile, CMake, meson, Cargo, go.mod, justfile i Pythona, własne polecenia zapamiętywane na projekt; karta „Zadanie” z wyjściem (zatrzymaj, powtórz, klikalne plik:wiersz:kolumna), błędy gcc/clang, tsc, rustc, go i Pythona w panelu Problemy, w edytorze i na pasku stanu
-- [ ] Aster Code: debugowanie (gdb/lldb przez DAP), zadania z pliku .aster/zadania.json, kilka zadań naraz, zadania w tle (serwer deweloperski) z wykrywaniem adresu
+- [x] Aster Code: debugowanie przez DAP (gdb -i dap, lldb-dap, debugpy): punkty przerwania (F9, klik obok numeru), F5 — start (program zapamiętany na projekt albo najnowszy plik ELF; .py — bieżący plik) i dalej, F10/F11/Shift+F11 kroki, F6 wstrzymaj, Shift+F5 stop; pasek sterowania nad edytorem, strzałka i podświetlenie wiersza zatrzymania, panel Debugowanie: stos (wybór ramki), zmienne rozwijane, konsola z wyjściem programu i wyrażeniami (:polecenie — dla debugera)
+- [x] Aster Code: ▶ Uruchom (Ctrl+F5) — serwery deweloperskie ze wszystkich projektów w folderze (frontend/, backend/…; npm/pnpm/yarn, FastAPI/uvicorn, Flask, Django, make run, cargo run, go run, skrypty z pyproject) naraz, każdy z własnymi logami w karcie Zadania; adres serwera z wyjścia, sprawdzony połączeniem — sam otwiera podgląd (frontend przed API)
+- [x] Aster Code: podgląd strony obok edytora (QtWebEngine): przeładowanie po zapisie, konsola przeglądarki (console.log/warn/error, błędy wczytania), telefon (390 px, przeglądarka telefonu) / komputer, wstecz/dalej, otwórz w przeglądarce
+- [x] Aster Code: kontener projektu (toolbox, a bez niego distrobox) zakładany z paska stanu albo palety, z pakietami Fedory dobranymi do projektu (package.json → nodejs, pyproject → python3-pip, CMake → gcc-c++ …); zadania, terminal (toolbox enter), serwery języków i debuger działają w nim, w systemie nic nie przybywa; z Flatpaka polecenia idą przez flatpak-spawn --host (niesprawdzone na prawdziwym toolboxie — test z udawanym)
+- [x] Aster Code: sekrety projektu w portfelu systemu (Secret Service: KWallet/ksecretd, gnome-keyring) — jeden wpis na projekt, ekran Sekrety (pokaż, kopiuj, usuń, dodaj), przeniesienie .env do portfela (w pliku zostają nazwy), wstrzykiwanie do zadań (plik 0600 w /run/user kasowany przez powłokę, działa też w kontenerze i z Flatpaka) i debugera; redact() i wykluczenie plików .env — dla agenta
+- [x] Aster Code: „Nowa aplikacja” (ekran startowy, menu, paleta) — frontend Vite + React (Vitest), backend FastAPI (pytest) albo Node/Express (node:test), baza SQLite albo PostgreSQL (zadanie „baza danych” w kontenerze), proxy /api, .env.example, README, .gitignore, pierwsze zatwierdzenie; potem kontener z pakietami i instalacja zależności jako zadania; własne zadania z .aster/zadania.json (sprawdzone: testy obu backendów i frontendu, ▶ Uruchom z podglądem)
+- [x] Aster Code: panel agenta (Ctrl+Shift+I, Aster Intelligence przez usługę aster-assistant): kontekst do włączenia (otwarty plik, zaznaczenie, problemy z serwerów języków i kompilatora, git, środowisko) bez plików .env i wartości sekretów; polecenia agenta w kontenerze projektu (bezpieczne od razu, reszta po kliknięciu); zmiany jako bloki aster-edit/aster-file → różnice do akceptacji plik po pliku (podgląd, Zastosuj/Odrzuć, wszystko naraz), zastosowane zapisywane; pasek „co agent robi” w panelu i na pasku stanu (sprawdzone z usługą z gałęzi claude/asystent i udawanym modelem)
+- [x] Aster Code: różnice obok siebie (przełącznik w podglądzie różnic i w Ustawieniach, zapamiętany) — także dla zatwierdzeń z historii i zmian od agenta
+- [x] Aster Code: wdrożenie jednym kliknięciem (⇪ na pasku kart, paleta) — własny serwer przez SSH (budowanie, rsync z wykluczeniem node_modules/.venv/.git/.env, polecenie po wdrożeniu), GitHub Pages, Netlify, Vercel, Cloudflare Pages (klucze z Sekretów projektu); ustawienia w .aster/wdrozenie.json, wdrożenie jako zadanie z logami, adres strony po zakończeniu (sprawdzone: SSH na localhost; hostingi — niesprawdzone, bez kont)
+- [x] Aster Code: logowanie do GitHuba bez terminala — przez przeglądarkę (gh auth login --web: kod jednorazowy w Aster Code, gh auth setup-git) albo tokenem w portfelu (pomocnik haseł gita z tokenem przy wysyłaniu i pobieraniu, także dla gh-pages); nowe repozytorium na GitHubie i pierwsze wysłanie jednym kliknięciem
+- [x] Aster Code: poprawki przed wydaniem — wynik poleceń agenta bez sekretów (wartości z portfela i .env, zmienne o tajnych nazwach, znane kształty kluczy), polecenia czytające .env, klucze i środowisko nie uruchamiają się; Flatpak: dostęp do portfela i usługi asystenta, git przez flatpak-spawn; zmiana od agenta liczona na aktualnej treści pliku; kopie niezapisanych kart przywracane po awarii; haki testowe tylko z -DASTER_CODE_TEST_HOOKS=ON
+- [ ] Aster Code: debugowanie dalej — warunkowe punkty przerwania, obserwowane wyrażenia, podgląd wartości po najechaniu, punkty przerwania zapamiętane i przesuwane przy edycji, przekazanie wejścia do programu; zadania z pliku .aster/zadania.json, kilka zadań naraz, serwer deweloperski w tle
 - [ ] Aster Code: więcej grup i podział w pionie, zaznaczanie prostokątne (Shift+Alt+przeciągnięcie), zwijanie z serwera języka (foldingRange), zwinięte bloki w minimapie, przeciąganie kart między grupami
 - [ ] Aster Code: kilka terminali, zadania (uruchom/zbuduj), debugowanie (DAP), rozszerzenia i ustawienia (motywy, skróty z VS Code)
 - [x] Aster Harbor (`apps/dev/harbor`, `aster-harbor`, Start → Narzędzia developera) — kontenery i środowiska

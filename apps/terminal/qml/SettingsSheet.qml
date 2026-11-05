@@ -6,7 +6,7 @@ import Aster.Terminal
 // Ustawienia Terminala — arkusz nad oknem: wygląd (kolory, czcionka, kursor), zachowanie i skróty
 Item {
     id: sheet
-    property real radius: 24
+    property real radius: 12
     signal closeRequested()
     anchors.fill: parent
     focus: true
@@ -21,7 +21,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(560, parent.width - 40)
         height: Math.min(parent.height - 40, 720)
-        radius: 22
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         MouseArea { anchors.fill: parent }
@@ -221,7 +221,7 @@ Item {
                     }
                     HoverButton {
                         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                        width: resetText.implicitWidth + 28; height: 34; radius: 17
+                        width: resetText.implicitWidth + 28; height: 34; radius: 10
                         baseColor: Theme.fill
                         onClicked: Terminal.resetSettings()
                         Text { id: resetText; anchors.centerIn: parent; text: "Przywróć domyślne"; color: Theme.text; font.family: Theme.font; font.pixelSize: 13 }
@@ -241,7 +241,7 @@ Item {
         Text { text: grp.title; leftPadding: 2; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
         Rectangle {
             width: parent.width; height: body.height + 8
-            radius: 14
+            radius: 10
             color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.03)
             border.width: 1; border.color: Theme.line
             Column { id: body; y: 4; x: 0; width: parent.width; spacing: 0 }

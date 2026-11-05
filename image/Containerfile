@@ -5,7 +5,7 @@ ARG FEDORA=44
 
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS build
 RUN dnf install -y cmake ninja-build gcc-c++ extra-cmake-modules python3 \
-        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel qt6-qtsvg-devel kf6-prison-devel onnxruntime-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel
+        qt6-qtbase-devel qt6-qtdeclarative-devel layer-shell-qt-devel kf6-kwindowsystem-devel kf6-kservice-devel kf6-kio-devel kf6-kconfig-devel libxcrypt-devel libvterm-devel polkit-qt6-1-devel qt6-qtwebengine-devel plasma-workspace-devel exiv2-devel qt6-qtpdf-devel kf6-syntax-highlighting-devel qt6-qtmultimedia-devel taglib-devel libarchive-devel kf6-solid-devel plasma-wayland-protocols-devel kf6-kguiaddons-devel sane-backends-devel qt6-qtbase-private-devel pipewire-devel libsndfile-devel libsamplerate-devel alsa-lib-devel qt6-qtsvg-devel kf6-prison-devel onnxruntime-devel librsvg2-tools xcursorgen mlt-devel whisper-cpp-devel kdecoration-devel
 COPY CMakeLists.txt /src/
 COPY common /src/common
 COPY shell /src/shell
@@ -18,8 +18,18 @@ RUN cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_
  && cmake --build /build \
  && DESTDIR=/out cmake --install /build
 
+# Silnik wypełniania z opisu w Aster Pixel: stable-diffusion.cpp (MIT), przypięty do sprawdzonej wersji; Vulkan, a bez karty procesor
+FROM registry.fedoraproject.org/fedora:${FEDORA} AS sdcpp
+RUN dnf install -y cmake ninja-build gcc-c++ git glslc spirv-headers-devel vulkan-headers vulkan-loader-devel \
+ && git clone https://github.com/leejet/stable-diffusion.cpp /sd \
+ && git -C /sd checkout 58bb3c1b1cd4749e94e39f537e9adfce295dcaee \
+ && git -C /sd submodule update --init --recursive --depth 1 \
+ && cmake -S /sd -B /sd/out -G Ninja -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DSD_WEBM=OFF -DSD_WEBP=OFF \
+ && cmake --build /sd/out --target sd-cli
+
 FROM quay.io/fedora/fedora-kinoite:${FEDORA}
 COPY --from=build /out/ /
+COPY --from=sdcpp /sd/out/bin/sd-cli /usr/bin/aster-pixel-gen
 RUN dnf install -y python3 binutils cpio onnxruntime google-roboto-fonts layer-shell-qt libvterm git jetbrains-mono-fonts-all exiv2-libs kf6-kimageformats qt6-qtimageformats qt6-qtpdf qt6-qtmultimedia taglib exfatprogs dosfstools ntfsprogs google-noto-color-emoji-fonts sane-backends sane-backends-drivers-scanners sane-airscan kdeconnectd mlt mlt-qt6 openh264 whisper-cpp libsndfile libsamplerate alsa-lib kf6-kwallet qt6-qtbase-postgresql qt6-qtbase-mysql rsync openssh-clients curl podman-compose llama-cpp \
         glibc-langpack-pl glibc-langpack-en glibc-langpack-de glibc-langpack-uk glibc-langpack-cs glibc-langpack-fr glibc-langpack-es glibc-langpack-it \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key TerminalApplication aster-terminal \
@@ -28,12 +38,39 @@ RUN dnf install -y python3 binutils cpio onnxruntime google-roboto-fonts layer-s
  && kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme Aster \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Bouncing false \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Blinking false \
+ # Kolory Aster i czcionka Geist także w programach spoza Astera (programy GTK dostają kolory przez kde-gtk-config)
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme AsterLight \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key font "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key menuFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key toolBarFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key smallestReadableFont "Geist,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key fixed "JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ # Ramka okien Aster, krótsze animacje i zasysanie do doku
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key library org.aster.decoration \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key scaleEnabled false \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key asteroknaEnabled true \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key squashEnabled false \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key magiclampEnabled true \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key AnimationDurationFactor 0.7 \
+ # Okna: nowe na środku ekranu, wyraźne przyciąganie, Super+strzałki jak w Windowsie
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Windows --key Placement Centered \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key asterukladEnabled true \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Windows --key BorderSnapZone 14 \
+ && kwriteconfig6 --file /etc/xdg/kwinrc --group Windows --key WindowSnapZone 12 \
+ && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Maximize" "Meta+Up,Meta+PgUp,Maksymalizuj okno" \
+ && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Minimize" "Meta+Down,Meta+PgDown,Minimalizuj okno" \
+ && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Quick Tile Top" "none,Meta+Up,Przyciągnij okno do góry" \
+ && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Quick Tile Bottom" "none,Meta+Down,Przyciągnij okno do dołu" \
  && mkdir -p /usr/share/icons/default && printf '[Icon Theme]\nInherits=Aster\n' > /usr/share/icons/default/index.theme \
- && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
+ && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\ngtk-theme='Breeze'\nfont-name='Geist 10'\ndocument-font-name='Geist 10'\nmonospace-font-name='JetBrains Mono 10'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
  && glib-compile-schemas /usr/share/glib-2.0/schemas \
  && systemctl --global enable aster-shell.service \
  # Konto i ustawienia z instalatora przy pierwszym starcie (tools/build-iso.sh, apps/installer)
  && systemctl enable aster-firstboot.service \
+ # Aktualizacje pobierają się w tle i czekają na restart użytkownika, zamiast samoczynnie restartować komputer
+ && systemctl enable aster-update.timer \
+ && systemctl mask bootc-fetch-apply-updates.timer \
  && dnf clean all
 
 # ——— Bez zdublowanych programów: KDE-owe okna zastąpione przez Aster znikają (infrastruktura KDE zostaje) ———

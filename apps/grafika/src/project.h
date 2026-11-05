@@ -60,7 +60,25 @@ public:
     QVariantMap print() const { return m_print; }
 
     QImage image(const QString &key, qreal pixels) const override;
-    QImage fullImage(const QString &key) const;                  // zdjęcie w pełnej rozdzielczości (do AI)
+    QImage fullImage(const QString &key) const;
+    // Automatyczna poprawa: jasność, kontrast i nasycenie dobrane do zdjęcia (pola elementu do zmiany)
+    Q_INVOKABLE QVariantMap autoEnhance(const QString &key) const;
+    // Warstwy jak w programach do zdjęć
+    Q_INVOKABLE bool usesCompositing() const;                    // bieżąca strona ma tryby mieszania albo korekcje
+    Q_INVOKABLE QVariantList curveSamples(const QVariantList &points, int size) const;
+    Q_INVOKABLE void addMask(const QString &id, bool hidden = false);   // maska warstwy: cała biała albo cała czarna
+    // Malowanie po masce: punkty i grubość w częściach pola warstwy, soft 0..1 — miękkość pędzla
+    Q_INVOKABLE void maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft);
+    Q_INVOKABLE void invertMask(const QString &id);
+    Q_INVOKABLE void gradientMask(const QString &id, qreal angle);       // wygaszanie: od pełnego widoku do zera
+    QSize maskSizeFor(const QVariantMap &el) const;
+    void setMaskImage(const QString &id, const QImage &mask);            // gotowa maska (np. zaznaczenie AI)                  // zdjęcie w pełnej rozdzielczości (do AI)
+    // Podgląd malowania: zdjęcie `key` rysuje się na razie z `img`, plik w projekcie jeszcze się nie zmienia
+    void setLive(const QString &key, const QImage &img);
+    void clearLive(const QString &key);
+    QString addDecoded(const QByteArray &png, const QImage &img);    // PNG policzony w tle, bez ponownego dekodowania
+    Q_INVOKABLE QString colorAt(qreal x, qreal y) const;              // kolor strony w punkcie (pipeta), #rrggbb
+    Q_INVOKABLE QString newPixelLayer();                              // pusta, przezroczysta warstwa do malowania na całą stronę
     QString addImage(const QImage &img);                         // nowe zdjęcie w projekcie (PNG, z przezroczystością)
     QByteArray vector(const QString &key) const override;
     Q_INVOKABLE bool recolorable(const QString &key) const;     // SVG z currentColor (jednokolorowa ikona)
@@ -71,7 +89,8 @@ public:
     Q_INVOKABLE bool applyTemplate(const QString &file);  // zastąp zawartość strony (z cofaniem)
     Q_INVOKABLE bool open(const QString &path);
     Q_INVOKABLE bool save();                               // bez ścieżki — do Dokumenty/Grafiki
-    Q_INVOKABLE void setPageSize(qreal width, qreal height, bool fit = false);   // fit — przeskaluj treść do nowej strony
+    Q_INVOKABLE void setPageSize(qreal width, qreal height, bool fit = false);
+    Q_INVOKABLE void cropPage(qreal x, qreal y, qreal width, qreal height);   // przycięcie wszystkich stron do prostokąta   // fit — przeskaluj treść do nowej strony
     // Element powiększony k razy względem punktu (ox, oy) — rozmiar, pozycja, czcionka, grubości, cień
     Q_INVOKABLE QVariantMap scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) const;
     Q_INVOKABLE QVariantMap document() const;              // bieżąca strona (background, elements) i wszystkie (pages)
@@ -121,6 +140,7 @@ public:
     Q_INVOKABLE QString importImage(const QString &fileOrUrl);   // zwraca klucz zdjęcia albo ""
     Q_INVOKABLE QSize imageSize(const QString &key) const;
     Q_INVOKABLE void copy(const QStringList &ids) const;
+    Q_INVOKABLE QString clipboardText() const;                    // np. komórki skopiowane z arkusza (tabulatory)
     Q_INVOKABLE QStringList paste();                              // elementy ze schowka, zdjęcie albo tekst
     Q_INVOKABLE bool copyImage();                                 // cała strona jako obraz (do wklejenia w komunikatorze)
     // allPages — PNG/JPG: każda strona do osobnego pliku (nazwa-1, nazwa-2…); PDF ma zawsze wszystkie strony
@@ -144,6 +164,7 @@ Q_SIGNALS:
     void error(const QString &message);
 
 private:
+    QHash<QString, QImage> m_live;
     struct Asset {
         QByteArray data;
         QString ext;

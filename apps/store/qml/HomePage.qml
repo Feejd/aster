@@ -147,7 +147,7 @@ Item {
             Rectangle {
                 width: parent.width
                 height: winCol.implicitHeight + 40
-                radius: 18
+                radius: 12
                 color: Theme.fill
                 Column {
                     id: winCol
@@ -224,7 +224,7 @@ Item {
         property string hint
         signal clicked()
         width: parent ? parent.width : 300
-        height: 40; radius: 9
+        height: 40; radius: 8
         color: sgArea.containsMouse ? Theme.hover : "transparent"
         Txt { x: 10; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 120; text: sg.label; elide: Text.ElideRight; font.pixelSize: 15 }
         Txt { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: sg.hint; color: Theme.text2; font.pixelSize: 12 }

@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     // Maski (zaokrąglone rogi obrazu) wymagają shaderów — nie ma ich w renderowaniu programowym
     readonly property bool shaders: GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
 
@@ -267,7 +267,7 @@ Window {
             visible: !win.hasCamera || win.cameraError !== "" || !win.live
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: 76; height: 76; radius: 22
+                width: 76; height: 76; radius: 12
                 color: Qt.rgba(1, 1, 1, 0.08)
                 Icon { anchors.centerIn: parent; d: Icons.camera; size: 36; stroke: 1.6; color: Qt.rgba(1, 1, 1, 0.6) }
             }
@@ -363,7 +363,7 @@ Window {
             Rectangle {
                 anchors.centerIn: parent
                 visible: win.showRec
-                width: recRow.implicitWidth + 28; height: 32; radius: 16
+                width: recRow.implicitWidth + 28; height: 32; radius: 10
                 color: "#E5484D"
                 Row {
                     id: recRow
@@ -418,13 +418,13 @@ Window {
                 // Zdjęcie / Film
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 44; height: 88; radius: 22
+                    width: 44; height: 88; radius: 12
                     color: Qt.rgba(0, 0, 0, 0.35)
                     border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.12)
                     opacity: win.busy ? 0.4 : 1
                     Rectangle {
                         x: 3; y: win.mode === "photo" ? 3 : 41
-                        width: 38; height: 44; radius: 19
+                        width: 38; height: 44; radius: 10
                         color: Qt.rgba(1, 1, 1, 0.92)
                         Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                     }
@@ -499,7 +499,7 @@ Window {
                 id: thumbBox
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom; anchors.bottomMargin: 24
-                width: 52; height: 52; radius: 14
+                width: 52; height: 52; radius: 10
                 color: Qt.rgba(1, 1, 1, 0.1)
                 border.width: 2; border.color: Qt.rgba(1, 1, 1, 0.85)
                 visible: Roll.lastPath !== "" || win.preview
@@ -540,7 +540,7 @@ Window {
             y: shown ? 76 : -height - 10
             opacity: shown ? 1 : 0
             z: 300
-            width: Math.min(parent.width - 60, toastText.implicitWidth + 36); height: 40; radius: 20
+            width: Math.min(parent.width - 60, toastText.implicitWidth + 36); height: 40; radius: 12
             color: "#ECEEF3"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -575,7 +575,7 @@ Window {
         property string label
         property bool active: false
         property string tip
-        width: label ? 46 + labelText.implicitWidth : 40; height: 40; radius: 20
+        width: label ? 46 + labelText.implicitWidth : 40; height: 40; radius: 12
         color: hovered ? Qt.rgba(1, 1, 1, 0.16) : "transparent"
         opacity: enabled ? 1 : 0.35
         Icon {

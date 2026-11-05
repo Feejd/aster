@@ -113,6 +113,8 @@ static const QDBusArgument &operator>>(const QDBusArgument &a, KeySeq &s)
 static const QString kAccel = QStringLiteral("org.kde.kglobalaccel");
 static const QStringList kShortcutId{QStringLiteral("aster-shell"), QStringLiteral("assistant"), QStringLiteral("Powłoka Aster"),
                                      QStringLiteral("Aster Intelligence")};
+static const QStringList kControlId{QStringLiteral("aster-shell"), QStringLiteral("control-center"), QStringLiteral("Powłoka Aster"),
+                                    QStringLiteral("Centrum sterowania")};
 
 void Assistant::registerShortcut()
 {
@@ -124,11 +126,15 @@ void Assistant::registerShortcut()
         m.setArguments(args);
         QDBusConnection::sessionBus().asyncCall(m);
     };
-    const QList<KeySeq> keys{KeySeq{{QKeyCombination(Qt::META, Qt::Key_Space).toCombined()}}};
-    accel(QStringLiteral("doRegister"), {kShortcutId});
-    // SetPresent (2): skrót aktywny, a jeśli ktoś go zmienił w Ustawieniach — zostaje jego wybór; IsDefault (8): domyślny
-    accel(QStringLiteral("setShortcutKeys"), {kShortcutId, QVariant::fromValue(keys), 2u});
-    accel(QStringLiteral("setShortcutKeys"), {kShortcutId, QVariant::fromValue(keys), 2u | 8u});
+    const auto bind = [&accel](const QStringList &id, Qt::Key key) {
+        const QList<KeySeq> keys{KeySeq{{QKeyCombination(Qt::META, key).toCombined()}}};
+        accel(QStringLiteral("doRegister"), {id});
+        // SetPresent (2): skrót aktywny, a jeśli ktoś go zmienił w Ustawieniach — zostaje jego wybór; IsDefault (8): domyślny
+        accel(QStringLiteral("setShortcutKeys"), {id, QVariant::fromValue(keys), 2u});
+        accel(QStringLiteral("setShortcutKeys"), {id, QVariant::fromValue(keys), 2u | 8u});
+    };
+    bind(kShortcutId, Qt::Key_Space);
+    bind(kControlId, Qt::Key_A);
     const bool ok = bus.connect(kAccel, QStringLiteral("/component/aster_shell"), QStringLiteral("org.kde.kglobalaccel.Component"),
                                 QStringLiteral("globalShortcutPressed"), this, SLOT(onShortcut(QString, QString, qlonglong)));
     qInfo("asystent: skrót Meta+Space zarejestrowany, nasłuch %s", ok ? "działa" : "NIE działa");
@@ -136,8 +142,12 @@ void Assistant::registerShortcut()
 
 void Assistant::onShortcut(const QString &component, const QString &action, qlonglong)
 {
-    if (component == kShortcutId.at(0) && action == kShortcutId.at(1))
+    if (component != kShortcutId.at(0))
+        return;
+    if (action == kShortcutId.at(1))
         Q_EMIT toggleRequested();
+    else if (action == kControlId.at(1))
+        Q_EMIT controlRequested();
 }
 
 // ——— Usługa ———

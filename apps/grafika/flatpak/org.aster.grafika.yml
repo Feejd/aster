@@ -1,4 +1,4 @@
-# Grafika jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
+# Aster Pixel jako Flatpak — działa na każdym Linuksie (Fedora, Ubuntu, Mint, Debian, Arch…).
 # Budowa: flatpak-builder --user --install-deps-from=flathub build apps/grafika/flatpak/org.aster.grafika.yml
 # (z katalogu głównego repozytorium). Paczkę do pobrania buduje .github/workflows/flatpak.yml,
 # instaluje ją tools/install-apps.sh (albo tools/install-grafika.sh).
@@ -42,6 +42,18 @@ modules:
         only-arches: [aarch64]
         url: https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-aarch64-1.22.0.tgz
         sha256: bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702
+
+  # stable-diffusion.cpp (MIT) — silnik wypełniania z opisu; Vulkan, a bez karty procesor
+  - name: aster-pixel-gen
+    buildsystem: simple
+    build-commands:
+      - cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DSD_WEBM=OFF -DSD_WEBP=OFF
+      - cmake --build out --target sd-cli
+      - install -Dm755 out/bin/sd-cli /app/bin/aster-pixel-gen
+    sources:
+      - type: git
+        url: https://github.com/leejet/stable-diffusion.cpp
+        commit: 58bb3c1b1cd4749e94e39f537e9adfce295dcaee
 
   - name: grafika
     buildsystem: cmake-ninja

@@ -24,7 +24,7 @@ Item {
             // Podsumowanie
             Rectangle {
                 width: parent.width; height: 92
-                radius: 16
+                radius: 10
                 color: Theme.dark ? Qt.rgba(1, 1, 1, 0.035) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.025)
                 border.width: 1; border.color: Theme.line
                 Row {

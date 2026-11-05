@@ -20,7 +20,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     // Kolory ścieżek (indeks zapisany w projekcie)
     readonly property var trackColors: ["#FF6B6B", "#FFA94D", "#F5C542", "#51CF66", "#22B8CF", "#4D8BF7", "#9775FA", "#F06595"]
     property bool showMixer: false

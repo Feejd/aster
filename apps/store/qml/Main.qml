@@ -24,7 +24,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     property var stack: [{ page: "home" }]
     readonly property var route: stack[stack.length - 1]
@@ -152,7 +152,7 @@ Window {
                 Rectangle {
                     visible: win.route.page !== "home" && frame.width > 980
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 210; height: 36; radius: 10
+                    width: 210; height: 36; radius: 8
                     color: Theme.fill
                     border.width: quickField.activeFocus ? 1.5 : 0
                     border.color: Theme.accent
@@ -173,7 +173,7 @@ Window {
                     id: queuePill
                     visible: Flatpak.activity.length > 0
                     anchors.verticalCenter: parent.verticalCenter
-                    width: queueText.implicitWidth + 26; height: 36; radius: 10
+                    width: queueText.implicitWidth + 26; height: 36; radius: 8
                     color: Theme.accentSoft
                     readonly property var job: Flatpak.activity.length ? Flatpak.activity[0] : null
                     Txt {
@@ -232,7 +232,7 @@ Window {
             visible: Store.compare.length > 0 && win.route.page !== "compare"
             anchors.left: parent.left; anchors.leftMargin: 20
             anchors.bottom: parent.bottom; anchors.bottomMargin: 18
-            width: cmpRow.implicitWidth + 24; height: 46; radius: 13
+            width: cmpRow.implicitWidth + 24; height: 46; radius: 10
             color: Theme.surface
             border.width: 1; border.color: Theme.line
             z: 25
@@ -266,7 +266,7 @@ Window {
             anchors.bottomMargin: toastTimer.running ? 22 : -height - 4
             Behavior on anchors.bottomMargin { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
             z: 30
-            width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 44; radius: 12
+            width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 44; radius: 10
             color: Theme.text
             Txt {
                 id: toastText
@@ -306,7 +306,7 @@ Window {
             MouseArea { anchors.fill: parent; onClicked: removeSheet.ref = "" }
             Rectangle {
                 anchors.centerIn: parent
-                width: 440; height: sheetCol.implicitHeight + 48; radius: 18
+                width: 440; height: sheetCol.implicitHeight + 48; radius: 12
                 color: Theme.surface
                 MouseArea { anchors.fill: parent }
                 Column {
@@ -325,11 +325,11 @@ Window {
                     }
                     Rectangle {
                         visible: removeSheet.dataSize > 0
-                        width: parent.width; height: 48; radius: 11
+                        width: parent.width; height: 48; radius: 10
                         color: Theme.fill
                         Rectangle {
                             x: 14; anchors.verticalCenter: parent.verticalCenter
-                            width: 20; height: 20; radius: 6
+                            width: 20; height: 20; radius: 5
                             color: removeSheet.withData ? Theme.accent : "transparent"
                             border.width: removeSheet.withData ? 0 : 1.5; border.color: Theme.text2
                             Icon { anchors.centerIn: parent; visible: removeSheet.withData; d: Icons.check; size: 13; color: "white" }
@@ -356,7 +356,7 @@ Window {
             visible: !Flatpak.available
             anchors.horizontalCenter: parent.horizontalCenter
             y: 70; z: 22
-            width: noFp.implicitWidth + 30; height: 34; radius: 10
+            width: noFp.implicitWidth + 30; height: 34; radius: 8
             color: Theme.danger
             Txt { id: noFp; anchors.centerIn: parent; text: "Brak programu flatpak: instalowanie jest wyłączone"; color: Theme.dark ? "#16181D" : "white"; font.pixelSize: 12; font.weight: Font.Medium }
         }
@@ -371,7 +371,7 @@ Window {
         implicitWidth: tiRow.implicitWidth + 24
         height: 38
         Rectangle {
-            anchors.fill: parent; radius: 10
+            anchors.fill: parent; radius: 8
             color: ti.active ? Theme.fill : (tiArea.containsMouse ? Theme.hover : "transparent")
             Behavior on color { ColorAnimation { duration: 100 } }
         }

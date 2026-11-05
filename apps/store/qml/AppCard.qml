@@ -8,7 +8,7 @@ Rectangle {
     property string ref
     readonly property var info: { Store.version; return ref ? Store.item(ref) : null; }
     height: 148
-    radius: 16
+    radius: 12
     color: area.containsMouse ? Theme.hover : Theme.fill
     Behavior on color { ColorAnimation { duration: 100 } }
     MouseArea { id: area; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Store.openApp(card.ref) }

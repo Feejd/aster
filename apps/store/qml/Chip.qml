@@ -11,7 +11,7 @@ Rectangle {
     implicitHeight: 34
     width: implicitWidth
     height: implicitHeight
-    radius: 10
+    radius: 8
     color: selected ? Theme.accent : (area.containsMouse ? Theme.hover : Theme.fill)
     Behavior on color { ColorAnimation { duration: 100 } }
     Txt {

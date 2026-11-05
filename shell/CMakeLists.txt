@@ -6,6 +6,8 @@ qt_add_executable(aster-shell
     src/platform.h
     src/controlcenter.cpp
     src/controlcenter.h
+    src/connectivity.cpp
+    src/connectivity.h
     src/polkitagent.cpp
     src/polkitagent.h
     src/assistant.cpp
@@ -67,7 +69,12 @@ target_link_libraries(aster-shell PRIVATE
 )
 
 install(TARGETS aster-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Ramka okien i animacje okien (KWin)
+add_subdirectory(decoration)
+install(DIRECTORY effects/asterokna DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/effects)
+install(DIRECTORY kwinscripts/asteruklad DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts)
 install(DIRECTORY ../data/wallpapers DESTINATION ${CMAKE_INSTALL_DATADIR}/aster)
+install(DIRECTORY ../data/color-schemes DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(DIRECTORY ../data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
 install(FILES ../session/aster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/wayland-sessions)
 install(FILES ../session/org.aster.shell.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
@@ -99,6 +106,8 @@ else()
     message(WARNING "Bez rsvg-convert/xcursorgen (librsvg2-tools, xcursorgen) — kursor Aster nie zostanie zbudowany")
 endif()
 install(FILES ../session/aster-shell.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
+install(FILES ../session/aster-update.service ../session/aster-update.timer DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+install(FILES ../session/50-aster-update.rules DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/rules.d)
 # Pierwszy start po instalacji: konto i ustawienia z instalatora
 install(PROGRAMS ../session/aster-firstboot DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 install(FILES ../session/aster-firstboot.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)

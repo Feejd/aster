@@ -27,7 +27,7 @@ Column {
         width: parent.width
         height: body.height
         visible: body.height > 0
-        radius: 16
+        radius: 10
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.78)
         border.width: 1
         border.color: Theme.line

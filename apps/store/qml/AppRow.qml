@@ -18,7 +18,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         anchors.margins: -2; anchors.leftMargin: -8; anchors.rightMargin: -8
-        radius: 12
+        radius: 10
         color: hover.containsMouse ? Theme.hover : "transparent"
         Behavior on color { ColorAnimation { duration: 100 } }
     }

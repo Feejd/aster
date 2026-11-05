@@ -25,7 +25,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: gb.big ? 12 : 9
+        radius: gb.big ? 10 : 8
         color: gb.busy ? Theme.fill
              : gb.installed ? (area.containsMouse ? Theme.hover : Theme.fill)
              : gb.big ? Theme.accent

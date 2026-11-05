@@ -25,7 +25,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26           // margines na cień
-    readonly property real r: maxed ? 0 : 24          // zaokrąglenie rogów
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12          // zaokrąglenie rogów
 
     // ——— Stan ———
     property var backStack: []
@@ -588,6 +588,7 @@ Window {
         // ——— Pasek tytułu ———
         Item {
             id: titlebar
+            z: 1                        // pasek tytułu biegnie nad całym oknem, także nad panelem treści
             width: parent.width; height: 52
 
             DragHandler {
@@ -758,7 +759,6 @@ Window {
         // ——— Panel treści (prawa część okna: pasek narzędzi, folder, pasek stanu) ———
         GlassPane {
             id: pane
-            z: -1                       // pod paskiem tytułu, który biegnie nad całym oknem
             x: sidebar.width
             width: parent.width - sidebar.width
             height: parent.height
@@ -1014,7 +1014,7 @@ Window {
                 visible: folder.count === 0 && !folder.loading
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 64; height: 64; radius: 18
+                    width: 64; height: 64; radius: 10
                     color: Theme.fill
                     Icon { anchors.centerIn: parent; d: win.query ? Icons.search : (win.inTrash ? Icons.trash : Icons.folder); size: 28; color: Theme.text2 }
                 }
@@ -1072,7 +1072,7 @@ Window {
                 anchors.centerIn: parent
                 width: Math.min(parent.width - 80, f && (f.isImage || text) ? 640 : 380)
                 height: Math.min(parent.height - 60, f && (f.isImage || text) ? 560 : 440)
-                radius: 18
+                radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 scale: win.quickLook ? 1 : 0.94
@@ -1107,7 +1107,7 @@ Window {
                             readonly property string ext: ql.f && ql.f.name.lastIndexOf(".") > 0 ? ql.f.name.slice(ql.f.name.lastIndexOf(".") + 1).toUpperCase() : ""
                             readonly property color tint: FileKinds.tint(ext)
                             anchors.centerIn: parent
-                            width: 100; height: 124; radius: 16
+                            width: 100; height: 124; radius: 10
                             color: Qt.alpha(tint, Theme.dark ? 0.28 : 0.16)
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -1156,7 +1156,7 @@ Window {
             MouseArea { anchors.fill: parent; onClicked: win.confirm = null }
             Rectangle {
                 anchors.centerIn: parent
-                width: 400; height: confirmCol.implicitHeight + 48; radius: 16
+                width: 400; height: confirmCol.implicitHeight + 48; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -1193,7 +1193,7 @@ Window {
             anchors.horizontalCenter: content.horizontalCenter
             y: content.y + content.height - height - 14 - (toastTimer.running ? 54 : 0)
             Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
-            width: archRow.implicitWidth + 16; height: 46; radius: 23
+            width: archRow.implicitWidth + 16; height: 46; radius: 12
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             Row {
@@ -1208,7 +1208,7 @@ Window {
                 }
                 HoverButton {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: extractAllText.implicitWidth + 28; height: 34; radius: 17
+                    width: extractAllText.implicitWidth + 28; height: 34; radius: 10
                     baseColor: Theme.accent
                     color: hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor
                     onClicked: win.extractHere(win.archiveFile)
@@ -1228,7 +1228,7 @@ Window {
                 delegate: Rectangle {
                     id: jobCard
                     required property var modelData
-                    width: 320; height: 66; radius: 14
+                    width: 320; height: 66; radius: 10
                     color: Theme.surface
                     border.width: 1; border.color: Theme.edge
                     Icon { x: 16; y: 14; d: Icons.archive; size: 18; color: Theme.accentText }
@@ -1298,7 +1298,7 @@ Window {
             MouseArea { anchors.fill: parent; onClicked: sheetShade.close() }
             Rectangle {
                 anchors.centerIn: parent
-                width: 420; height: sheetCol.implicitHeight + 48; radius: 16
+                width: 420; height: sheetCol.implicitHeight + 48; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -1346,7 +1346,7 @@ Window {
                                 id: fmt
                                 required property var modelData
                                 readonly property bool on: sheetShade.format === modelData[0]
-                                width: fmtText.implicitWidth + 24; height: 30; radius: 15
+                                width: fmtText.implicitWidth + 24; height: 30; radius: 10
                                 baseColor: on ? Theme.accent : Theme.fill
                                 color: on ? baseColor : (hovered ? Theme.hover : baseColor)
                                 onClicked: sheetShade.format = fmt.modelData[0]
@@ -1436,7 +1436,7 @@ Window {
             MouseArea { anchors.fill: parent; onClicked: formatShade.close() }
             Rectangle {
                 anchors.centerIn: parent
-                width: 440; height: formatCol.implicitHeight + 48; radius: 16
+                width: 440; height: formatCol.implicitHeight + 48; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -1475,7 +1475,7 @@ Window {
                                 id: fsBtn
                                 required property var modelData
                                 readonly property bool on: formatShade.type === modelData.id
-                                width: fsText.implicitWidth + 26; height: 30; radius: 15
+                                width: fsText.implicitWidth + 26; height: 30; radius: 10
                                 baseColor: on ? Theme.accent : Theme.fill
                                 color: on ? baseColor : (hovered ? Theme.hover : baseColor)
                                 onClicked: formatShade.type = fsBtn.modelData.id
@@ -1524,7 +1524,7 @@ Window {
         Rectangle {
             anchors.horizontalCenter: content.horizontalCenter
             y: parent.height - status.height - height - (toastTimer.running ? 16 : -8)
-            width: Math.min(content.width - 40, toastRow.implicitWidth + 32); height: 42; radius: 21
+            width: Math.min(content.width - 40, toastRow.implicitWidth + 32); height: 42; radius: 12
             color: Theme.text
             opacity: toastTimer.running ? 1 : 0
             visible: opacity > 0
@@ -1560,7 +1560,7 @@ Window {
             Drag.hotSpot.y: 0
             Rectangle {
                 x: 14; y: 10
-                width: ghostRow.implicitWidth + 20; height: 34; radius: 17
+                width: ghostRow.implicitWidth + 20; height: 34; radius: 10
                 color: Theme.accent
                 Row {
                     id: ghostRow

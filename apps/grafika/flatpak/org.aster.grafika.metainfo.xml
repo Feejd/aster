@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>org.aster.grafika</id>
-  <name>Grafika</name>
+  <name>Aster Pixel</name>
   <summary>Posty, plakaty, zaproszenia i CV z gotowych szablonów</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <developer id="org.aster">
     <name>Aster</name>
   </developer>
   <description>
-    <p>Prosty program do robienia grafik: posty i relacje do mediów społecznościowych, plakaty, ulotki,
+    <p>Aster Pixel — prosty program graficzny w układzie profesjonalnych edytorów (warstwy, narzędzia, właściwości): posty i relacje do mediów społecznościowych, plakaty, ulotki,
        zaproszenia, CV, miniaturki i wizytówki. Gotowe szablony, darmowe zdjęcia, ikony i czcionki z internetu,
-       kody QR, wykresy, wiele stron w jednym projekcie, eksport do PNG, JPG i PDF (także do drukarni).</p>
+       kody QR, wykresy, tabele, rysowanie, narzędzia AI działające na komputerze (usuwanie i rozmywanie tła, magiczna gumka), wiele stron w jednym projekcie, eksport do PNG, JPG i PDF (także do drukarni).</p>
   </description>
   <launchable type="desktop-id">org.aster.grafika.desktop</launchable>
   <url type="homepage">https://github.com/Feejd/aster</url>

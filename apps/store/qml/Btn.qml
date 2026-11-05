@@ -12,7 +12,7 @@ HoverButton {
     implicitHeight: 38
     width: implicitWidth
     height: implicitHeight
-    radius: 10
+    radius: 8
     baseColor: primary ? Theme.accent : Theme.fill
     opacity: enabled ? 1 : 0.5
     Row {

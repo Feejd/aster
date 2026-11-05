@@ -123,7 +123,7 @@ Item {
                     delegate: Rectangle {
                         id: mini
                         required property var modelData
-                        width: miniCol.implicitWidth + 36; height: 74; radius: 14
+                        width: miniCol.implicitWidth + 36; height: 74; radius: 12
                         color: Ui.tile(modelData.hue, miniArea.containsMouse)
                         Column {
                             id: miniCol
@@ -159,7 +159,7 @@ Item {
                 visible: Intelligence.available && !!page.query
                 width: parent.width
                 height: aiCol.implicitHeight + 28
-                radius: 14
+                radius: 12
                 color: Theme.accentSoft
                 Column {
                     id: aiCol

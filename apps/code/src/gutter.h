@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QHash>
+#include <QSet>
 #include <QVariantList>
 #include <QFont>
 #include <QPointer>
@@ -30,6 +31,8 @@ class Gutter : public QQuickPaintedItem
     Q_PROPERTY(QString baseText READ baseText WRITE setBaseText NOTIFY baseChanged)                // wersja z HEAD
     Q_PROPERTY(bool hasBase READ hasBase WRITE setHasBase NOTIFY baseChanged)
     Q_PROPERTY(QVariantList diagnostics READ diagnostics WRITE setDiagnostics NOTIFY changed)  // błędy z serwera języka
+    Q_PROPERTY(QVariantList breakpoints READ breakpoints WRITE setBreakpoints NOTIFY changed)  // wiersze z punktem przerwania
+    Q_PROPERTY(int stopLine MEMBER m_stopLine WRITE setStopLine NOTIFY changed)                // debuger zatrzymany w wierszu (−1)
     Q_PROPERTY(QColor errorColor MEMBER m_error NOTIFY changed)
     Q_PROPERTY(QColor warningColor MEMBER m_warning NOTIFY changed)
     Q_PROPERTY(int lineCount READ lineCount NOTIFY changed)
@@ -54,6 +57,9 @@ public:
     int lineCount() const;
     QVariantList diagnostics() const { return m_diagList; }
     void setDiagnostics(const QVariantList &list);
+    QVariantList breakpoints() const { return m_bpList; }
+    void setBreakpoints(const QVariantList &list);
+    void setStopLine(int l) { if (l != m_stopLine) { m_stopLine = l; update(); Q_EMIT changed(); } }
     int changeCount() const { return m_changeCount; }
 
     // Następne/poprzednie zmienione miejsce od wiersza (−1, gdy brak)
@@ -79,7 +85,9 @@ private:
     QVector<quint8> m_marks;            // na wiersz: 0 bez zmian, 1 dodany, 2 zmieniony
     QVector<bool> m_deletedBefore;      // usunięte wiersze tuż przed wierszem i (rozmiar = wiersze + 1)
     int m_changeCount = 0;
-    QVariantList m_diagList;
+    QVariantList m_diagList, m_bpList;
+    QSet<int> m_bps;
+    int m_stopLine = -1;
     QHash<int, int> m_diagLines;        // wiersz → najpoważniejszy problem (1 błąd, 2 ostrzeżenie, …)
     QColor m_error = QColor(0xE5, 0x48, 0x4D), m_warning = QColor(0xD2, 0x99, 0x22);
 };

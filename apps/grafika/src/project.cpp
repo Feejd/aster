@@ -11,7 +11,10 @@
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QMimeData>
+#include <QLinearGradient>
 #include <QPainter>
+#include <QPainterPath>
+#include <QtMath>
 #include <QPdfWriter>
 #include <QRandomGenerator>
 #include <QSaveFile>
@@ -356,6 +359,7 @@ void Project::setName(const QString &name)
 void Project::create(qreal width, qreal height, const QString &name, const QVariantMap &print)
 {
     m_assets.clear();
+    m_live.clear();
     m_undo.clear();
     m_redo.clear();
     // print — rozmiar do druku w mm (A4, plakat), dla PDF
@@ -551,6 +555,51 @@ QVariantMap Project::scaled(const QVariantMap &el, qreal k, qreal ox, qreal oy) 
         if (el.contains(QLatin1String(key)))
             out[QLatin1String(key)] = std::round(num(el, key) * k * 10) / 10;
     return out;
+}
+
+void Project::cropPage(qreal x, qreal y, qreal width, qreal height)
+{
+    commit();
+    x = std::round(x);
+    y = std::round(y);
+    width = qMax(16.0, std::round(width));
+    height = qMax(16.0, std::round(height));
+    // Strony mają wspólny rozmiar, więc przesuwa się treść każdej; rozmiar do druku maleje razem ze stroną
+    storePage();
+    for (QVariant &pv : m_pages) {
+        QVariantMap p = pv.toMap();
+        QVariantList elements = p.value(QStringLiteral("elements")).toList();
+        for (QVariant &v : elements) {
+            QVariantMap el = v.toMap();
+            if (el.value(QStringLiteral("type")).toString() != QLatin1String("adjust")) {
+                el[QStringLiteral("x")] = num(el, "x") - x;
+                el[QStringLiteral("y")] = num(el, "y") - y;
+            }
+            v = el;
+        }
+        p[QStringLiteral("elements")] = elements;
+        pv = p;
+    }
+    if (!m_guides.isEmpty()) {
+        QVariantMap g;
+        for (const auto &[axis, shift] : {std::pair{QStringLiteral("x"), x}, std::pair{QStringLiteral("y"), y}}) {
+            QVariantList list;
+            for (const QVariant &v : m_guides.value(axis).toList())
+                list.append(v.toDouble() - shift);
+            g[axis] = list;
+        }
+        m_guides = g;
+        Q_EMIT guidesChanged();
+    }
+    if (!m_print.isEmpty()) {
+        m_print[QStringLiteral("width")] = num(m_print, "width") * width / m_width;
+        m_print[QStringLiteral("height")] = num(m_print, "height") * height / m_height;
+    }
+    m_width = width;
+    m_height = height;
+    showPage(m_page);
+    Q_EMIT pageChanged();
+    commit();
 }
 
 void Project::setPageSize(qreal width, qreal height, bool fit)
@@ -798,7 +847,7 @@ QStringList Project::colors() const
     return out;
 }
 
-static const char *const ColorKeys[] = {"color", "color2", "fill", "fill2", "stroke", "outlineColor", "bg", "shadowColor", "duo1", "duo2"};
+static const char *const ColorKeys[] = {"color", "color2", "fill", "fill2", "stroke", "outlineColor", "bg", "shadowColor", "duo1", "duo2", "headerFill", "headerColor", "stripe"};
 
 // Wywołuje fn dla każdego koloru w projekcie (tła stron, pola elementów, kolory słupków wykresów)
 static void eachColor(QVariantList &pages, const std::function<void(QVariant &)> &fn)
@@ -1069,8 +1118,56 @@ QString Project::importImage(const QString &fileOrUrl)
     return key;
 }
 
+void Project::setLive(const QString &key, const QImage &img)
+{
+    m_live.insert(key, img);
+    Q_EMIT imagesChanged();
+}
+
+void Project::clearLive(const QString &key)
+{
+    if (m_live.remove(key))
+        Q_EMIT imagesChanged();
+}
+
+QString Project::addDecoded(const QByteArray &png, const QImage &img)
+{
+    const QString key = QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha1).toHex().left(20)) + QStringLiteral(".png");
+    if (m_assets.contains(key))
+        return key;
+    Asset a;
+    a.data = png;
+    a.ext = QStringLiteral("png");
+    a.full = img;
+    a.preview = qMax(img.width(), img.height()) > 1600 ? img.scaled(1600, 1600, Qt::KeepAspectRatio, Qt::SmoothTransformation) : img;
+    m_assets.insert(key, a);
+    Q_EMIT imagesChanged();
+    return key;
+}
+
+QString Project::colorAt(qreal x, qreal y) const
+{
+    const qreal k = qMin(1.0, 2048 / qMax(m_width, m_height));
+    const QImage img = Art::renderPage(pageDocument(m_page), QSize(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k))), this, Qt::white);
+    const QPoint p(qBound(0, qRound(x * k), img.width() - 1), qBound(0, qRound(y * k), img.height() - 1));
+    return QColor(img.pixel(p)).name(QColor::HexRgb).toUpper();
+}
+
+QString Project::newPixelLayer()
+{
+    const qreal k = qMin(1.0, 4096 / qMax(m_width, m_height));
+    QImage img(qMax(1, qRound(m_width * k)), qMax(1, qRound(m_height * k)), QImage::Format_ARGB32);
+    img.fill(Qt::transparent);
+    const QString key = addImage(img);
+    return add({{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("src"), key}, {QStringLiteral("pixel"), true},
+                {QStringLiteral("x"), 0.0}, {QStringLiteral("y"), 0.0}, {QStringLiteral("w"), m_width}, {QStringLiteral("h"), m_height}});
+}
+
 QImage Project::image(const QString &key, qreal pixels) const
 {
+    const auto live = m_live.constFind(key);
+    if (live != m_live.cend())
+        return *live;
     const auto it = m_assets.constFind(key);
     if (it == m_assets.cend())
         return {};
@@ -1080,6 +1177,9 @@ QImage Project::image(const QString &key, qreal pixels) const
 
 QImage Project::fullImage(const QString &key) const
 {
+    const auto live = m_live.constFind(key);
+    if (live != m_live.cend())
+        return *live;
     const auto it = m_assets.constFind(key);
     return it == m_assets.cend() ? QImage() : it->full;
 }
@@ -1166,6 +1266,157 @@ void Project::copy(const QStringList &ids) const
     QGuiApplication::clipboard()->setMimeData(mime);
 }
 
+QVariantMap Project::autoEnhance(const QString &key) const
+{
+    QImage img = fullImage(key);
+    if (img.isNull())
+        return {};
+    img = img.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_ARGB32);
+    int hist[256] = {};
+    qint64 n = 0;
+    qreal chroma = 0, sum = 0;
+    for (int y = 0; y < img.height(); ++y) {
+        const QRgb *row = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            if (qAlpha(row[x]) < 128)
+                continue;
+            const int r = qRed(row[x]), g = qGreen(row[x]), b = qBlue(row[x]);
+            const int l = (299 * r + 587 * g + 114 * b) / 1000;
+            ++hist[l];
+            sum += l;
+            chroma += qMax(r, qMax(g, b)) - qMin(r, qMin(g, b));
+            ++n;
+        }
+    }
+    if (n == 0)
+        return {};
+    // Ciemne i jasne 1,5% pikseli — zakres, który rozciągamy do pełnej skali
+    auto percentile = [&](qreal p) {
+        qint64 acc = 0;
+        for (int i = 0; i < 256; ++i)
+            if ((acc += hist[i]) >= n * p)
+                return i;
+        return 255;
+    };
+    const int lo = percentile(0.015), hi = percentile(0.985);
+    const qreal mean = sum / n;
+    const qreal k = qBound(1.0, 225.0 / qMax(30, hi - lo), 1.45);
+    const qreal mid = (mean - 128) * k + 128;
+    const qreal brightness = qBound(-0.25, (128 - mid) / 110 * 0.55, 0.3);
+    const qreal c = chroma / n;
+    const qreal saturation = c < 35 ? 0.25 : c < 60 ? 0.15 : c < 90 ? 0.08 : 0;
+    auto r2 = [](qreal v) { return std::round(v * 100) / 100; };
+    return {{QStringLiteral("brightness"), r2(brightness)}, {QStringLiteral("contrast"), r2(k - 1)}, {QStringLiteral("saturation"), r2(saturation)}};
+}
+
+bool Project::usesCompositing() const
+{
+    return Art::compositing({{QStringLiteral("elements"), m_elements}});
+}
+
+QVariantList Project::curveSamples(const QVariantList &points, int size) const
+{
+    return Art::curveSamples(points, qBound(2, size, 512));
+}
+
+// Maska ma proporcje warstwy; dłuższy bok 1024 px wystarcza nawet w dużym eksporcie, bo maski są miękkie
+static QSize maskSize(const QVariantMap &el, qreal pageW, qreal pageH)
+{
+    const bool adjust = el.value(QStringLiteral("type")).toString() == QLatin1String("adjust");
+    const qreal w = adjust ? pageW : qMax(1.0, el.value(QStringLiteral("w")).toDouble());
+    const qreal h = adjust ? pageH : qMax(1.0, el.value(QStringLiteral("h")).toDouble());
+    const qreal k = 1024 / qMax(w, h);
+    return QSize(qMax(8, qRound(w * k)), qMax(8, qRound(h * k)));
+}
+
+QSize Project::maskSizeFor(const QVariantMap &el) const
+{
+    return maskSize(el, m_width, m_height);
+}
+
+void Project::setMaskImage(const QString &id, const QImage &mask)
+{
+    change(id, {{QStringLiteral("layerMask"), addImage(mask)}});
+}
+
+void Project::addMask(const QString &id, bool hidden)
+{
+    const QVariantMap el = get(id);
+    if (el.isEmpty())
+        return;
+    QImage m(maskSize(el, m_width, m_height), QImage::Format_Grayscale8);
+    m.fill(hidden ? 0 : 255);
+    setMaskImage(id, m);
+}
+
+void Project::maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft)
+{
+    const QVariantMap el = get(id);
+    QImage m = fullImage(el.value(QStringLiteral("layerMask")).toString());
+    if (m.isNull() || points.isEmpty())
+        return;
+    m = m.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    const qreal px = qMax(1.0, width * m.width());
+    QPainterPath path;
+    for (int i = 0; i < points.size(); ++i) {
+        const QVariantList q = points.at(i).toList();
+        if (q.size() != 2)
+            continue;
+        const QPointF pt(q[0].toDouble() * m.width(), q[1].toDouble() * m.height());
+        if (path.elementCount() == 0)
+            path.moveTo(pt);
+        else
+            path.lineTo(pt);
+    }
+    if (points.size() == 1)
+        path.lineTo(path.currentPosition() + QPointF(0.01, 0));
+    QImage stroke(m.size(), QImage::Format_ARGB32_Premultiplied);
+    stroke.fill(Qt::transparent);
+    {
+        QPainter q(&stroke);
+        q.setRenderHint(QPainter::Antialiasing);
+        q.setPen(QPen(reveal ? Qt::white : Qt::black, px, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        q.drawPath(path);
+    }
+    Art::blur(stroke, qRound(qBound(0.0, soft, 1.0) * px * 0.3));
+    {
+        QPainter q(&m);
+        q.drawImage(0, 0, stroke);
+    }
+    setMaskImage(id, m.convertToFormat(QImage::Format_Grayscale8));
+}
+
+void Project::invertMask(const QString &id)
+{
+    QImage m = fullImage(get(id).value(QStringLiteral("layerMask")).toString());
+    if (m.isNull())
+        return;
+    m = m.convertToFormat(QImage::Format_Grayscale8);
+    m.invertPixels();
+    setMaskImage(id, m);
+}
+
+void Project::gradientMask(const QString &id, qreal angle)
+{
+    const QVariantMap el = get(id);
+    const QSize size = maskSize(el, m_width, m_height);
+    QImage m(size, QImage::Format_RGB32);
+    const QRectF r(QPointF(0, 0), size);
+    // Kąt jak przy przejściach kolorów: 180° — pełny widok u góry, zanika ku dołowi
+    const qreal a = qDegreesToRadians(angle), d = (qAbs(qSin(a)) * r.width() + qAbs(qCos(a)) * r.height()) / 2;
+    const QPointF dir(qSin(a) * d, -qCos(a) * d);
+    QLinearGradient g(r.center() - dir, r.center() + dir);
+    g.setColorAt(0, Qt::white);
+    g.setColorAt(1, Qt::black);
+    QPainter(&m).fillRect(r, g);
+    setMaskImage(id, m.convertToFormat(QImage::Format_Grayscale8));
+}
+
+QString Project::clipboardText() const
+{
+    return QGuiApplication::clipboard()->text();
+}
+
 QStringList Project::paste()
 {
     const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
@@ -1232,7 +1483,7 @@ QString Project::exportFile(const QString &format, qreal scale, const QString &t
 
     if (pdfOut) {
         QPdfWriter pdf(path);
-        pdf.setCreator(QStringLiteral("Aster Grafika"));
+        pdf.setCreator(QStringLiteral("Aster Pixel"));
         pdf.setTitle(m_name);
         // Rozmiar do druku (A4, plakat) albo piksele jak na ekranie (96 na cal)
         const QSizeF mm = !m_print.isEmpty() ? QSizeF(num(m_print, "width"), num(m_print, "height"))

@@ -128,7 +128,7 @@ Item {
                 Txt { text: "Porządki"; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.5 }
                 Rectangle {
                     visible: page.unused.length > 0
-                    width: parent.width; height: 68; radius: 14
+                    width: parent.width; height: 68; radius: 12
                     color: Theme.fill
                     Column {
                         x: 16; anchors.verticalCenter: parent.verticalCenter

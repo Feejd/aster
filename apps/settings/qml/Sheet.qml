@@ -34,7 +34,7 @@ Item {
         anchors.centerIn: parent
         width: 420
         height: col.implicitHeight + 48
-        radius: 22
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         scale: sh.shown ? 1 : 0.95
@@ -58,7 +58,7 @@ Item {
                 spacing: 8
                 TextButton { height: 34; text: "Anuluj"; onClicked: sh.close() }
                 Rectangle {
-                    height: 34; width: okText.implicitWidth + 30; radius: 17
+                    height: 34; width: okText.implicitWidth + 30; radius: 10
                     opacity: sh.acceptEnabled ? 1 : 0.45
                     color: sh.danger ? (okArea.containsMouse ? "#C42B2B" : "#DC3B3B") : (okArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent)
                     Text { id: okText; anchors.centerIn: parent; text: sh.acceptText; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }

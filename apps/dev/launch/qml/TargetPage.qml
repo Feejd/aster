@@ -68,7 +68,7 @@ Flickable {
                             id: typeBtn
                             required property var modelData
                             readonly property bool active: page.project.type === modelData[0]
-                            width: typeLabel.implicitWidth + 24; height: 32; radius: 16
+                            width: typeLabel.implicitWidth + 24; height: 32; radius: 10
                             baseColor: active ? Theme.accent : Theme.fill
                             color: active ? Theme.accent : (hovered ? Theme.hover : Theme.fill)
                             onClicked: page.set("type", modelData[0])
@@ -169,7 +169,7 @@ Flickable {
                             id: keyBtn
                             required property var modelData
                             readonly property bool active: (page.project.key || "") === modelData.path
-                            width: keyRow.implicitWidth + 24; height: 32; radius: 16
+                            width: keyRow.implicitWidth + 24; height: 32; radius: 10
                             baseColor: active ? Theme.accent : Theme.fill
                             color: active ? Theme.accent : (hovered ? Theme.hover : Theme.fill)
                             onClicked: page.set("key", modelData.path)

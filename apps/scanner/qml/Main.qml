@@ -21,7 +21,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     Settings {
         id: prefs
@@ -182,7 +182,7 @@ Window {
                 visible: Scanner.devices.length === 0
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 76; height: 76; radius: 22
+                    width: 76; height: 76; radius: 12
                     color: Theme.fill
                     Icon {
                         anchors.centerIn: parent
@@ -364,7 +364,7 @@ Window {
                 visible: win.pages.length > 0
                 anchors.bottom: parent.bottom
                 width: parent.width; height: 168
-                radius: 16
+                radius: 10
                 color: Theme.fill
                 Text {
                     x: 16; y: 12
@@ -439,7 +439,7 @@ Window {
             anchors.right: parent.right; anchors.rightMargin: 16
             y: topBar.height
             width: 300; height: parent.height - y - 16
-            radius: 18
+            radius: 10
             color: Theme.pane
             border.width: 1; border.color: Theme.line
             enabled: Scanner.devices.length > 0
@@ -560,7 +560,7 @@ Window {
             y: shown ? 70 : -height - 10
             opacity: shown ? 1 : 0
             z: 300
-            width: Math.min(parent.width - 60, toastRow.implicitWidth + 36); height: 40; radius: 20
+            width: Math.min(parent.width - 60, toastRow.implicitWidth + 36); height: 40; radius: 12
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -632,7 +632,7 @@ Window {
                 id: chip
                 required property var modelData
                 readonly property bool on: chip.modelData.value === chips.current
-                width: chipText.implicitWidth + 26; height: 32; radius: 16
+                width: chipText.implicitWidth + 26; height: 32; radius: 10
                 baseColor: on ? Theme.accent : Theme.fill
                 color: on ? baseColor : hovered ? Theme.hover : baseColor
                 enabled: !Scanner.busy
@@ -653,7 +653,7 @@ Window {
         property string text
         property string icon
         property bool primary: false
-        width: btnRow.implicitWidth + 30; height: 36; radius: height / 2
+        width: btnRow.implicitWidth + 30; height: 36; radius: 8
         baseColor: primary ? Theme.accent : Theme.fill
         color: !enabled ? baseColor : primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)
         opacity: enabled ? 1 : 0.45

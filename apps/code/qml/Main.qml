@@ -22,7 +22,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
     readonly property bool hasProject: Project.root !== ""
 
     Settings {
@@ -46,14 +46,27 @@ Window {
         property bool autoFetch: true
         property bool lsp: true
         property string recentTasks: "{}"        // folder projektu → ostatnie polecenia (JSON)
+        property string debugPrograms: "{}"      // folder projektu → program i argumenty do debugowania (JSON)
+        property real previewWidth: 0.45
+        property bool previewOnSave: true
+        property bool previewAuto: true
+        property bool diffSideBySide: false
     }
     Binding { target: Lsp; property: "enabled"; value: prefs.lsp }
+    Binding { target: ProjectEnv; property: "root"; value: Project.root }
+    Binding { target: Secrets; property: "root"; value: Project.root }
 
     // Samozapis po chwili od ostatniej zmiany (bez porządkowania pliku — nie przeszkadza w pisaniu)
     Timer {
         id: autoSaveTimer
         interval: 1000
         onTriggered: { for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified && !tabs.get(i).readOnly) win.save(i, null, true); }
+    }
+    // Kopie niezapisanych kart (bez plików z sekretami) — po awarii wracają przy otwarciu projektu
+    Timer {
+        id: backupTimer
+        interval: 2000
+        onTriggered: { for (let i = 0; i < tabs.count; ++i) if (win.page(i) && win.page(i).modified && !Secrets.secretFile(tabs.get(i).path)) Project.backupWrite(tabs.get(i).path, win.page(i).edit.text); }
     }
     // Sprawdzanie serwera gita w tle
     Timer {
@@ -242,6 +255,7 @@ Window {
         lastSave[t.path] = Date.now();
         if (Project.save(t.path, p.edit.text, t.encoding, t.eol)) {
             p.markSaved();
+            if (prefs.previewOnSave) preview.reload();
             for (let k = 0; k < tabs.count; ++k) if (k !== i && tabs.get(k).path === t.path) page(k).markSaved();
             Lsp.saved(t.path);
             p.refreshBlame();
@@ -270,6 +284,7 @@ Window {
             return;
         }
         const g = tabs.get(i).group, uid = tabs.get(i).uid, path = tabs.get(i).path;
+        if (force && p && p.modified) Project.backupRemove(path);        // „Nie zapisuj”
         // Duplikat tego pliku w drugiej grupie przejmuje dokument w serwerze języka
         const wasPrimary = p ? p.lspPrimary : false;
         const wasFocused = i === current;
@@ -320,12 +335,30 @@ Window {
         whenSaved(() => { saveSession(); closeAllTabs(); terminalShown = false; Project.close(); });
     }
     function restoreSession() {
+        // Kopie odczytane przed otwarciem kart — wczytanie pliku ustawia stan „bez zmian” i kasuje jego kopię
+        const saved = Project.backups();
         const list = Project.sessionTabs();
         list.forEach(p => openFile(p));
         if (tabs.count) activate(Math.min(Project.sessionCurrent(), tabs.count - 1));
         const l = Project.sessionLayout();
         sidebarView = l.sidebarView || 0;
         terminalShown = !!l.terminal;
+        restoreBackups(saved);
+    }
+    // Program zakończył się bez zapisu (awaria, zanik zasilania) — niezapisana treść wraca do kart
+    function restoreBackups(saved) {
+        let n = 0;
+        for (const b of saved) {
+            if (!Project.exists(b.path)) continue;
+            openFile(b.path, { preview: false });
+            const i = indexOfPath(b.path);
+            if (i < 0) continue;
+            const e = page(i).edit;
+            if (e.text === b.text) { Project.backupRemove(b.path); continue; }
+            TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [b.text], 0);
+            n++;
+        }
+        if (n) toast("Przywrócono niezapisane zmiany: " + n + (n === 1 ? " plik" : " pliki") + " (Ctrl+Z wraca do wersji z dysku)");
     }
     function saveSession() {
         if (!hasProject) return;
@@ -351,7 +384,7 @@ Window {
             }
         }
         function onMessage(text) { win.toast(text); }
-        function onRootChanged() { Lsp.setRoot(Project.root); }
+        function onRootChanged() { Lsp.setRoot(Project.root); ProjectEnv.root = Project.root; }
         function onFileChanged(path) {
             const i = win.indexOfPath(path);
             if (i < 0 || Date.now() - (win.lastSave[path] || 0) < 2000) return;
@@ -545,7 +578,7 @@ Window {
     function showTasks() { if (hasProject) palette.openTasks(taskList()); }
     function runTask(t) {
         saveAll();
-        Tasks.run(t.label, t.command, t.cwd || Project.root);
+        Tasks.run(t.label, t.command, t.cwd || Project.root, taskEnv(t.cwd || Project.root));
         // Ostatnie 6 poleceń na projekt — na górze listy
         let all = {};
         try { all = JSON.parse(prefs.recentTasks); } catch (e) {}
@@ -555,6 +588,44 @@ Window {
         prefs.recentTasks = JSON.stringify(all);
         terminalShown = true;
         terminalPanel.tab = 3;
+    }
+    // ▶ Uruchom (Ctrl+F5): serwer deweloperski z każdego projektu naraz (np. frontend i backend), każdy z własnymi logami
+    function runApp() {
+        if (!hasProject) return;
+        const targets = Tasks.runTargets(Project.root);
+        if (!targets.length) { showTasks(); return; }
+        saveAll();
+        previewScore = -1;
+        for (const t of targets) Tasks.run(t.label, t.command, t.cwd || Project.root, win.taskEnv(t.cwd || Project.root));
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    function showRunMenu() {
+        const p = runBtn.mapToItem(frame, 0, runBtn.height + 6);
+        const targets = Tasks.runTargets(Project.root);
+        const items = [];
+        if (targets.length > 1) items.push({ label: "Uruchom wszystko (" + targets.length + ")", icon: "play", shortcut: "Ctrl+F5", action: "run:all" });
+        targets.forEach((t, i) => items.push({ label: t.label, icon: "play", action: "run:" + i, shortcut: targets.length === 1 ? "Ctrl+F5" : "" }));
+        if (Tasks.runningCount) items.push({ separator: true }, { label: "Zatrzymaj wszystko", icon: "stop", action: "run:stop", danger: true });
+        items.push({ separator: true }, { label: "Inne zadania…", icon: "apps", action: "tasks" }, { label: "Podgląd strony", icon: "globe", action: "preview" });
+        runMenuTargets = targets;
+        menu.openAt(Math.min(p.x, frame.width - 280), p.y, items);
+    }
+    property var runMenuTargets: []
+    property int previewScore: -1
+    // Zmienne środowiska dla zadania (sekrety projektu — punkt „Sekrety”)
+    function taskEnv(cwd) { return Secrets.names.length ? { __secrets: true } : {}; }
+    Connections {
+        target: Tasks
+        // Kilka serwerów — w podglądzie strona (frontend), nie API; lepszy adres zastępuje gorszy
+        function onUrlDetected(id, label, url) {
+            const score = /back|api|server|uvicorn|flask|django|baza|db/i.test(label) ? 0 : /front|web|client|ui|site|vite|next|dev|start/i.test(label) ? 2 : 1;
+            if (prefs.previewAuto && (!preview.shown || score > win.previewScore || !preview.url)) {
+                win.previewScore = score;
+                preview.open(url);
+            }
+            win.toast("„" + label + "” działa: " + url);
+        }
     }
     // Ctrl+Shift+B: ostatnio uruchomione zadanie budowania od razu, inaczej lista
     function buildTask() {
@@ -573,6 +644,260 @@ Window {
                      : "„" + title + "” — błąd" + (Tasks.errorCount ? " (" + Tasks.errorCount + ")" : ""));
         }
     }
+    // ——— Debugowanie (F5) ———
+    // Plik .py — debugpy dla bieżącego pliku; inaczej program z projektu (zapamiętany albo najnowszy plik ELF)
+    function startDebug(ask) {
+        if (Debugger.state) { Debugger.resume(); return; }
+        if (!hasProject) return;
+        const py = curPath.endsWith(".py");
+        const ad = Debugger.adapterFor(py ? "python" : "native");
+        if (!ad.available) { Project.copyText(ad.install); toast("Brak debugera " + ad.name + " — polecenie w schowku: " + ad.install); return; }
+        if (py) { saveAll(); launchDebug("python", curPath, ""); return; }
+        let all = {};
+        try { all = JSON.parse(prefs.debugPrograms); } catch (e) {}
+        const saved = all[Project.root];
+        if (saved && !ask && Project.exists(Project.root + "/" + saved.program)) { launchDebug("native", Project.root + "/" + saved.program, saved.args); return; }
+        const guess = saved ? saved.program + (saved.args ? " " + saved.args : "") : Project.relative(Debugger.guessProgram(Project.root));
+        nameBox.ask("Program do debugowania", guess, "Ścieżka w projekcie, po spacji argumenty. Zbuduj go z -g (informacje dla debugera).", (text) => {
+            const parts = text.trim().split(/\s+/);
+            if (!parts[0]) return;
+            const prog = parts[0], args = parts.slice(1).join(" ");
+            all[Project.root] = { program: prog, args: args };
+            prefs.debugPrograms = JSON.stringify(all);
+            win.launchDebug("native", prog.startsWith("/") ? prog : Project.root + "/" + prog, args);
+        });
+    }
+    function launchDebug(kind, program, args) {
+        if (!Debugger.start(kind, program, args, Project.root)) return;
+        terminalShown = true;
+        terminalPanel.tab = 4;
+    }
+    function toggleBreakpointHere() { if (cur) Debugger.toggleBreakpoint(curPath, cur.lineCol.y); }
+    Connections {
+        target: Debugger
+        // Zatrzymanie — plik i wiersz na wierzchu
+        function onStopChanged() { if (Debugger.stopPath && Debugger.stopLine >= 0) win.openFile(Debugger.stopPath, { line: Debugger.stopLine, col: 0, length: 0 }); }
+        function onMessage(text) { win.toast(text); }
+        function onEnded(code) { win.toast(code >= 0 ? "Program zakończył się (kod " + code + ")" : "Debugowanie zakończone"); }
+    }
+    // ——— Historia pliku ———
+    function showHistory(path) {
+        if (!Project.isGit) { toast("Historia jest dostępna w repozytorium gita"); return; }
+        if (path && path !== curPath) openFile(path);
+        historyView.commitData = null;
+        prefs.sidebar = true;
+        sidebarView = 3;
+    }
+    function showCommit(hash) {
+        historyView.openCommit(hash);
+        prefs.sidebar = true;
+        sidebarView = 3;
+    }
+    // Starsza wersja wchodzi do edytora jak zwykła zmiana — da się ją przejrzeć, cofnąć (Ctrl+Z) albo zapisać
+    function restoreVersion(path, hash, rel) {
+        const f = Project.fileAt(hash, rel);
+        if (!f.ok) { toast("Nie udało się wczytać tej wersji"); return; }
+        openFile(path);
+        const i = indexOfPath(path);
+        if (i < 0) return;
+        const e = page(i).edit;
+        const pos = e.cursorPosition;
+        TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [f.text], 0);
+        e.cursorPosition = Math.min(pos, e.length);
+        pin(i);
+        toast("Wersja z " + hash.slice(0, 7) + " w edytorze — zapisz (Ctrl+S) albo cofnij (Ctrl+Z)");
+    }
+    // ——— Środowisko projektu (kontener) ———
+    property string envState: ProjectEnv.state
+    onEnvStateChanged: Lsp.restartServers()
+    function createContainer() {
+        if (!ProjectEnv.toolAvailable()) { toast("W systemie nie ma toolbox ani distrobox"); return; }
+        nameBox.ask("Kontener dla „" + Project.name + "”", ProjectEnv.suggestPackages().join(" "),
+                    "Pakiety Fedory do zainstalowania (spacja między nimi). Wszystko trafi do kontenera — w systemie nic nie przybędzie.", (text) => {
+            ProjectEnv.useContainer(true);
+            const pk = text.trim().split(/\s+/).filter(x => !!x);
+            win.envTask("Kontener: przygotowanie", ProjectEnv.createCommand(pk));
+        });
+    }
+    function envTask(label, command) {
+        Tasks.run(label, command, Project.root, { __host: true });
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    function showEnvMenu() {
+        const p = envBtn.mapToItem(frame, 0, 0);
+        const st = ProjectEnv.state;
+        const items = st === "ready" ? [
+            { label: "Terminal w kontenerze", icon: "terminal", action: "env:terminal" },
+            { label: "Zainstaluj pakiety…", icon: "download", action: "env:install" },
+            { separator: true },
+            { label: "Pracuj w systemie (kontener zostaje)", icon: "monitor", action: "env:off" },
+            { label: "Usuń kontener…", icon: "trash", action: "env:remove", danger: true }
+        ] : st === "none" ? [
+            { label: "Załóż kontener " + ProjectEnv.container, icon: "plus", action: "env:create" },
+            { label: "Pracuj w systemie", icon: "monitor", action: "env:off" }
+        ] : [
+            { label: "Utwórz kontener projektu…", icon: "plus", action: "env:create", enabled: ProjectEnv.toolAvailable() },
+            { label: ProjectEnv.toolAvailable() ? "Node, Python, bazy danych — w kontenerze, nie w systemie" : "Brak toolbox — zainstaluj: rpm-ostree install toolbox",
+              icon: "info", action: "", enabled: false }
+        ];
+        menu.openAt(Math.max(8, p.x - 160), p.y - items.length * 34 - 18, items);
+    }
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (!title.startsWith("Kontener")) return;
+            ProjectEnv.refresh();
+            if (code === 0) win.toast(title === "Kontener: usuwanie" ? "Kontener usunięty" : "Kontener gotowy — terminal, zadania i serwery języków działają w nim");
+        }
+    }
+    // ——— Nowa aplikacja z szablonu ———
+    // Folder → kontener z pakietami → instalacja zależności (każda jako zadanie z logami) → README
+    property var pendingSetup: []
+    function startFromTemplate(r, container) {
+        openFolder(r.path);
+        ProjectEnv.root = r.path;
+        pendingSetup = r.setup;
+        Qt.callLater(() => win.openFile(r.path + "/README.md", { preview: false }));
+        if (container) {
+            ProjectEnv.useContainer(true);
+            envTask("Kontener: przygotowanie", ProjectEnv.createCommand(r.packages));
+        } else {
+            runPendingSetup();
+        }
+        toast("Aplikacja „" + Project.name + "” utworzona — instaluję zależności");
+    }
+    function runPendingSetup() {
+        const steps = pendingSetup;
+        pendingSetup = [];
+        for (const s of steps) Tasks.run(s.label, s.command, s.cwd, {});
+        if (steps.length) { terminalShown = true; terminalPanel.tab = 3; setupLeft = steps.length; }
+    }
+    property int setupLeft: 0
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (title === "Kontener: przygotowanie" && code === 0 && win.pendingSetup.length) Qt.callLater(win.runPendingSetup);
+            else if (win.setupLeft > 0 && (title.indexOf("install") >= 0 || title.indexOf("zależności") >= 0)) {
+                if (--win.setupLeft === 0) win.toast(code === 0 ? "Gotowe — ▶ Uruchom (Ctrl+F5) startuje aplikację" : "Instalacja zależności nie powiodła się — szczegóły w karcie Zadania");
+            }
+        }
+    }
+    // ——— Agent ———
+    // Kontekst dla modelu: projekt, otwarty plik, zaznaczenie, problemy, git, środowisko — bez .env i wartości sekretów
+    function agentContext(o) {
+        const out = [];
+        out.push("Projekt w Aster Code: " + Project.name + " (" + Project.root + ")");
+        out.push("Środowisko poleceń: " + (ProjectEnv.state === "ready" ? "kontener " + ProjectEnv.container + " (" + ProjectEnv.tool + ") — pakiety instaluj w nim: sudo dnf install -y …" : "system (/usr tylko do odczytu — bez sudo dnf; kontener projektu można założyć w Aster Code)"));
+        if (Project.isGit) out.push("Git: gałąź " + Project.branch + (Project.changes.length ? ", zmienione: " + Project.changes.slice(0, 30).map(c => c.rel + " (" + c.status + ")").join(", ") : ", bez zmian"));
+        const open = []; for (let i = 0; i < tabs.count; ++i) if (open.indexOf(Project.relative(tabs.get(i).path)) < 0) open.push(Project.relative(tabs.get(i).path));
+        if (open.length) out.push("Otwarte karty: " + open.join(", "));
+        out.push("Pliki projektu (część): " + Project.quickOpen("", 150).map(f => f.rel).filter(r => !Secrets.secretFile(r)).join(", "));
+        if (cur && curPath) {
+            const rel = Project.relative(curPath);
+            out.push("\nOtwarty plik: " + rel + " (" + (cur.language || "tekst") + "), kursor w wierszu " + (cur.lineCol.y + 1));
+            if (Secrets.secretFile(curPath)) {
+                out.push("(To plik z sekretami — jego treść nie jest dołączona.)");
+            } else {
+                const sel = cur.edit.selectedText.replace(/\u2029/g, "\n");
+                if (o.selection && sel) {
+                    const a = TextOps.lineColumn(cur.edit.textDocument, cur.edit.selectionStart).y + 1;
+                    out.push("Zaznaczenie (wiersze " + a + "–" + (a + sel.split("\n").length - 1) + "):\n```\n" + sel + "\n```");
+                }
+                if (o.file) {
+                    const t = cur.edit.text;
+                    if (t.length <= 60000) out.push("Treść " + rel + ":\n```\n" + t + "\n```");
+                    else {
+                        const ls = t.split("\n"), c = cur.lineCol.y;
+                        out.push("Fragment " + rel + " (wiersze " + Math.max(1, c - 150) + "–" + Math.min(ls.length, c + 150) + " z " + ls.length + "):\n```\n" + ls.slice(Math.max(0, c - 150), c + 150).join("\n") + "\n```");
+                    }
+                }
+            }
+        }
+        if (o.problems) {
+            const probs = [];
+            for (const f of Lsp.problems.concat(Tasks.problems))
+                for (const d of f.items) if (probs.length < 40 && d.severity <= 2) probs.push(Project.relative(f.path) + ":" + (d.line + 1) + ":" + (d.col + 1) + " " + (d.severity === 1 ? "błąd" : "ostrzeżenie") + ": " + d.message + (d.source ? " [" + d.source + "]" : ""));
+            if (probs.length) out.push("\nProblemy (serwery języków i kompilator):\n" + probs.join("\n"));
+        }
+        out.push("\nZmiany w plikach proponuj wyłącznie blokami — bez sed, cat > ani echo do plików. Użytkownik przejrzy różnice i zaakceptuje je plik po pliku:\n"
+                 + "```aster-edit ścieżka/względem/projektu\n<<<<<<< SZUKAJ\n(dokładnie skopiowany fragment obecnej treści, kilka wierszy)\n=======\n(nowa treść tego fragmentu)\n>>>>>>> ZAMIEŃ\n```\n"
+                 + "W jednym bloku może być kilka par SZUKAJ/ZAMIEŃ. Nowy plik albo cała nowa treść: ```aster-file ścieżka (nowa linia, cała treść)```. "
+                 + "Polecenia (testy, budowanie, instalacja pakietów) — jedno w bloku ```bash; działają w folderze projektu. Pisz po polsku, zwięźle.");
+        const text = out.join("\n");
+        return Secrets.names.length ? Secrets.redact(text) : text;
+    }
+    function agentFileText(abs) {
+        const i = indexOfPath(abs);
+        return i >= 0 && page(i) ? page(i).edit.text : Agent.readFile(abs);
+    }
+    // Zaakceptowana zmiana: plik w edytorze (do cofnięcia Ctrl+Z) i zapis — testy agenta widzą nową treść
+    function applyAgentEdit(path, text) {
+        if (!Project.exists(path)) {
+            Project.save(path, text, "UTF-8", "LF");
+            Project.refreshFiles();
+        }
+        openFile(path, { preview: false });
+        const i = indexOfPath(path);
+        if (i < 0) return;
+        const e = page(i).edit;
+        if (e.text !== text) {
+            const pos = e.cursorPosition;
+            TextOps.multiEdit(e.textDocument, [{ a: 0, b: e.length }], [text], 0);
+            e.cursorPosition = Math.min(pos, e.length);
+        }
+        save(i, null, true);
+    }
+    function askAgent(prompt) { agentPanel.ask(prompt); }
+    // ——— Wdrożenie ———
+    function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+    function deployCommand(c) {
+        const build = c.build ? "(cd " + shq(c.buildDir || ".") + " && " + c.build + ") && " : "";
+        const send = c.send || ".";
+        if (c.target === "ssh") {
+            // Ścieżka bez ~/ — rsync i tak liczy ją od katalogu domowego na serwerze
+            const remote = String(c.path || "aplikacja").replace(/^~\//, "").replace(/\/$/, "");
+            const src = send === "." ? "./" : send.replace(/\/?$/, "/");
+            return build + "rsync -az --delete --mkpath --exclude .git --exclude node_modules --exclude .venv --exclude .env --exclude '.env.*' --exclude .aster "
+                 + "-e 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' " + shq(src) + " " + shq(c.host + ":" + remote + "/")
+                 + (c.post ? " && ssh -o BatchMode=yes " + shq(c.host) + " " + shq("cd " + remote + " && " + c.post) : "")
+                 + " && echo " + shq("Wdrożono: " + c.host + ":" + remote);
+        }
+        if (c.target === "pages") return build + "npx --yes gh-pages -d " + shq(send) + " -t true && echo 'Wdrożono na gałąź gh-pages'";
+        if (c.target === "netlify") return build + "npx --yes netlify-cli deploy --prod --dir " + shq(send) + (c.project ? " --site " + shq(c.project) : "");
+        if (c.target === "vercel") return "cd " + shq(c.buildDir || ".") + " && npx --yes vercel deploy --prod --yes --token \"$VERCEL_TOKEN\"";
+        if (c.target === "cloudflare") return build + "npx --yes wrangler pages deploy " + shq(send) + " --project-name " + shq(c.project || "strona");
+        return "";
+    }
+    function runDeploy(c) {
+        const names = { ssh: "serwer", pages: "GitHub Pages", netlify: "Netlify", vercel: "Vercel", cloudflare: "Cloudflare Pages" };
+        saveAll();
+        Tasks.run("Wdrożenie: " + (names[c.target] || c.target), deployCommand(c), Project.root, { __secrets: Secrets.names.length > 0, __github: c.target === "pages" });
+        terminalShown = true;
+        terminalPanel.tab = 3;
+    }
+    // ⇪ Wdróż: zapisane ustawienia — od razu, inaczej ekran wdrożenia
+    function quickDeploy() {
+        let c = null;
+        try { c = JSON.parse(Agent.readFile(Project.root + "/.aster/wdrozenie.json") || "null"); } catch (e) {}
+        if (c && c.target && (c.target !== "ssh" || c.host)) runDeploy(c);
+        else deployView.open();
+    }
+    property string lastDeployUrl: ""
+    Connections {
+        target: Tasks
+        function onFinished(title, code) {
+            if (!title.startsWith("Wdrożenie")) return;
+            const m = Tasks.lines.join("\n").match(/https:\/\/[^\s'"]+\.(?:netlify\.app|vercel\.app|pages\.dev|github\.io)[^\s'"]*/g);
+            win.lastDeployUrl = m ? m[m.length - 1] : "";
+            win.toast(code === 0 ? "Wdrożono" + (win.lastDeployUrl ? ": " + win.lastDeployUrl : "") : "Wdrożenie nie powiodło się — szczegóły w karcie Zadania");
+        }
+    }
+    Connections {
+        target: GitHub
+        function onMessage(text) { win.toast(text); }
+        function onRepoCreated(url) { win.toast("Repozytorium na GitHubie: " + url); Project.refreshGit(); }
+    }
     function showProblems() {
         if (!hasProject) return;
         if (terminalShown && terminalPanel.tab === 1) { terminalShown = false; return; }
@@ -584,6 +909,7 @@ Window {
         const e = cur.edit;
         menu.openAt(p.x, p.y, [
             { label: "Przejdź do definicji", icon: "arrow", shortcut: "F12", action: "definition", enabled: cur.lspOn },
+            { label: "Zapytaj agenta o zaznaczenie", icon: "sparkles", action: "agent:selection", enabled: e.selectedText !== "" },
             { label: "Szybka poprawka", icon: "bolt", shortcut: "Ctrl+.", action: "quickfix", enabled: cur.lspOn },
             { label: "Znajdź odwołania", icon: "search", shortcut: "Shift+F12", action: "references", enabled: cur.lspOn },
             { label: "Zmień nazwę", icon: "pencil", shortcut: "F2", action: "rename", enabled: cur.lspOn },
@@ -728,7 +1054,7 @@ Window {
     }
 
     // ——— Widoki ———
-    property int sidebarView: 0          // 0 pliki, 1 szukaj, 2 zmiany
+    property int sidebarView: 0          // 0 pliki, 1 szukaj, 2 zmiany, 3 historia
     property bool terminalShown: false
     property bool terminalMax: false
     function showView(v) {
@@ -773,6 +1099,22 @@ Window {
         { label: "Podziel edytor", shortcut: "Ctrl+\\", action: "split", icon: "sidebar" },
         { label: "Ustawienia", shortcut: "Ctrl+,", action: "settings", icon: "gear" },
         { label: "Uruchom zadanie…", shortcut: "", action: "tasks", icon: "play" },
+        { label: "Nowa aplikacja…", shortcut: "", action: "newApp", icon: "sparkle" },
+        { label: "Agent", shortcut: "Ctrl+Shift+I", action: "agent", icon: "sparkles" },
+        { label: "Wdróż", shortcut: "", action: "deploy", icon: "upload" },
+        { label: "Wdrożenie: ustawienia…", shortcut: "", action: "deploySettings", icon: "upload" },
+        { label: "GitHub: zaloguj / utwórz repozytorium…", shortcut: "", action: "deploySettings", icon: "gitBranch" },
+        { label: "Agent: napraw problemy", shortcut: "", action: "agent:fix", icon: "sparkles" },
+        { label: "Kontener projektu: utwórz…", shortcut: "", action: "env:create", icon: "box" },
+        { label: "Sekrety projektu (.env, klucze API)", shortcut: "", action: "secrets", icon: "key" },
+        { label: "Kontener projektu: zainstaluj pakiety…", shortcut: "", action: "env:install", icon: "box" },
+        { label: "Uruchom aplikację (serwery)", shortcut: "Ctrl+F5", action: "run:all", icon: "play" },
+        { label: "Zatrzymaj wszystkie procesy", shortcut: "", action: "run:stop", icon: "stop" },
+        { label: "Podgląd strony", shortcut: "", action: "preview", icon: "globe" },
+        { label: "Debuguj", shortcut: "F5", action: "debug", icon: "bug" },
+        { label: "Debuguj inny program…", shortcut: "", action: "debugAsk", icon: "bug" },
+        { label: "Punkt przerwania", shortcut: "F9", action: "breakpoint", icon: "bug" },
+        { label: "Usuń wszystkie punkty przerwania", shortcut: "", action: "clearBreakpoints", icon: "trash" },
         { label: "Zbuduj", shortcut: "Ctrl+Shift+B", action: "build", icon: "bolt" },
         { label: "Uruchom ponownie ostatnie zadanie", shortcut: "", action: "rerun", icon: "reload" },
         { label: "Zatrzymaj zadanie", shortcut: "", action: "stopTask", icon: "stop" },
@@ -804,6 +1146,7 @@ Window {
         { label: "Git: wyślij (push)", shortcut: "", action: "git:push", icon: "upload" },
         { label: "Git: pobierz (pull)", shortcut: "", action: "git:pull", icon: "download" },
         { label: "Git: pokaż zmiany w pliku", shortcut: "", action: "git:diff", icon: "gitBranch" },
+        { label: "Git: historia pliku", shortcut: "", action: "fileHistory", icon: "clock" },
         { label: "Git: przełącz gałąź…", shortcut: "", action: "git:checkout", icon: "gitBranch" },
         { label: "Git: nowa gałąź…", shortcut: "", action: "git:checkout", icon: "plus" },
         { label: "Git: połącz gałąź z bieżącą…", shortcut: "", action: "git:merge", icon: "gitBranch" },
@@ -897,10 +1240,32 @@ Window {
         else if (a === "tab:reveal") { prefs.sidebar = true; sidebarView = 0; const row = Project.tree.reveal(tabs.get(menu.tab).path); if (row >= 0) treeList.positionViewAtIndex(row, ListView.Center); }
         else if (a === "tab:copy") Project.copyText(Project.relative(tabs.get(menu.tab).path));
         else if (a === "tab:split") { activate(menu.tab); splitEditor(); }
+        else if (a === "tab:history") showHistory(tabs.get(menu.tab).path);
+        else if (a === "fileHistory") showHistory(curPath);
         else if (a === "tab:move") moveToOtherGroup(menu.tab);
         else if (a === "split") splitEditor();
         else if (a === "settings") settingsView.open();
         else if (a === "tasks") showTasks();
+        else if (a === "env:create") createContainer();
+        else if (a === "secrets") secretsView.open();
+        else if (a === "newApp") newAppView.open();
+        else if (a === "deploy") quickDeploy();
+        else if (a === "deploySettings") deployView.open();
+        else if (a === "agent") agentPanel.shown ? agentPanel.close() : agentPanel.open();
+        else if (a === "agent:fix") askAgent("Napraw błędy z panelu Problemy w tym pliku.");
+        else if (a === "agent:selection") askAgent("Wyjaśnij zaznaczony kod i zaproponuj poprawki, jeśli są potrzebne.");
+        else if (a === "env:terminal") { terminalShown = true; terminalPanel.tab = 0; terminalPanel.restart(); }
+        else if (a === "env:off") ProjectEnv.useContainer(false);
+        else if (a === "env:install") nameBox.ask("Zainstaluj w kontenerze", "", "Pakiety Fedory, np. nodejs postgresql-server redis", (t) => { if (t.trim()) win.envTask("Kontener: pakiety", ProjectEnv.installCommand(t.trim().split(/\s+/))); });
+        else if (a === "env:remove") win.confirm = { kind: "envRemove", name: ProjectEnv.container };
+        else if (a === "run:all") runApp();
+        else if (a === "run:stop") Tasks.stopAll();
+        else if (a === "preview") preview.shown ? preview.close() : preview.open("");
+        else if (a.startsWith("run:")) { const t = runMenuTargets[Number(a.slice(4))]; if (t) { saveAll(); Tasks.run(t.label, t.command, t.cwd || Project.root, taskEnv(t.cwd || Project.root)); terminalShown = true; terminalPanel.tab = 3; } }
+        else if (a === "debug") startDebug(false);
+        else if (a === "debugAsk") startDebug(true);
+        else if (a === "breakpoint") toggleBreakpointHere();
+        else if (a === "clearBreakpoints") Debugger.clearBreakpoints();
         else if (a === "build") buildTask();
         else if (a === "rerun") { saveAll(); Tasks.rerun(); terminalShown = true; terminalPanel.tab = 3; }
         else if (a === "stopTask") Tasks.stop();
@@ -909,6 +1274,7 @@ Window {
         if (a === "newFile") newFile(path);
         else if (a === "newFolder") newFolder(path);
         else if (a === "rename") renamePath(path);
+        else if (a === "history") showHistory(path);
         else if (a === "trash") trashPath(path);
         else if (a === "copyPath") Project.copyText(path);
         else if (a === "copyRel") Project.copyText(Project.relative(path));
@@ -924,6 +1290,7 @@ Window {
         menu.openAt(p.x - 250, p.y, [
             { label: "Otwórz folder…", icon: "folder", shortcut: "Ctrl+O", action: "openFolder" },
             { label: "Nowy plik", icon: "filePlus", shortcut: "Ctrl+N", action: "newFile" },
+            { label: "Nowa aplikacja…", icon: "sparkle", action: "newApp" },
             { label: "Zapisz", icon: "download", shortcut: "Ctrl+S", action: "save", enabled: !!win.cur },
             { label: "Zapisz wszystko", icon: "copy", shortcut: "Ctrl+Alt+S", action: "saveAll" },
             { separator: true },
@@ -960,6 +1327,7 @@ Window {
             { label: "Zmień nazwę", icon: "pencil", action: "tree:rename", enabled: path !== Project.root },
             { label: "Przenieś do Kosza", icon: "trash", action: "tree:trash", danger: true, enabled: path !== Project.root },
             { separator: true },
+            { label: "Historia pliku", icon: "clock", action: "tree:history", enabled: !isDir && Project.isGit },
             { label: "Kopiuj ścieżkę", icon: "copy", action: "tree:copyPath" },
             { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tree:copyRel" },
             { label: "Otwórz w terminalu", icon: "terminal", action: "tree:terminal" },
@@ -1013,6 +1381,37 @@ Window {
         else if (what === "split") splitEditor();
         else if (what === "settings") settingsView.open();
         else if (what === "tasks") showTasks();
+        else if (what === "runapp") runApp();
+        else if (what === "envcreate") { ProjectEnv.useContainer(true); envTask("Kontener: przygotowanie", ProjectEnv.createCommand(ProjectEnv.suggestPackages())); }
+        else if (what === "envmenu") showEnvMenu();
+        else if (what === "secrets") secretsView.open();
+        else if (what === "newapp") newAppView.open();
+        else if (what === "agent") agentPanel.open();
+        else if (what.startsWith("ask:")) askAgent(arg);
+        else if (what === "acceptall") agentPanel.acceptAll();
+        else if (what.startsWith("replaceline:")) { if (cur) { const kv = arg.split("=>"); const t = cur.edit.text.replace(kv[0], kv[1]); TextOps.multiEdit(cur.edit.textDocument, [{ a: 0, b: cur.edit.length }], [t], 0); } }
+        else if (what === "sidebyside") prefs.diffSideBySide = true;
+        else if (what === "deployview") deployView.open();
+        else if (what.startsWith("deploycfg:")) { Project.save(Project.root + "/.aster/wdrozenie.json", arg, "UTF-8", "LF"); }
+        else if (what === "deploy") quickDeploy();
+        else if (what === "ghlogin") { deployView.open(); GitHub.loginBrowser(); }
+        else if (what === "reviewfirst") { const e = agentPanel.edits.find(x => x.state === "pending"); if (e) agentPanel.review(e.path); }
+        else if (what.startsWith("mkapp:")) { const o = JSON.parse(arg); const r = Templates.create(o); if (r.ok) startFromTemplate(r, !!o.container); else toast(r.error); }
+        else if (what === "importenv") Secrets.importEnv(Project.root + "/.env", true);
+        else if (what.startsWith("secret:")) { const kv = arg.split("="); Secrets.set(kv[0], kv.slice(1).join("=")); }
+        else if (what.startsWith("preview:")) preview.open(arg);
+        else if (what === "phone") preview.phone = true;
+        else if (what === "pconsole") preview.consoleOpen = true;
+        else if (what === "history") showHistory(curPath);
+        else if (what.startsWith("histdiff:")) { const n = Number(arg); const e = historyView.entries[n]; if (e) diffView.openCommit(curPath, e.rel, e.hash, e.subject); }
+        else if (what.startsWith("histfiles:")) { const e = historyView.entries[Number(arg)]; if (e) showCommit(e.hash); }
+        else if (what.startsWith("restore:")) { const e = historyView.entries[Number(arg)]; if (e) restoreVersion(curPath, e.hash, e.rel); }
+        else if (what.startsWith("bp:")) Debugger.toggleBreakpoint(curPath, Number(arg) - 1);
+        else if (what.startsWith("debug:")) { const d = arg.split(" "); launchDebug("native", Project.root + "/" + d[0], d.slice(1).join(" ")); }
+        else if (what === "dnext") Debugger.next();
+        else if (what === "dstep") Debugger.stepIn();
+        else if (what === "dcont") Debugger.resume();
+        else if (what.startsWith("deval:")) Debugger.evaluate(arg);
         else if (what.startsWith("runcmd:")) runTask({ label: arg, command: arg, group: "custom" });
         else if (what.startsWith("settingsSearch:")) { settingsView.open(); Qt.callLater(() => settingsView.searchFor(arg)); }
         else if (what.startsWith("pref:")) { const kv = arg.split("="); prefs[kv[0]] = kv[1] === "true" ? true : kv[1] === "false" ? false : kv[1]; }
@@ -1056,6 +1455,15 @@ Window {
     Shortcut { sequence: "Ctrl+W"; enabled: tabs.count > 0; onActivated: win.closeTab(win.current) }
     Shortcut { sequence: "Ctrl+\\"; enabled: !!win.cur; onActivated: win.splitEditor() }
     Shortcut { sequence: "Ctrl+Shift+B"; enabled: win.hasProject; onActivated: win.buildTask() }
+    Shortcut { sequence: "Ctrl+F5"; enabled: win.hasProject; onActivated: win.runApp() }
+    Shortcut { sequence: "Ctrl+Shift+I"; enabled: win.hasProject; onActivated: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
+    Shortcut { sequence: "F5"; enabled: win.hasProject; onActivated: win.startDebug(false) }
+    Shortcut { sequence: "Shift+F5"; enabled: !!Debugger.state; onActivated: Debugger.stop() }
+    Shortcut { sequence: "F6"; enabled: Debugger.state === "running"; onActivated: Debugger.pause() }
+    Shortcut { sequence: "F10"; enabled: Debugger.state === "stopped"; onActivated: Debugger.next() }
+    Shortcut { sequence: "F11"; enabled: Debugger.state === "stopped"; onActivated: Debugger.stepIn() }
+    Shortcut { sequence: "Shift+F11"; enabled: Debugger.state === "stopped"; onActivated: Debugger.stepOut() }
+    Shortcut { sequence: "F9"; enabled: !!win.cur; onActivated: win.toggleBreakpointHere() }
     Shortcut { sequence: "Ctrl+,"; onActivated: settingsView.shown ? settingsView.close() : settingsView.open() }
     Shortcut { sequence: "Ctrl+1"; enabled: win.split; onActivated: win.focusGroupN(0) }
     Shortcut { sequence: "Ctrl+2"; enabled: win.split; onActivated: win.focusGroupN(1) }
@@ -1093,8 +1501,8 @@ Window {
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; enabled: tabs.count > 1; onActivated: win.activate((win.current + 1) % tabs.count) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; enabled: tabs.count > 1; onActivated: win.activate((win.current - 1 + tabs.count) % tabs.count) }
     Shortcut { sequence: "F11"; onActivated: { if (win.visibility === Window.FullScreen) win.showNormal(); else win.showFullScreen(); } }
-    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown
-        onActivated: { if (win.confirm) win.confirm = null; else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
+    Shortcut { sequence: "Esc"; enabled: findBar.shown || !!win.confirm || diffView.shown || settingsView.shown || secretsView.shown || deployView.shown
+        onActivated: { if (win.confirm) win.confirm = null; else if (deployView.shown) deployView.close(); else if (secretsView.shown) secretsView.close(); else if (settingsView.shown) settingsView.close(); else if (diffView.shown) { diffView.close(); if (win.cur) win.cur.focusEditor(); } else win.closeFind(); } }
 
     // ——— Okno ———
     function updateEffects() {
@@ -1190,6 +1598,24 @@ Window {
                     anchors.right: winButtons.left; anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
+                    // ▶ Uruchom — z wykrytych serwerów; zielony, gdy coś działa
+                    ToolBtn {
+                        id: runBtn
+                        visible: win.hasProject
+                        icon: "play"
+                        opacity: 1
+                        onClicked: Tasks.runningCount ? win.showRunMenu() : win.runApp()
+                        Rectangle {
+                            visible: Tasks.runningCount > 0
+                            anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 3
+                            width: 8; height: 8; radius: 4
+                            color: Theme.dark ? "#3FB950" : "#1A7F37"
+                        }
+                    }
+                    ToolBtn { icon: "chevronDown"; visible: win.hasProject; width: 18; onClicked: win.showRunMenu() }
+                    ToolBtn { icon: "globe"; visible: win.hasProject; opacity: preview.shown ? 1 : 0.7; onClicked: preview.shown ? preview.close() : preview.open("") }
+                    ToolBtn { icon: "upload"; visible: win.hasProject; onClicked: win.quickDeploy() }
+                    ToolBtn { icon: "sparkles"; visible: win.hasProject; opacity: agentPanel.shown ? 1 : 0.7; onClicked: agentPanel.shown ? agentPanel.close() : agentPanel.open() }
                     ToolBtn { icon: "search"; onClicked: palette.open("") }
                     ToolBtn { icon: "sidebar"; rotation: 180; enabled: !!win.cur; onClicked: win.splitEditor() }
                     ToolBtn { icon: "panelBottom"; opacity: win.terminalShown ? 1 : 0.7; onClicked: win.toggleTerminal() }
@@ -1247,7 +1673,7 @@ Window {
             Item {
                 id: editorArea
                 y: crumbs.y + crumbs.height
-                width: parent.width
+                width: parent.width - (preview.shown ? preview.width : 0) - (agentPanel.shown ? agentPanel.width : 0)
                 height: (win.terminalShown && win.terminalMax ? 0 : parent.height - y - status.height - (win.terminalShown ? terminalPanel.height : 0))
                 clip: true
 
@@ -1294,13 +1720,13 @@ Window {
                         autoClose: prefs.autoClose
                         autoComplete: prefs.autoComplete
                         defaultIndent: prefs.defaultIndent
-                        onEdited: if (prefs.autoSave === "delay") autoSaveTimer.restart()
+                        onEdited: { if (prefs.autoSave === "delay") autoSaveTimer.restart(); backupTimer.restart(); }
                         fontSize: prefs.fontSize
                         onZoomRequested: (d) => win.zoom(d)
                         onDefinitionRequested: (seq) => win.definitionFeedback(seq)
                         onQuickFixRequested: win.quickFix()
                         onContextMenuRequested: (item, x, y) => win.showEditorMenu(item, x, y)
-                        onModifiedChanged: { if (modified) win.pin(index); win.revision++; }
+                        onModifiedChanged: { if (modified) win.pin(index); else Project.backupRemove(path); win.revision++; }
                         Component.onCompleted: {
                             if (win.pendingPrimary[uid] === false) lspPrimary = false;
                             delete win.pendingPrimary[uid];
@@ -1313,6 +1739,58 @@ Window {
 
                 // Linia między grupami
                 Rectangle { visible: win.split; x: win.splitX; width: 1; height: parent.height; color: Theme.line; z: 6 }
+
+                // Pasek sterowania debugowaniem (u góry edytora, na środku)
+                Rectangle {
+                    visible: !!Debugger.state
+                    z: 8
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 6
+                    width: dbgRow.width + 12; height: 34; radius: 10
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.edge
+                    Row {
+                        id: dbgRow
+                        anchors.centerIn: parent
+                        spacing: 2
+                        DbgBtn { icon: Debugger.state === "running" ? "pause" : "play"; tint: Theme.dark ? "#56D364" : "#1A7F37"
+                                 onClicked: Debugger.state === "running" ? Debugger.pause() : Debugger.resume() }
+                        DbgBtn { icon: "stepOver"; enabled: Debugger.state === "stopped"; onClicked: Debugger.next() }
+                        DbgBtn { icon: "stepIn"; enabled: Debugger.state === "stopped"; onClicked: Debugger.stepIn() }
+                        DbgBtn { icon: "stepOut"; enabled: Debugger.state === "stopped"; onClicked: Debugger.stepOut() }
+                        DbgBtn { icon: "stop"; tint: Theme.danger; onClicked: Debugger.stop() }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            leftPadding: 6; rightPadding: 4
+                            text: Debugger.state === "stopped" ? "Zatrzymany" : Debugger.state === "running" ? "Działa" : "Start…"
+                            color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+                        }
+                    }
+                }
+
+                // Wdrożenie i GitHub
+                DeployView {
+                    id: deployView
+                    parent: pane
+                    x: 0; y: editorArea.y
+                    width: pane.width; height: status.y - y
+                    z: 50
+                    root: Project.root
+                    onDeploy: (c) => win.runDeploy(c)
+                    onOpenSecrets: { deployView.shown = false; secretsView.open(); }
+                    onInstallRequested: (pkg) => win.envTask("Kontener: pakiety", ProjectEnv.installCommand([pkg]))
+                    onClosed: if (win.cur) win.cur.focusEditor()
+                }
+
+                // Sekrety projektu
+                SecretsView {
+                    id: secretsView
+                    parent: pane
+                    x: 0; y: editorArea.y
+                    width: pane.width; height: status.y - y
+                    z: 50
+                    onClosed: if (win.cur) win.cur.focusEditor()
+                }
 
                 // Ustawienia (Ctrl+,)
                 SettingsView {
@@ -1334,6 +1812,11 @@ Window {
                     z: 8
                     fontSize: prefs.fontSize - 0.5
                     onOpenFile: (path) => win.openFile(path)
+                    onRestoreVersion: (path, hash, rel) => win.restoreVersion(path, hash, rel)
+                    sideBySide: prefs.diffSideBySide
+                    onSideBySideChanged: prefs.diffSideBySide = sideBySide
+                    onAgentAccept: (path) => agentPanel.accept(path)
+                    onAgentReject: (path) => agentPanel.reject(path)
                     onDiscardHunk: (path, index) => win.confirm = { kind: "discard", paths: [path], name: Project.fileName(path), hunk: index }
                 }
 
@@ -1447,12 +1930,50 @@ Window {
                 }
             }
 
+            // Podgląd strony obok edytora (szerokość do przeciągnięcia)
+            PreviewPane {
+                id: preview
+                x: editorArea.width
+                y: editorArea.y
+                width: Math.max(320, Math.min(parent.width - 360, parent.width * prefs.previewWidth))
+                height: editorArea.height
+                onClosed: if (win.cur) win.cur.focusEditor()
+                Rectangle { width: 1; height: parent.height; color: Theme.line }
+                MouseArea {
+                    width: 8; height: parent.height; x: -4
+                    cursorShape: Qt.SplitHCursor
+                    property real startX
+                    onPressed: (e) => startX = e.x
+                    onPositionChanged: (e) => { if (pressed) prefs.previewWidth = Math.max(0.2, Math.min(0.8, (preview.width - (e.x - startX)) / preview.parent.width)); }
+                }
+            }
+
+            // Agent po prawej (Ctrl+Shift+I) — od paska kart do paska stanu
+            AgentPanel {
+                id: agentPanel
+                x: parent.width - width
+                y: editorArea.y
+                width: Math.max(320, Math.min(520, parent.width * 0.3))
+                height: status.y - y
+                z: 5
+                root: Project.root
+                fileRel: win.curPath ? Project.relative(win.curPath) : ""
+                selectionLines: { win.revision; return win.cur && win.cur.edit.selectedText ? win.cur.edit.selectedText.split("\u2029").length : 0; }
+                problemCount: Lsp.errorCount + Lsp.warningCount + Tasks.errorCount + Tasks.warningCount
+                buildContext: (o) => win.agentContext(o)
+                fileText: (abs) => win.agentFileText(abs)
+                onApplyEdit: (path, text) => win.applyAgentEdit(path, text)
+                onShowEdit: (path, title, rows) => diffView.openRows(path, title, rows)
+                onOpenPath: (path) => win.openFile(path)
+                onClosed: if (win.cur) win.cur.focusEditor()
+            }
+
             // Terminal
             TerminalPanel {
                 id: terminalPanel
                 visible: win.terminalShown
                 y: editorArea.y + editorArea.height
-                width: parent.width
+                width: parent.width - (agentPanel.shown ? agentPanel.width : 0)
                 height: win.terminalMax ? parent.height - editorArea.y - status.height : Math.max(120, Math.min(prefs.terminalHeight, parent.height - 200))
                 dir: Project.root
                 maximized: win.terminalMax
@@ -1461,6 +1982,8 @@ Window {
                 onOpenProblem: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
                 onOpenReference: (path, line, col, length) => win.openFile(path, { line: line, col: col, length: length })
                 onOpenLocation: (path, line, col) => win.openFile(path, { line: line, col: col, length: 0 })
+                onOpenFrame: (i) => Debugger.selectFrame(i)
+                onOpenPreview: (url) => preview.open(url)
                 MouseArea {
                     width: parent.width; height: 6; y: -3
                     z: 5
@@ -1542,6 +2065,29 @@ Window {
                         text: tabs.count && win.revision >= 0 ? (tabs.get(win.current).eol === "\r\n" ? "CRLF" : "LF") : ""
                         onClicked: win.showStatusMenu("eol", eolBtn)
                     }
+                    // Agent pracuje, a panel jest schowany — co robi
+                    StatusBtn {
+                        visible: !agentPanel.shown && !!agentPanel.statusText
+                        icon: "sparkles"
+                        text: agentPanel.statusText
+                        onClicked: agentPanel.open()
+                    }
+                    // Sekrety projektu (gdy są albo gdy w projekcie leży .env z wartościami)
+                    StatusBtn {
+                        visible: win.hasProject && Secrets.names.length > 0
+                        icon: "key"
+                        text: Secrets.names.length
+                        onClicked: secretsView.open()
+                    }
+                    // Środowisko projektu: kontener albo system
+                    StatusBtn {
+                        id: envBtn
+                        visible: win.hasProject && (ProjectEnv.toolAvailable() || ProjectEnv.state !== "off")
+                        icon: ProjectEnv.state === "ready" ? "box" : ProjectEnv.state === "off" ? "monitor" : "alertCircle"
+                        text: ProjectEnv.state === "ready" ? ProjectEnv.container : ProjectEnv.state === "none" ? "Kontener do założenia"
+                            : ProjectEnv.state === "missing" ? "Brak toolbox" : "System"
+                        onClicked: win.showEnvMenu()
+                    }
                     StatusBtn { text: win.cur ? win.cur.language : "" }
                     // Serwer języka: nazwa (działa), „uruchamia się” albo podpowiedź, co doinstalować
                     StatusBtn {
@@ -1596,6 +2142,7 @@ Window {
                     ViewBtn { icon: "files"; view: 0 }
                     ViewBtn { icon: "search"; view: 1 }
                     ViewBtn { icon: "gitBranch"; view: 2; badge: Project.changes.length }
+                    ViewBtn { icon: "clock"; view: 3; visible: Project.isGit }
                 }
             }
 
@@ -1679,6 +2226,15 @@ Window {
                 onReplaceFileRequested: (path) => win.replaceInPaths([path])
                 onReplaceMatchRequested: (path, line, col) => win.replaceMatch(path, line, col)
             }
+            HistoryView {
+                id: historyView
+                visible: win.sidebarView === 3
+                y: sideTop.height
+                width: parent.width; height: parent.height - y
+                path: win.curPath
+                onShowDiff: (path, rel, hash, title) => diffView.openCommit(path, rel, hash, title)
+            }
+
             ChangesView {
                 id: changesView
                 visible: win.sidebarView === 2
@@ -1688,6 +2244,7 @@ Window {
                 onShowDiff: (path, staged) => diffView.open(path, staged)
                 onDiscardRequested: (paths) => win.confirm = { kind: "discard", paths: paths, name: Project.fileName(paths[0] || "") }
                 onPickBranch: palette.openBranches("checkout")
+                onShowCommit: (hash) => win.showCommit(hash)
             }
 
             // Zmiana szerokości paska
@@ -1709,6 +2266,17 @@ Window {
             radius: win.r
             onOpenFolder: folderDialog.open()
             onOpenRecent: (path) => win.openFolder(path)
+            onNewApp: newAppView.open()
+        }
+
+        // Nowa aplikacja z szablonu — nad całym oknem (działa też bez otwartego projektu)
+        NewAppView {
+            id: newAppView
+            anchors.fill: parent
+            anchors.margins: 1
+            radius: win.r
+            z: 700
+            onCreated: (r, container) => win.startFromTemplate(r, container)
         }
         Item {
             visible: !win.hasProject
@@ -1737,7 +2305,8 @@ Window {
                     spacing: 8
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: !win.confirm ? "" : win.confirm.kind === "replace"
+                        text: !win.confirm ? "" : win.confirm.kind === "envRemove" ? "Usunąć kontener „" + win.confirm.name + "”?"
+                            : win.confirm.kind === "replace"
                               ? "Zamienić " + win.confirm.count + " wystąpień w " + win.confirm.files + (win.confirm.files === 1 ? " pliku?" : " plikach?")
                             : win.confirm.kind === "discard"
                               ? (win.confirm.hunk !== undefined ? "Odrzucić ten fragment zmian w „" + win.confirm.name + "”?"
@@ -1748,7 +2317,8 @@ Window {
                     }
                     Text {
                         width: parent.width; wrapMode: Text.Wrap
-                        text: win.confirm && win.confirm.kind === "replace" ? "„" + searchView.query + "” → „" + searchView.replacement + "”. Otwarte karty zmienią się w edytorze (do cofnięcia), pozostałe pliki zostaną zapisane od razu."
+                        text: win.confirm && win.confirm.kind === "envRemove" ? "Zainstalowane w nim programy znikną. Pliki projektu zostają (są w katalogu domowym)."
+                            : win.confirm && win.confirm.kind === "replace" ? "„" + searchView.query + "” → „" + searchView.replacement + "”. Otwarte karty zmienią się w edytorze (do cofnięcia), pozostałe pliki zostaną zapisane od razu."
                             : win.confirm && win.confirm.kind === "discard" ? "Pliki wrócą do ostatniej zatwierdzonej wersji — tego nie da się cofnąć. Nowe pliki trafią do Kosza."
                                                                            : "Jeśli nie zapiszesz, zmiany przepadną."
                         color: Theme.text2; font.family: Theme.font; font.pixelSize: 13
@@ -1757,7 +2327,7 @@ Window {
                     Item {
                         width: parent.width; height: 34
                         Pill {
-                            visible: !!win.confirm && win.confirm.kind !== "discard" && win.confirm.kind !== "replace"
+                            visible: !!win.confirm && ["discard", "replace", "envRemove"].indexOf(win.confirm.kind) < 0
                             text: "Nie zapisuj"; danger: true
                             onClicked: {
                                 const c = win.confirm;
@@ -1782,12 +2352,17 @@ Window {
                                 }
                             }
                             Pill {
+                                visible: !!win.confirm && win.confirm.kind === "envRemove"
+                                text: "Usuń kontener"; danger: true
+                                onClicked: { win.confirm = null; const cmd = ProjectEnv.removeCommand(); ProjectEnv.useContainer(false); win.envTask("Kontener: usuwanie", cmd); }
+                            }
+                            Pill {
                                 visible: !!win.confirm && win.confirm.kind === "replace"
                                 text: "Zamień wszystko"; primary: true
                                 onClicked: { const c = win.confirm; win.confirm = null; win.replaceInPaths(c.paths); }
                             }
                             Pill {
-                                visible: !win.confirm || (win.confirm.kind !== "discard" && win.confirm.kind !== "replace")
+                                visible: !win.confirm || ["discard", "replace", "envRemove"].indexOf(win.confirm.kind) < 0
                                 text: win.confirm && win.confirm.kind === "all" ? "Zapisz wszystkie" : "Zapisz"; primary: true
                                 onClicked: {
                                     const c = win.confirm;
@@ -1903,6 +2478,14 @@ Window {
             onDoubleClicked: if (!row.isDir) win.openFile(row.path, { preview: false })
         }
     }
+    component DbgBtn: HoverButton {
+        id: db
+        property string icon
+        property color tint: Theme.accentText
+        width: 30; height: 28; radius: 7
+        opacity: enabled ? 1 : 0.35
+        Icon { anchors.centerIn: parent; d: Icons[db.icon] || ""; size: 15; stroke: 2; color: db.tint }
+    }
     component TabButton: Rectangle {
         id: tab
         required property int index
@@ -1949,6 +2532,7 @@ Window {
                         { label: tab.group === 0 ? "Przenieś do prawej grupy" : "Przenieś do lewej grupy", icon: "forward", action: "tab:move" },
                         { separator: true },
                         { label: "Pokaż w drzewie plików", icon: "files", action: "tab:reveal" },
+                        { label: "Historia pliku", icon: "clock", action: "tab:history" },
                         { label: "Kopiuj ścieżkę względną", icon: "copy", action: "tab:copy" }
                     ]);
                     return;

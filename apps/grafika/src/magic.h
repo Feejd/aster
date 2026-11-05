@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QTransform>
 #include <QVariantList>
+#include <atomic>
 #include <QtQml/qqmlregistration.h>
 #include <functional>
 #include <memory>
@@ -32,6 +33,7 @@ class Magic : public QObject
     Q_PROPERTY(QString maskUrl READ maskUrl NOTIFY maskChanged)         // podgląd zaznaczenia w ramce elementu
     Q_PROPERTY(bool hasMask READ hasMask NOTIFY maskChanged)
     Q_PROPERTY(QString element READ element NOTIFY maskChanged)         // zdjęcie w trybie narzędzi AI
+    Q_PROPERTY(bool generating READ generating NOTIFY busyChanged)      // trwa wypełnianie z opisu (można anulować)
 
 public:
     explicit Magic(QObject *parent = nullptr);
@@ -44,11 +46,29 @@ public:
     QString maskUrl() const { return m_maskUrl; }
     bool hasMask() const { return m_hasMask; }
     QString element() const { return m_id; }
+    bool generating() const { return m_generating; }
 
     // Ile MB trzeba pobrać przed pierwszym użyciem: background | object | erase
     Q_INVOKABLE int downloadMB(const QString &feature) const;
 
     Q_INVOKABLE void removeBackground(Project *project, const QString &id);
+    // Rozmycie tła za osobą albo rzeczą (jak tryb portretowy), strength 0…1; 0 przywraca ostre zdjęcie
+    Q_INVOKABLE void blurBackground(Project *project, const QString &id, qreal strength);
+
+    // Korektor: zamalowany pędzlem kawałek (punkty strony, grubość w pikselach strony) znika, a tło uzupełnia się samo
+    Q_INVOKABLE void heal(Project *project, const QString &id, const QVariantList &points, qreal width);
+
+    // Zaznaczenie pikseli z AI: główny obiekt zdjęcia albo rzecz pod kliknięciem (punkt strony); wypełnienie zaznaczenia
+    Q_INVOKABLE void selectSubject(Project *project, const QString &id, const QString &mode);
+    Q_INVOKABLE void selectObject(Project *project, const QString &id, qreal x, qreal y, const QString &mode);
+    Q_INVOKABLE void fillSelection(Project *project, const QString &id);
+
+    // Wypełnianie z opisu: zaznaczony obszar powstaje od nowa według opisu i trafia na osobną warstwę z maską.
+    // Silnik to program aster-pixel-gen (stable-diffusion.cpp) z modelem SD 1.5 Inpainting pobieranym przy pierwszym użyciu.
+    Q_INVOKABLE bool canGenerate() const;
+    Q_INVOKABLE void generate(Project *project, const QString &prompt);
+    Q_INVOKABLE void regenerate(Project *project, const QString &id, const QString &prompt);    // nowa wersja tej warstwy
+    Q_INVOKABLE void cancelGenerate();
 
     Q_INVOKABLE void begin(Project *project, const QString &id);
     Q_INVOKABLE void end();
@@ -70,6 +90,7 @@ private:
     void run(const QString &status, const QStringList &models, std::function<std::function<void()>()> work);
     void ensureModels(const QStringList &models, std::function<void()> then);
     void setStatus(const QString &status);
+    void startGenerate(Project *project, const QRectF &area, const QImage &mask, const QString &prompt, const QString &replace);
     void setMask(const QImage &mask, bool remember = true);
     void publishMask();
     bool loadElement();
@@ -90,4 +111,9 @@ private:
     bool m_hasMask = false;
     QString m_maskUrl;
     int m_maskSerial = 0;
+    bool m_generating = false;
+    std::shared_ptr<std::atomic_bool> m_cancel;
+    bool m_genCpu = false;          // karta dała zły wynik: dalej na procesorze
+    QString m_fgKey;                // ostatnio policzona maska pierwszego planu (rozmycie tła) — szybka zmiana siły
+    QImage m_fgMask;
 };

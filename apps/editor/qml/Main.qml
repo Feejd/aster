@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: maxed ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     Settings {
         id: prefs
@@ -516,7 +516,7 @@ Window {
                 visible: shown || y > -height
                 Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
                 z: 10
-                width: 420; height: replace ? 92 : 46; radius: 16
+                width: 420; height: replace ? 92 : 46; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Column {
@@ -597,7 +597,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: banner.height + 12
                 z: 10
-                width: 300; height: 46; radius: 16
+                width: 300; height: 46; radius: 10
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 Text { x: 16; anchors.verticalCenter: parent.verticalCenter; text: "Wiersz"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
@@ -663,7 +663,7 @@ Window {
             Rectangle {
                 anchors.centerIn: parent
                 width: 420; height: dlgCol.implicitHeight + 44
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -697,7 +697,7 @@ Window {
             y: parent.height - (shown ? height + 44 : 0)
             opacity: shown ? 1 : 0
             z: 300
-            width: toastText.implicitWidth + 36; height: 38; radius: 19
+            width: toastText.implicitWidth + 36; height: 38; radius: 10
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -796,7 +796,7 @@ Window {
         property string text
         property bool danger: false
         property bool primary: false
-        width: pillText.implicitWidth + 26; height: 32; radius: 16
+        width: pillText.implicitWidth + 26; height: 32; radius: 10
         baseColor: danger ? "transparent" : primary ? Theme.accent : Theme.fill
         color: hovered ? (primary ? Qt.darker(Theme.accent, 1.1) : Theme.hover) : baseColor
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: pill.primary ? "white" : pill.danger ? Theme.danger : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
