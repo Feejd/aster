@@ -31,7 +31,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(parent.width - 80, 820)
         height: Math.min(parent.height - 56, head.height + flick.contentHeight + foot.height + 8)
-        radius: 22
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         clip: true

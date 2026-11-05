@@ -141,7 +141,7 @@ GlassPane {
         property real ratio: 1
         property color tint
         width: 200; height: 190
-        radius: 16
+        radius: 10
         color: fcArea.containsMouse ? Theme.hover : Theme.fill
         border.width: 1
         border.color: fcArea.containsMouse ? Theme.accentAlpha(0.5) : Theme.line

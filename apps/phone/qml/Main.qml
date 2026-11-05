@@ -22,7 +22,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     Settings { id: prefs; property string device }
 
@@ -133,7 +133,7 @@ Window {
                     id: row
                     required property var modelData
                     readonly property bool current: win.dev !== null && win.dev.id === modelData.id
-                    width: devList.width; height: 58; radius: 14
+                    width: devList.width; height: 58; radius: 10
                     baseColor: current ? Theme.accentSoft : "transparent"
                     color: current ? baseColor : hovered ? Theme.hover : baseColor
                     onClicked: win.selected = modelData.id
@@ -224,7 +224,7 @@ Window {
                 visible: !Phone.running
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 76; height: 76; radius: 22; color: Theme.fill
+                    width: 76; height: 76; radius: 12; color: Theme.fill
                     Icon { anchors.centerIn: parent; d: Icons.phone; size: 36; stroke: 1.6; color: Theme.text2 }
                 }
                 Text {
@@ -318,7 +318,7 @@ Window {
                         width: parent.width
                         Rectangle {
                             id: phoneArt
-                            width: 64; height: 112; radius: 14
+                            width: 64; height: 112; radius: 10
                             color: Theme.dark ? "#14161C" : "#1F2330"
                             Rectangle {
                                 anchors.fill: parent; anchors.margins: 4
@@ -455,7 +455,7 @@ Window {
                                 required property var modelData
                                 width: parent.width
                                 height: noteCol.implicitHeight + 26
-                                radius: 14
+                                radius: 10
                                 color: Theme.surface
                                 border.width: 1; border.color: Theme.line
                                 Rectangle {
@@ -551,7 +551,7 @@ Window {
                 id: dropHint
                 visible: false
                 anchors.fill: parent; anchors.margins: 16
-                radius: 20
+                radius: 12
                 color: Theme.accentSoft
                 border.width: 2; border.color: Theme.accent
                 Column {
@@ -579,7 +579,7 @@ Window {
             Rectangle {
                 anchors.centerIn: parent
                 width: 380; height: sheetCol.implicitHeight + 44
-                radius: 20
+                radius: 12
                 color: Theme.pane
                 border.width: 1; border.color: Theme.line
                 MouseArea { anchors.fill: parent }
@@ -617,7 +617,7 @@ Window {
             y: shown ? 20 : -height - 10
             opacity: shown ? 1 : 0
             z: 300
-            width: Math.min(parent.width - side.width - 60, toastText.implicitWidth + 36); height: 40; radius: 20
+            width: Math.min(parent.width - side.width - 60, toastText.implicitWidth + 36); height: 40; radius: 12
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -644,7 +644,7 @@ Window {
         property string text
         property bool good: false
         property bool warn: false
-        width: pillRow.implicitWidth + 22; height: 28; radius: 14
+        width: pillRow.implicitWidth + 22; height: 28; radius: 10
         color: warn ? Qt.rgba(0.9, 0.3, 0.3, 0.15) : good ? Theme.accentSoft : Theme.fill
         Row {
             id: pillRow
@@ -661,7 +661,7 @@ Window {
         default property alias content: inner.data
         width: parent ? parent.width : 0
         height: inner.childrenRect.height + 36
-        radius: 16
+        radius: 10
         color: accent ? Theme.accentSoft : Theme.surface
         border.width: 1; border.color: accent ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : Theme.line
         Item { id: inner; x: 18; y: 18; width: card.width - 36; height: childrenRect.height }
@@ -676,7 +676,7 @@ Window {
         property string plugin
         enabled: win.usable && win.has(plugin)
         readonly property int cols: devCol.width >= 4 * 170 + 36 ? 4 : 2
-        width: Math.floor((devCol.width - (cols - 1) * 12) / cols); height: 104; radius: 16
+        width: Math.floor((devCol.width - (cols - 1) * 12) / cols); height: 104; radius: 10
         baseColor: Theme.surface
         color: hovered && enabled ? Theme.hover : baseColor
         opacity: enabled ? 1 : 0.45
@@ -707,7 +707,7 @@ Window {
         property string icon
         property bool primary: false
         property bool danger: false
-        width: btnRow.implicitWidth + 30; height: 36; radius: height / 2
+        width: btnRow.implicitWidth + 30; height: 36; radius: 8
         readonly property color tone: danger ? "#DC2626" : Theme.accent
         baseColor: primary ? tone : Theme.fill
         color: !enabled ? baseColor : primary ? (hovered ? Qt.lighter(tone, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)

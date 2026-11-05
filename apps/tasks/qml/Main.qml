@@ -25,7 +25,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     readonly property var pages: [
         { id: "processes", name: "Procesy", icon: "list", colors: ["#7FA7FF", "#3E63DD"] },
@@ -284,7 +284,7 @@ Window {
                         visible: win.page === "processes"
                         anchors.verticalCenter: parent.verticalCenter
                         enabled: win.selected !== ""
-                        width: endRow.implicitWidth + 26; height: 34; radius: 17
+                        width: endRow.implicitWidth + 26; height: 34; radius: 10
                         baseColor: enabled ? "#E5484D" : Theme.fill
                         color: hovered && enabled ? "#D93B40" : baseColor
                         opacity: enabled ? 1 : 0.6
@@ -364,7 +364,7 @@ Window {
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
                 z: 20
-                width: toastText.implicitWidth + 36; height: 40; radius: 20
+                width: toastText.implicitWidth + 36; height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -392,7 +392,7 @@ Window {
                 readonly property var d: win.details || ({})
                 anchors.centerIn: parent
                 width: 470; height: sheetCol.implicitHeight + 44
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -407,7 +407,7 @@ Window {
                             AppIcon { visible: !!sheet.d.desktopId; anchors.fill: parent; size: 48; desktopId: sheet.d.desktopId || ""; source: sheet.d.iconName || "" }
                             Rectangle {
                                 visible: !sheet.d.desktopId
-                                anchors.fill: parent; radius: 14
+                                anchors.fill: parent; radius: 10
                                 color: Theme.fill
                                 Icon { anchors.centerIn: parent; d: Icons.apps; size: 24; stroke: 1.8; color: Theme.text2 }
                             }
@@ -500,7 +500,7 @@ Window {
                 id: dlg
                 anchors.centerIn: parent
                 width: 400; height: dlgCol.implicitHeight + 44
-                radius: 22
+                radius: 12
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 MouseArea { anchors.fill: parent }
@@ -531,7 +531,7 @@ Window {
         property string text
         property bool danger: false
         property bool primary: false
-        width: pillText.implicitWidth + 30; height: 34; radius: 17
+        width: pillText.implicitWidth + 30; height: 34; radius: 10
         baseColor: danger ? "#E5484D" : primary ? Theme.accent : Theme.fill
         color: hovered ? (danger ? "#D93B40" : primary ? Qt.darker(Theme.accent, 1.1) : Theme.hover) : baseColor
         Text { id: pillText; anchors.centerIn: parent; text: pill.text; color: pill.danger || pill.primary ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }

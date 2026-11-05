@@ -14,8 +14,8 @@ Window {
     color: "transparent"
     visible: false
     width: Screen.width
-    height: Screen.height - 46 - 84
-    readonly property int shotY: 46
+    height: Screen.height - 32 - 84
+    readonly property int shotY: 32
     title: "Centrum sterowania"
 
     property bool open: false
@@ -121,11 +121,11 @@ Window {
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają centrum
 
-        Island { anchors.fill: parent; radius: 30 }
+        Island { anchors.fill: parent; radius: 16 }
         Rectangle {
             anchors.fill: parent
-            radius: 30
-            color: Theme.dark ? Qt.rgba(0.09, 0.09, 0.11, 0.68) : Qt.rgba(1, 1, 1, 0.68)
+            radius: 16
+            color: "transparent"
         }
 
         Column {
@@ -707,10 +707,8 @@ Window {
         id: tile
         property int order: 0
         readonly property real k: panel.stagger(order)
-        radius: 22
-        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(1, 1, 1, 0.55)
-        border.width: 1
-        border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.75)
+        radius: 10
+        color: Theme.fill
         opacity: k
         transform: Translate { y: (1 - tile.k) * 10 }
     }

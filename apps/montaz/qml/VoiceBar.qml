@@ -10,7 +10,7 @@ Rectangle {
     property var editor
     width: Math.min(parent ? parent.width - 24 : 480, 520)
     height: 60
-    radius: 18
+    radius: 10
     color: Theme.surface
     border.width: 1
     border.color: Theme.edge
@@ -79,7 +79,7 @@ Rectangle {
         // Przyciszanie muzyki i filmu pod lektorem
         HoverButton {
             anchors.verticalCenter: parent.verticalCenter
-            width: 150; height: 30; radius: 15
+            width: 150; height: 30; radius: 10
             baseColor: Project.duck ? Theme.accentSoft : Theme.fill
             onClicked: Project.setOption("duck", !Project.duck)
             Row {

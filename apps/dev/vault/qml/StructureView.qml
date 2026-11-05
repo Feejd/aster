@@ -160,7 +160,7 @@ Flickable {
         property int count: -1
         default property alias body: inner.data
         width: col.width
-        radius: 14
+        radius: 10
         color: "transparent"
         border.width: 1; border.color: Theme.line
         // Tytuł nad ramką

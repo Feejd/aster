@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 24
+    readonly property real r: visibility === Window.FullScreen ? 0 : 12
 
     property string page: startPage
     readonly property var groups: [
@@ -268,7 +268,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
-                width: toastText.implicitWidth + 36; height: 40; radius: 20
+                width: toastText.implicitWidth + 36; height: 40; radius: 12
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }

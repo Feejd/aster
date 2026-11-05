@@ -125,7 +125,8 @@ QVariantList Files::places() const
 
 QVariantMap Files::systemDrive() const
 {
-    const QStorageInfo root = QStorageInfo::root();
+    // Na atomowym systemie „/” to mały obraz tylko do odczytu; prawdziwe miejsce jest tam, gdzie katalog domowy
+    const QStorageInfo root(QDir::homePath());
     const qint64 total = root.bytesTotal();
     const qint64 free = root.bytesAvailable();
     return {

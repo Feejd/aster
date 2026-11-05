@@ -21,7 +21,8 @@ na końcu obraz systemu i własne aplikacje. Każdy etap kończy się czymś, co
 - [x] Dok chowa się, gdy okno na niego zachodzi, i wraca od dolnej krawędzi (do wyłączenia w Ustawieniach); lista okien programu po najechaniu i menu pod prawym przyciskiem
 - [ ] Dok: miniatury okien (PipeWire), przypinanie programów z menu
 - [x] Nowe okna na środku ekranu, kolejne schodkowo (`shell/kwinscripts/asteruklad`), Super+góra/dół jak w Windowsie
-- [ ] Dynamiczna wyspa: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
+- [x] Żywy pasek zamiast dynamicznej wyspy: zegar na belce, powiadomienia i pytania jako karta spod paska, linia postępu na dolnej krawędzi
+- [ ] Żywy pasek: postęp pobierania i kopiowania plików, nagrywanie ekranu, minutnik; panel „Dziś” po kliknięciu
 - [ ] Menu aktywnego programu na lewej wyspie paska (globalne menu KDE)
 - [x] Super = Start
 - [x] Super+A = centrum sterowania

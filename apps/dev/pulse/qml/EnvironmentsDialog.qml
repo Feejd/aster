@@ -11,7 +11,7 @@ Item {
     property bool shown: false
     property var envs: []
     property int current: 0
-    property real radius: 24
+    property real radius: 12
     signal saved()
 
     property var original: []            // nazwy przy otwarciu — po zmianie nazwy wybranego środowiska zostaje wybrane
@@ -80,7 +80,7 @@ Item {
         id: sheet
         anchors.centerIn: parent
         width: Math.min(parent.width - 60, 820); height: Math.min(parent.height - 60, 520)
-        radius: 22
+        radius: 12
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         MouseArea { anchors.fill: parent }
