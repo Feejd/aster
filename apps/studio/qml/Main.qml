@@ -188,6 +188,7 @@ Window {
         else if (what === "mixer") dock = "mixer";
         else if (what === "rack") dock = "rack";
         else if (what === "piano") dock = "piano";
+        else if (what === "channel") dock = "channel";
         else if (what.startsWith("monitor:")) Studio.monitor = what.substring(8) === "1";
         else if (what.startsWith("punch:")) Studio.punch = what.substring(6) === "1";
         else if (what.startsWith("js:")) { const out = new Function("Studio", "return (" + what.substring(3) + ");")(Studio); console.warn("JS", JSON.stringify(out)); }
@@ -352,6 +353,7 @@ Window {
         const c = Studio.channels.find((k) => k.id === id);
         const p = item.mapToItem(frame, x, y);
         menu.openAt(p.x, p.y, [
+            { label: "Ustawienia kanału", icon: "sliders", action: "chSet" },
             { label: "Piano roll", icon: "keyboard", shortcut: "F7", action: "chPiano" }
         ].concat(c.kind === "vst" ? [{ label: "Okno wtyczki", icon: "sliders", action: "chPlugin" }] : []).concat([
             { label: "Automatyka…", icon: "activity", action: "chAuto" },
@@ -368,6 +370,13 @@ Window {
         // Wtyczki mają setki parametrów: bez przewijania menu pokazuje początek listy
         const shown = targets.slice(0, 18);
         menu.openAt(p.x, Math.max(60, p.y - shown.length * 34), shown.map((t, i) => ({ label: t.label, icon: "activity", action: "autoT:" + i })));
+    }
+    function askPreset(kind, id) {
+        renameSheet.presetKind = kind;
+        renameSheet.presetId = id;
+        renameField.text = "";
+        renameSheet.open();
+        renameField.input.forceActiveFocus();
     }
     function sideMenu(item, slot) {
         menu.sideSlot = slot;
@@ -419,6 +428,7 @@ Window {
             else Studio.setInsertDuck(Studio.selectedInsert, from, 0.7);
         }
         else if (a === "chAuto") Qt.callLater(() => autoMenu(menu.anchorItem, Studio.channelAutoTargets(menu.channel)));
+        else if (a === "chSet") { Studio.selectedChannel = menu.channel; dock = "channel"; }
         else if (a === "chPiano") { Studio.selectedChannel = menu.channel; dock = "piano"; }
         else if (a === "chPlugin") Studio.openChannelPlugin(menu.channel);
         else if (a === "chRemove") Studio.removeChannel(menu.channel);
@@ -820,7 +830,7 @@ Window {
                 z: 20
                 anchors.bottom: parent.bottom
                 width: parent.width - inspector.width
-                height: win.dock === "" ? 0 : Math.min(win.dock === "mixer" ? 320 : 360, parent.height * 0.5)
+                height: win.dock === "" ? 0 : Math.min(win.dock === "mixer" ? 320 : win.dock === "channel" ? 270 : 360, parent.height * 0.5)
                 visible: height > 0
                 clip: true
                 Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
@@ -830,6 +840,7 @@ Window {
                     colors: win.trackColors
                     onChannelMenu: (id, item, x, y) => win.channelMenu(id, item, x, y)
                     onPianoRequested: (id) => { Studio.selectedChannel = id; win.dock = "piano"; }
+                    onSettingsRequested: (id) => { Studio.selectedChannel = id; win.dock = "channel"; }
                     onAddRequested: win.showBrowser = true
                     onPatternMenu: (item) => win.patternMenu(item)
                     onCloseRequested: win.dock = ""
@@ -842,12 +853,20 @@ Window {
                     colors: win.trackColors
                     onCloseRequested: win.dock = "rack"
                 }
+                ChannelPanel {
+                    anchors.fill: parent
+                    visible: win.dock === "channel"
+                    colors: win.trackColors
+                    onCloseRequested: win.dock = "rack"
+                    onSavePreset: win.askPreset("channel", Studio.selectedChannel)
+                }
                 Mixer {
                     id: mixer
                     anchors.fill: parent
                     visible: win.dock === "mixer"
                     colors: win.trackColors
                     onAddPluginRequested: pluginSheet.start()
+                    onSavePresetRequested: win.askPreset("insert", Studio.selectedInsert)
                     onSidechainRequested: (item, slot) => win.sideMenu(item, slot)
                     onAutomateRequested: (item) => win.autoMenu(item, Studio.autoTargets(Studio.selectedInsert))
                 }
@@ -1303,7 +1322,9 @@ Window {
             radius: win.r
             property int clipId: 0              // 0 — zmiana nazwy ścieżki
             property int channelId: 0           // kanał racka
-            onClosed: channelId = 0
+            property string presetKind: ""      // zapis ustawienia: nazwa nowego pliku
+            property int presetId: 0
+            onClosed: { channelId = 0; presetKind = ""; }
             title: clipId ? "Nazwa klipu" : "Nazwa ścieżki"
             cardWidth: 380
             Column {
@@ -1314,7 +1335,7 @@ Window {
                     anchors.right: parent.right
                     spacing: 8
                     Pill { text: "Anuluj"; onClicked: renameSheet.close() }
-                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { if (renameSheet.channelId) Studio.renameChannel(renameSheet.channelId, renameField.text); else if (renameSheet.clipId) Studio.renameClip(renameSheet.clipId, renameField.text); else Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
+                    Pill { id: renameOk; text: "Zmień"; primary: true; onClicked: { if (renameSheet.presetKind) Studio.savePreset(renameSheet.presetKind, renameSheet.presetId, renameField.text); else if (renameSheet.channelId) Studio.renameChannel(renameSheet.channelId, renameField.text); else if (renameSheet.clipId) Studio.renameClip(renameSheet.clipId, renameField.text); else Studio.renameTrack(menu.track, renameField.text); renameSheet.close(); } }
                 }
             }
         }

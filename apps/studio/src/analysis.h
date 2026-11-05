@@ -24,5 +24,7 @@ struct Result
 };
 
 Result analyze(const AudioSource &src, int rate);
+// Początki uderzeń (ramki `rate`), najmocniejsze `maxCount`, rosnąco — do cięcia sampli
+std::vector<double> onsetTimes(const AudioSource &src, int rate, int maxCount);
 
 }

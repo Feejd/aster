@@ -49,6 +49,11 @@ struct Biquad
         const double A = std::pow(10.0, db / 40), w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * q);
         return make(1 + al * A, -2 * cs, 1 - al * A, 1 + al / A, -2 * cs, 1 - al / A);
     }
+    static Biquad lowPassQ(double f, double q, double rate)
+    {
+        const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * q);
+        return make((1 - cs) / 2, 1 - cs, (1 - cs) / 2, 1 + al, -2 * cs, 1 - al);
+    }
     static Biquad lowPass(double f, double rate)
     {
         const double w = 2 * M_PI * f / rate, cs = std::cos(w), al = std::sin(w) / (2 * 0.7071);

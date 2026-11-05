@@ -11,6 +11,7 @@ Item {
     property var colors: []
     signal channelMenu(int id, Item item, real x, real y)
     signal pianoRequested(int id)
+    signal settingsRequested(int id)
     signal addRequested()
     signal patternMenu(Item item)
     signal closeRequested()
@@ -62,6 +63,13 @@ Item {
         width: 30; height: 30; radius: 15
         onClicked: rk.closeRequested()
         Icon { anchors.centerIn: parent; d: Icons.close; size: 13; stroke: 2; color: Theme.text2 }
+    }
+
+    // Pliki z menedżera plików: każdy to nowy kanał samplera
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: (drop) => { for (const u of drop.urls) Studio.addSample(u.toString()); drop.accept(); }
     }
 
     // Wiersze
@@ -127,7 +135,7 @@ Item {
                                 else Studio.channelNoteOn(row.ch.id, row.ch.kind === "bass" ? 36 : 60, 0.85);
                             }
                             onReleased: Studio.channelNoteOff(row.ch.id, row.ch.kind === "bass" ? 36 : 60)
-                            onDoubleClicked: { if (row.ch.kind === "vst") Studio.openChannelPlugin(row.ch.id); else rk.pianoRequested(row.ch.id); }
+                            onDoubleClicked: { if (row.ch.kind === "vst") Studio.openChannelPlugin(row.ch.id); else rk.settingsRequested(row.ch.id); }
                         }
                     }
                     // Głośność kanału

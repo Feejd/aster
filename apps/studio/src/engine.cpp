@@ -123,6 +123,17 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
         sequence(s, pos, n, clips);
         const Vst3::Transport tp{s->bpm, std::max(0LL, pos), clips, s->beatsPerBar};
         const int channels = std::min(int(s->channels.size()), int(MaxChannels));
+        // Grupy ucinania: otwarty hat milknie, gdy uderzy zamknięty — co do próbki
+        int chokes = 0;
+        if (clips)
+            for (int c = 0; c < channels; ++c) {
+                const ChannelRT &ch = s->channels[size_t(c)];
+                if (!ch.choke)
+                    continue;
+                for (size_t k = m_cursor[c]; k < ch.events.size() && ch.events[k].at < pos + n && chokes < 64; ++k)
+                    if (ch.events[k].on && ch.events[k].at >= pos)
+                        m_chokes[chokes++] = {c, ch.choke, int(ch.events[k].at - pos)};
+            }
         for (int c = 0; c < channels; ++c) {
             const ChannelRT &ch = s->channels[size_t(c)];
             if (!ch.inst || ch.insert < 0 || ch.insert >= inserts)
@@ -138,6 +149,12 @@ void Renderer::block(const Snapshot *s, long long pos, int n, float *out, bool c
                     if (e.at >= pos)
                         m_ev[count++] = Vst3::Note{int(e.at - pos), e.on, e.pitch, e.velocity};
                 }
+            }
+            if (ch.choke) {
+                for (int k = 0; k < chokes && count < 512; ++k)
+                    if (m_chokes[k].channel != c && m_chokes[k].group == ch.choke)
+                        m_ev[count++] = Vst3::Note{m_chokes[k].offset, false, -1, 0};
+                std::stable_sort(m_ev, m_ev + count, [](const Vst3::Note &a, const Vst3::Note &b) { return a.offset < b.offset; });
             }
             std::fill_n(m_cl, n, 0.f);
             std::fill_n(m_cr, n, 0.f);

@@ -44,6 +44,42 @@ float at(const std::vector<float> &v, double i)
 
 }
 
+std::vector<double> onsetTimes(const AudioSource &src, int rate, int maxCount)
+{
+    // Przyrost energii w oknach 5 ms (co 2,5 ms), lokalne szczyty ponad średnią, co najmniej 40 ms od siebie
+    const int hop = rate / 400, win = hop * 2;
+    std::vector<float> e;
+    for (long long i = 0; i + win < src.frames; i += hop) {
+        float s = 0;
+        for (int k = 0; k < win; ++k)
+            s += src.at(i + k, 0) * src.at(i + k, 0);
+        e.push_back(std::log1p(1000.f * s));
+    }
+    std::vector<float> flux(e.size(), 0.f);
+    for (size_t i = 4; i < e.size(); ++i)
+        flux[i] = std::max(0.f, e[i] - e[i - 4]);
+    const float mean = flux.empty() ? 0 : std::accumulate(flux.begin(), flux.end(), 0.f) / float(flux.size());
+    struct Peak { size_t at; float v; };
+    std::vector<Peak> peaks;
+    const size_t gap = size_t(0.04 * rate / hop);
+    for (size_t i = 1; i + 1 < flux.size(); ++i)
+        if (flux[i] > std::max(mean * 2.5f, 0.3f) && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1])
+            peaks.push_back({i, flux[i]});
+    std::sort(peaks.begin(), peaks.end(), [](const Peak &a, const Peak &b) { return a.v > b.v; });
+    std::vector<size_t> kept;
+    for (const Peak &p : peaks) {
+        if (int(kept.size()) >= maxCount)
+            break;
+        if (std::none_of(kept.begin(), kept.end(), [&](size_t k) { return (k > p.at ? k - p.at : p.at - k) < gap; }))
+            kept.push_back(p.at);
+    }
+    std::sort(kept.begin(), kept.end());
+    std::vector<double> out;
+    for (size_t k : kept)
+        out.push_back(double(k > 2 ? k - 2 : 0) * hop);
+    return out;
+}
+
 Result analyze(const AudioSource &src, int rate)
 {
     Result r;

@@ -14,7 +14,17 @@ Item {
     readonly property var rows: [{ id: "kick", label: "Stopa" }, { id: "snare", label: "Werbel" }, { id: "clap", label: "Klaśnięcie" },
                                  { id: "hat", label: "Hi-hat" }, { id: "openhat", label: "Otwarty hat" }, { id: "perc", label: "Perkusjonalia" }]
     readonly property var sounds: Studio.open && Studio.sourcesVersion >= 0 ? Studio.projectSounds() : []
-    Component.onCompleted: Qt.callLater(Studio.scanPlugins)
+    property var libraryItems: []
+    property var channelPresets: []
+    property var insertPresets: []
+    function reload() {
+        libraryItems = Studio.library();
+        channelPresets = Studio.presetList("channel");
+        insertPresets = Studio.presetList("insert");
+    }
+    onOpenChanged: reload()
+    Connections { target: Studio; function onPresetsChanged() { br.reload(); } }
+    Component.onCompleted: { reload(); Qt.callLater(Studio.scanPlugins); }
 
     Rectangle { anchors.fill: parent; color: Theme.dark ? "#14151A" : "#EDEEF3" }
     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
@@ -87,6 +97,46 @@ Item {
                     onClicked: { Studio.addPlugin(Studio.selectedInsert, modelData.uid); br.effectAdded(); }
                 }
             }
+            Section { key: "lib"; label: "Biblioteka" }
+            Repeater {
+                model: br.open === "lib" || br.query !== "" ? br.libraryItems : []
+                delegate: Entry {
+                    id: libEntry
+                    required property var modelData
+                    label: modelData.name
+                    icon: "audioTrack"
+                    visible: br.match(modelData.name + " " + modelData.folder)
+                    onClicked: Studio.addSample(modelData.path)
+                    HoverButton {
+                        anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22; radius: 6
+                        onClicked: Studio.previewFile(libEntry.modelData.path)
+                        Icon { anchors.centerIn: parent; d: Icons.play; size: 11; stroke: 2; color: Theme.text2 }
+                        Tip { shown: parent.hovered; text: "Posłuchaj" }
+                    }
+                }
+            }
+            Hint { visible: br.open === "lib" && br.libraryItems.length === 0; text: "Dodaj sample do folderu Biblioteka obok projektów. Pliki można też upuścić na rack." }
+            Section { key: "presets"; label: "Zapisane ustawienia" }
+            Repeater {
+                model: br.open === "presets" ? br.channelPresets : []
+                delegate: Entry {
+                    required property var modelData
+                    label: modelData.name
+                    icon: "keyboard"
+                    onClicked: Studio.loadPreset("channel", Studio.selectedChannel, modelData.path)
+                }
+            }
+            Repeater {
+                model: br.open === "presets" ? br.insertPresets : []
+                delegate: Entry {
+                    required property var modelData
+                    label: modelData.name
+                    icon: "sliders"
+                    onClicked: Studio.loadPreset("insert", Studio.selectedInsert, modelData.path)
+                }
+            }
+            Hint { visible: br.open === "presets" && br.channelPresets.length + br.insertPresets.length === 0; text: "Ustawienia kanału i insertu zapisuje się przyciskami w ich panelach." }
             Section { key: "files"; label: "Dźwięki projektu" }
             Repeater {
                 model: br.open === "files" || br.query !== "" ? br.sounds : []

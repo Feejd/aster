@@ -14,9 +14,10 @@ pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
 set(STUDIO_VST3_PREFIX "/usr" CACHE PATH "Gdzie jest VST3 SDK")
 find_library(VST3_HOSTING vst3sdk_hosting HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
 find_library(VST3_COMMON vst3sdk_common HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)
+find_library(RUBBERBAND rubberband HINTS ${STUDIO_VST3_PREFIX}/lib64 REQUIRED)    # rozciąganie w czasie
 
 qt_add_executable(aster-studio src/main.cpp)
-target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk)
+target_include_directories(aster-studio PRIVATE src ${STUDIO_VST3_PREFIX}/include/vst3sdk ${STUDIO_VST3_PREFIX}/include)
 target_compile_definitions(aster-studio PRIVATE RELEASE=1)
 
 set(STUDIO_QML
@@ -33,6 +34,7 @@ set(STUDIO_QML
     qml/Lyrics.qml
     qml/ChannelRack.qml
     qml/Browser.qml
+    qml/ChannelPanel.qml
     qml/LyricText.qml
     qml/Prompter.qml
     qml/PianoRoll.qml
@@ -47,7 +49,7 @@ qt_add_qml_module(aster-studio
     VERSION 1.0
     QML_FILES ${STUDIO_QML}
     SOURCES
-        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/vst3host.cpp src/vst3host.h src/rack.cpp src/instrument.h
+        src/analysis.cpp src/analysis.h src/lyrics.cpp src/lyrics.h src/denoise.cpp src/denoise.h src/fft.h src/vst3host.cpp src/vst3host.h src/rack.cpp src/instrument.h src/stretch.cpp src/stretch.h src/library.cpp
         src/audiosource.cpp
         src/audiosource.h
         src/dsp.h
@@ -76,6 +78,7 @@ target_link_libraries(aster-studio PRIVATE
     PkgConfig::X11
     ${VST3_HOSTING}
     ${VST3_COMMON}
+    ${RUBBERBAND}
     ${CMAKE_DL_LIBS}
     PkgConfig::SNDFILE
     PkgConfig::SAMPLERATE

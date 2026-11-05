@@ -134,6 +134,7 @@ struct ChannelRT
     int insert = 0;
     float gainL = 1.f, gainR = 1.f;
     bool audible = true;
+    int choke = 0;                        // grupa ucinania: nuta kanału ucina pozostałe z tej samej grupy
     std::vector<SeqEvent> events;
 };
 
@@ -208,6 +209,8 @@ private:
     const Snapshot *m_seqSnap = nullptr;
     bool m_wasPlaying = false;
     Vst3::Note m_ev[512];
+    struct Choke { int channel, group, offset; };
+    Choke m_chokes[64];
     float m_autoVal[MaxTracks][AutoRT::Kinds];
     bool m_autoSet[MaxTracks][AutoRT::Kinds];
     float m_gainL[MaxTracks], m_gainR[MaxTracks];      // poprzedni blok: głośność płynie, bez trzasków

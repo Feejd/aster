@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audiosource.h"
+#include "dsp.h"
 #include "synthvoice.h"
 #include "vst3host.h"
 
@@ -19,12 +20,28 @@ public:
     virtual void silence() = 0;                 // zatrzymanie, skok głowicy, zawrócenie pętli
 };
 
-// Sampler: dźwięk z pliku albo syntezy, wysokość przez szybkość odtwarzania.
-// Jednostrzałowy (perkusja) gra do końca, inaczej puszczenie nuty wycisza w 12 ms.
+// Sampler: dźwięk z pliku albo syntezy. Wysokość przez szybkość odtwarzania, obwiednia ADSR, zakres pliku,
+// pętla, filtr. Pocięty na plasterki gra każdym klawiszem od podstawy inny kawałek, zawsze w oryginalnym tempie.
+struct SamplerParams
+{
+    double attack = 0.001, decay = 0.1, sustain = 1, release = 0.012;   // sekundy, sustain 0…1
+    long long from = 0, to = -1;          // zakres w ramkach (-1 — do końca)
+    bool loop = false, oneShot = true;
+    int root = 60;
+    double tune = 0;                      // półtony
+    double cutoff = 20000, resonance = 0.7;   // Hz, Q
+    std::vector<long long> slices;        // początki plasterków
+};
+
 class SamplerInstrument : public Instrument
 {
 public:
-    SamplerInstrument(SourcePtr src, int root, bool oneShot, int rate) : m_src(std::move(src)), m_root(root), m_oneShot(oneShot), m_rate(rate) {}
+    SamplerInstrument(SourcePtr src, const SamplerParams &p, int rate) : m_src(std::move(src)), m_p(p), m_rate(rate)
+    {
+        m_filter = p.cutoff < 19000;
+        if (m_filter)
+            m_lp = Biquad::lowPassQ(p.cutoff, p.resonance, rate);
+    }
     void process(float *l, float *r, int n, const Vst3::Note *ev, int count, const Vst3::Transport &) override
     {
         int done = 0;
@@ -33,32 +50,54 @@ public:
             render(l + done, r + done, to - done);
             done = to;
             if (e < count) {
-                if (ev[e].on)
+                if (ev[e].pitch < 0)
+                    choke();
+                else if (ev[e].on)
                     start(ev[e].pitch, ev[e].velocity);
                 else
                     stop(ev[e].pitch);
             }
         }
+        if (m_filter)
+            for (int i = 0; i < n; ++i) {
+                l[i] = m_z[0].run(m_lp, l[i]);
+                r[i] = m_z[1].run(m_lp, r[i]);
+            }
     }
     void silence() override
     {
         for (Voice &v : m_v)
             if (v.on)
-                v.rel = std::min(v.rel, 1.f), v.falling = true;
+                v.stage = Release;
     }
 
 private:
     static constexpr int Voices = 32;
+    enum Stage { Attack, Decay, Sustain, Release, Choke };
     struct Voice
     {
-        bool on = false, falling = false;
+        bool on = false;
         int pitch = 0;
+        Stage stage = Attack;
         double pos = 0, step = 1;
-        float gain = 1, rel = 1;
+        long long from = 0, to = 0;
+        float gain = 1, env = 0;
         long long age = 0;
     };
     void start(int pitch, float vel)
     {
+        if (!m_src)
+            return;
+        long long from = m_p.from, to = m_p.to < 0 ? m_src->frames : std::min(m_p.to, m_src->frames);
+        double step = std::pow(2.0, (pitch - m_p.root + m_p.tune) / 12.0);
+        if (!m_p.slices.empty()) {
+            const int i = pitch - m_p.root;
+            if (i < 0 || i >= int(m_p.slices.size()))
+                return;
+            from = m_p.slices[size_t(i)];
+            to = size_t(i + 1) < m_p.slices.size() ? m_p.slices[size_t(i + 1)] : to;
+            step = std::pow(2.0, m_p.tune / 12.0);
+        }
         Voice *v = &m_v[0];
         for (Voice &o : m_v) {
             if (!o.on) {
@@ -71,46 +110,91 @@ private:
         *v = Voice{};
         v->on = true;
         v->pitch = pitch;
-        v->step = std::pow(2.0, (pitch - m_root) / 12.0);
+        v->from = from;
+        v->to = to;
+        v->pos = double(from);
+        v->step = step;
         v->gain = 0.25f + 0.75f * vel * vel;
         v->age = ++m_clock;
     }
     void stop(int pitch)
     {
-        if (m_oneShot)
+        if (m_p.oneShot)
             return;
         for (Voice &v : m_v)
-            if (v.on && v.pitch == pitch)
-                v.falling = true;
+            if (v.on && v.pitch == pitch && v.stage < Release)
+                v.stage = Release;
+    }
+    void choke()
+    {
+        for (Voice &v : m_v)
+            if (v.on)
+                v.stage = Choke;
     }
     void render(float *l, float *r, int n)
     {
         if (n <= 0 || !m_src)
             return;
         const AudioSource &s = *m_src;
-        const float fall = 1.f / (0.012f * float(m_rate));
+        const float sr = float(m_rate);
+        const float att = 1.f / std::max(1.f, float(m_p.attack) * sr), rel = 1.f / std::max(1.f, float(m_p.release) * sr);
+        const float dec = (1.f - float(m_p.sustain)) / std::max(1.f, float(m_p.decay) * sr), ck = 1.f / (0.004f * sr);
+        const float sus = float(m_p.sustain);
         for (Voice &v : m_v) {
             if (!v.on)
                 continue;
             for (int i = 0; i < n; ++i) {
-                const long long a = (long long)v.pos;
-                if (a + 1 >= s.frames || v.rel <= 0) {
+                long long a = (long long)v.pos;
+                if (a + 1 >= v.to) {
+                    if (!m_p.loop) {
+                        v.on = false;
+                        break;
+                    }
+                    v.pos -= double(v.to - v.from - 1);
+                    a = (long long)v.pos;
+                }
+                switch (v.stage) {
+                case Attack:
+                    v.env += att;
+                    if (v.env >= 1) {
+                        v.env = 1;
+                        v.stage = Decay;
+                    }
+                    break;
+                case Decay:
+                    v.env -= dec;
+                    if (v.env <= sus) {
+                        v.env = sus;
+                        v.stage = Sustain;
+                    }
+                    break;
+                case Sustain:
+                    break;
+                case Release:
+                    v.env -= rel;
+                    break;
+                case Choke:
+                    v.env -= ck;
+                    break;
+                }
+                if (v.env <= 0 && v.stage >= Release) {
                     v.on = false;
                     break;
                 }
                 const float f = float(v.pos - double(a));
-                const float g = v.gain * v.rel;
+                const float g = v.gain * v.env;
                 l[i] += (s.at(a, 0) + (s.at(a + 1, 0) - s.at(a, 0)) * f) * g;
                 r[i] += (s.at(a, 1) + (s.at(a + 1, 1) - s.at(a, 1)) * f) * g;
                 v.pos += v.step;
-                if (v.falling)
-                    v.rel -= fall;
             }
         }
     }
     SourcePtr m_src;
-    int m_root, m_rate;
-    bool m_oneShot;
+    SamplerParams m_p;
+    int m_rate;
+    bool m_filter = false;
+    Biquad m_lp;
+    BiquadState m_z[2];
     Voice m_v[Voices];
     long long m_clock = 0;
 };

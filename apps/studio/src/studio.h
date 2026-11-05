@@ -315,6 +315,12 @@ public:
     Q_INVOKABLE void renameChannel(int id, const QString &name);
     Q_INVOKABLE void renamePattern(int id, const QString &name);
     Q_INVOKABLE int duplicatePattern(int id);
+    // Sampler: klucze attack decay sustain release from to tune cutoff resonance root choke, 0/1: reverse loop oneShot
+    Q_INVOKABLE void setChannelParam(int id, const QString &key, double value);
+    Q_INVOKABLE QVariantMap channelParams(int id) const;
+    Q_INVOKABLE void chopChannel(int id, const QString &mode, int count);   // equal — po równo, onsets — na uderzenia, none — całość
+    Q_INVOKABLE void slicesToPattern(int id);                   // plasterki w bieżącym wzorze, w oryginalnych miejscach
+    Q_INVOKABLE void stretchChannel(int id, int bars);          // do tempa projektu, bez zmiany wysokości (0 — najbliższa potęga dwójki)
     Q_INVOKABLE void channelNoteOn(int id, int pitch, double velocity = 0.85);    // gra teraz (klawiatura, MIDI, podgląd)
     Q_INVOKABLE void channelNoteOff(int id, int pitch);
     // Automatyka. Cel: vol:<insert> pan:<insert> reverb|echo|drive|double|deess:<insert> chvol:<kanał>
@@ -324,6 +330,14 @@ public:
     Q_INVOKABLE int addAutomation(const QString &target, const QString &label);   // klip na pasie Automatyka: cały utwór
     Q_INVOKABLE void setAutoPoints(int clip, const QVariantList &points);         // [{ t (s od początku klipu), v }]
     Q_INVOKABLE QVariantList patternPreview(int id) const;       // nuty wzoru dla klipu: [{ x, w, y }] w 0…1
+    // Biblioteka i ustawienia. kind: "channel" albo "insert"
+    Q_INVOKABLE QVariantList library() const;
+    Q_INVOKABLE QString libraryFolder() const;
+    Q_INVOKABLE int addSample(const QString &pathOrUrl);         // kopia do projektu i kanał samplera
+    Q_INVOKABLE void previewFile(const QString &path);
+    Q_INVOKABLE QVariantList presetList(const QString &kind) const;
+    Q_INVOKABLE bool savePreset(const QString &kind, int id, const QString &name);
+    Q_INVOKABLE void loadPreset(const QString &kind, int id, const QString &path);
     Q_INVOKABLE QStringList projectSounds() const;               // pliki z audio/ do samplera
     // Odszumianie wszystkich nagrań ścieżki (w tle); level 0 — z powrotem oryginały
     Q_INVOKABLE void denoiseTrack(int index, int level);
@@ -387,6 +401,7 @@ signals:
     void sharingChanged();
     void lyricsChanged();
     void pluginsChanged();
+    void presetsChanged();
     void rackChanged();
     void shareReady(const QString &path, const QString &kind);
     void shareFailed(const QString &error);
@@ -476,6 +491,14 @@ private:
         QString kind, kit, row, file, inst;
         int root = 60;
         bool oneShot = true;
+        // Sampler (też kanały perkusji)
+        double attack = 0.001, decay = 0.1, sustain = 1, release = 0.012;
+        double from = 0, to = 1;        // zakres: ułamek pliku
+        bool reverse = false, loop = false;
+        double tune = 0, cutoff = 20000, resonance = 0.7;
+        int choke = 0;                  // grupa ucinania (0 — brak)
+        QList<double> slices;           // plasterki: ułamki pliku
+        QString origFile;               // przed rozciągnięciem do tempa
         Slot vst;
         std::shared_ptr<Instrument> instrument;
     };
@@ -592,6 +615,8 @@ private:
     QJsonObject rackJson(bool pluginStates) const;
     void rackFromJson(const QJsonObject &o, const QHash<int, Channel> &oldChannels);
     std::shared_ptr<Instrument> makeInstrument(Channel &c);
+    SourcePtr channelSource(const Channel &c) const;          // dźwięk kanału (po odwróceniu)
+    void rebuildInstrument(Channel &c);
     void compileChannels(Snapshot *s, bool forExport);
     void compileAutos(Snapshot *s);
     QHash<int, Vst3::Plugin *> m_snapPlugins;   // slot → instancja w budowanej migawce (eksport ma własne)
@@ -602,6 +627,8 @@ private:
     long long patternFrames(const Pattern &p) const;
     Pattern *findPattern(int id);
     Channel *findChannel(int id);
+    const Channel *findChannel(int id) const { return const_cast<Studio *>(this)->findChannel(id); }
+    const Insert *findInsert(int id) const { return const_cast<Studio *>(this)->findInsert(id); }
     void applyPatternLoop();
     void clearRack();
     QVariantList m_tracksView, m_mixView;

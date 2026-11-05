@@ -1,6 +1,9 @@
 // Rack kanałów, wzory i mikser: model DAW-a. Kanały grają nuty na żywo przez instrumenty, wzory układa playlista
 // (klipy z `pattern`), a inserty miksera sumują wszystko i wysyłają dalej. Wszystko trafia do migawki silnika.
+#include "analysis.h"
 #include "beatsynth.h"
+#include "denoise.h"
+#include "stretch.h"
 #include "studio.h"
 
 #include <QCoreApplication>
@@ -423,13 +426,54 @@ Studio::Channel *Studio::findChannel(int id)
     return nullptr;
 }
 
+SourcePtr Studio::channelSource(const Channel &c) const
+{
+    return m_sources.value(c.kind == QLatin1String("drum") ? QStringLiteral("kit:%1:%2").arg(c.kit, c.row)
+                                                           : c.reverse ? QStringLiteral("rev:") + c.file : c.file);
+}
+
 std::shared_ptr<Instrument> Studio::makeInstrument(Channel &c)
 {
-    if (c.kind == QLatin1String("drum"))
-        return std::make_shared<SamplerInstrument>(BeatSynth::kitSample(c.kit, c.row, Engine::Rate), c.root, true, Engine::Rate);
-    if (c.kind == QLatin1String("sampler")) {
-        const SourcePtr src = m_sources.value(c.file);
-        return src ? std::make_shared<SamplerInstrument>(src, c.root, c.oneShot, Engine::Rate) : nullptr;
+    if (c.kind == QLatin1String("drum") || c.kind == QLatin1String("sampler")) {
+        if (c.kind == QLatin1String("drum")) {
+            const QString key = QStringLiteral("kit:%1:%2").arg(c.kit, c.row);
+            if (!m_sources.contains(key)) {
+                auto src = BeatSynth::kitSample(c.kit, c.row, Engine::Rate);
+                src->file = key;
+                m_sources.insert(key, src);
+            }
+        } else if (c.reverse && !m_sources.contains(QStringLiteral("rev:") + c.file)) {
+            // Wstecz: osobna kopia (dla całego pliku, więc odwrócenie nic nie przesuwa w zakresie)
+            const SourcePtr src = m_sources.value(c.file);
+            if (!src)
+                return nullptr;
+            auto rev = std::make_shared<AudioSource>(*src);
+            for (long long i = 0; i < src->frames; ++i)
+                for (int ch = 0; ch < src->channels; ++ch)
+                    rev->data[size_t(i * src->channels + ch)] = src->data[size_t((src->frames - 1 - i) * src->channels + ch)];
+            rev->computePeaks();
+            rev->file = QStringLiteral("rev:") + c.file;
+            m_sources.insert(rev->file, rev);
+        }
+        const SourcePtr src = channelSource(c);
+        if (!src)
+            return nullptr;
+        SamplerParams p;
+        p.attack = c.attack;
+        p.decay = c.decay;
+        p.sustain = c.sustain;
+        p.release = c.release;
+        p.from = llround(c.from * src->frames);
+        p.to = llround(c.to * src->frames);
+        p.loop = c.loop;
+        p.oneShot = c.oneShot;
+        p.root = c.root;
+        p.tune = c.tune;
+        p.cutoff = c.cutoff;
+        p.resonance = c.resonance;
+        for (double f : std::as_const(c.slices))
+            p.slices.push_back(llround(f * src->frames));
+        return std::make_shared<SamplerInstrument>(src, p, Engine::Rate);
     }
     if (c.kind == QLatin1String("synth"))
         return std::make_shared<SynthInstrument>(BeatSynth::instrumentOf(c.inst), Engine::Rate);
@@ -572,6 +616,184 @@ QVariantList Studio::channels() const
                              {QStringLiteral("pan"), c.pan}, {QStringLiteral("mute"), c.mute},
                              {QStringLiteral("missing"), !c.instrument}});
     return l;
+}
+
+void Studio::rebuildInstrument(Channel &c)
+{
+    c.instrument = makeInstrument(c);
+}
+
+void Studio::setChannelParam(int id, const QString &key, double v)
+{
+    Channel *c = findChannel(id);
+    if (!c)
+        return;
+    if (key == QLatin1String("attack"))
+        c->attack = std::clamp(v, 0.0005, 5.0);
+    else if (key == QLatin1String("decay"))
+        c->decay = std::clamp(v, 0.001, 5.0);
+    else if (key == QLatin1String("sustain"))
+        c->sustain = std::clamp(v, 0.0, 1.0);
+    else if (key == QLatin1String("release"))
+        c->release = std::clamp(v, 0.002, 5.0);
+    else if (key == QLatin1String("from"))
+        c->from = std::clamp(v, 0.0, c->to - 0.001);
+    else if (key == QLatin1String("to"))
+        c->to = std::clamp(v, c->from + 0.001, 1.0);
+    else if (key == QLatin1String("tune"))
+        c->tune = std::clamp(v, -24.0, 24.0);
+    else if (key == QLatin1String("cutoff"))
+        c->cutoff = std::clamp(v, 40.0, 20000.0);
+    else if (key == QLatin1String("resonance"))
+        c->resonance = std::clamp(v, 0.5, 8.0);
+    else if (key == QLatin1String("root"))
+        c->root = std::clamp(int(v), 0, 127);
+    else if (key == QLatin1String("choke"))
+        c->choke = std::clamp(int(v), 0, 8);
+    else if (key == QLatin1String("reverse") && c->kind == QLatin1String("sampler"))
+        c->reverse = v != 0;
+    else if (key == QLatin1String("loop"))
+        c->loop = v != 0;
+    else if (key == QLatin1String("oneShot"))
+        c->oneShot = v != 0;
+    else
+        return;
+    rebuildInstrument(*c);
+    changed(false);
+}
+
+QVariantMap Studio::channelParams(int id) const
+{
+    for (const Channel &c : m_channels) {
+        if (c.id != id)
+            continue;
+        const SourcePtr src = channelSource(c);
+        QVariantList slices;
+        for (double f : c.slices)
+            slices << f;
+        return {{QStringLiteral("kind"), c.kind}, {QStringLiteral("wave"), src ? src->file : QString()},
+                {QStringLiteral("seconds"), src ? double(src->frames) / Engine::Rate : 0.0},
+                {QStringLiteral("attack"), c.attack}, {QStringLiteral("decay"), c.decay}, {QStringLiteral("sustain"), c.sustain},
+                {QStringLiteral("release"), c.release}, {QStringLiteral("from"), c.from}, {QStringLiteral("to"), c.to},
+                {QStringLiteral("reverse"), c.reverse}, {QStringLiteral("loop"), c.loop}, {QStringLiteral("oneShot"), c.oneShot},
+                {QStringLiteral("tune"), c.tune}, {QStringLiteral("cutoff"), c.cutoff}, {QStringLiteral("resonance"), c.resonance},
+                {QStringLiteral("root"), c.root}, {QStringLiteral("choke"), c.choke}, {QStringLiteral("slices"), slices},
+                {QStringLiteral("stretched"), !c.origFile.isEmpty()}};
+    }
+    return {};
+}
+
+void Studio::chopChannel(int id, const QString &mode, int count)
+{
+    Channel *c = findChannel(id);
+    if (!c)
+        return;
+    const SourcePtr src = channelSource(*c);
+    if (!src)
+        return;
+    checkpoint();
+    c = findChannel(id);
+    c->slices.clear();
+    if (mode == QLatin1String("equal")) {
+        for (int i = 0; i < std::clamp(count, 2, 64); ++i)
+            c->slices.append(c->from + (c->to - c->from) * i / std::clamp(count, 2, 64));
+    } else if (mode == QLatin1String("onsets")) {
+        for (double t : Analysis::onsetTimes(*src, Engine::Rate, std::clamp(count, 2, 64)))
+            if (t / src->frames >= c->from && t / src->frames < c->to)
+                c->slices.append(t / src->frames);
+        if (c->slices.isEmpty() || c->slices.first() > c->from + 0.001)
+            c->slices.prepend(c->from);
+    }
+    rebuildInstrument(*c);
+    changed(false);
+    if (!c->slices.isEmpty())
+        emit message(QStringLiteral("Plasterki: %1 — każdy na kolejnym klawiszu od podstawy.").arg(c->slices.size()));
+}
+
+void Studio::slicesToPattern(int id)
+{
+    Channel *c = findChannel(id);
+    Pattern *p = findPattern(m_curPattern);
+    if (!c || !p || c->slices.isEmpty())
+        return;
+    const SourcePtr src = channelSource(*c);
+    if (!src)
+        return;
+    checkpoint();
+    c = findChannel(id);
+    p = findPattern(m_curPattern);
+    const double stepFrames = 60.0 / m_bpm / 4 * Engine::Rate;
+    const double base = c->slices.first() * src->frames;
+    QList<PatNote> notes;
+    for (int i = 0; i < c->slices.size(); ++i) {
+        const double a = c->slices[i] * src->frames - base;
+        const double b = (i + 1 < c->slices.size() ? c->slices[i + 1] : c->to) * src->frames - base;
+        notes.append({std::round(a / stepFrames * 4) / 4, std::max(0.25, (b - a) / stepFrames), c->root + i, 0.85});
+    }
+    PatData &d = p->data[id];
+    d.notes = notes;
+    d.steps.clear();
+    const double last = (notes.last().step + notes.last().len) / (m_beatsPerBar * 4);
+    p->bars = std::clamp(int(std::ceil(last - 0.01)), p->bars, 32);
+    applyPatternLoop();
+    changed();
+}
+
+void Studio::stretchChannel(int id, int bars)
+{
+    Channel *c = findChannel(id);
+    if (!c || c->kind != QLatin1String("sampler"))
+        return;
+    const QString orig = c->origFile.isEmpty() ? c->file : c->origFile;
+    const SourcePtr src = m_sources.value(orig);
+    if (!src)
+        return;
+    const double bar = 60.0 / m_bpm * m_beatsPerBar, seconds = double(src->frames) / Engine::Rate;
+    if (bars <= 0) {
+        bars = 1;
+        while (bars < 64 && std::fabs(bars * 2 * bar - seconds) < std::fabs(bars * bar - seconds))
+            bars *= 2;
+    }
+    const double ratio = bars * bar / seconds;
+    if (ratio < 0.25 || ratio > 4) {
+        emit message(QStringLiteral("Za duża zmiana długości — wybierz inną liczbę taktów."));
+        return;
+    }
+    const QString file = QFileInfo(orig).completeBaseName() + QStringLiteral(" · %1 BPM.wav").arg(m_bpm);
+    const QString dir = m_folder + QStringLiteral("/audio/");
+    ++m_loading;
+    emit busyChanged();
+    QPointer<Studio> self(this);
+    QThreadPool::globalInstance()->start([self, src, ratio, dir, file, orig, id, bars] {
+        auto res = stretchAudio(*src, ratio, Engine::Rate);
+        const bool ok = res && res->frames > 0 && Denoise::saveWav(*res, dir + file);
+        QMetaObject::invokeMethod(qApp, [self, res, ok, file, orig, id, dir, bars] {
+            if (!self)
+                return;
+            --self->m_loading;
+            emit self->busyChanged();
+            if (self->m_folder + QStringLiteral("/audio/") != dir)
+                return;
+            if (!ok || !self->findChannel(id)) {
+                emit self->message(QStringLiteral("Nie udało się dopasować dźwięku do tempa."));
+                return;
+            }
+            self->checkpoint();
+            res->file = file;
+            self->m_sources.insert(file, res);
+            ++self->m_sourcesVersion;
+            emit self->sourcesChanged();
+            Channel *c = self->findChannel(id);
+            c->origFile = orig;
+            c->file = file;
+            c->from = 0;
+            c->to = 1;
+            c->slices.clear();
+            self->rebuildInstrument(*c);
+            self->changed(false);
+            emit self->message(QStringLiteral("Dopasowane do tempa: %1 takt(y), wysokość bez zmian.").arg(bars));
+        });
+    });
 }
 
 // ——— Wzory ———
@@ -788,6 +1010,7 @@ void Studio::compileChannels(Snapshot *s, bool forExport)
         rt.gainL = float(g * (pan > 0 ? 1 - pan : 1));
         rt.gainR = float(g * (pan < 0 ? 1 + pan : 1));
         rt.audible = !c.mute;
+        rt.choke = c.choke;
         if (const Insert *in = findInsert(c.insert); in && !in->frozen.isEmpty() && m_sources.contains(in->frozen)) {
             rt.inst = nullptr;                  // gra plik zamrożonego insertu
             s->channels.push_back(std::move(rt));
@@ -974,6 +1197,7 @@ int Studio::rackChannel(const QString &kind, const QString &kit, const QString &
     c.volume = volume;
     c.color = int(m_channels.size()) % Colors;
     c.root = kind == QLatin1String("bass") ? 36 : 60;
+    c.choke = row == QLatin1String("hat") || row == QLatin1String("openhat") ? 1 : 0;   // zamknięty ucina otwarty, jak w talerzu
     c.instrument = makeInstrument(c);
     m_channels.append(c);
     if (!m_selChannel)
@@ -1285,7 +1509,17 @@ QJsonObject Studio::rackJson(bool pluginStates) const
                       {QStringLiteral("insert"), c.insert}, {QStringLiteral("volume"), c.volume}, {QStringLiteral("pan"), c.pan},
                       {QStringLiteral("mute"), c.mute}, {QStringLiteral("kind"), c.kind}, {QStringLiteral("kit"), c.kit},
                       {QStringLiteral("row"), c.row}, {QStringLiteral("file"), c.file}, {QStringLiteral("inst"), c.inst},
-                      {QStringLiteral("root"), c.root}, {QStringLiteral("oneShot"), c.oneShot}};
+                      {QStringLiteral("root"), c.root}, {QStringLiteral("oneShot"), c.oneShot},
+                      {QStringLiteral("attack"), c.attack}, {QStringLiteral("decay"), c.decay}, {QStringLiteral("sustain"), c.sustain},
+                      {QStringLiteral("release"), c.release}, {QStringLiteral("from"), c.from}, {QStringLiteral("to"), c.to},
+                      {QStringLiteral("reverse"), c.reverse}, {QStringLiteral("loop"), c.loop}, {QStringLiteral("tune"), c.tune},
+                      {QStringLiteral("cutoff"), c.cutoff}, {QStringLiteral("resonance"), c.resonance}, {QStringLiteral("choke"), c.choke},
+                      {QStringLiteral("origFile"), c.origFile}, {QStringLiteral("slices"), [&] {
+                           QJsonArray a;
+                           for (double f : c.slices)
+                               a.append(f);
+                           return a;
+                       }()}};
         if (c.kind == QLatin1String("vst")) {
             QJsonObject v{{QStringLiteral("path"), c.vst.info.path}, {QStringLiteral("uid"), c.vst.info.uid},
                           {QStringLiteral("name"), c.vst.info.name}, {QStringLiteral("vendor"), c.vst.info.vendor}};
@@ -1330,6 +1564,21 @@ void Studio::rackFromJson(const QJsonObject &o, const QHash<int, Channel> &oldCh
         c.inst = co.value(QStringLiteral("inst")).toString();
         c.root = co.value(QStringLiteral("root")).toInt(60);
         c.oneShot = co.value(QStringLiteral("oneShot")).toBool(true);
+        c.attack = co.value(QStringLiteral("attack")).toDouble(0.001);
+        c.decay = co.value(QStringLiteral("decay")).toDouble(0.1);
+        c.sustain = co.value(QStringLiteral("sustain")).toDouble(1);
+        c.release = co.value(QStringLiteral("release")).toDouble(0.012);
+        c.from = co.value(QStringLiteral("from")).toDouble(0);
+        c.to = co.value(QStringLiteral("to")).toDouble(1);
+        c.reverse = co.value(QStringLiteral("reverse")).toBool();
+        c.loop = co.value(QStringLiteral("loop")).toBool();
+        c.tune = co.value(QStringLiteral("tune")).toDouble();
+        c.cutoff = co.value(QStringLiteral("cutoff")).toDouble(20000);
+        c.resonance = co.value(QStringLiteral("resonance")).toDouble(0.7);
+        c.choke = co.value(QStringLiteral("choke")).toInt();
+        c.origFile = co.value(QStringLiteral("origFile")).toString();
+        for (const QJsonValue &f : co.value(QStringLiteral("slices")).toArray())
+            c.slices.append(f.toDouble());
         const QJsonObject vo = co.value(QStringLiteral("vst")).toObject();
         const bool hasState = vo.contains(QStringLiteral("state"));
         if (c.kind == QLatin1String("vst")) {
@@ -1342,7 +1591,10 @@ void Studio::rackFromJson(const QJsonObject &o, const QHash<int, Channel> &oldCh
         }
         // Cofanie: ten sam instrument gra dalej
         if (const auto it = oldChannels.constFind(c.id); it != oldChannels.constEnd() && !hasState && it->kind == c.kind
-            && it->kit == c.kit && it->row == c.row && it->file == c.file && it->inst == c.inst && it->root == c.root) {
+            && it->kit == c.kit && it->row == c.row && it->file == c.file && it->inst == c.inst && it->root == c.root
+            && it->attack == c.attack && it->decay == c.decay && it->sustain == c.sustain && it->release == c.release && it->from == c.from
+            && it->to == c.to && it->reverse == c.reverse && it->loop == c.loop && it->tune == c.tune && it->cutoff == c.cutoff
+            && it->resonance == c.resonance && it->oneShot == c.oneShot && it->slices == c.slices) {
             c.instrument = it->instrument;
             c.vst.plugin = it->vst.plugin;
         }

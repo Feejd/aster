@@ -46,5 +46,7 @@ Każdy etap zostawia działający program i kończy się commitem.
 4. [x] Automatyka (klipy z krzywą: głośność, panorama, efekty, parametry VST3, głośność kanału), kompensacja
        opóźnień wtyczek (także w wysyłkach, metronomie, nagrywaniu i eksporcie), sidechain Studia i wejście boczne
        VST3, zamrażanie insertów do pliku. Jeszcze nie: nagrywanie automatyki ruchem suwaka, krzywe nieliniowe.
-5. [ ] Sampler pełny (obwiednie, ucinanie, rozciąganie w czasie: rubberband), biblioteka brzmień, presety.
+5. [x] Sampler: obwiednia ADSR, zakres, pętla, wstecz, strojenie, filtr, grupy ucinania, plasterki (na uderzenia
+       i po równo, układanie we wzorze), dopasowanie do tempa (Rubber Band). Biblioteka w folderze obok projektów,
+       upuszczanie plików na rack, zapisane ustawienia kanałów i insertów. Własnej paczki sampli jeszcze nie ma.
 6. [ ] Wtyczki w osobnym procesie, CLAP, yabridge w obrazie i wtyczki z Windowsa (test na x86_64).

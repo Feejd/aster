@@ -11,6 +11,7 @@ Item {
     property var colors: []
     signal addPluginRequested()
     signal automateRequested(Item item)
+    signal savePresetRequested()
     signal sidechainRequested(Item item, int slot)     // slot 0 — sidechain Studia
     function color(i) { return colors.length ? colors[i % colors.length] : Theme.accent; }
 
@@ -168,6 +169,12 @@ Item {
                         color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
                     }
                     Tip { shown: parent.hovered; text: "Efekty i instrumenty do pliku — procesor odpoczywa" }
+                }
+                HoverButton {
+                    visible: !!side.sel
+                    width: sideCol.width; height: 26; radius: 7
+                    onClicked: mx.savePresetRequested()
+                    Text { x: 6; anchors.verticalCenter: parent.verticalCenter; text: "Zapisz brzmienie…"; color: Theme.accentText; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
                 }
                 Text { text: "Wysyłki"; topPadding: 6; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
                 Repeater {
