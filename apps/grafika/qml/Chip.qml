@@ -8,7 +8,7 @@ HoverButton {
     property bool on: false
     width: chipText.implicitWidth + 26
     height: 32
-    radius: 16
+    radius: 8
     baseColor: on ? Theme.accent : Theme.fill
     color: on ? baseColor : hovered ? Theme.hover : baseColor
     Text {

@@ -47,7 +47,7 @@ Item {
         id: card
         width: pop.cardWidth
         height: pop.cardHeight
-        radius: 16
+        radius: 12
         color: Theme.surface
         border.width: 1
         border.color: Theme.edge

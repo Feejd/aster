@@ -13,7 +13,7 @@ Item {
     id: ed
     required property Project project
     property var app                 // Main: toast, goHome, presets
-    property real radius: 24
+    property real radius: 12
 
     // Pisanie w polu tekstowym — wtedy Delete, strzałki i Ctrl+Z należą do pola
     readonly property bool typing: {
@@ -1003,7 +1003,7 @@ Item {
                 // Powiększenie w jednej grupie
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: zoomRow.implicitWidth + 8; height: 36; radius: 18
+                    width: zoomRow.implicitWidth + 8; height: 36; radius: 8
                     color: Theme.fill
                     Row {
                         id: zoomRow
@@ -1053,7 +1053,7 @@ Item {
             y: bar.height
             width: parent.width - ed.toolsWidth
             height: parent.height - y
-            color: Theme.dark ? "transparent" : "#ECEDF1"      // biała strona musi odcinać się od płótna także w jasnym motywie
+            color: Theme.dark ? "transparent" : Theme.windowGlass      // biała strona musi odcinać się od płótna także w jasnym motywie
             Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.line; z: 2 }
 
         Stage {
@@ -1401,7 +1401,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(parent.width - 48, sheetRow.implicitWidth + 56)
             height: sheetCol.implicitHeight + 48
-            radius: 20
+            radius: 12
             color: Theme.surface
             border.width: 1; border.color: Theme.line
             MouseArea { anchors.fill: parent }
