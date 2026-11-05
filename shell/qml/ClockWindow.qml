@@ -1,13 +1,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
-import QtQuick.Effects
 import QtQuick.Shapes
 import Aster.Shell
 import Aster.Ui
 
 // Pulpit (nad tapetą, pod oknami) — pierwsze, co widać po zalogowaniu:
-//  • duża, półgruba godzina z Geista z delikatnym gradientem, nad nią data,
+//  • data i duża, cienka godzina w jednym kolorze,
 //  • pod nią widżety w siatce kafelków (bento): kalendarz miesiąca, bateria, teraz gra.
 // Kliknięcia trafiają tylko w widżety; reszta pulpitu przepuszcza je dalej.
 // Ustawienia → Pulpit i dok → „Zegar na pulpicie” chowa całość.
@@ -35,7 +34,7 @@ Window {
 
     Item {
         id: hero
-        x: 76; y: 92
+        x: 48; y: 64
         width: Math.max(timeText.implicitWidth, bento.width)
         height: bento.y + bento.height
         opacity: cw.shown ? 1 : 0
@@ -43,49 +42,31 @@ Window {
 
         Text {
             id: dateText
-            x: 6
-            text: cw.now.toLocaleDateString(cw.loc, "dddd · d MMMM").toUpperCase()
+            x: 3
+            text: {
+                const t = cw.now.toLocaleDateString(cw.loc, "dddd, d MMMM");
+                return t.charAt(0).toUpperCase() + t.slice(1);
+            }
             color: cw.ink
-            opacity: 0.72
-            font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold; font.letterSpacing: 2.2
+            font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Normal
         }
-
-        // Godzina: tekst jako maska nad gradientem (na rysowaniu programowym — zwykły kolor)
-        readonly property bool fancy: GraphicsInfo.api !== GraphicsInfo.Software
         Text {
             id: timeText
-            y: dateText.height - 18
+            y: dateText.height
             text: cw.now.toLocaleTimeString(cw.loc, "HH:mm")
             color: cw.ink
-            opacity: hero.fancy ? 0 : (Theme.dark ? 1 : 0.88)
-            layer.enabled: hero.fancy
             font.family: Theme.font
-            font.pixelSize: 176
-            font.weight: Font.DemiBold
-            font.letterSpacing: -7
+            font.pixelSize: 112
+            font.weight: Font.Light
+            font.letterSpacing: -3
             font.features: { "tnum": 1 }
-        }
-        Rectangle {
-            visible: hero.fancy
-            anchors.fill: timeText
-            gradient: Gradient {
-                GradientStop { position: 0.15; color: Theme.dark ? "white" : "#141822" }
-                GradientStop { position: 0.95; color: Theme.dark ? Qt.rgba(1, 1, 1, 0.55) : Qt.darker(Theme.accent, 1.6) }
-            }
-            layer.enabled: hero.fancy
-            layer.effect: MultiEffect {
-                maskEnabled: true
-                maskSource: timeText
-                maskThresholdMin: 0.4
-                maskSpreadAtMin: 0.3
-            }
         }
 
         // ——— Widżety ———
         Row {
             id: bento
-            y: timeText.y + timeText.height - 6
-            spacing: 14
+            y: timeText.y + timeText.height + 12
+            spacing: 12
 
             // Kalendarz miesiąca
             Card {
@@ -140,7 +121,7 @@ Window {
                             width: 30.8; height: 26
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 26; height: 26; radius: 13
+                                width: 26; height: 26; radius: 6
                                 visible: cell.isToday
                                 color: Theme.accent
                             }
@@ -219,11 +200,8 @@ Window {
                     Rectangle {
                         id: cover
                         x: 14; anchors.verticalCenter: parent.verticalCenter
-                        width: 60; height: 60; radius: 14
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: "#FF9A62" }
-                            GradientStop { position: 1; color: "#C2185B" }
-                        }
+                        width: 60; height: 60; radius: 10
+                        color: Theme.accent
                         opacity: ControlCenter.playerAvailable ? 1 : 0.4
                         Image {
                             anchors.fill: parent
@@ -267,18 +245,13 @@ Window {
         }
     }
 
-    // Kafelek widżetu: szkło jak wyspy, poświata za kursorem
+    // Kafelek widżetu: ta sama matowa powierzchnia co panele
     component Card: Island {
         id: card
         readonly property bool isCard: true
         onVisibleChanged: regionTimer.restart()
-        radius: 14
+        radius: 12
         shadowStrength: 0.7
-        spot: cardHover.hovered ? 0.8 : 0
-        spotX: cardHover.point.position.x
-        spotY: cardHover.point.position.y
-        Behavior on spot { NumberAnimation { duration: 220 } }
-        HoverHandler { id: cardHover }
     }
 
     component MediaButton: Rectangle {

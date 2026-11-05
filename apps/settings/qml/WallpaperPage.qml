@@ -8,8 +8,8 @@ import Aster.Settings
 Page {
     id: wp
     readonly property var walls: [
-        { id: "aura", name: "Aura" }, { id: "bloom", name: "Bloom" },
-        { id: "szczyty", name: "Szczyty" }, { id: "jezioro", name: "Jezioro" }
+        { id: "grzbiety", name: "Grzbiety" }, { id: "mgla", name: "Mgła" },
+        { id: "pasma", name: "Pasma" }, { id: "papier", name: "Papier" }
     ]
     // Własne zdjęcie (ze Zdjęć: „Ustaw jako tapetę”) — pełna ścieżka zamiast nazwy tapety Aster
     readonly property bool custom: Config.wallpaper.startsWith("/")

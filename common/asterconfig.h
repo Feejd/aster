@@ -31,7 +31,13 @@ public:
     explicit AsterConfig(QObject *parent = nullptr);
 
     QColor accent() const { return m_values.value(QStringLiteral("accent"), QStringLiteral("#3456E8")).value<QColor>(); }
-    QString wallpaper() const { return m_values.value(QStringLiteral("wallpaper"), QStringLiteral("aura")).toString(); }
+    QString wallpaper() const
+    {
+        const QString id = m_values.value(QStringLiteral("wallpaper"), QStringLiteral("grzbiety")).toString();
+        // Tapety sprzed nowego wyglądu już nie istnieją
+        static const QStringList old{QStringLiteral("aura"), QStringLiteral("bloom"), QStringLiteral("szczyty"), QStringLiteral("jezioro")};
+        return old.contains(id) ? QStringLiteral("grzbiety") : id;
+    }
     bool desktopClock() const { return m_values.value(QStringLiteral("desktopClock"), true).toBool(); }
     bool batteryPercent() const { return m_values.value(QStringLiteral("batteryPercent"), true).toBool(); }
     bool doNotDisturb() const { return m_values.value(QStringLiteral("doNotDisturb"), false).toBool(); }
