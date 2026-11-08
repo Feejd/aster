@@ -2,8 +2,8 @@
 // Programy Aster same wyskakują sprężyście (common/WindowSheen.qml), więc przy otwieraniu ich nie ruszamy.
 "use strict";
 
-const OpenMs = 240;
-const CloseMs = 150;
+const OpenMs = 180;
+const CloseMs = 110;
 
 class AsterOkna {
     constructor() {

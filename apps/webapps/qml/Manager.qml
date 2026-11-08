@@ -237,7 +237,7 @@ Window {
                     color: Theme.surface
                     border.width: 1; border.color: Theme.line
                     opacity: visible ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 160 } }
+                    Behavior on opacity { NumberAnimation { duration: 100 } }
 
                     // Jak będzie wyglądać okno: ikona na pasku w kolorze aplikacji
                     Rectangle {
@@ -413,7 +413,7 @@ Window {
                                 SequentialAnimation {
                                     id: recIn
                                     PauseAnimation { duration: Math.min(rec.index, 20) * 18 }
-                                    NumberAnimation { target: rec; property: "opacity"; to: 1; duration: 180 }
+                                    NumberAnimation { target: rec; property: "opacity"; to: 1; duration: 110 }
                                 }
                                 MouseArea { id: recArea; anchors.fill: parent; hoverEnabled: true }
                                 Rectangle {
@@ -445,7 +445,7 @@ Window {
                                     width: rec.busy ? 30 : getText.implicitWidth + 26
                                     height: 30; radius: 15
                                     color: rec.installed ? Theme.fill : Theme.accentSoft
-                                    Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+                                    Behavior on width { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
                                     Text {
                                         id: getText
                                         anchors.centerIn: parent
@@ -473,7 +473,7 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: toastTimer.running ? 22 : -height
-            Behavior on anchors.bottomMargin { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
+            Behavior on anchors.bottomMargin { NumberAnimation { duration: 130; easing.type: Easing.OutQuint } }
             width: Math.min(parent.width - 40, toastRow.implicitWidth + 36); height: 44; radius: 22
             color: Theme.text
             Row {

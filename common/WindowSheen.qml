@@ -22,7 +22,7 @@ Item {
         anchors.fill: parent
         visible: sh.aurora
         opacity: sh.active ? 1 : 0.5
-        Behavior on opacity { NumberAnimation { duration: 260 } }
+        Behavior on opacity { NumberAnimation { duration: 160 } }
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
             strokeColor: "transparent"
@@ -49,7 +49,7 @@ Item {
     Component.onCompleted: if (animateOpen) intro.start()
     ParallelAnimation {
         id: intro
-        NumberAnimation { target: sh.window.contentItem; property: "scale"; from: 0.94; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
-        NumberAnimation { target: sh.window.contentItem; property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutQuad }
+        NumberAnimation { target: sh.window.contentItem; property: "scale"; from: 0.94; to: 1; duration: 250; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+        NumberAnimation { target: sh.window.contentItem; property: "opacity"; from: 0; to: 1; duration: 110; easing.type: Easing.OutQuad }
     }
 }

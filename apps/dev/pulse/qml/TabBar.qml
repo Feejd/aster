@@ -61,7 +61,7 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: tab.active ? parent.width - 16 : 0; height: 2; radius: 1
                     color: Theme.accent
-                    Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                    Behavior on width { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
                 }
                 MouseArea {
                     id: tabArea

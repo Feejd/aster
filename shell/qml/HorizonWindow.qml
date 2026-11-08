@@ -256,7 +256,7 @@ Window {
         height: hz.barH
         radius: height / 2
         onWidthChanged: hz.updateRegion()
-        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
 
         Row {
             id: leftRow
@@ -271,7 +271,7 @@ Window {
                 scale: markArea.pressed ? 0.88 : (markArea.containsMouse ? 1.06 : 1)
                 rotation: markArea.containsMouse ? 30 : 0
                 Behavior on scale { SpringAnimation { spring: 5; damping: 0.3 } }
-                Behavior on rotation { NumberAnimation { duration: 380; easing.type: Easing.OutBack } }
+                Behavior on rotation { NumberAnimation { duration: 230; easing.type: Easing.OutBack } }
                 Icon { anchors.centerIn: parent; d: Icons.aster; size: 15; stroke: 2.2; color: "white" }
                 MouseArea { id: markArea; anchors.fill: parent; hoverEnabled: true; onClicked: hz.startRequested() }
             }
@@ -339,7 +339,7 @@ Window {
         flat: !hz.asking && !hz.noting
         // Przy pytaniu cień ustępuje poświacie
         shadowStrength: hz.asking ? 0.35 : 1
-        Behavior on shadowStrength { NumberAnimation { duration: 300 } }
+        Behavior on shadowStrength { NumberAnimation { duration: 180 } }
         readonly property var n: hz.current
         readonly property real idleW: idleRow.implicitWidth + (hz.playing ? 92 : 36)
         width: hz.asking ? hz.askW : hz.noting ? 440 : idleW
@@ -347,14 +347,14 @@ Window {
         radius: 14
         x: Math.round((hz.width - width) / 2)
         y: hz.asking || hz.noting ? hz.reserved + 8 : 3
-        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on y { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
         onWidthChanged: hz.updateRegion()
         onHeightChanged: hz.updateRegion()
         onYChanged: hz.updateRegion()
         // Sprężyna — wyspa „rozlewa się” jak kropla, a nie przesuwa
         Behavior on width { SpringAnimation { spring: 3.6; damping: 0.26; epsilon: 0.3 } }
         Behavior on height { SpringAnimation { spring: 3.6; damping: 0.3; epsilon: 0.3 } }
-        Behavior on radius { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+        Behavior on radius { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
         HoverHandler { id: islandHover }
         TapHandler {
@@ -378,8 +378,8 @@ Window {
                 width: 22; height: 22; radius: 7
                 opacity: hz.playing ? 1 : 0
                 scale: hz.playing ? 1 : 0.5
-                Behavior on opacity { NumberAnimation { duration: 200 } }
-                Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+                Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutBack } }
                 gradient: Gradient {
                     GradientStop { position: 0; color: "#FF8A65" }
                     GradientStop { position: 1; color: "#C2185B" }
@@ -422,7 +422,7 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2.5
                 opacity: hz.playing ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 Repeater {
                     model: [0.55, 1.0, 0.7, 0.85]
                     delegate: Rectangle {
@@ -437,8 +437,8 @@ Window {
                         SequentialAnimation on level {
                             running: hz.playing
                             loops: Animation.Infinite
-                            NumberAnimation { to: 1; duration: 260 + bar.index * 70; easing.type: Easing.InOutSine }
-                            NumberAnimation { to: 0.2; duration: 300 + bar.index * 50; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 1; duration: 160 + bar.index * 70; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: 0.2; duration: 180 + bar.index * 50; easing.type: Easing.InOutSine }
                         }
                     }
                 }
@@ -450,7 +450,7 @@ Window {
             anchors.fill: parent
             opacity: hz.noting && !hz.asking && island.height > 70 ? 1 : 0
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: 180 } }
+            Behavior on opacity { NumberAnimation { duration: 110 } }
 
             Item {
                 id: iconBox
@@ -609,7 +609,7 @@ Window {
                 width: parent.width
                 height: visible ? toolsCol.implicitHeight + 14 : 0
                 opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 220 } }
+                Behavior on opacity { NumberAnimation { duration: 130 } }
                 Rectangle { width: parent.width; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
                 Column {
                     id: toolsCol
@@ -678,8 +678,8 @@ Window {
                                     SequentialAnimation {
                                         PauseAnimation { duration: 40 + chip.index * 35 }
                                         ParallelAnimation {
-                                            NumberAnimation { target: chip; property: "opacity"; to: 1; duration: 220 }
-                                            NumberAnimation { target: chip; property: "lift"; to: 0; duration: 180; easing.type: Easing.OutCubic }
+                                            NumberAnimation { target: chip; property: "opacity"; to: 1; duration: 130 }
+                                            NumberAnimation { target: chip; property: "lift"; to: 0; duration: 110; easing.type: Easing.OutCubic }
                                         }
                                     }
                                 }
@@ -730,8 +730,8 @@ Window {
                         onVisibleChanged: if (visible) reveal.restart(); else { opacity = 0; lift = 3; }
                         ParallelAnimation {
                             id: reveal
-                            NumberAnimation { target: answerText; property: "opacity"; to: 1; duration: 320; easing.type: Easing.OutCubic }
-                            NumberAnimation { target: answerText; property: "lift"; to: 0; duration: 200; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: answerText; property: "opacity"; to: 1; duration: 190; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: answerText; property: "lift"; to: 0; duration: 120; easing.type: Easing.OutCubic }
                         }
                         text: Assistant.lastError ? Assistant.lastAnswer : Assistant.lastAnswer.replace(/\*\*/g, "")
                         wrapMode: Text.Wrap
@@ -897,8 +897,8 @@ Window {
         property real s: hz.dropShown ? 1 : 0.8
         transform: Scale { origin.x: drop.width - 34; origin.y: 0; xScale: drop.s; yScale: drop.s }
         Behavior on opacity { NumberAnimation { duration: hz.dropShown ? 160 : 120 } }
-        Behavior on s { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on s { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
         onWidthChanged: hz.updateRegion()
         onVisibleChanged: hz.updateRegion()
 
@@ -952,7 +952,7 @@ Window {
         radius: 13
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         color: highlighted ? Theme.accent : bbArea.containsMouse ? Theme.hover : "transparent"
-        Behavior on color { ColorAnimation { duration: 140 } }
+        Behavior on color { ColorAnimation { duration: 90 } }
         scale: bbArea.pressed ? 0.93 : 1
         Behavior on scale { NumberAnimation { duration: 100 } }
         Row {

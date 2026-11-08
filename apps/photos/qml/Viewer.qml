@@ -125,7 +125,7 @@ Item {
             width: 44; height: 44; radius: 22
             visible: can && viewer.chrome
             opacity: sideHover.hovered ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             baseColor: Qt.rgba(0, 0, 0, 0.42)
             color: hovered ? Qt.rgba(0, 0, 0, 0.6) : baseColor
             onClicked: arrow.modelData[0] < 0 ? viewer.prev() : viewer.next()
@@ -140,7 +140,7 @@ Item {
         color: viewer.immersive ? Qt.rgba(0, 0, 0, 0.55) : "transparent"
         opacity: viewer.chrome ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         DragHandler { target: null; onActiveChanged: if (active) viewer.window.startSystemMove() }
         TapHandler { onDoubleTapped: if (viewer.window.visibility === Window.Maximized) viewer.window.showNormal(); else viewer.window.showMaximized() }
         readonly property color fg: viewer.immersive ? "white" : Theme.text
@@ -221,7 +221,7 @@ Item {
         width: photoView.width; height: viewer.model.count > 1 ? 76 : 14
         opacity: viewer.chrome ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         Rectangle { anchors.fill: parent; color: viewer.immersive ? Qt.rgba(0, 0, 0, 0.55) : "transparent" }
         ListView {
             id: strip
@@ -243,7 +243,7 @@ Item {
                 required property string thumb
                 readonly property bool current: index === viewer.index
                 width: current ? 64 : 42; height: 56
-                Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on width { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
                 Rectangle {
                     anchors.fill: parent
                     radius: 7

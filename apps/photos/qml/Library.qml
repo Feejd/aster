@@ -48,9 +48,9 @@ Item {
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     opacity: status === Image.Ready ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 180 } }
+                    Behavior on opacity { NumberAnimation { duration: 110 } }
                     scale: tileArea.containsMouse ? 1.04 : 1
-                    Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
                 }
                 Rectangle { anchors.fill: parent; color: "white"; opacity: tileArea.pressed ? 0.12 : 0 }
             }
@@ -81,7 +81,7 @@ Item {
             height: Math.max(30, grid.visibleArea.heightRatio * grid.height)
             color: Theme.text2
             opacity: grid.moving ? 0.5 : 0.18
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on opacity { NumberAnimation { duration: 120 } }
         }
     }
 

@@ -519,8 +519,8 @@ Window {
                 z: 20
                 width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 40; radius: 20
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
-                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-                Behavior on opacity { NumberAnimation { duration: 160 } }
+                Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 Text { id: toastText; anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - 30); elide: Text.ElideRight; color: Theme.dark ? "#16181D" : "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                 Timer { id: toastTimer; interval: 3000; onTriggered: toastBox.shown = false }
             }

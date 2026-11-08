@@ -153,8 +153,8 @@ Window {
             z: 600
             width: Math.min(parent.width - 60, toastRow.implicitWidth + 36); height: 40; radius: 12
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
-            Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Row {
                 id: toastRow
                 anchors.centerIn: parent

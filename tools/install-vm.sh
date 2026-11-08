@@ -51,7 +51,7 @@ kwriteconfig6 --file kwinrc --group Plugins --key scaleEnabled false 2>/dev/null
 kwriteconfig6 --file kwinrc --group Plugins --key asteroknaEnabled true 2>/dev/null || true
 kwriteconfig6 --file kwinrc --group Plugins --key squashEnabled false 2>/dev/null || true
 kwriteconfig6 --file kwinrc --group Plugins --key magiclampEnabled true 2>/dev/null || true
-kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0.7 2>/dev/null || true
+kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor 0.5 2>/dev/null || true
 dbus-send --session --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/null || true
 gsettings set org.gnome.desktop.interface cursor-theme Aster 2>/dev/null || true
 

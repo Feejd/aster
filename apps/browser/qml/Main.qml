@@ -286,8 +286,8 @@ Window {
             topLeftRadius: win.r; topRightRadius: win.r
             color: win.privateMode ? "#6B4FD8" : win.tint
             opacity: win.privateMode ? (Theme.dark ? 0.30 : 0.16) : (win.tint.a > 0 ? 0.16 : 0)
-            Behavior on opacity { NumberAnimation { duration: 300 } }
-            Behavior on color { ColorAnimation { duration: 300 } }
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+            Behavior on color { ColorAnimation { duration: 180 } }
         }
 
         // ——— Pasek okna ———
@@ -349,8 +349,8 @@ Window {
                         width: (parent.width - 28) * (win.cur && !win.cur.internal ? win.cur.view.loadProgress / 100 : 0)
                         color: Theme.accent
                         opacity: win.cur && win.cur.loading ? 1 : 0
-                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
-                        Behavior on opacity { NumberAnimation { duration: 300 } }
+                        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+                        Behavior on opacity { NumberAnimation { duration: 180 } }
                     }
 
                     // Kłódka / tarcza: informacje o witrynie
@@ -545,7 +545,7 @@ Window {
                 height: tabs.count > 1 ? 38 : 0
                 visible: height > 0
                 clip: true
-                Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
 
                 Flickable {
                     id: tabFlick
@@ -636,7 +636,7 @@ Window {
             z: 5
             color: Theme.paneGlass
             border.width: 1; border.color: Theme.edge
-            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+            Behavior on height { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
             readonly property var names: ["uzyskać dodatkowe uprawnienie", "używać mikrofonu", "używać kamery", "używać kamery i mikrofonu",
                                           "udostępniać ekran", "udostępniać ekran z dźwiękiem", "przejąć kursor myszy", "wysyłać powiadomienia",
                                           "znać Twoją lokalizację", "czytać schowek", "widzieć zainstalowane czcionki"]
@@ -768,7 +768,7 @@ Window {
                 anchors.right: parent.right; anchors.rightMargin: 16
                 y: shown ? 12 : -height - 10
                 visible: y > -height
-                Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                Behavior on y { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
                 width: 360; height: 46; radius: 23
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
@@ -815,7 +815,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - (shown ? height + 22 : -10)
                 visible: y < parent.height
-                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
+                Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
                 width: toastRow.implicitWidth + 28; height: 42; radius: 21
                 color: Theme.dark ? "#F2F3F6" : "#17181D"
                 Row {
@@ -845,7 +845,7 @@ Window {
                 color: Qt.rgba(0.08, 0.08, 0.1, 0.88)
                 opacity: 0
                 visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 250 } }
+                Behavior on opacity { NumberAnimation { duration: 150 } }
                 Text { id: fsText; anchors.centerIn: parent; text: "Naciśnij Esc, aby wyjść z pełnego ekranu"; color: "white"; font.family: Theme.font; font.pixelSize: 13 }
                 Timer { id: fsTimer; interval: 2600; onTriggered: fsHint.opacity = 0 }
             }
@@ -1271,8 +1271,8 @@ Window {
             opacity: pop.shown ? 1 : 0
             scale: pop.shown ? 1 : 0.96
             transformOrigin: pop.alignRight ? Item.TopRight : Item.TopLeft
-            Behavior on opacity { NumberAnimation { duration: 140 } }
-            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 90 } }
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuint } }
             layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect { shadowEnabled: true; shadowBlur: 0.9; shadowVerticalOffset: 12; shadowColor: Theme.shadow }
             HoverHandler { id: popHover }

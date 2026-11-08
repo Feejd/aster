@@ -188,7 +188,7 @@ Page {
                                 GradientStop { position: 0; color: "#38BDF8" }
                                 GradientStop { position: 1; color: "#2563EB" }
                             }
-                            Behavior on width { NumberAnimation { duration: 400 } }
+                            Behavior on width { NumberAnimation { duration: 240 } }
                         }
                     }
                     TextButton { visible: mr.downloading; text: "Przerwij"; onClicked: Assistant.cancelDownload() }

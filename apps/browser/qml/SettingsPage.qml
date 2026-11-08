@@ -238,13 +238,13 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 44; height: 26; radius: 13
             color: sw.checked ? Theme.accent : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14))
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Behavior on color { ColorAnimation { duration: 90 } }
             Rectangle {
                 x: sw.checked ? parent.width - width - 3 : 3
                 anchors.verticalCenter: parent.verticalCenter
                 width: 20; height: 20; radius: 10
                 color: "white"
-                Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
             }
         }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sw.toggled() }

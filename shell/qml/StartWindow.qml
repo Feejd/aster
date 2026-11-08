@@ -135,10 +135,10 @@ Window {
             Transition {
                 to: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: panel; property: "s"; duration: 230; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
-                    NumberAnimation { target: panel; property: "offset"; duration: 200; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: panel; property: "s"; duration: 140; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
+                    NumberAnimation { target: panel; property: "offset"; duration: 120; easing.type: Easing.OutQuint }
                     NumberAnimation { target: panel; property: "opacity"; duration: 70; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: panel; property: "reveal"; from: 0; duration: 300; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: panel; property: "reveal"; from: 0; duration: 180; easing.type: Easing.OutCubic }
                 }
             },
             Transition {
@@ -171,7 +171,7 @@ Window {
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
                 border.color: field.activeFocus ? Theme.accent : "transparent"
-                Behavior on color { ColorAnimation { duration: 140 } }
+                Behavior on color { ColorAnimation { duration: 90 } }
                 Icon {
                     x: 16; anchors.verticalCenter: parent.verticalCenter
                     d: Icons.search; size: 18
@@ -216,8 +216,8 @@ Window {
                 property real shift: 0
                 ParallelAnimation {
                     id: switchAnim
-                    NumberAnimation { target: browse; property: "shift"; from: 18; to: 0; duration: 220; easing.type: Easing.OutQuint }
-                    NumberAnimation { target: catContent; property: "opacity"; from: 0; to: 1; duration: 140; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: browse; property: "shift"; from: 18; to: 0; duration: 130; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: catContent; property: "opacity"; from: 0; to: 1; duration: 90; easing.type: Easing.OutQuad }
                 }
 
                 Flickable {

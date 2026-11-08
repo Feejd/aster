@@ -23,7 +23,7 @@ Item {
         PauseAnimation { duration: Math.max(0, fi.enterDelay) }
         ParallelAnimation {
             NumberAnimation { target: fi; property: "opacity"; to: 1; duration: 110; easing.type: Easing.OutQuad }
-            NumberAnimation { target: shift; property: "y"; to: 0; duration: 220; easing.type: Easing.OutQuint }
+            NumberAnimation { target: shift; property: "y"; to: 0; duration: 130; easing.type: Easing.OutQuint }
         }
     }
 

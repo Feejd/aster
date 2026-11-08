@@ -385,13 +385,13 @@ Window {
             height: parent.height
             visible: width > 0
             clip: true
-            Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
+            Behavior on width { NumberAnimation { duration: 130; easing.type: Easing.OutQuint } }
             // Tło w kolorze menu strony (lekko przezroczyste — prześwituje szkło okna)
             Rectangle {
                 anchors.fill: parent
                 topLeftRadius: win.r; bottomLeftRadius: win.r
                 color: win.sideFill
-                Behavior on color { ColorAnimation { duration: 250 } }
+                Behavior on color { ColorAnimation { duration: 150 } }
             }
 
             Item {
@@ -409,7 +409,7 @@ Window {
                         clip: true
                         anchors.verticalCenter: parent.verticalCenter
                         color: sideBack.containsMouse ? win.sideHover : "transparent"
-                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
                         Icon { anchors.centerIn: parent; d: Icons.back; size: 16; color: win.sideText }
                         MouseArea { id: sideBack; anchors.fill: parent; hoverEnabled: true; onClicked: web.goBack() }
                     }
@@ -506,7 +506,7 @@ Window {
                     Behavior on color { ColorAnimation { duration: 120 } }
                     opacity: 0
                     Component.onCompleted: navIn.start()
-                    NumberAnimation { id: navIn; target: navItem; property: "opacity"; to: 1; duration: 160; easing.type: Easing.OutQuad }
+                    NumberAnimation { id: navIn; target: navItem; property: "opacity"; to: 1; duration: 100; easing.type: Easing.OutQuad }
                     // Nagłówek grupy („Kanały”, „Etykiety”)
                     Text {
                         visible: navItem.isSection
@@ -687,7 +687,7 @@ Window {
             topLeftRadius: win.sideWidth ? 0 : win.r; bottomLeftRadius: win.sideWidth ? 0 : win.r
             topRightRadius: win.r; bottomRightRadius: win.r
             color: Qt.rgba(win.barColor.r, win.barColor.g, win.barColor.b, 0.86)
-            Behavior on color { ColorAnimation { duration: 300 } }
+            Behavior on color { ColorAnimation { duration: 180 } }
         }
 
         // ——— Pasek tytułu ———
@@ -713,7 +713,7 @@ Window {
                     clip: true
                     anchors.verticalCenter: parent.verticalCenter
                     color: backArea.containsMouse ? win.barHover : "transparent"
-                    Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                    Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
                     Icon { anchors.centerIn: parent; d: Icons.back; size: 17; color: win.barText }
                     MouseArea { id: backArea; anchors.fill: parent; hoverEnabled: true; onClicked: web.goBack() }
                 }
@@ -724,7 +724,7 @@ Window {
                     clip: true
                     anchors.verticalCenter: parent.verticalCenter
                     color: fwdArea.containsMouse ? win.barHover : "transparent"
-                    Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                    Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
                     Icon { anchors.centerIn: parent; d: Icons.forward; size: 17; color: win.barText }
                     MouseArea { id: fwdArea; anchors.fill: parent; hoverEnabled: true; onClicked: web.goForward() }
                 }
@@ -883,8 +883,8 @@ Window {
                 width: parent.width * web.loadProgress / 100
                 color: win.barTinted ? win.barText : Theme.accent
                 opacity: web.loading && win.everLoaded ? 0.7 : 0
-                Behavior on width { NumberAnimation { duration: 200 } }
-                Behavior on opacity { NumberAnimation { duration: 300 } }
+                Behavior on width { NumberAnimation { duration: 120 } }
+                Behavior on opacity { NumberAnimation { duration: 180 } }
             }
         }
 
@@ -899,7 +899,7 @@ Window {
             visible: height > 0
             clip: true
             color: Theme.surface
-            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+            Behavior on height { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
             readonly property var names: ["", "mikrofonu", "kamery", "kamery i mikrofonu", "udostępniania ekranu", "udostępniania ekranu z dźwiękiem",
                                           "przejęcia kursora", "powiadomień", "Twojej lokalizacji", "schowka", "czcionek"]
             function answer(grant) { if (!request) return; if (grant) request.grant(); else request.deny(); request = null; }
@@ -1064,7 +1064,7 @@ Window {
                     smooth: true; mipmap: true
                     scale: 0.85
                     Component.onCompleted: splashIn.start()
-                    NumberAnimation { id: splashIn; target: splashIcon; property: "scale"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                    NumberAnimation { id: splashIn; target: splashIcon; property: "scale"; to: 1; duration: 250; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1076,8 +1076,8 @@ Window {
                 }
                 ParallelAnimation {
                     id: splashOut
-                    NumberAnimation { target: splash; property: "opacity"; to: 0; duration: 260; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: splashIcon; property: "scale"; to: 1.15; duration: 260; easing.type: Easing.InQuad }
+                    NumberAnimation { target: splash; property: "opacity"; to: 0; duration: 160; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: splashIcon; property: "scale"; to: 1.15; duration: 160; easing.type: Easing.InQuad }
                 }
                 Timer { running: true; interval: 9000; onTriggered: if (splash.opacity === 1) splashOut.start() }
             }
@@ -1122,7 +1122,7 @@ Window {
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom; anchors.bottomMargin: toastTimer.running ? 18 : -height
-                Behavior on anchors.bottomMargin { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+                Behavior on anchors.bottomMargin { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
                 width: toastText.implicitWidth + 32; height: 40; radius: 20
                 color: Theme.text
                 Text { id: toastText; anchors.centerIn: parent; color: Theme.surface; font.family: win.uiFont; font.pixelSize: 13 }

@@ -514,7 +514,7 @@ Window {
                 anchors.right: parent.right; anchors.rightMargin: 16
                 y: shown ? banner.height + 12 : -height - 4
                 visible: shown || y > -height
-                Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+                Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
                 z: 10
                 width: 420; height: replace ? 92 : 46; radius: 16
                 color: Theme.surface
@@ -699,8 +699,8 @@ Window {
             z: 300
             width: toastText.implicitWidth + 36; height: 38; radius: 19
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
-            Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Text { id: toastText; anchors.centerIn: parent; color: Theme.dark ? "#16181D" : "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
             Timer { id: toastTimer; interval: 2600; onTriggered: toastBox.shown = false }
         }

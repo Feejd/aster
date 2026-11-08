@@ -138,7 +138,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, win.installing ? 0.5 : (s.dark ? 0.35 : 0.12))
-        Behavior on color { ColorAnimation { duration: 400 } }
+        Behavior on color { ColorAnimation { duration: 240 } }
     }
 
     // Wyłączanie (prawy górny róg)
@@ -161,7 +161,7 @@ Window {
         border.width: 1; border.color: Theme.line
         visible: !win.installing
         opacity: visible ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 300 } }
+        Behavior on opacity { NumberAnimation { duration: 180 } }
 
         // Lewa kolumna: znak Aster i kroki
         Rectangle {
@@ -256,8 +256,8 @@ Window {
                 onLoaded: { item.opacity = 0; item.x = 24; fadeIn.restart(); }
                 ParallelAnimation {
                     id: fadeIn
-                    NumberAnimation { target: page.item; property: "opacity"; to: 1; duration: 260; easing.type: Easing.OutCubic }
-                    NumberAnimation { target: page.item; property: "x"; to: 0; duration: 320; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: page.item; property: "opacity"; to: 1; duration: 160; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: page.item; property: "x"; to: 0; duration: 190; easing.type: Easing.OutCubic }
                 }
             }
         }
@@ -290,7 +290,7 @@ Window {
         anchors.fill: parent
         visible: win.installing
         opacity: visible ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 400 } }
+        Behavior on opacity { NumberAnimation { duration: 240 } }
 
         Column {
             anchors.centerIn: parent
@@ -1022,11 +1022,11 @@ Window {
             width: 46; height: 28; radius: 14
             color: tg.checked ? Theme.accent : Theme.fill
             border.width: tg.checked ? 0 : 1; border.color: Theme.line
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Behavior on color { ColorAnimation { duration: 90 } }
             Rectangle {
                 x: tg.checked ? parent.width - width - 3 : 3; anchors.verticalCenter: parent.verticalCenter
                 width: 22; height: 22; radius: 11; color: "white"
-                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                Behavior on x { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
             }
         }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: tg.toggled() }

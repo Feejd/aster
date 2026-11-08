@@ -176,7 +176,7 @@ Sheet {
                 width: 16; height: 16; radius: 8; y: 2
                 x: ck.checked ? parent.width - width - 2 : 2
                 color: "white"
-                Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+                Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
             }
         }
         Column {

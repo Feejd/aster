@@ -82,7 +82,7 @@ Page {
                                 color: "transparent"
                                 border.width: 3; border.color: Theme.accent
                                 opacity: w.chosen ? 1 : 0
-                                Behavior on opacity { NumberAnimation { duration: 160 } }
+                                Behavior on opacity { NumberAnimation { duration: 100 } }
                             }
                             Rounded {
                                 anchors.fill: parent

@@ -40,7 +40,7 @@ Window {
         width: Math.max(timeText.implicitWidth, bento.width)
         height: bento.y + bento.height
         opacity: cw.shown ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 120 } }
 
         Text {
             id: dateText

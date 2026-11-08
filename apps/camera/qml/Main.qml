@@ -297,7 +297,7 @@ Window {
             anchors.fill: parent
             color: "white"
             opacity: 0
-            NumberAnimation { id: flashAnim; target: flashRect; property: "opacity"; to: 0; duration: 380; easing.type: Easing.OutQuad }
+            NumberAnimation { id: flashAnim; target: flashRect; property: "opacity"; to: 0; duration: 230; easing.type: Easing.OutQuad }
         }
 
         // Odliczanie samowyzwalacza
@@ -312,7 +312,7 @@ Window {
             onTextChanged: if (visible) { countPulse.restart(); }
             SequentialAnimation {
                 id: countPulse
-                NumberAnimation { target: countText; property: "scale"; from: 1.25; to: 1; duration: 300; easing.type: Easing.OutBack }
+                NumberAnimation { target: countText; property: "scale"; from: 1.25; to: 1; duration: 180; easing.type: Easing.OutBack }
             }
         }
 
@@ -426,7 +426,7 @@ Window {
                         x: 3; y: win.mode === "photo" ? 3 : 41
                         width: 38; height: 44; radius: 19
                         color: Qt.rgba(1, 1, 1, 0.92)
-                        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                        Behavior on y { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
                     }
                     Column {
                         y: 3
@@ -441,7 +441,7 @@ Window {
                                     d: Icons[modeItem.modelData.icon]
                                     size: 19; stroke: 1.9
                                     color: win.mode === modeItem.modelData.m ? "#111" : "white"
-                                    Behavior on color { ColorAnimation { duration: 160 } }
+                                    Behavior on color { ColorAnimation { duration: 100 } }
                                 }
                                 MouseArea {
                                     id: modeArea
@@ -474,9 +474,9 @@ Window {
                         radius: square ? 6 : width / 2
                         color: win.mode === "video" ? "#E5484D" : "white"
                         scale: shutterArea.pressed ? 0.88 : shutterArea.containsMouse ? 0.95 : 1
-                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                        Behavior on radius { NumberAnimation { duration: 200 } }
-                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        Behavior on radius { NumberAnimation { duration: 120 } }
+                        Behavior on color { ColorAnimation { duration: 120 } }
                         Behavior on scale { NumberAnimation { duration: 120 } }
                     }
                     MouseArea {
@@ -507,7 +507,7 @@ Window {
                 SequentialAnimation {
                     id: popAnim
                     NumberAnimation { target: thumbBox; property: "scale"; to: 1.15; duration: 120 }
-                    NumberAnimation { target: thumbBox; property: "scale"; to: 1; duration: 260; easing.type: Easing.OutBack }
+                    NumberAnimation { target: thumbBox; property: "scale"; to: 1; duration: 160; easing.type: Easing.OutBack }
                 }
                 RoundedImage {
                     anchors.fill: parent; anchors.margins: 3
@@ -542,8 +542,8 @@ Window {
             z: 300
             width: Math.min(parent.width - 60, toastText.implicitWidth + 36); height: 40; radius: 20
             color: "#ECEEF3"
-            Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Text {
                 id: toastText
                 anchors.centerIn: parent

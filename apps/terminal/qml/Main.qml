@@ -256,7 +256,7 @@ Window {
             height: parent.height - y
             bottomLeftRadius: win.r; bottomRightRadius: win.r
             color: win.paneColor
-            Behavior on color { ColorAnimation { duration: 200 } }
+            Behavior on color { ColorAnimation { duration: 120 } }
             Rectangle { width: parent.width; height: 1; color: Theme.line }
 
             Repeater {
@@ -272,7 +272,7 @@ Window {
                 bottomLeftRadius: win.r; bottomRightRadius: win.r
                 color: win.paneDark ? "white" : "black"
                 opacity: 0
-                NumberAnimation on opacity { id: flashAnim; running: false; from: 0.12; to: 0; duration: 260; easing.type: Easing.OutQuad }
+                NumberAnimation on opacity { id: flashAnim; running: false; from: 0.12; to: 0; duration: 160; easing.type: Easing.OutQuad }
             }
 
             // Pliki upuszczone na terminal wpisują się jako ścieżki
@@ -305,7 +305,7 @@ Window {
                 anchors.right: parent.right; anchors.rightMargin: 14
                 y: shown ? 12 : -height - 4
                 visible: shown || y > -height
-                Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+                Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
                 z: 10
                 width: 360; height: 44; radius: 22
                 color: Theme.surface
@@ -355,7 +355,7 @@ Window {
                 property bool shown: false
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - (shown ? height + 18 : -4)
-                Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutQuint } }
+                Behavior on y { NumberAnimation { duration: 130; easing.type: Easing.OutQuint } }
                 visible: y < parent.height
                 z: 10
                 width: toastText.implicitWidth + 36; height: 38; radius: 19
@@ -508,7 +508,7 @@ Window {
                 radius: width / 2
                 color: win.paneDark ? Qt.rgba(1, 1, 1, 0.38) : Qt.rgba(0, 0, 0, 0.32)
                 opacity: scrollArea.show || scrollHover.hovered || thumbDrag.pressed ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
                 Behavior on width { NumberAnimation { duration: 120 } }
                 Behavior on x { NumberAnimation { duration: 120 } }
             }
@@ -534,7 +534,7 @@ Window {
             border.width: 1; border.color: Theme.edge
             opacity: term.scrollValue > 0 ? 1 : 0
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Row {
                 id: downRow
                 anchors.centerIn: parent

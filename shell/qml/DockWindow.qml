@@ -155,7 +155,7 @@ Window {
     property bool forcedHover: false
     readonly property bool hovering: hover.hovered || forcedHover || popupHover.hovered
     property real hoverAmt: hovering ? 1 : 0
-    Behavior on hoverAmt { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+    Behavior on hoverAmt { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
     // Na korzeniu okna, żeby kursor był śledzony także nad ikonami
     HoverHandler {
@@ -168,7 +168,7 @@ Window {
         id: island
         x: Math.round((dock.width - width) / 2)
         y: dock.height - height - 10 + (dock.revealed ? 0 : 96)
-        Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         onYChanged: dock.updateRegion()
         width: row.width + 18
         height: 70

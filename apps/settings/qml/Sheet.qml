@@ -22,7 +22,7 @@ Item {
     z: 900
     visible: opacity > 0
     opacity: shown ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: 140 } }
+    Behavior on opacity { NumberAnimation { duration: 90 } }
 
     Rectangle {
         anchors.fill: parent
@@ -38,7 +38,7 @@ Item {
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         scale: sh.shown ? 1 : 0.95
-        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
         MouseArea { anchors.fill: parent }
         Keys.onEscapePressed: sh.close()
         Column {

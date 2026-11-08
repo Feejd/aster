@@ -11,7 +11,7 @@ Item {
     property real radius: 14
     readonly property bool lifted: window.active || WindowEffects.preview
     property real depth: lifted ? 1 : 0.55
-    Behavior on depth { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+    Behavior on depth { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
     readonly property real a: Theme.dark ? 1.6 : 1
 
     x: frame.x; y: frame.y

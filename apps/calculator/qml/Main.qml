@@ -311,7 +311,7 @@ Window {
                     font.family: Theme.font; font.pixelSize: win.evaluated ? 54 : 46; font.weight: win.evaluated ? Font.DemiBold : Font.Medium
                     font.features: { "tnum": 1 }
                     font.letterSpacing: -0.5
-                    Behavior on font.pixelSize { NumberAnimation { duration: 140 } }
+                    Behavior on font.pixelSize { NumberAnimation { duration: 90 } }
                 }
                 Text {
                     width: parent.width; height: 24
@@ -420,8 +420,8 @@ Window {
             z: 300
             width: toastText.implicitWidth + 32; height: 34; radius: 17
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
-            Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutQuint } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Text { id: toastText; anchors.centerIn: parent; color: Theme.dark ? "#16181D" : "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
             Timer { id: toastTimer; interval: 1500; onTriggered: toastBox.shown = false }
         }

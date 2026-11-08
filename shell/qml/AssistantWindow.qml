@@ -94,7 +94,7 @@ Window {
             Transition {
                 to: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: panel; property: "s"; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
+                    NumberAnimation { target: panel; property: "s"; duration: 200; easing.type: Easing.OutBack; easing.overshoot: 0.9 }
                     NumberAnimation { target: panel; property: "opacity"; duration: 110 }
                 }
             },
@@ -102,8 +102,8 @@ Window {
                 from: "shown"
                 ParallelAnimation {
                     // chowa się z powrotem w kroplę pod prawą wyspą
-                    NumberAnimation { target: panel; property: "s"; to: 0.5; duration: 170; easing.type: Easing.InCubic }
-                    NumberAnimation { target: panel; property: "opacity"; duration: 170; easing.type: Easing.InQuad }
+                    NumberAnimation { target: panel; property: "s"; to: 0.5; duration: 100; easing.type: Easing.InCubic }
+                    NumberAnimation { target: panel; property: "opacity"; duration: 100; easing.type: Easing.InQuad }
                 }
             }
         ]
@@ -175,8 +175,8 @@ Window {
             // Nowa wiadomość wjeżdża od dołu i przenika
             add: Transition {
                 ParallelAnimation {
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutCubic }
-                    NumberAnimation { property: "scale"; from: 0.94; to: 1; duration: 380; easing.type: Easing.OutBack }
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 160; easing.type: Easing.OutCubic }
+                    NumberAnimation { property: "scale"; from: 0.94; to: 1; duration: 230; easing.type: Easing.OutBack }
                 }
             }
             // Odpowiedź rośnie — trzymaj koniec w widoku
@@ -520,7 +520,7 @@ Window {
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(1, 1, 1, 0.7)
         border.width: 1
         border.color: waiting ? Qt.rgba(0.23, 0.51, 0.96, 0.6) : Theme.line
-        Behavior on border.color { ColorAnimation { duration: 200 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
 
 
         Column {

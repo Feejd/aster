@@ -49,7 +49,7 @@ Page {
                             border.width: 2.5
                             border.color: sw.modelData.color
                             opacity: sw.chosen ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: 140 } }
+                            Behavior on opacity { NumberAnimation { duration: 90 } }
                         }
                         Rectangle {
                             anchors.fill: parent
@@ -91,7 +91,7 @@ Page {
                 border.width: 3
                 border.color: Theme.accent
                 opacity: mc.chosen ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 160 } }
+                Behavior on opacity { NumberAnimation { duration: 100 } }
             }
             Rectangle {
                 id: mini

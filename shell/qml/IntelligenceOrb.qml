@@ -64,8 +64,8 @@ Item {
         SequentialAnimation on pulse {
             running: o.busy
             loops: Animation.Infinite
-            NumberAnimation { to: 1.18; duration: 420; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 0.92; duration: 420; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 1.18; duration: 250; easing.type: Easing.InOutSine }
+            NumberAnimation { to: 0.92; duration: 250; easing.type: Easing.InOutSine }
             onRunningChanged: if (!running) star.pulse = 1
         }
     }

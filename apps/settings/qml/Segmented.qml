@@ -24,7 +24,7 @@ Rectangle {
                 color: on ? (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : "white") : "transparent"
                 border.width: on && !Theme.dark ? 1 : 0
                 border.color: Theme.line
-                Behavior on color { ColorAnimation { duration: 140 } }
+                Behavior on color { ColorAnimation { duration: 90 } }
                 Text { id: txt; anchors.centerIn: parent; text: opt.modelData.label; color: opt.on ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.weight: opt.on ? Font.DemiBold : Font.Medium }
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: seg.picked(opt.modelData.value) }
             }

@@ -237,8 +237,8 @@ Item {
             id: anim
             NumberAnimation { target: flash; property: "opacity"; to: 1; duration: 60 }
             ParallelAnimation {
-                NumberAnimation { target: flash; property: "opacity"; to: 0; duration: 520; easing.type: Easing.InQuad }
-                NumberAnimation { target: flash; property: "scale"; from: 1; to: 1.35; duration: 520 }
+                NumberAnimation { target: flash; property: "opacity"; to: 0; duration: 310; easing.type: Easing.InQuad }
+                NumberAnimation { target: flash; property: "scale"; from: 1; to: 1.35; duration: 310 }
             }
         }
     }
@@ -252,7 +252,7 @@ Item {
         width: 190; height: 40; radius: 20
         color: Qt.rgba(0, 0, 0, 0.55)
         opacity: 0
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on opacity { NumberAnimation { duration: 110 } }
         Timer { id: volumeTimer; interval: 1100; onTriggered: volumeHint.opacity = 0 }
         Icon { x: 14; anchors.verticalCenter: parent.verticalCenter; d: player.muted || player.volume === 0 ? Icons.volumeOff : Icons.volume; size: 18; color: "white" }
         Rectangle {
@@ -273,7 +273,7 @@ Item {
         visible: text !== ""
         anchors.horizontalCenter: parent.horizontalCenter
         y: parent.height - height - (player.chrome ? bottom.height + 8 : 36)
-        Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
+        Behavior on y { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
         width: Math.min(implicitWidth, parent.width - 80)
         text: player.cueText
         wrapMode: Text.WordWrap
@@ -290,7 +290,7 @@ Item {
         width: parent.width; height: 64
         opacity: player.chrome ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 220 } }
+        Behavior on opacity { NumberAnimation { duration: 130 } }
         Rectangle {
             anchors.fill: parent
             gradient: Gradient {
@@ -336,7 +336,7 @@ Item {
         width: parent.width; height: 104
         opacity: player.chrome ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 220 } }
+        Behavior on opacity { NumberAnimation { duration: 130 } }
         HoverHandler { onPointChanged: player.wake() }
         Rectangle {
             anchors.fill: parent

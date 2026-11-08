@@ -217,7 +217,7 @@ Window {
                             Rectangle {
                                 width: Math.max(height, parent.width * Math.min(1, mini.modelData[1] / 100)); height: parent.height; radius: 2.5
                                 color: mini.modelData[2]
-                                Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+                                Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
                             }
                         }
                     }
@@ -351,8 +351,8 @@ Window {
             }
             ParallelAnimation {
                 id: pageAnim
-                NumberAnimation { target: pageHolder; property: "opacity"; from: 0; to: 1; duration: 160; easing.type: Easing.OutQuad }
-                NumberAnimation { target: pageHolder; property: "shift"; from: 14; to: 0; duration: 240; easing.type: Easing.OutQuint }
+                NumberAnimation { target: pageHolder; property: "opacity"; from: 0; to: 1; duration: 100; easing.type: Easing.OutQuad }
+                NumberAnimation { target: pageHolder; property: "shift"; from: 14; to: 0; duration: 140; easing.type: Easing.OutQuint }
             }
 
             // Komunikat na dole
@@ -366,8 +366,8 @@ Window {
                 z: 20
                 width: toastText.implicitWidth + 36; height: 40; radius: 20
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
-                Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-                Behavior on opacity { NumberAnimation { duration: 160 } }
+                Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+                Behavior on opacity { NumberAnimation { duration: 100 } }
                 Text { id: toastText; anchors.centerIn: parent; color: Theme.dark ? "#16181D" : "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
                 Timer { id: toastTimer; interval: 3000; onTriggered: toastBox.shown = false }
             }

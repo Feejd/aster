@@ -16,7 +16,7 @@ Item {
     z: 150
     visible: opacity > 0.01
     opacity: shown ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: 140 } }
+    Behavior on opacity { NumberAnimation { duration: 90 } }
 
     Rectangle { anchors.fill: parent; radius: sheet.radius; color: Qt.rgba(0, 0, 0, Theme.dark ? 0.45 : 0.25) }
     MouseArea { anchors.fill: parent; onClicked: if (sheet.dismissable) sheet.dismissed() }
@@ -30,7 +30,7 @@ Item {
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         scale: sheet.shown ? 1 : 0.97
-        Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutQuad } }
+        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
         clip: true
         MouseArea { anchors.fill: parent }
         Column {

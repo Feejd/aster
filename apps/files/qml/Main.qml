@@ -1093,7 +1093,7 @@ Window {
             color: Qt.rgba(0, 0, 0, 0.25)
             visible: opacity > 0
             opacity: win.quickLook ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 140 } }
+            Behavior on opacity { NumberAnimation { duration: 90 } }
             MouseArea { anchors.fill: parent; onClicked: win.quickLook = null }
             Rectangle {
                 id: ql
@@ -1106,7 +1106,7 @@ Window {
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 scale: win.quickLook ? 1 : 0.94
-                Behavior on scale { NumberAnimation { duration: 170; easing.type: Easing.OutBack; easing.overshoot: 1.0 } }
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutBack; easing.overshoot: 1.0 } }
                 MouseArea { anchors.fill: parent }
                 Rectangle {
                     id: qlBox
@@ -1222,7 +1222,7 @@ Window {
             visible: win.inArchive
             anchors.horizontalCenter: content.horizontalCenter
             y: content.y + content.height - height - 14 - (toastTimer.running ? 54 : 0)
-            Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+            Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
             width: archRow.implicitWidth + 16; height: 46; radius: 23
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
@@ -1279,7 +1279,7 @@ Window {
                         Rectangle {
                             width: parent.width * jobCard.modelData.progress; height: parent.height; radius: parent.radius
                             color: Theme.accent
-                            Behavior on width { NumberAnimation { duration: 200 } }
+                            Behavior on width { NumberAnimation { duration: 120 } }
                         }
                     }
                     HoverButton {
@@ -1558,8 +1558,8 @@ Window {
             color: Theme.text
             opacity: toastTimer.running ? 1 : 0
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: 180 } }
-            Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 110 } }
+            Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutQuint } }
             Row {
                 id: toastRow
                 anchors.centerIn: parent

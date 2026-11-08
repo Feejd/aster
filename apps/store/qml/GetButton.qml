@@ -42,7 +42,7 @@ Item {
             width: parent.width * gb.fraction
             radius: parent.radius
             color: Theme.accentSoft
-            Behavior on width { NumberAnimation { duration: 200 } }
+            Behavior on width { NumberAnimation { duration: 120 } }
         }
         Txt {
             id: label

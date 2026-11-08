@@ -52,7 +52,7 @@ RUN dnf install -y rubberband-libs vst3sdk-hosting xorg-x11-server-Xwayland pyth
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key asteroknaEnabled true \
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key squashEnabled false \
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key magiclampEnabled true \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key AnimationDurationFactor 0.7 \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group KDE --key AnimationDurationFactor 0.5 \
  # Okna: nowe na środku ekranu, wyraźne przyciąganie, Super+strzałki jak w Windowsie
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Windows --key Placement Centered \
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key asterukladEnabled true \

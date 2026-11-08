@@ -43,8 +43,8 @@ Window {
         SequentialAnimation {
             id: enter
             ParallelAnimation {
-                NumberAnimation { target: holder; property: "scale"; from: 0.94; to: 1; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
-                NumberAnimation { target: holder; property: "opacity"; from: 0; to: 1; duration: 160 }
+                NumberAnimation { target: holder; property: "scale"; from: 0.94; to: 1; duration: 160; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+                NumberAnimation { target: holder; property: "opacity"; from: 0; to: 1; duration: 100 }
             }
         }
         SequentialAnimation {

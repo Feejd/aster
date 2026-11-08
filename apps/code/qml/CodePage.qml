@@ -1114,7 +1114,7 @@ Item {
         height: Math.max(30, flick.visibleArea.heightRatio * flick.height)
         color: Theme.text2
         opacity: vArea.containsMouse || vArea.pressed ? 0.5 : 0.2
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         MouseArea {
             id: vArea
             anchors.fill: parent; anchors.margins: -4

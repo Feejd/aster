@@ -202,7 +202,7 @@ Item {
         color: Qt.rgba(0, 0, 0, 0.25)
         opacity: wifi.asking ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 140 } }
+        Behavior on opacity { NumberAnimation { duration: 90 } }
         MouseArea { anchors.fill: parent; onClicked: wifi.asking = null }
 
         Rectangle {
@@ -212,7 +212,7 @@ Item {
             radius: 18
             color: Theme.surface
             scale: wifi.asking ? 1 : 0.94
-            Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+            Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutBack } }
             MouseArea { anchors.fill: parent }
             layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect { shadowEnabled: true; shadowBlur: 1; shadowVerticalOffset: 10; shadowColor: Qt.rgba(0, 0, 0, 0.3) }

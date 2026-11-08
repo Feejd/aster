@@ -101,10 +101,10 @@ Window {
             Transition {
                 to: "shown"
                 ParallelAnimation {
-                    NumberAnimation { target: panel; property: "s"; duration: 230; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
-                    NumberAnimation { target: panel; property: "offset"; duration: 200; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: panel; property: "s"; duration: 140; easing.type: Easing.OutBack; easing.overshoot: 0.8 }
+                    NumberAnimation { target: panel; property: "offset"; duration: 120; easing.type: Easing.OutQuint }
                     NumberAnimation { target: panel; property: "opacity"; duration: 70; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: panel; property: "reveal"; from: 0; duration: 300; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: panel; property: "reveal"; from: 0; duration: 180; easing.type: Easing.OutCubic }
                 }
             },
             Transition {
@@ -738,7 +738,7 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             color: tg.on ? Theme.accent : (Theme.dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.08))
             scale: tgArea.pressed ? 0.9 : 1
-            Behavior on color { ColorAnimation { duration: 160 } }
+            Behavior on color { ColorAnimation { duration: 100 } }
             Behavior on scale { NumberAnimation { duration: 100 } }
             Icon { anchors.centerIn: parent; d: Icons[tg.icon] || ""; size: 18; stroke: 2; color: tg.on ? "white" : Theme.text }
         }

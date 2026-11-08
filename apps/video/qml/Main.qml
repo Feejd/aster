@@ -384,8 +384,8 @@ Window {
             z: 300
             width: toastRow.implicitWidth + 36; height: 40; radius: 20
             color: Theme.dark || win.watching ? "#ECEEF3" : "#1E2027"
-            Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
-            Behavior on opacity { NumberAnimation { duration: 160 } }
+            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutQuint } }
+            Behavior on opacity { NumberAnimation { duration: 100 } }
             Row {
                 id: toastRow
                 anchors.centerIn: parent
@@ -454,7 +454,7 @@ Window {
                 cache: true
                 sourceSize.width: 480
                 opacity: status === Image.Ready ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
             }
             Rectangle {
                 anchors.fill: parent

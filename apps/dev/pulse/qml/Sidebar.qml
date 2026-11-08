@@ -91,7 +91,7 @@ Item {
             x: sb.page === "collections" ? 2 : parent.width / 2
             y: 2; width: parent.width / 2 - 2; height: parent.height - 4; radius: 7
             color: Theme.dark ? Qt.rgba(1, 1, 1, 0.12) : "white"
-            Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
         }
         Repeater {
             model: [["collections", "Kolekcje"], ["history", "Historia"]]

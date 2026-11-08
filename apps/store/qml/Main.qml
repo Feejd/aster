@@ -264,7 +264,7 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: toastTimer.running ? 22 : -height - 4
-            Behavior on anchors.bottomMargin { NumberAnimation { duration: 200; easing.type: Easing.OutQuint } }
+            Behavior on anchors.bottomMargin { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
             z: 30
             width: Math.min(parent.width - 40, toastText.implicitWidth + 36); height: 44; radius: 10
             color: Theme.text

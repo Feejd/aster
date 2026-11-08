@@ -263,7 +263,7 @@ Item {
         height: Math.max(30, list.visibleArea.heightRatio * list.height)
         color: Theme.text2
         opacity: list.moving || barArea.containsMouse || barArea.pressed ? 0.55 : 0.2
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         Behavior on width { NumberAnimation { duration: 120 } }
         MouseArea {
             id: barArea

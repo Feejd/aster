@@ -58,7 +58,7 @@ Rectangle {
                 height: parent.height; radius: 2
                 width: parent.width * Math.max(0.03, row.d.progress < 0 ? 0.3 : row.d.progress)
                 color: row.d.state === DownloadItem.Paused ? Theme.text2 : Theme.accent
-                Behavior on width { NumberAnimation { duration: 250 } }
+                Behavior on width { NumberAnimation { duration: 150 } }
             }
         }
         Text {

@@ -56,8 +56,8 @@ Item {
         running: item.starting
         loops: Animation.Infinite
         alwaysRunToEnd: true
-        NumberAnimation { to: 18; duration: 260; easing.type: Easing.OutQuad }
-        NumberAnimation { to: 0; duration: 300; easing.type: Easing.OutBounce }
+        NumberAnimation { to: 18; duration: 160; easing.type: Easing.OutQuad }
+        NumberAnimation { to: 0; duration: 180; easing.type: Easing.OutBounce }
         PauseAnimation { duration: 120 }
     }
 
@@ -74,7 +74,7 @@ Item {
         border.color: Theme.dark ? "#2A2C33" : "white"
         scale: item.badge > 0 ? 1 : 0
         visible: scale > 0.01
-        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
+        Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
         Text {
             id: badgeText
             anchors.centerIn: parent
@@ -110,8 +110,8 @@ Item {
         border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.08)
         opacity: shown ? 1 : 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 140 } }
-        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 90 } }
+        Behavior on y { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
         Text {
             id: tipText
             anchors.centerIn: parent

@@ -12,7 +12,7 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: tg.checked ? Theme.accent : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.13))
-        Behavior on color { ColorAnimation { duration: 160 } }
+        Behavior on color { ColorAnimation { duration: 100 } }
     }
     RectangularShadow {
         x: knob.x; y: knob.y; width: knob.width; height: knob.height
@@ -26,7 +26,7 @@ Item {
         width: area.pressed ? 24 : 20; height: 20
         radius: 10
         color: "white"
-        Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
+        Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutBack; easing.overshoot: 1.2 } }
         Behavior on width { NumberAnimation { duration: 120 } }
     }
     MouseArea {

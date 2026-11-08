@@ -314,7 +314,7 @@ Item {
                 border.width: sc.pw > 0 ? 0 : 1.5
                 border.color: Theme.accent
                 scale: sc.hovered ? 1.06 : 1
-                Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+                Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
                 Icon {
                     anchors.centerIn: parent
                     d: Icons[sc.pw > 0 ? sc.icon : "plus"] || ""

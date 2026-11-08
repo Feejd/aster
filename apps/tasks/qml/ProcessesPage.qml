@@ -85,7 +85,7 @@ Item {
             height: Math.max(30, list.visibleArea.heightRatio * list.height)
             color: Theme.text2
             opacity: list.moving || barArea.containsMouse ? 0.5 : 0.18
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on opacity { NumberAnimation { duration: 120 } }
             MouseArea { id: barArea; anchors.fill: parent; hoverEnabled: true }
         }
     }
@@ -210,7 +210,7 @@ Item {
                 d: Icons.chevronRight; size: 12; stroke: 2.2
                 color: Theme.text2
                 rotation: row.expanded ? 90 : 0
-                Behavior on rotation { NumberAnimation { duration: 140 } }
+                Behavior on rotation { NumberAnimation { duration: 90 } }
             }
             MouseArea { anchors.fill: parent; onClicked: page.model.toggle(row.key) }
         }
