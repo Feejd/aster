@@ -256,7 +256,7 @@ void Decoration::paint(QPainter *painter, const QRectF &repaintArea)
     // Tytuł na środku; nie wchodzi na przyciski
     const qreal reserved = 3 * (ButtonSize + ButtonSpacing) + SideMargin + 12;
     if (width > 2 * reserved) {
-        QFont font(QStringLiteral("Manrope"));
+        QFont font(QStringLiteral("Inter"));
         font.setPixelSize(13);
         font.setWeight(QFont::Medium);
         painter->setFont(font);

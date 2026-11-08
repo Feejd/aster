@@ -58,7 +58,8 @@ Window {
             font.family: Theme.font
             font.pixelSize: 148
             font.weight: Font.ExtraLight
-            font.letterSpacing: -7
+            font.letterSpacing: -5
+            font.variableAxes: { "opsz": 32 }   // wersja „Display”: ciaśniej i smuklej przy dużych rozmiarach
             font.features: { "tnum": 1 }
         }
 

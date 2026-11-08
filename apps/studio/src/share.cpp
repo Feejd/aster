@@ -60,7 +60,7 @@ QImage cover(const QString &title, const QString &artist, const std::vector<floa
     }
 
     // Tytuł i wykonawca
-    QFont f(QStringLiteral("Manrope"));
+    QFont f(QStringLiteral("Inter"));
     f.setPixelSize(104);
     f.setWeight(QFont::Bold);
     p.setFont(f);

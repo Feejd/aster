@@ -229,7 +229,8 @@ Window {
                     x: 32; anchors.verticalCenter: parent.verticalCenter
                     text: win.current.name
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 32; font.weight: Font.Normal; font.letterSpacing: -0.5
+                    font.family: Theme.font; font.pixelSize: 30; font.weight: Font.DemiBold; font.letterSpacing: -0.6
+                    font.variableAxes: { "opsz": 32 }
                 }
                 WindowButtons {
                     window: win
