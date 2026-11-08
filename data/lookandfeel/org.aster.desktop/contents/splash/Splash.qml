@@ -11,7 +11,7 @@ Rectangle {
     Image {
         id: wall
         anchors.fill: parent
-        source: "file:///usr/share/aster/wallpapers/grzbiety-dark.jpg"
+        source: "file:///usr/share/aster/wallpapers/swit-dark.jpg"
         fillMode: Image.PreserveAspectCrop
         visible: GraphicsInfo.api === GraphicsInfo.Software
     }

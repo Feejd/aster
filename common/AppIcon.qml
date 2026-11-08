@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import org.kde.kirigami as Kirigami
 
-// Ikona programu w jednym kształcie dla całego systemu: płaski kwadrat w kolorze programu z białym znakiem.
+// Ikona programu w jednym kształcie dla całego systemu: zaokrąglony kwadrat w kolorze programu z białym znakiem.
 //  • programy Aster i podstawowe programy systemu: własny kafelek ze znakiem (spójny zestaw),
 //  • aplikacje webowe Aster: ich kafelek (już ma kształt) wycięty w squircle,
 //  • reszta: oryginalna ikona na neutralnym kafelku z falą, więc wszystko ma ten sam obrys.
@@ -74,14 +74,24 @@ Item {
 
     readonly property real corner: size * 0.3
 
-    // Kafelek: kwadrat z małym zaokrągleniem w jednym, pełnym kolorze programu
+    // Kafelek: zaokrąglony kwadrat w kolorze programu, u góry odrobinę jaśniejszy (światło z góry),
+    // z cienką jasną krawędzią od środka — bez połysku i odbić
     Rectangle {
         anchors.fill: parent
         visible: !ai.webapp
         radius: ai.corner
-        color: ai.design ? ai.lo : ai.dark ? "#2B2C31" : "#E9E9E5"
-        border.width: ai.design ? 0 : 1
-        border.color: ai.dark ? "#3A3B41" : "#D5D5D0"
+        gradient: Gradient {
+            GradientStop { position: 0; color: ai.design ? Qt.lighter(ai.lo, 1.28) : ai.dark ? "#34353B" : "#FFFFFF" }
+            GradientStop { position: 1; color: ai.design ? ai.lo : ai.dark ? "#26272C" : "#E6E7EA" }
+        }
+    }
+    Rectangle {
+        anchors.fill: parent
+        visible: !ai.webapp
+        radius: ai.corner
+        color: "transparent"
+        border.width: Math.max(1, ai.size / 56)
+        border.color: ai.design ? Qt.rgba(1, 1, 1, 0.16) : ai.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.07)
     }
 
     // Znak: cienka biała linia, jedna grubość w całym zestawie
@@ -90,8 +100,8 @@ Item {
         anchors.centerIn: parent
         visible: !!ai.design
         d: ai.design ? (Icons[ai.design[2]] || "") : ""
-        size: ai.size * 0.54
-        stroke: 1.9
+        size: ai.size * 0.5
+        stroke: 2.1
         color: "white"
     }
 

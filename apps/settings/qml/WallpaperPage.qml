@@ -8,7 +8,7 @@ import Aster.Settings
 Page {
     id: wp
     readonly property var walls: [
-        { id: "grzbiety", name: "Grzbiety" }, { id: "mgla", name: "Mgła" },
+        { id: "swit", name: "Świt" }, { id: "grzbiety", name: "Grzbiety" }, { id: "mgla", name: "Mgła" },
         { id: "pasma", name: "Pasma" }, { id: "papier", name: "Papier" }
     ]
     // Własne zdjęcie (ze Zdjęć: „Ustaw jako tapetę”) — pełna ścieżka zamiast nazwy tapety Aster

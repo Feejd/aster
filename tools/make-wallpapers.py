@@ -80,6 +80,26 @@ def paper(base, line, seed):
     return (base * (1 - ink) + line * ink).astype(np.float32)
 
 
+def silk(blobs, base, seed, folds=2.6, depth=0.20, sheen=0.10):
+    """Jedwab: miękkie plamy koloru i szerokie, płynne fałdy z delikatnym światłem na grzbietach."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    x, y = xx / W, yy / H
+    img = np.zeros((H, W, 3), np.float32) + base
+    for (cx, cy, r, color) in blobs:
+        w = np.exp(-(((x - cx) * 1.6) ** 2 + (y - cy) ** 2) / (2 * r * r))[..., None]
+        img = img * (1 - w) + color * w
+    f = (y * 0.9 + x * 0.55
+         + 0.10 * np.sin(x * 3.1 + rng.uniform(0, 6))
+         + 0.05 * np.sin(x * 6.3 + y * 2.2 + rng.uniform(0, 6))
+         + 0.03 * np.sin(y * 9.0 + rng.uniform(0, 6)))
+    wave = np.sin(f * folds * 2 * np.pi)
+    shade = (wave * 0.5 + 0.5)[..., None]
+    crest = np.clip((wave - 0.55) / 0.45, 0, 1)[..., None] ** 3
+    img = img * (1 - depth / 2 + depth * shade) + (255 - img) * sheen * crest
+    return img
+
+
 def save(img, name, seed):
     rng = np.random.default_rng(seed)
     grain = rng.normal(0, 1.1, (H, W, 1)).astype(np.float32)        # drobne ziarno: mat zamiast połysku i bez pasków
@@ -89,6 +109,8 @@ def save(img, name, seed):
     pic.resize((480, 300), Image.LANCZOS).save(f"{OUT}/{name}-thumb.jpg", quality=85)
 
 
+save(silk([(0.15, 0.2, 0.32, rgb("#F7C9B6")), (0.8, 0.25, 0.30, rgb("#C7D3FF")), (0.55, 0.85, 0.36, rgb("#E6C8F2")), (0.95, 0.9, 0.25, rgb("#B9E2F2"))], rgb("#F4EEF3"), 51), "swit-light", 9)
+save(silk([(0.15, 0.25, 0.30, rgb("#5B2E8C")), (0.85, 0.2, 0.28, rgb("#1F3A8F")), (0.55, 0.85, 0.36, rgb("#7A2C6B")), (0.95, 0.9, 0.25, rgb("#0F5A73"))], rgb("#0E0F1F"), 51, depth=0.42, sheen=0.025), "swit-dark", 10)
 save(layers(rgb("#E9E6DF"), rgb("#7C8496"), 6, 11, 0.05), "grzbiety-light", 1)
 save(layers(rgb("#3A3E4C"), rgb("#101217"), 6, 11, 0.05), "grzbiety-dark", 2)
 save(layers(rgb("#E6ECF1"), rgb("#5F7F92"), 5, 23, 0.035), "mgla-light", 3)
