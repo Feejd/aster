@@ -77,7 +77,7 @@ Sheet {
                     required property var modelData
                     readonly property bool chosen: sheet.kind === modelData.id
                     width: (grid.width - 16) / 3; height: 62
-                    radius: 10
+                    radius: 14
                     color: chosen ? Theme.accentSoft : tileArea.containsMouse ? Theme.hover : Theme.fill
                     border.width: chosen ? 1.5 : 0
                     border.color: Theme.accent

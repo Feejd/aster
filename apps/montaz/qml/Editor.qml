@@ -295,7 +295,7 @@ GlassPane {
             }
             HoverButton {
                 anchors.verticalCenter: parent.verticalCenter
-                width: exportRow.implicitWidth + 28; height: 34; radius: 10
+                width: exportRow.implicitWidth + 28; height: 34; radius: 17
                 baseColor: Theme.accent
                 color: hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor
                 enabled: Project.duration > 0
@@ -378,7 +378,7 @@ GlassPane {
                 spacing: 10
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 54; height: 54; radius: 10
+                    width: 54; height: 54; radius: 16
                     color: Theme.fill
                     Icon { anchors.centerIn: parent; d: Icons.plus; size: 24; color: Theme.text2 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ed.importRequested() }
@@ -458,7 +458,7 @@ GlassPane {
                     }
                     HoverButton {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: addLabel.implicitWidth + 26; height: 32; radius: 10
+                        width: addLabel.implicitWidth + 26; height: 32; radius: 16
                         baseColor: Qt.rgba(1, 1, 1, 0.14)
                         onClicked: ed.importRequested()
                         Text { id: addLabel; anchors.centerIn: parent; text: "Dodaj multimedia…"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }

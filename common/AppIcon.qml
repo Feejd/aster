@@ -72,7 +72,7 @@ Item {
     readonly property color lo: design ? design[1] : (dark ? "#24252C" : "#DDE1E8")
     function alpha(c, o) { return Qt.rgba(c.r, c.g, c.b, o); }
 
-    readonly property real corner: size * 0.2
+    readonly property real corner: size * 0.3
 
     // Kafelek: kwadrat z małym zaokrągleniem w jednym, pełnym kolorze programu
     Rectangle {

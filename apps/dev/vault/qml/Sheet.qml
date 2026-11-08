@@ -7,7 +7,7 @@ Item {
     id: sheet
     property bool shown: false
     property real cardWidth: 460
-    property real radius: 12
+    property real radius: 24
     property string title
     property string subtitle
     default property alias content: col.data
@@ -24,7 +24,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(sheet.cardWidth, sheet.width - 40)
         height: Math.min(col.implicitHeight + head.implicitHeight + 50, sheet.height - 40)
-        radius: 12
+        radius: 22
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         clip: true

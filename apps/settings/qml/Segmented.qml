@@ -8,7 +8,7 @@ Rectangle {
     property var model: []          // [{ label, value }]
     property var value
     signal picked(var value)
-    height: 32; radius: 10
+    height: 32; radius: 16
     width: row.implicitWidth + 6
     color: Theme.fill
     Row {

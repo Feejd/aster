@@ -10,7 +10,7 @@ Item {
     width: 40; height: 24
     Rectangle {
         anchors.fill: parent
-        radius: 8
+        radius: height / 2
         color: tg.checked ? Theme.accent : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.13))
         Behavior on color { ColorAnimation { duration: 160 } }
     }

@@ -110,7 +110,7 @@ Window {
 
         MouseArea { anchors.fill: parent }
 
-        Island { anchors.fill: parent; radius: 16 }
+        Island { anchors.fill: parent; radius: 30 }
         Rectangle {
             anchors.fill: parent
             radius: 16

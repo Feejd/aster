@@ -11,7 +11,7 @@ Rectangle {
     width: parent ? parent.width : 0
     readonly property real naturalHeight: col.y + col.implicitHeight + 18
     height: naturalHeight
-    radius: 10
+    radius: 16
     color: Theme.dark ? Qt.rgba(1, 1, 1, 0.035) : Qt.rgba(1, 1, 1, 0.9)
     border.width: 1; border.color: Theme.line
     Column {

@@ -154,7 +154,7 @@ Window {
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają Startu
 
-        Island { anchors.fill: parent; radius: 16 }
+        Island { anchors.fill: parent; radius: 30 }
 
         Item {
             id: main
@@ -164,8 +164,8 @@ Window {
             Rectangle {
                 id: searchBox
                 x: 20; y: 18
-                width: main.width - 40; height: 42
-                radius: 9
+                width: main.width - 40; height: 46
+                radius: 23
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
                 border.color: field.activeFocus ? Theme.accent : "transparent"
@@ -241,7 +241,7 @@ Window {
                             }
                             Rectangle {
                                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                                width: allText.implicitWidth + 20; height: 28; radius: 7
+                                width: allText.implicitWidth + 20; height: 28; radius: 14
                                 color: allArea.containsMouse ? Theme.hover : "transparent"
                                 Text {
                                     id: allText
@@ -270,7 +270,7 @@ Window {
                                     id: chip
                                     required property var modelData
                                     readonly property bool active: start.category === modelData.id
-                                    width: chipText.implicitWidth + 20; height: 28; radius: 7
+                                    width: chipText.implicitWidth + 24; height: 30; radius: 15
                                     color: active ? Theme.accent : chipArea.containsMouse ? Theme.hover : Theme.fill
                                     Text {
                                         id: chipText
@@ -303,7 +303,7 @@ Window {
                                     transform: Translate { y: (1 - tile.k) * 10 }
                                     Rectangle {
                                         anchors.fill: parent; anchors.margins: 2
-                                        radius: 9
+                                        radius: 18
                                         color: Theme.hover
                                         opacity: tileArea.containsMouse ? 1 : 0
                                         Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -445,7 +445,7 @@ Window {
             id: footer
             anchors.bottom: parent.bottom
             width: parent.width; height: 54
-            bottomLeftRadius: 16; bottomRightRadius: 16
+            bottomLeftRadius: 30; bottomRightRadius: 30
             color: Theme.windowGlass
             Rectangle { width: parent.width; height: 1; color: Theme.line }
             Rectangle {
@@ -485,7 +485,7 @@ Window {
         property string icon
         property string tip
         signal clicked()
-        width: 32; height: 32; radius: 8
+        width: 36; height: 36; radius: 18
         color: fbArea.containsMouse ? Theme.hover : Theme.fill
         scale: fbArea.pressed ? 0.9 : 1
         Behavior on scale { NumberAnimation { duration: 100 } }

@@ -57,7 +57,7 @@ Window {
             color: cw.ink
             font.family: Theme.font
             font.pixelSize: 148
-            font.weight: Font.ExtraLight
+            font.weight: Font.Thin
             font.letterSpacing: -6
             font.features: { "tnum": 1 }
         }
@@ -251,8 +251,8 @@ Window {
         id: card
         readonly property bool isCard: true
         onVisibleChanged: regionTimer.restart()
-        radius: 12
-        shadowStrength: 0.55
+        radius: 26
+        shadowStrength: 0.45
     }
 
     component MediaButton: Rectangle {

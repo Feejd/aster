@@ -165,7 +165,7 @@ Item {
                 }
                 HoverButton {
                     visible: (insp.info.fade ?? 0) > 0 && Project.clips.length > 2
-                    width: allText.implicitWidth + 24; height: 30; radius: 10
+                    width: allText.implicitWidth + 24; height: 30; radius: 15
                     baseColor: Theme.fill
                     onClicked: Project.applyTransitionToAll(insp.selected)
                     Text { id: allText; anchors.centerIn: parent; text: "Zastosuj do wszystkich klipów"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -208,7 +208,7 @@ Item {
                 }
                 HoverButton {
                     visible: (insp.info.look ?? "") !== "" || (insp.info.brightness ?? 0) !== 0 || (insp.info.contrast ?? 1) !== 1 || (insp.info.saturation ?? 1) !== 1
-                    width: resetText.implicitWidth + 24; height: 30; radius: 10
+                    width: resetText.implicitWidth + 24; height: 30; radius: 15
                     baseColor: Theme.fill
                     onClicked: Project.setValue(insp.selected, "resetLook", true)
                     Text { id: resetText; anchors.centerIn: parent; text: "Przywróć oryginał"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -294,7 +294,7 @@ Item {
                 }
                 HoverButton {
                     visible: (insp.info.x ?? -1) >= 0 || (insp.info.scale ?? 1) !== 1
-                    width: posText.implicitWidth + 24; height: 28; radius: 10
+                    width: posText.implicitWidth + 24; height: 28; radius: 14
                     baseColor: Theme.fill
                     onClicked: Project.setValue(insp.selected, "resetPos", true)
                     Text { id: posText; anchors.centerIn: parent; text: "Miejsce i wielkość ze stylu"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -386,7 +386,7 @@ Item {
                     onMoved: (v) => Project.setValue(insp.selected, "volume", v)
                 }
                 HoverButton {
-                    width: fullText.implicitWidth + 24; height: 30; radius: 10
+                    width: fullText.implicitWidth + 24; height: 30; radius: 15
                     baseColor: Theme.fill
                     onClicked: Project.setValue(insp.selected, "full", true)
                     Text { id: fullText; anchors.centerIn: parent; text: "Na cały kadr"; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium }
@@ -601,7 +601,7 @@ Item {
         property string label
         property bool on: false
         signal toggled()
-        width: tgRow.implicitWidth + 22; height: 28; radius: 10
+        width: tgRow.implicitWidth + 22; height: 28; radius: 14
         baseColor: on ? Theme.accent : Theme.fill
         color: on ? Theme.accent : (hovered ? Theme.hover : baseColor)
         onClicked: tg.toggled()
@@ -746,7 +746,7 @@ Item {
                 id: chip
                 required property var modelData
                 readonly property bool on: chips.current === modelData
-                width: chipText.implicitWidth + 20; height: 28; radius: 10
+                width: chipText.implicitWidth + 20; height: 28; radius: 14
                 baseColor: on ? Theme.accent : Theme.fill
                 color: on ? Theme.accent : (hovered ? Theme.hover : baseColor)
                 onClicked: chips.picked(modelData)

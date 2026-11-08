@@ -171,8 +171,8 @@ Window {
         Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
         onYChanged: dock.updateRegion()
         width: row.width + 18
-        height: 66
-        radius: 16
+        height: 70
+        radius: 30
         spot: dock.hoverAmt * 0.9
         spotX: dock.pointerX - x
         spotY: dock.pointerY - y
@@ -296,7 +296,7 @@ Window {
         }
 
         visible: open
-        radius: 12
+        radius: 22
         width: 280
         height: popupList.height + 16
         x: {

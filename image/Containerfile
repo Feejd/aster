@@ -38,14 +38,14 @@ RUN dnf install -y rubberband-libs vst3sdk-hosting xorg-x11-server-Xwayland pyth
  && kwriteconfig6 --file /etc/xdg/kcminputrc --group Mouse --key cursorTheme Aster \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Bouncing false \
  && kwriteconfig6 --file /etc/xdg/klaunchrc --group BusyCursorSettings --key Blinking false \
- # Kolory Aster i czcionka Geist także w programach spoza Astera (programy GTK dostają kolory przez kde-gtk-config)
+ # Kolory Aster i czcionka Outfit także w programach spoza Astera (programy GTK dostają kolory przez kde-gtk-config)
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key ColorScheme AsterLight \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key font "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key menuFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key toolBarFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key smallestReadableFont "Geist,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key font "Outfit,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key menuFont "Outfit,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key toolBarFont "Outfit,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key smallestReadableFont "Outfit,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
  && kwriteconfig6 --file /etc/xdg/kdeglobals --group General --key fixed "JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
- && kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
+ && kwriteconfig6 --file /etc/xdg/kdeglobals --group WM --key activeFont "Outfit,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" \
  # Ramka okien Aster, krótsze animacje i zasysanie do doku
  && kwriteconfig6 --file /etc/xdg/kwinrc --group org.kde.kdecoration2 --key library org.aster.decoration \
  && kwriteconfig6 --file /etc/xdg/kwinrc --group Plugins --key scaleEnabled false \
@@ -63,7 +63,7 @@ RUN dnf install -y rubberband-libs vst3sdk-hosting xorg-x11-server-Xwayland pyth
  && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Quick Tile Top" "none,Meta+Up,Przyciągnij okno do góry" \
  && kwriteconfig6 --file /etc/xdg/kglobalshortcutsrc --group kwin --key "Window Quick Tile Bottom" "none,Meta+Down,Przyciągnij okno do dołu" \
  && mkdir -p /usr/share/icons/default && printf '[Icon Theme]\nInherits=Aster\n' > /usr/share/icons/default/index.theme \
- && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\ngtk-theme='Breeze'\nfont-name='Geist 10'\ndocument-font-name='Geist 10'\nmonospace-font-name='JetBrains Mono 10'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
+ && printf "[org.gnome.desktop.interface]\ncursor-theme='Aster'\ngtk-theme='Breeze'\nfont-name='Outfit 10'\ndocument-font-name='Outfit 10'\nmonospace-font-name='JetBrains Mono 10'\n" > /usr/share/glib-2.0/schemas/90-aster-cursor.gschema.override \
  && glib-compile-schemas /usr/share/glib-2.0/schemas \
  && systemctl --global enable aster-shell.service \
  # Konto i ustawienia z instalatora przy pierwszym starcie (tools/build-iso.sh, apps/installer)

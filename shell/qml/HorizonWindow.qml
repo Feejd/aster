@@ -217,11 +217,10 @@ Window {
         onTriggered: if (islandHover.hovered || askField.text !== "") restart(); else hz.closeAsk()
     }
 
-    // Górny pasek: jedna pełna belka przez cały ekran
+    // Górny pasek stanu: przezroczysty, leży wprost na tapecie (jak na telefonie)
     Rectangle {
         width: parent.width; height: hz.reserved
         color: Theme.bar
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
     }
 
     // Żywa linia na dolnej krawędzi paska: jedyny ruch w spoczynku. Powiadomienie odlicza nią swój czas,

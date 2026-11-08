@@ -20,7 +20,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 12
+    readonly property real r: visibility === Window.FullScreen ? 0 : 24
 
     Playback {
         id: pb
@@ -283,7 +283,7 @@ Window {
                     // Szukaj (Ctrl+E)
                     Rectangle {
                         visible: !win.detail && win.section !== "queue"
-                        width: 220; height: 34; radius: 10
+                        width: 220; height: 34; radius: 17
                         color: Theme.fill
                         border.width: searchInput.activeFocus ? 2 : 0
                         border.color: Theme.accent
@@ -484,7 +484,7 @@ Window {
                     Cover {
                         id: albumCover
                         x: 28; y: 4
-                        width: 190; height: 190; radius: 10
+                        width: 190; height: 190; radius: 14
                         source: win.albumData ? win.albumData.cover : ""
                         big: true
                     }
@@ -763,7 +763,7 @@ Window {
             y: parent.height - bar.height - (shown ? height + 18 : 0)
             opacity: shown ? 1 : 0
             z: 300
-            width: toastText.implicitWidth + 36; height: 40; radius: 12
+            width: toastText.implicitWidth + 36; height: 40; radius: 20
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -907,7 +907,7 @@ Window {
         property string text
         property string icon
         property bool primary: false
-        width: pillRow.implicitWidth + (text ? 30 : 20); height: 34; radius: 10
+        width: pillRow.implicitWidth + (text ? 30 : 20); height: 34; radius: 17
         baseColor: primary ? Theme.accent : Theme.fill
         color: primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)
         Row {
@@ -968,7 +968,7 @@ Window {
         opacity: enabled ? 1 : 0.4
         Rectangle {
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width; height: sl.hot ? 5 : 4; radius: 8
+            width: parent.width; height: sl.hot ? 5 : 4; radius: height / 2
             color: Theme.fill
             Rectangle { width: parent.width * sl.shown; height: parent.height; radius: parent.radius; color: sl.hot ? Theme.accent : Theme.text2 }
         }
@@ -1013,7 +1013,7 @@ Window {
         spacing: 12
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 76; height: 76; radius: 12
+            width: 76; height: 76; radius: 22
             color: Theme.fill
             Icon { anchors.centerIn: parent; d: Icons[es.icon] || ""; size: 34; stroke: 1.6; color: Theme.text2 }
         }

@@ -187,7 +187,7 @@ Item {
                 width: Math.min(420, parent.width - 60)
                 spacing: 14
                 Rectangle {
-                    width: 64; height: 64; radius: 12
+                    width: 64; height: 64; radius: 20
                     color: Theme.accentSoft
                     Icon { anchors.centerIn: parent; d: Icons.flame; size: 30; stroke: 2; color: Theme.accentText }
                 }
@@ -212,7 +212,7 @@ Item {
                 width: Math.min(480, parent.width - 60)
                 spacing: 14
                 Rectangle {
-                    width: 64; height: 64; radius: 12
+                    width: 64; height: 64; radius: 20
                     color: Qt.rgba(1, 0.27, 0.23, 0.16)
                     Icon { anchors.centerIn: parent; d: Icons.lock; size: 30; stroke: 2; color: Theme.danger }
                 }
@@ -300,7 +300,7 @@ Item {
             anchors.centerIn: parent
             width: Math.min(440, parent.width - 40)
             height: dlgCol.implicitHeight + 48
-            radius: 12
+            radius: 20
             color: Theme.surface
             border.width: 1; border.color: Theme.edge
             readonly property var req: tab.dialog ? tab.dialog.request : null

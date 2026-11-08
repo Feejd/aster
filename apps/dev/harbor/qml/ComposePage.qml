@@ -17,7 +17,7 @@ Item {
         spacing: 10
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 72; height: 72; radius: 12
+            width: 72; height: 72; radius: 22
             gradient: Gradient {
                 GradientStop { position: 0; color: "#C4B5FD" }
                 GradientStop { position: 1; color: "#7C3AED" }
@@ -68,7 +68,7 @@ Item {
         readonly property bool anyUp: p.up > 0
         width: col.width
         height: cardCol.implicitHeight + 28
-        radius: 10
+        radius: 16
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.035) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.025)
         border.width: 1; border.color: Theme.line
 

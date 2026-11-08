@@ -121,7 +121,7 @@ Window {
 
         MouseArea { anchors.fill: parent }   // kliknięcia w panel nie zamykają centrum
 
-        Island { anchors.fill: parent; radius: 16 }
+        Island { anchors.fill: parent; radius: 30 }
         Rectangle {
             anchors.fill: parent
             radius: 16
@@ -707,7 +707,7 @@ Window {
         id: tile
         property int order: 0
         readonly property real k: panel.stagger(order)
-        radius: 10
+        radius: 22
         color: Theme.fill
         opacity: k
         transform: Translate { y: (1 - tile.k) * 10 }

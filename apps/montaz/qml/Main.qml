@@ -20,7 +20,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 12
+    readonly property real r: visibility === Window.FullScreen ? 0 : 24
 
     Component.onCompleted: effectsTimer.restart()
     onClosing: Project.closeProject()
@@ -138,7 +138,7 @@ Window {
             y: shown ? 70 : -height - 10
             opacity: shown ? 1 : 0
             z: 300
-            width: toastText.implicitWidth + 36; height: 40; radius: 12
+            width: toastText.implicitWidth + 36; height: 40; radius: 20
             color: Theme.dark ? "#ECEEF3" : "#1E2027"
             Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
             Behavior on opacity { NumberAnimation { duration: 160 } }

@@ -344,7 +344,7 @@ Item {
         spacing: 8
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 56; height: 56; radius: 10
+            width: 56; height: 56; radius: 18
             color: Theme.fill
             Icon { anchors.centerIn: parent; d: Icons[em.icon] || ""; size: 26; stroke: 1.9; color: em.iconColor }
         }

@@ -44,7 +44,7 @@ Page {
                         width: 30; height: 30
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 36; height: 36; radius: 10
+                            width: 36; height: 36; radius: 18
                             color: "transparent"
                             border.width: 2.5
                             border.color: sw.modelData.color
@@ -53,7 +53,7 @@ Page {
                         }
                         Rectangle {
                             anchors.fill: parent
-                            radius: 10
+                            radius: 15
                             gradient: Gradient {
                                 GradientStop { position: 0; color: Qt.lighter(sw.modelData.color, 1.25) }
                                 GradientStop { position: 1; color: sw.modelData.color }
@@ -86,7 +86,7 @@ Page {
             width: 200; height: 132
             Rectangle {
                 anchors.fill: parent; anchors.margins: -4
-                radius: 10
+                radius: 18
                 color: "transparent"
                 border.width: 3
                 border.color: Theme.accent
@@ -96,7 +96,7 @@ Page {
             Rectangle {
                 id: mini
                 anchors.fill: parent
-                radius: 10
+                radius: 14
                 clip: true
                 gradient: Gradient {
                     orientation: Gradient.Horizontal

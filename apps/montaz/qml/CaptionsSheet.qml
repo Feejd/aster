@@ -40,13 +40,13 @@ Item {
     }
 
     MouseArea { anchors.fill: parent; onClicked: sheet.close(); onWheel: {} }
-    Rectangle { anchors.fill: parent; radius: 12; color: Qt.rgba(0, 0, 0, 0.4) }
+    Rectangle { anchors.fill: parent; radius: 24; color: Qt.rgba(0, 0, 0, 0.4) }
 
     Rectangle {
         anchors.centerIn: parent
         width: 460
         height: content.implicitHeight + 44
-        radius: 10
+        radius: 18
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         scale: sheet.shown ? 1 : 0.96
@@ -209,7 +209,7 @@ Item {
                 id: pill
                 required property var modelData
                 readonly property bool on: pills.current === modelData.id
-                width: pillText.implicitWidth + 20; height: 28; radius: 10
+                width: pillText.implicitWidth + 20; height: 28; radius: 14
                 baseColor: on ? Theme.accent : Theme.fill
                 color: on ? Theme.accent : (hovered ? Theme.hover : baseColor)
                 onClicked: pills.picked(modelData.id)
@@ -228,7 +228,7 @@ Item {
         id: sb
         property string label
         property bool primary: false
-        width: sbText.implicitWidth + 32; height: 36; radius: 10
+        width: sbText.implicitWidth + 32; height: 36; radius: 18
         baseColor: primary ? Theme.accent : Theme.fill
         color: primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : Theme.accent) : (hovered ? Theme.hover : baseColor)
         opacity: enabled ? 1 : 0.45

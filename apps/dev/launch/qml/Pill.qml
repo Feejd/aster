@@ -9,7 +9,7 @@ HoverButton {
     property bool danger: false
     property bool primary: false
     property bool small: false
-    width: row.implicitWidth + (small ? 22 : 30); height: small ? 28 : 34; radius: 8
+    width: row.implicitWidth + (small ? 22 : 30); height: small ? 28 : 34; radius: height / 2
     opacity: enabled ? 1 : 0.5
     baseColor: danger ? "#E5484D" : primary ? Theme.accent : Theme.fill
     color: hovered && enabled ? (danger ? "#D93B40" : primary ? Qt.darker(Theme.accent, 1.1) : Theme.hover) : baseColor

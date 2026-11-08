@@ -17,7 +17,7 @@ Item {
     signal clicked()
 
     width: parent ? parent.width : 0
-    height: subtitle !== "" ? 60 : 46
+    height: subtitle !== "" ? 68 : 56
 
     readonly property bool first: {
         const c = parent ? parent.children : [];
@@ -25,16 +25,16 @@ Item {
             if (c[i].visible && c[i].height > 0) return c[i] === row;
         return true;
     }
-    readonly property real textX: 16
+    readonly property real textX: 20
 
     Rectangle {
         visible: !row.first
-        width: parent.width; height: 1
+        x: 18; width: parent.width - 36; height: 1
         color: Theme.line
     }
     Rectangle {
         anchors.fill: parent; anchors.margins: 3
-        radius: 6
+        radius: 18
         color: Theme.hover
         opacity: row.clickable && area.containsMouse ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 100 } }
@@ -57,7 +57,7 @@ Item {
             text: row.title
             elide: Text.ElideRight
             color: row.titleColor
-            font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+            font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Normal
         }
         Text {
             visible: row.subtitle !== ""

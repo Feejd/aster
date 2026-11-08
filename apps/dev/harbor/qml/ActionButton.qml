@@ -8,7 +8,7 @@ HoverButton {
     property string icon
     property bool primary: false
     property bool danger: false
-    width: abRow.implicitWidth + 28; height: 34; radius: 10
+    width: abRow.implicitWidth + 28; height: 34; radius: 17
     baseColor: danger ? "#E5484D" : primary ? Theme.accent : Theme.fill
     color: hovered && enabled ? (danger ? "#D93B40" : primary ? Qt.darker(Theme.accent, 1.08) : Theme.hover) : baseColor
     opacity: enabled ? 1 : 0.5

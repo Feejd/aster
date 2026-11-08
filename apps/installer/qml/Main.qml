@@ -156,7 +156,7 @@ Window {
         anchors.centerIn: parent
         width: Math.min(parent.width - 80, 1060)
         height: Math.min(parent.height - 80, 700)
-        radius: 12
+        radius: 28
         color: Theme.pane
         border.width: 1; border.color: Theme.line
         visible: !win.installing
@@ -367,7 +367,7 @@ Window {
                 visible: Installer.state === "installing"
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: parent.width; height: tipCol.implicitHeight + 36
-                radius: 12
+                radius: 20
                 color: Qt.rgba(1, 1, 1, 0.08)
                 border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.1)
                 property int tip: 0
@@ -412,7 +412,7 @@ Window {
                 id: logView
                 visible: false
                 width: parent.width; height: 220
-                radius: 10
+                radius: 14
                 color: Qt.rgba(0, 0, 0, 0.45)
                 Flickable {
                     anchors.fill: parent; anchors.margins: 12
@@ -490,7 +490,7 @@ Window {
             }
             Rectangle {
                 visible: Installer.wired
-                width: parent.width; height: 54; radius: 10
+                width: parent.width; height: 54; radius: 14
                 color: Theme.accentSoft
                 Row {
                     x: 16; anchors.verticalCenter: parent.verticalCenter
@@ -631,7 +631,7 @@ Window {
             Rectangle {
                 visible: s.disk !== ""
                 width: parent.width; height: warnCol.implicitHeight + 32
-                radius: 10
+                radius: 16
                 color: Qt.rgba(0.9, 0.25, 0.25, Theme.dark ? 0.16 : 0.08)
                 border.width: 1; border.color: Qt.rgba(0.9, 0.25, 0.25, 0.35)
                 Column {
@@ -743,7 +743,7 @@ Window {
                         width: 220; height: 168
                         readonly property bool on: s.dark === modelData.dark
                         Rectangle {
-                            width: parent.width; height: 132; radius: 10
+                            width: parent.width; height: 132; radius: 16
                             color: "transparent"
                             border.width: mode.on ? 3 : 1
                             border.color: mode.on ? s.accent : Theme.line
@@ -1019,7 +1019,7 @@ Window {
         }
         Rectangle {
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            width: 46; height: 28; radius: 10
+            width: 46; height: 28; radius: 14
             color: tg.checked ? Theme.accent : Theme.fill
             border.width: tg.checked ? 0 : 1; border.color: Theme.line
             Behavior on color { ColorAnimation { duration: 150 } }
@@ -1054,7 +1054,7 @@ Window {
         property string icon
         property string iconRight
         property bool primary: false
-        width: btnRow.implicitWidth + 34; height: 40; radius: 8
+        width: btnRow.implicitWidth + 34; height: 40; radius: height / 2
         baseColor: primary ? Theme.accent : Theme.fill
         color: !enabled ? baseColor : primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)
         opacity: enabled ? 1 : 0.4

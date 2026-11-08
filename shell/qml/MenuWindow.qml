@@ -189,8 +189,8 @@ Window {
         x: mw.current >= 0 && mw.current < mw.entries.length ? Math.min(mw.entries[mw.current].x, mw.width - width - 8) : 0
         y: 32
         width: 290
-        height: list.height + 12
-        radius: 10
+        height: list.height + 16
+        radius: 20
         MouseArea { anchors.fill: parent }
         Column {
             id: list
@@ -217,7 +217,7 @@ Window {
         y: 40
         width: 540
         height: found.height + 62
-        radius: 12
+        radius: 24
         MouseArea { anchors.fill: parent }
         Icon { x: 18; y: 15; d: Icons.search; size: 18; stroke: 2; color: Theme.text2 }
         Text {

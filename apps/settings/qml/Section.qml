@@ -27,9 +27,9 @@ Column {
         width: parent.width
         height: body.height
         visible: body.height > 0
-        radius: 9
-        color: Theme.dark ? "#1E1F23" : "#FFFFFF"
-        border.width: 1
+        radius: 22
+        color: Theme.dark ? "#1C1D21" : "#FFFFFF"
+        border.width: 0
         border.color: Theme.line
         Column { id: body; width: parent.width }
     }

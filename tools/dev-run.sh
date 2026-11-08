@@ -55,10 +55,10 @@ if ! cmp -s "$ROOT/data/fonts/geist/Geist-Regular.ttf" "$FONTS/Geist-Regular.ttf
     mkdir -p "$FONTS" && cp "$ROOT"/data/fonts/geist/*.ttf "$FONTS/" && fc-cache -f "$FONTS" >/dev/null 2>&1 || true
 fi
 for key in font menuFont toolBarFont; do
-    kwriteconfig6 --file kdeglobals --group General --key $key "Geist,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
+    kwriteconfig6 --file kdeglobals --group General --key $key "Outfit,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
 done
-kwriteconfig6 --file kdeglobals --group General --key smallestReadableFont "Geist,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
-kwriteconfig6 --file kdeglobals --group WM --key activeFont "Geist,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
+kwriteconfig6 --file kdeglobals --group General --key smallestReadableFont "Outfit,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
+kwriteconfig6 --file kdeglobals --group WM --key activeFont "Outfit,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1" 2>/dev/null || true
 
 # Szkło jak w Aster: mocniejsze rozmycie KWin z odrobiną szumu (ustawienie KWin tego użytkownika)
 kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled true 2>/dev/null || true

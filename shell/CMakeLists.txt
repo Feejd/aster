@@ -79,6 +79,7 @@ install(DIRECTORY kwinscripts/asteruklad DESTINATION ${CMAKE_INSTALL_DATADIR}/kw
 install(DIRECTORY ../data/wallpapers DESTINATION ${CMAKE_INSTALL_DATADIR}/aster)
 install(DIRECTORY ../data/color-schemes DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(DIRECTORY ../data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
+install(DIRECTORY ../data/fonts/outfit DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
 install(FILES ../session/aster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/wayland-sessions)
 install(FILES ../session/org.aster.shell.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(PROGRAMS ../session/startaster DESTINATION ${CMAKE_INSTALL_BINDIR})

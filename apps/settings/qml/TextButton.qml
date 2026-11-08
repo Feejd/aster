@@ -9,7 +9,7 @@ Rectangle {
     property bool busy: false
     signal clicked()
     width: label.implicitWidth + 24; height: 28
-    radius: 10
+    radius: 14
     color: primary ? (area.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent) : (area.containsMouse ? Theme.hover : Theme.fill)
     scale: area.pressed ? 0.95 : 1
     opacity: enabled ? 1 : 0.5

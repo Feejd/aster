@@ -15,7 +15,7 @@ namespace Aster {
 namespace {
 // Pasek jest niższy niż w programach Aster (44 px), bo tam mieści się w nim też ich pasek narzędzi
 constexpr qreal TitleHeight = 40;
-constexpr qreal CornerRadius = 12;
+constexpr qreal CornerRadius = 22;
 constexpr qreal ButtonSize = 30;
 constexpr qreal ButtonSpacing = 2;
 constexpr qreal SideMargin = 8;
@@ -107,7 +107,7 @@ void Button::paint(QPainter *painter, const QRectF &)
         back.setAlphaF(m_hover);
     }
     painter->setBrush(back);
-    painter->drawRoundedRect(box, 8, 8);
+    painter->drawEllipse(box);
 
     QColor ink = closing && m_hover > 0.5 ? QColor(Qt::white) : win->palette().windowText().color();
     if (!win->isActive() && m_hover == 0)
@@ -256,7 +256,7 @@ void Decoration::paint(QPainter *painter, const QRectF &repaintArea)
     // Tytuł na środku; nie wchodzi na przyciski
     const qreal reserved = 3 * (ButtonSize + ButtonSpacing) + SideMargin + 12;
     if (width > 2 * reserved) {
-        QFont font(QStringLiteral("Geist"));
+        QFont font(QStringLiteral("Outfit"));
         font.setPixelSize(13);
         font.setWeight(QFont::Medium);
         painter->setFont(font);

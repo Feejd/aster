@@ -25,7 +25,7 @@ Page {
     Rectangle {
         visible: Power.hasBattery
         width: parent.width; height: 132
-        radius: 10
+        radius: 18
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(1, 1, 1, 0.78)
         border.width: 1; border.color: Theme.line
         Row {

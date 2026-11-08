@@ -347,7 +347,7 @@ Item {
         id: chip
         property string text
         property bool active: false
-        width: chipText.implicitWidth + 24; height: 28; radius: 10
+        width: chipText.implicitWidth + 24; height: 28; radius: 14
         baseColor: active ? Theme.accentSoft : Theme.fill
         border.width: active ? 1 : 0
         border.color: Theme.accentAlpha(0.5)

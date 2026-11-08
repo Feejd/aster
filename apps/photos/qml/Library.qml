@@ -89,7 +89,7 @@ Item {
     Rectangle {
         x: lib.pad + 2; y: 8
         visible: lib.model.count > 0
-        width: monthText.implicitWidth + 24; height: 28; radius: 10
+        width: monthText.implicitWidth + 24; height: 28; radius: 14
         color: Theme.surface
         border.width: 1; border.color: Theme.edge
         Text {
@@ -107,7 +107,7 @@ Item {
         spacing: 8
         Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 64; height: 64; radius: 12
+            width: 64; height: 64; radius: 20
             color: Theme.fill
             Icon { anchors.centerIn: parent; d: Icons.image; size: 30; stroke: 1.6; color: Theme.text2 }
         }

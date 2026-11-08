@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 
 // Przyciski okna Aster: minimalizuj, maksymalizuj, zamknij.
-// Trzy kwadratowe płytki w rodzinie ikon Aster: schowaj do doku (strzałka do krawędzi), rozwiń (rogi), zamknij.
+// Trzy okrągłe przyciski: schowaj do doku (strzałka do krawędzi), rozwiń (rogi), zamknij.
 // Po najechaniu płytka ciemnieje, a zamknięcie czerwienieje. W oknie w tle płytki znikają i zostają przygaszone znaki.
 Row {
     id: wb
@@ -26,7 +26,7 @@ Row {
             id: wc
             required property var modelData
             readonly property bool closing: modelData.act === "close"
-            width: 28; height: 28; radius: 8
+            width: 30; height: 30; radius: 15
             color: wcArea.pressed ? (closing ? "#B92F34" : Theme.line)
                  : wcArea.containsMouse ? (closing ? "#D93B40" : Theme.hover) : wb.lit ? Theme.fill : "transparent"
             Behavior on color { ColorAnimation { duration: 90 } }

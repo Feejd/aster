@@ -11,7 +11,7 @@ Rectangle {
 
     width: label.implicitWidth + 32
     height: 38
-    radius: 10
+    radius: 19
     opacity: enabled ? 1 : 0.45
     color: primary ? (area.containsMouse ? Qt.darker(Theme.accent, 1.08) : Theme.accent)
                    : (area.containsMouse ? Theme.hover : Theme.fill)

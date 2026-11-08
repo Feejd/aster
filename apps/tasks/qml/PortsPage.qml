@@ -161,7 +161,7 @@ Item {
             HoverButton {
                 // Serwery stron: 80/443 i porty programistów (3000, 5173, 8080…), nie SSH, poczta czy DNS
                 visible: row.proto === "TCP" && (row.port === 80 || row.port === 443 || row.port >= 1024)
-                width: openText.implicitWidth + 22; height: 30; radius: 10
+                width: openText.implicitWidth + 22; height: 30; radius: 15
                 baseColor: Theme.fill
                 color: hovered ? Theme.hover : baseColor
                 onClicked: ports.openInBrowser(row.port)
@@ -170,7 +170,7 @@ Item {
             HoverButton {
                 enabled: row.pid > 0
                 opacity: enabled ? 1 : 0.4
-                width: endText.implicitWidth + 22; height: 30; radius: 10
+                width: endText.implicitWidth + 22; height: 30; radius: 15
                 baseColor: row.own ? "#E5484D" : Theme.fill
                 color: hovered && enabled ? (row.own ? "#D93B40" : Theme.hover) : baseColor
                 onClicked: page.endRequested(row.key, false)

@@ -16,7 +16,7 @@ Rectangle {
 
     readonly property var current: model.find(o => o.value === value)
     width: Math.min(maxWidth, label.implicitWidth + 44)
-    height: 30; radius: 10
+    height: 30; radius: 15
     color: area.containsMouse ? Theme.hover : Theme.fill
     Behavior on color { ColorAnimation { duration: 100 } }
     Text {
@@ -56,7 +56,7 @@ Rectangle {
                 height: Math.min(col.implicitHeight + 12, pop.height - y - 16)
                 x: Math.max(8, Math.min(pop.at.x + pop.minWidth - width, pop.width - width - 8))
                 y: Math.min(pop.at.y, pop.height - Math.min(col.implicitHeight + 12, 380) - 16)
-                radius: 10
+                radius: 14
                 color: Theme.surface
                 border.width: 1; border.color: Theme.edge
                 clip: true

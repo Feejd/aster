@@ -23,7 +23,7 @@ Window {
 
     readonly property bool maxed: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property int m: maxed ? 0 : 26
-    readonly property real r: visibility === Window.FullScreen ? 0 : 12
+    readonly property real r: visibility === Window.FullScreen ? 0 : 24
 
     property string page: startPage
     readonly property var groups: [
@@ -123,7 +123,7 @@ Window {
             Rectangle {
                 id: searchBox
                 x: 14; y: 16
-                width: parent.width - 28; height: 32; radius: 7
+                width: parent.width - 28; height: 40; radius: 20
                 color: Theme.fill
                 border.width: field.activeFocus ? 1.5 : 0
                 border.color: Theme.accent
@@ -160,8 +160,8 @@ Window {
                     // Konto
                     Rectangle {
                         visible: !field.text
-                        width: parent.width; height: 44
-                        radius: 7
+                        width: parent.width; height: 56
+                        radius: 22
                         color: win.page === "account" ? Theme.accentSoft : (accArea.containsMouse ? Theme.hover : "transparent")
                         Rectangle {
                             id: avatar
@@ -229,7 +229,7 @@ Window {
                     x: 32; anchors.verticalCenter: parent.verticalCenter
                     text: win.current.name
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 24; font.weight: Font.DemiBold; font.letterSpacing: -0.3
+                    font.family: Theme.font; font.pixelSize: 32; font.weight: Font.Normal; font.letterSpacing: -0.5
                 }
                 WindowButtons {
                     window: win
@@ -265,7 +265,7 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - (shown ? height + 22 : 0)
                 opacity: shown ? 1 : 0
-                width: toastText.implicitWidth + 36; height: 40; radius: 12
+                width: toastText.implicitWidth + 36; height: 40; radius: 20
                 color: Theme.dark ? "#ECEEF3" : "#1E2027"
                 Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutQuint } }
                 Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -282,22 +282,22 @@ Window {
         property bool external: false
         signal activated()
         readonly property bool active: !external && win.page === item.id
-        width: navCol.width; height: 34
-        radius: 7
+        width: navCol.width; height: 42
+        radius: 21
         color: active ? Theme.accent : (navArea.containsMouse ? Theme.hover : "transparent")
         // Znacznik działu: mały kwadrat w jego kolorze
         Rectangle {
-            x: 10; anchors.verticalCenter: parent.verticalCenter
-            width: 8; height: 8; radius: 2
+            x: 16; anchors.verticalCenter: parent.verticalCenter
+            width: 10; height: 10; radius: 5
             color: nav.active ? "white" : nav.item.colors[0]
         }
         Text {
-            x: 28; anchors.verticalCenter: parent.verticalCenter
+            x: 36; anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 36
             text: nav.item.name
             elide: Text.ElideRight
             color: nav.active ? "white" : Theme.text
-            font.family: Theme.font; font.pixelSize: 13; font.weight: nav.active ? Font.Medium : Font.Normal
+            font.family: Theme.font; font.pixelSize: 15; font.weight: nav.active ? Font.Medium : Font.Normal
         }
         Icon {
             visible: nav.external

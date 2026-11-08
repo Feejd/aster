@@ -209,7 +209,7 @@ Item {
             id: sheet
             anchors.centerIn: parent
             width: 380; height: sheetCol.height + 44
-            radius: 10
+            radius: 18
             color: Theme.surface
             scale: wifi.asking ? 1 : 0.94
             Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }

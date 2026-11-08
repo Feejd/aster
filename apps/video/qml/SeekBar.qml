@@ -20,7 +20,7 @@ Item {
     Rectangle {
         id: track
         anchors.verticalCenter: parent.verticalCenter
-        width: parent.width; height: bar.hot ? 6 : 4; radius: 8
+        width: parent.width; height: bar.hot ? 6 : 4; radius: height / 2
         color: Qt.rgba(1, 1, 1, 0.25)
         Behavior on height { NumberAnimation { duration: 120 } }
         Rectangle {
