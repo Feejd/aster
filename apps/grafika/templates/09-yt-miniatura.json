@@ -1,0 +1,125 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "To zmienia wszystko",
+ "category": "YouTube",
+ "width": 1280,
+ "height": 720,
+ "background": {
+  "type": "gradient",
+  "color": "#1F2937",
+  "color2": "#0B0F19",
+  "angle": 135
+ },
+ "elements": [
+  {
+   "type": "adjust",
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 720,
+   "contrast": 0.18,
+   "saturation": 0.25,
+   "shadows": 0.15,
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 600.0,
+   "y": 40.0,
+   "w": 760,
+   "h": 760,
+   "fill": "#FFE600",
+   "fill2": "#00FFE600",
+   "gradient": "radial",
+   "opacity": 0.8,
+   "blend": "screen",
+   "id": "e2"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 720,
+   "y": 40,
+   "w": 520,
+   "h": 680,
+   "mask": "blob",
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "TO ZMIENIA",
+   "x": 50,
+   "y": 120,
+   "w": 700,
+   "size": 128,
+   "font": "Anton",
+   "weight": 400,
+   "color": "#FFFFFF",
+   "align": "left",
+   "lineHeight": 1.1,
+   "outline": 0.07,
+   "outlineColor": "#0B0F19",
+   "rotation": -3,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "WSZYSTKO",
+   "x": 50,
+   "y": 270,
+   "w": 700,
+   "size": 150,
+   "font": "Anton",
+   "weight": 400,
+   "color": "#FFE600",
+   "align": "left",
+   "lineHeight": 1.1,
+   "outline": 0.07,
+   "outlineColor": "#0B0F19",
+   "rotation": -3,
+   "id": "e5"
+  },
+  {
+   "type": "draw",
+   "pen": "neon",
+   "stroke": "#FF3B3B",
+   "strokeWidth": 10,
+   "points": [
+    0.0455,
+    0.5694,
+    0.3347,
+    0.8472,
+    0.686,
+    0.5694,
+    0.9545,
+    0.1528
+   ],
+   "x": 138.0,
+   "y": 478.0,
+   "w": 484.0,
+   "h": 144.0,
+   "id": "e6"
+  },
+  {
+   "type": "draw",
+   "pen": "neon",
+   "stroke": "#FF3B3B",
+   "strokeWidth": 10,
+   "points": [
+    0.2619,
+    0.2245,
+    0.7381,
+    0.3673,
+    0.5238,
+    0.7755
+   ],
+   "x": 538.0,
+   "y": 464.0,
+   "w": 84.0,
+   "h": 98.0,
+   "id": "e7"
+  }
+ ]
+}

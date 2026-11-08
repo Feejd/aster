@@ -1,0 +1,113 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Premiera produktu",
+ "category": "Instagram",
+ "width": 1080,
+ "height": 1080,
+ "background": {
+  "type": "radial",
+  "color": "#FFFFFF",
+  "color2": "#DCE3EE"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 130.0,
+   "y": 60.0,
+   "w": 820,
+   "h": 820,
+   "fill": "#A5B4FC",
+   "fill2": "#00A5B4FC",
+   "gradient": "radial",
+   "opacity": 0.55,
+   "blend": "multiply",
+   "id": "e1"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 330,
+   "y": 170,
+   "w": 420,
+   "h": 520,
+   "radius": 36,
+   "shadow": true,
+   "shadowBlur": 60,
+   "shadowDist": 30,
+   "shadowAngle": 180,
+   "shadowOpacity": 0.3,
+   "shadowColor": "#1E293B",
+   "id": "e2"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 330,
+   "y": 690,
+   "w": 420,
+   "h": 520,
+   "radius": 36,
+   "rotation": 180,
+   "flipX": true,
+   "opacity": 0.35,
+   "layerMask": "fade:0:0.55:1",
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "NOWOŚĆ",
+   "x": 80,
+   "y": 80,
+   "w": 500,
+   "size": 32,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#4F46E5",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": 0.3,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "Aster One",
+   "x": 80,
+   "y": 120,
+   "w": 500,
+   "size": 76,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#0F172A",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e5"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 780,
+   "y": 820,
+   "w": 220,
+   "h": 90,
+   "fill": "#0F172A",
+   "radius": 45,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "399 zł",
+   "x": 780,
+   "y": 840,
+   "w": 220,
+   "size": 46,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e7"
+  }
+ ]
+}

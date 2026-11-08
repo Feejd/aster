@@ -20,7 +20,7 @@ Column {
         color: Theme.text; font.family: Theme.font; font.pixelSize: 12
     }
     Rectangle {
-        width: parent.width; height: 34; radius: 9
+        width: parent.width; height: 36; radius: 12
         color: Theme.fill
         border.width: input.activeFocus ? 1.5 : 0
         border.color: Theme.accent

@@ -1,0 +1,186 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Menu kawiarni",
+ "category": "Menu",
+ "width": 2480,
+ "height": 3508,
+ "print": {
+  "width": 210,
+  "height": 297
+ },
+ "background": {
+  "type": "color",
+  "color": "#F6F0E6"
+ },
+ "elements": [
+  {
+   "type": "image",
+   "src": "",
+   "x": 1380,
+   "y": 220,
+   "w": 900,
+   "h": 1320,
+   "mask": "arch",
+   "shadow": true,
+   "shadowBlur": 80,
+   "shadowDist": 40,
+   "shadowAngle": 180,
+   "shadowOpacity": 0.18,
+   "shadowColor": "#3B2A1E",
+   "id": "e1"
+  },
+  {
+   "type": "text",
+   "text": "Café",
+   "x": 200,
+   "y": 300,
+   "w": 1100,
+   "size": 340,
+   "font": "Playfair Display",
+   "weight": 700,
+   "color": "#2E2219",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Aster",
+   "x": 200,
+   "y": 640,
+   "w": 1100,
+   "size": 340,
+   "font": "Playfair Display",
+   "weight": 400,
+   "color": "#B5651D",
+   "align": "left",
+   "lineHeight": 1.1,
+   "italic": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "świeżo palona kawa · domowe ciasta",
+   "x": 200,
+   "y": 1070,
+   "w": 1100,
+   "size": 60,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#6B5A4A",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e4"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#B5651D",
+   "strokeWidth": 14,
+   "points": [
+    0.0105,
+    0.6389,
+    0.5932,
+    0.25,
+    0.9895,
+    0.75
+   ],
+   "x": 191.0,
+   "y": 1177.0,
+   "w": 858.0,
+   "h": 36.0,
+   "id": "e5"
+  },
+  {
+   "type": "table",
+   "cells": [
+    [
+     "Kawa",
+     "Mała",
+     "Duża"
+    ],
+    [
+     "Espresso",
+     "9 zł",
+     "12 zł"
+    ],
+    [
+     "Cappuccino",
+     "13 zł",
+     "16 zł"
+    ],
+    [
+     "Latte owsiane",
+     "15 zł",
+     "18 zł"
+    ],
+    [
+     "Flat white",
+     "14 zł",
+     "17 zł"
+    ],
+    [
+     "Matcha latte",
+     "16 zł",
+     "19 zł"
+    ]
+   ],
+   "x": 200,
+   "y": 1720,
+   "w": 2080,
+   "h": 1080,
+   "header": true,
+   "headerFill": "#2E2219",
+   "headerColor": "#F6F0E6",
+   "fill": "",
+   "stripe": "#EDE2D1",
+   "lines": "none",
+   "color": "#2E2219",
+   "size": 62,
+   "font": "Inter",
+   "radius": 44,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Pełne menu i ciasta dnia",
+   "x": 200,
+   "y": 3020,
+   "w": 1500,
+   "size": 70,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#2E2219",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "zeskanuj kod telefonem",
+   "x": 200,
+   "y": 3110,
+   "w": 1500,
+   "size": 52,
+   "font": "Inter",
+   "weight": 400,
+   "color": "#6B5A4A",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e8"
+  },
+  {
+   "type": "code",
+   "kind": "qr",
+   "data": "https://cafeaster.pl/menu",
+   "color": "#2E2219",
+   "bg": "#F6F0E6",
+   "x": 1980,
+   "y": 2940,
+   "w": 300,
+   "h": 300,
+   "id": "e9"
+  }
+ ]
+}

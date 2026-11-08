@@ -1,0 +1,371 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Raport roczny",
+ "category": "Slajd",
+ "width": 1920,
+ "height": 1080,
+ "background": {
+  "type": "color",
+  "color": "#0E1020"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 850.0,
+   "y": -470.0,
+   "w": 1300,
+   "h": 1300,
+   "fill": "#5B5BFF",
+   "fill2": "#005B5BFF",
+   "gradient": "radial",
+   "opacity": 0.85,
+   "blend": "screen",
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 1310.0,
+   "y": 510.0,
+   "w": 900,
+   "h": 900,
+   "fill": "#00C2A8",
+   "fill2": "#0000C2A8",
+   "gradient": "radial",
+   "opacity": 0.6,
+   "blend": "screen",
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "RAPORT 2026",
+   "x": 124,
+   "y": 330,
+   "w": 1200,
+   "size": 36,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#8C91FF",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": 0.3,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Rok, który nas\nzaskoczył",
+   "x": 120,
+   "y": 390,
+   "w": 1300,
+   "size": 150,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#FFFFFF",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": -0.02,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "Wyniki, liczby i plan na kolejny rok",
+   "x": 124,
+   "y": 740,
+   "w": 1200,
+   "size": 52,
+   "font": "Inter",
+   "weight": 400,
+   "color": "#B9BCD0",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e5"
+  }
+ ],
+ "pages": [
+  {
+   "background": {
+    "type": "color",
+    "color": "#0E1020"
+   },
+   "elements": [
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 850.0,
+     "y": -470.0,
+     "w": 1300,
+     "h": 1300,
+     "fill": "#5B5BFF",
+     "fill2": "#005B5BFF",
+     "gradient": "radial",
+     "opacity": 0.85,
+     "blend": "screen",
+     "id": "e1"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 1310.0,
+     "y": 510.0,
+     "w": 900,
+     "h": 900,
+     "fill": "#00C2A8",
+     "fill2": "#0000C2A8",
+     "gradient": "radial",
+     "opacity": 0.6,
+     "blend": "screen",
+     "id": "e2"
+    },
+    {
+     "type": "text",
+     "text": "RAPORT 2026",
+     "x": 124,
+     "y": 330,
+     "w": 1200,
+     "size": 36,
+     "font": "Inter",
+     "weight": 700,
+     "color": "#8C91FF",
+     "align": "left",
+     "lineHeight": 1.1,
+     "spacing": 0.3,
+     "id": "e3"
+    },
+    {
+     "type": "text",
+     "text": "Rok, który nas\nzaskoczył",
+     "x": 120,
+     "y": 390,
+     "w": 1300,
+     "size": 150,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#FFFFFF",
+     "align": "left",
+     "lineHeight": 1.1,
+     "spacing": -0.02,
+     "id": "e4"
+    },
+    {
+     "type": "text",
+     "text": "Wyniki, liczby i plan na kolejny rok",
+     "x": 124,
+     "y": 740,
+     "w": 1200,
+     "size": 52,
+     "font": "Inter",
+     "weight": 400,
+     "color": "#B9BCD0",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e5"
+    }
+   ]
+  },
+  {
+   "background": {
+    "type": "color",
+    "color": "#F4F5F8"
+   },
+   "elements": [
+    {
+     "type": "text",
+     "text": "Sprzedaż rośnie co kwartał",
+     "x": 120,
+     "y": 100,
+     "w": 1600,
+     "size": 84,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#141518",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e6"
+    },
+    {
+     "type": "shape",
+     "shape": "rect",
+     "x": 120,
+     "y": 250,
+     "w": 1050,
+     "h": 720,
+     "fill": "#FFFFFF",
+     "radius": 40,
+     "id": "e7"
+    },
+    {
+     "type": "chart",
+     "chart": "column",
+     "data": [
+      {
+       "label": "I kw.",
+       "value": 120,
+       "color": "#5B5BFF"
+      },
+      {
+       "label": "II kw.",
+       "value": 180,
+       "color": "#5B5BFF"
+      },
+      {
+       "label": "III kw.",
+       "value": 240,
+       "color": "#5B5BFF"
+      },
+      {
+       "label": "IV kw.",
+       "value": 310,
+       "color": "#00C2A8"
+      }
+     ],
+     "x": 170,
+     "y": 300,
+     "w": 950,
+     "h": 620,
+     "size": 32,
+     "color": "#3A3D46",
+     "font": "Inter",
+     "id": "e8"
+    },
+    {
+     "type": "shape",
+     "shape": "rect",
+     "x": 1220,
+     "y": 250,
+     "w": 580,
+     "h": 340,
+     "fill": "#5B5BFF",
+     "radius": 40,
+     "id": "e9"
+    },
+    {
+     "type": "text",
+     "text": "+158%",
+     "x": 1270,
+     "y": 310,
+     "w": 480,
+     "size": 140,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#FFFFFF",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e10"
+    },
+    {
+     "type": "text",
+     "text": "wzrost rok do roku",
+     "x": 1274,
+     "y": 470,
+     "w": 480,
+     "size": 40,
+     "font": "Inter",
+     "weight": 500,
+     "color": "#DADBFF",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e11"
+    },
+    {
+     "type": "shape",
+     "shape": "rect",
+     "x": 1220,
+     "y": 630,
+     "w": 580,
+     "h": 340,
+     "fill": "#FFFFFF",
+     "radius": 40,
+     "id": "e12"
+    },
+    {
+     "type": "chart",
+     "chart": "donut",
+     "data": [
+      {
+       "label": "Online",
+       "value": 62,
+       "color": "#5B5BFF"
+      },
+      {
+       "label": "Sklepy",
+       "value": 38,
+       "color": "#00C2A8"
+      }
+     ],
+     "x": 1260,
+     "y": 670,
+     "w": 500,
+     "h": 260,
+     "size": 30,
+     "color": "#3A3D46",
+     "font": "Inter",
+     "id": "e13"
+    }
+   ]
+  },
+  {
+   "background": {
+    "type": "color",
+    "color": "#FFFFFF"
+   },
+   "elements": [
+    {
+     "type": "text",
+     "text": "Plan na 2027",
+     "x": 120,
+     "y": 100,
+     "w": 1600,
+     "size": 84,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#141518",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e14"
+    },
+    {
+     "type": "table",
+     "cells": [
+      [
+       "Cel",
+       "Termin",
+       "Odpowiada"
+      ],
+      [
+       "Nowy sklep w Gdańsku",
+       "marzec",
+       "Anna"
+      ],
+      [
+       "Aplikacja mobilna",
+       "czerwiec",
+       "Tomek"
+      ],
+      [
+       "Program lojalnościowy",
+       "wrzesień",
+       "Ola"
+      ]
+     ],
+     "x": 120,
+     "y": 260,
+     "w": 1680,
+     "h": 640,
+     "header": true,
+     "headerFill": "#141518",
+     "headerColor": "#FFFFFF",
+     "fill": "#FFFFFF",
+     "stripe": "#F4F5F8",
+     "lines": "none",
+     "color": "#141518",
+     "size": 40,
+     "font": "Inter",
+     "radius": 28,
+     "id": "e15"
+    }
+   ]
+  }
+ ]
+}

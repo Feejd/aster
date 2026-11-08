@@ -10,7 +10,7 @@ HoverButton {
     property real textSize: 13
     width: btnRow.implicitWidth + 30
     height: 36
-    radius: 8
+    radius: height / 2
     baseColor: primary ? Theme.accent : Theme.fill
     color: !enabled ? baseColor : primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)
     opacity: enabled ? 1 : 0.45

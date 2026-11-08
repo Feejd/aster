@@ -9,7 +9,7 @@ HoverButton {
     property bool on: false
     width: 32
     height: 32
-    radius: 8
+    radius: 10
     baseColor: on ? Theme.accentSoft : "transparent"
     color: on ? baseColor : hovered ? Theme.hover : baseColor
     opacity: enabled ? 1 : 0.35

@@ -232,6 +232,14 @@ QVariantMap Project::prepared(QVariantMap el) const
         el[QStringLiteral("h")] = 200.0;
     if (type == QLatin1String("text"))
         el[QStringLiteral("h")] = std::ceil(Art::textHeight(el));
+    // Szablony podają przekształcenie rogami w częściach pola (warpN), bo wysokość tekstu liczy dopiero program
+    const QVariantList wn = el.take(QStringLiteral("warpN")).toList();
+    if (wn.size() == 8) {
+        QVariantList warp;
+        for (int i = 0; i < 8; ++i)
+            warp.append(std::round(wn[i].toDouble() * num(el, i % 2 ? "h" : "w") * 10) / 10);
+        el[QStringLiteral("warp")] = warp;
+    }
     return el;
 }
 
@@ -888,6 +896,9 @@ QStringList Project::projectColors() const
     QStringList out;
     eachColor(all, [&out](QVariant &v) {
         const QString s = v.toString().toLower();
+        // Całkiem przezroczyste (np. koniec przejścia w miękkiej plamie) nie są kolorem projektu
+        if (s.size() == 9 && s.mid(1, 2) == QLatin1String("00"))
+            return;
         if (s.startsWith(QLatin1Char('#')) && (s.size() == 7 || s.size() == 9) && !out.contains(s) && out.size() < 18)
             out.append(s);
     });
@@ -1165,6 +1176,9 @@ QString Project::newPixelLayer()
 
 QImage Project::image(const QString &key, qreal pixels) const
 {
+    // Maski opisane w szablonie (fade:…, radial…) — np. miniatura maski w panelu warstw
+    if (key.startsWith(QLatin1String("fade:")) || key.startsWith(QLatin1String("radial")))
+        return Art::proceduralMask(key).convertToFormat(QImage::Format_ARGB32);
     const auto live = m_live.constFind(key);
     if (live != m_live.cend())
         return *live;
@@ -1352,7 +1366,7 @@ void Project::addMask(const QString &id, bool hidden)
 void Project::maskStroke(const QString &id, const QVariantList &points, qreal width, bool reveal, qreal soft)
 {
     const QVariantMap el = get(id);
-    QImage m = fullImage(el.value(QStringLiteral("layerMask")).toString());
+    QImage m = Art::maskSource(el.value(QStringLiteral("layerMask")).toString(), this);
     if (m.isNull() || points.isEmpty())
         return;
     m = m.convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -1388,7 +1402,7 @@ void Project::maskStroke(const QString &id, const QVariantList &points, qreal wi
 
 void Project::invertMask(const QString &id)
 {
-    QImage m = fullImage(get(id).value(QStringLiteral("layerMask")).toString());
+    QImage m = Art::maskSource(get(id).value(QStringLiteral("layerMask")).toString(), this);
     if (m.isNull())
         return;
     m = m.convertToFormat(QImage::Format_Grayscale8);

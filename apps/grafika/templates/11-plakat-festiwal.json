@@ -1,0 +1,196 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Letnie brzmienie",
+ "category": "Plakat",
+ "width": 3508,
+ "height": 4961,
+ "print": {
+  "width": 297,
+  "height": 420
+ },
+ "background": {
+  "type": "color",
+  "color": "#111111"
+ },
+ "elements": [
+  {
+   "type": "image",
+   "src": "",
+   "x": 0,
+   "y": 1350,
+   "w": 3508,
+   "h": 1500,
+   "layerMask": "fade:180:0.6:1",
+   "id": "e1"
+  },
+  {
+   "type": "adjust",
+   "x": 0,
+   "y": 0,
+   "w": 3508,
+   "h": 4961,
+   "saturation": -1,
+   "curves": {
+    "rgb": [
+     [
+      0,
+      0
+     ],
+     [
+      0.25,
+      0.14
+     ],
+     [
+      0.75,
+      0.9
+     ],
+     [
+      1,
+      1
+     ]
+    ]
+   },
+   "id": "e2"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 0,
+   "y": 0,
+   "w": 3508,
+   "h": 4961,
+   "fill": "#FF3D6E",
+   "radius": 0,
+   "blend": "multiply",
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "LETNIE\nBRZMIENIE",
+   "x": 150,
+   "y": 300,
+   "w": 3208,
+   "size": 760,
+   "font": "Anton",
+   "weight": 400,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 0.95,
+   "warpN": [
+    0.06,
+    0,
+    0.94,
+    0,
+    1,
+    1,
+    0,
+    1
+   ],
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "FESTIWAL MUZYKI · 18–20 LIPCA",
+   "x": 200,
+   "y": 2700,
+   "w": 3108,
+   "size": 150,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.1,
+   "spacing": 0.12,
+   "id": "e5"
+  },
+  {
+   "type": "table",
+   "cells": [
+    [
+     "Piątek",
+     "Sobota",
+     "Niedziela"
+    ],
+    [
+     "Nocne Tramwaje",
+     "Lato w Mieście",
+     "Ciche Fale"
+    ],
+    [
+     "Echo Parku",
+     "Dziewczyny z Portu",
+     "Złote Godziny"
+    ]
+   ],
+   "x": 300,
+   "y": 3020,
+   "w": 2908,
+   "h": 980,
+   "header": true,
+   "headerFill": "#FFFFFF",
+   "headerColor": "#E0245E",
+   "fill": "",
+   "lines": "rows",
+   "stroke": "#66FFFFFF",
+   "strokeWidth": 6,
+   "color": "#FFFFFF",
+   "size": 110,
+   "font": "Inter",
+   "align": "center",
+   "radius": 60,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Park Miejski, scena nad stawem",
+   "x": 300,
+   "y": 4330,
+   "w": 2300,
+   "size": 140,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "wstęp za okazaniem biletu",
+   "x": 300,
+   "y": 4510,
+   "w": 2300,
+   "size": 100,
+   "font": "Inter",
+   "weight": 400,
+   "color": "#FFD6E2",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e8"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 2740,
+   "y": 4160,
+   "w": 520,
+   "h": 520,
+   "fill": "#FFFFFF",
+   "radius": 60,
+   "id": "e9"
+  },
+  {
+   "type": "code",
+   "kind": "qr",
+   "data": "https://festiwal.pl/bilety",
+   "color": "#141518",
+   "bg": "#FFFFFF",
+   "x": 2780,
+   "y": 4200,
+   "w": 440,
+   "h": 440,
+   "id": "e10"
+  }
+ ]
+}

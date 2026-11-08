@@ -1,0 +1,135 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Zaproszenie ślubne",
+ "category": "Zaproszenie",
+ "width": 1748,
+ "height": 2480,
+ "print": {
+  "width": 148,
+  "height": 210
+ },
+ "background": {
+  "type": "color",
+  "color": "#FBF8F3"
+ },
+ "elements": [
+  {
+   "type": "image",
+   "src": "",
+   "x": 474,
+   "y": 200,
+   "w": 800,
+   "h": 1000,
+   "mask": "arch",
+   "layerMask": "radial:0.75:1",
+   "id": "e1"
+  },
+  {
+   "type": "text",
+   "text": "Julia & Marek",
+   "x": 100,
+   "y": 1260,
+   "w": 1548,
+   "size": 210,
+   "font": "Great Vibes",
+   "weight": 400,
+   "color": "#5C4A3D",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e2"
+  },
+  {
+   "type": "draw",
+   "pen": "pen",
+   "stroke": "#B79E83",
+   "strokeWidth": 4,
+   "points": [
+    0.0066,
+    0.7727,
+    0.2796,
+    0.0909,
+    0.5,
+    0.9091,
+    0.7204,
+    0.0909,
+    0.9934,
+    0.7727
+   ],
+   "x": 570.0,
+   "y": 1506.0,
+   "w": 608.0,
+   "h": 44.0,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "z radością zapraszają na ślub i wesele",
+   "x": 200,
+   "y": 1600,
+   "w": 1348,
+   "size": 64,
+   "font": "Lora",
+   "weight": 400,
+   "color": "#6B5A4A",
+   "align": "center",
+   "lineHeight": 1.1,
+   "italic": true,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "12 września 2026 · 15:00",
+   "x": 200,
+   "y": 1760,
+   "w": 1348,
+   "size": 76,
+   "font": "Lora",
+   "weight": 700,
+   "color": "#3D3027",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Kościół św. Anny, Kraków · przyjęcie w Dworku pod Lipami",
+   "x": 200,
+   "y": 1880,
+   "w": 1348,
+   "size": 50,
+   "font": "Inter",
+   "weight": 400,
+   "color": "#6B5A4A",
+   "align": "center",
+   "lineHeight": 1.4,
+   "id": "e6"
+  },
+  {
+   "type": "code",
+   "kind": "qr",
+   "data": "https://slub.example/potwierdz",
+   "color": "#5C4A3D",
+   "bg": "#FBF8F3",
+   "x": 774,
+   "y": 2080,
+   "w": 200,
+   "h": 200,
+   "id": "e7"
+  },
+  {
+   "type": "text",
+   "text": "potwierdź przybycie",
+   "x": 574,
+   "y": 2300,
+   "w": 600,
+   "size": 40,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#8C7A6B",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e8"
+  }
+ ]
+}

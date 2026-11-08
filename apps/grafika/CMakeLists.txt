@@ -23,6 +23,7 @@ set(GRAFIKA_QML
     qml/ColorWell.qml
     qml/IconToggle.qml
     qml/Section.qml
+    qml/CardCorners.qml
         qml/CurveEditor.qml
         qml/CorrectionPanel.qml
     qml/SearchField.qml

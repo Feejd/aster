@@ -456,16 +456,17 @@ Item {
         height: parent.height
 
         Text {
-            x: 12; y: 14
+            x: sp.showRail ? 12 : 16; y: sp.tab === "layers" ? 4 : 18
             text: { for (const t of sp.tabs) if (t.id === sp.tab) return t.label; return ""; }
             color: Theme.text
-            font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
+            font.family: Theme.font; font.pixelSize: sp.tab === "layers" ? 24 : 19; font.weight: Font.Bold; font.letterSpacing: -0.5
+            font.variableAxes: { "opsz": 24 }
         }
 
         Flickable {
             id: scroll
-            x: 12; y: 50
-            width: parent.width - 24
+            x: sp.showRail ? 12 : 16; y: sp.tab === "layers" ? 46 : 58
+            width: parent.width - 2 * x
             height: parent.height - y
             contentHeight: pages.height + 20
             clip: true
@@ -572,7 +573,7 @@ Item {
                             required property int index
                             width: textCol.width
                             height: Math.max(52, label.implicitHeight + 24)
-                            radius: 12
+                            radius: 16
                             baseColor: Theme.fill
                             onClicked: sp.addTextStyle(modelData)
                             Text {
@@ -1103,7 +1104,7 @@ Item {
                     visible: sp.tab === "layers"
                     width: parent.width
                     spacing: 10
-                    readonly property real rowH: 46
+                    readonly property real rowH: 50
                     Text {
                         width: parent.width
                         wrapMode: Text.WordWrap
@@ -1137,7 +1138,7 @@ Item {
                                 y: dragged ? layerList.dragY : index * layersCol.rowH
                                 z: dragged ? 2 : 0
                                 width: layerList.width; height: layersCol.rowH - 4
-                                radius: 10
+                                radius: 16
                                 color: picked ? Theme.accentSoft : rowMa.containsMouse || dragged ? Theme.hover : "transparent"
                                 opacity: modelData.hidden ? 0.5 : 1
 

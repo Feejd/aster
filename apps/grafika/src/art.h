@@ -49,6 +49,9 @@ void blur(QImage &premultiplied, int radius);
 QTransform frameTransform(const QVariantMap &el, const QSize &image);
 // Piksele strony → układ elementu (bez obrotu, początek w lewym górnym rogu)
 QTransform pageToFrame(const QVariantMap &el);
+// Maski opisane w szablonie: fade:KĄT[:OD:DO] i radial[:OD:DO]; maskSource — taka albo plik z projektu
+QImage proceduralMask(const QString &key);
+QImage maskSource(const QString &key, const ImageSource *images);
 // Strona jako obraz o podanym rozmiarze (miniatury, PNG, JPG)
 QImage renderPage(const QVariantMap &doc, const QSize &size, const ImageSource *images, const QColor &under = Qt::transparent);
 

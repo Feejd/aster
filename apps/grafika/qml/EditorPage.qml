@@ -715,10 +715,10 @@ Item {
     }
 
     // ——— Układ jak w programach graficznych: pasek u góry, warstwy z lewej, płótno, narzędzia i ich panel z prawej ———
-    readonly property real barH: 60
+    readonly property real barH: 68
     readonly property alias side: side
-    readonly property real layersWidth: 250
-    readonly property real toolsWidth: 304
+    readonly property real layersWidth: 262
+    readonly property real toolsWidth: 330
     // Narzędzia (kolejność w rzędzie po prawej); select — zaznaczanie i właściwości zaznaczonego
     readonly property var tools: [
         { id: "select", label: "Zaznacz i przesuń", icon: "cursor", key: "V" },
@@ -858,15 +858,17 @@ Item {
         DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
         HoverButton {
             id: homeBtn
-            x: 12; anchors.verticalCenter: parent.verticalCenter
-            width: homeRow.implicitWidth + 20; height: 36; radius: 12
+            x: 16; anchors.verticalCenter: parent.verticalCenter
+            width: homeRow.implicitWidth + 30; height: 40; radius: 20
+            baseColor: Theme.surface
+            color: hovered ? Theme.fill : baseColor
             tip: "Wróć do projektów"
             onClicked: ed.app.goHome()
             Row {
                 id: homeRow
                 anchors.centerIn: parent
                 spacing: 8
-                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 15; stroke: 2.2; color: Theme.text }
+                Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.back; size: 16; stroke: 2.2; color: Theme.text }
                 AppIcon { anchors.verticalCenter: parent.verticalCenter; desktopId: "org.aster.grafika"; size: 22 }
                 Text { anchors.verticalCenter: parent.verticalCenter; text: "Projekty"; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
             }
@@ -892,33 +894,33 @@ Item {
         Item {
             id: layerFoot
             y: parent.height - height
-            width: parent.width; height: 108
+            width: parent.width; height: 116
             readonly property var one: stage.current
             readonly property bool has: ed.many.length > 0
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
             Row {
-                x: 12; y: 10
+                x: 16; y: 4
                 spacing: 8
                 HoverButton {
                     id: blendBtn
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 112; height: 32; radius: 8
-                    baseColor: Theme.fill
+                    width: 112; height: 36; radius: 18
+                    baseColor: Theme.surface
+                    color: hovered ? Theme.fill : baseColor
                     enabled: layerFoot.has
                     opacity: enabled ? 1 : 0.45
                     tip: "Tryb mieszania — jak warstwa łączy się z tym, co pod nią"
                     onClicked: ed.showBlendMenu(blendBtn)
                     Text {
-                        x: 10; width: parent.width - 30
+                        x: 14; width: parent.width - 34
                         anchors.verticalCenter: parent.verticalCenter
                         elide: Text.ElideRight
                         text: ed.blendLabel(layerFoot.one.blend)
                         color: Theme.text; font.family: Theme.font; font.pixelSize: 12
                     }
-                    Icon { anchors.right: parent.right; anchors.rightMargin: 7; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 11; anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 13; stroke: 2; color: Theme.text2 }
                 }
                 ValueSlider {
-                    width: parent.parent.width - 24 - 112 - 8
+                    width: parent.parent.width - 32 - 112 - 8
                     enabled: stage.selected !== ""
                     opacity: enabled ? 1 : 0.45
                     label: "Krycie"
@@ -928,8 +930,12 @@ Item {
                     onMoved: (v, done) => ed.project.change(stage.selected, { opacity: v >= 0.995 ? null : Math.round(v * 100) / 100 }, done)
                 }
             }
+            Rectangle {
+                x: 16; y: 62
+                width: parent.width - 32; height: 44; radius: 22
+                color: Theme.surface
             Row {
-                x: 8; y: 64
+                anchors.centerIn: parent
                 spacing: 2
                 ToolBtn {
                     icon: "circleHalf"
@@ -943,31 +949,28 @@ Item {
                 ToolBtn { icon: "copy"; tip: "Duplikuj warstwę (Ctrl+D)"; enabled: layerFoot.has; onClicked: ed.duplicate() }
                 ToolBtn { icon: "trash"; tip: "Usuń warstwę (Delete)"; enabled: layerFoot.has; onClicked: ed.remove() }
             }
+            }
         }
     }
 
     // ——— Treść na panelu okna, jak w innych programach Aster: pasek, płótno, narzędzia ———
-    GlassPane {
+    Item {
         id: content
         x: ed.layersWidth
         width: parent.width - x
         height: parent.height
-        topRightRadius: ed.radius
-        bottomRightRadius: ed.radius
 
         Item {
             id: bar
             width: parent.width; height: ed.barH
             DragHandler { target: null; onActiveChanged: if (active) ed.Window.window.startSystemMove() }
             TapHandler { onDoubleTapped: { const w = ed.Window.window; if (w.visibility === Window.Maximized) w.showNormal(); else w.showMaximized(); } }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
-
             // Nazwa projektu (do zmiany w miejscu)
             Rectangle {
                 id: nameBox
-                x: 18; y: 9
+                x: 0; y: 11
                 width: Math.min(Math.max(120, nameInput.contentWidth + 20), parent.width - right.width - x - 24)
-                height: 28; radius: 8
+                height: 32; radius: 10
                 color: nameInput.activeFocus ? Theme.fill : nameHover.hovered ? Theme.hover : "transparent"
                 HoverHandler { id: nameHover; cursorShape: Qt.IBeamCursor }
                 TextInput {
@@ -979,14 +982,15 @@ Item {
                     clip: true
                     selectByMouse: true
                     selectionColor: Theme.accent
-                    font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; font.letterSpacing: -0.2
+                    font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.5
+                    font.variableAxes: { "opsz": 22 }
                     onAccepted: focus = false
                     onEditingFinished: ed.project.name = text
                     Keys.onEscapePressed: { text = ed.project.name; focus = false; }
                 }
             }
             Text {
-                x: 28; y: 37
+                x: 10; y: 43
                 text: (Math.round(ed.project.pageWidth) + " × " + Math.round(ed.project.pageHeight) + " px")
                       + (ed.project.modified ? " · zapisuję…" : ed.project.path !== "" ? " · zapisano" : "")
                 color: Theme.text2; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }
@@ -994,54 +998,72 @@ Item {
 
             Row {
                 id: right
-                anchors.right: parent.right; anchors.rightMargin: 14
+                anchors.right: parent.right; anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
-                Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 1; height: 20; color: Theme.line }
-                // Powiększenie w jednej grupie
+                spacing: 8
+                // Cofanie
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: zoomRow.implicitWidth + 8; height: 36; radius: 8
-                    color: Theme.fill
+                    width: undoRow.implicitWidth + 8; height: 40; radius: 20
+                    color: Theme.surface
+                    Row {
+                        id: undoRow
+                        anchors.centerIn: parent
+                        ToolBtn { width: 36; height: 32; radius: 16; icon: "undo"; tip: "Cofnij (Ctrl+Z)"; enabled: ed.project.canUndo; onClicked: ed.undo() }
+                        ToolBtn { width: 36; height: 32; radius: 16; icon: "redo"; tip: "Ponów (Ctrl+Shift+Z)"; enabled: ed.project.canRedo; onClicked: ed.project.redo() }
+                    }
+                }
+                // Powiększenie
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: zoomRow.implicitWidth + 8; height: 40; radius: 20
+                    color: Theme.surface
                     Row {
                         id: zoomRow
                         anchors.centerIn: parent
-                        ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
+                        ToolBtn { width: 36; height: 32; radius: 16; anchors.verticalCenter: parent.verticalCenter; icon: "minus"; tip: "Pomniejsz (Ctrl −)"; onClicked: stage.zoomBy(0.8) }
                         HoverButton {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 54; height: 28; radius: 7
+                            width: 58; height: 32; radius: 16
                             tip: stage.fit ? "Rzeczywisty rozmiar (100%)" : "Dopasuj do okna (Ctrl+0)"
                             onClicked: { if (stage.fit) stage.zoomTo(1); else stage.fit = true; }
                             Text {
                                 anchors.centerIn: parent
                                 text: Math.round(stage.zoom * 100) + "%"
-                                color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; font.features: { "tnum": 1 }
+                                color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; font.features: { "tnum": 1 }
                             }
                         }
-                        ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
+                        ToolBtn { width: 36; height: 32; radius: 16; anchors.verticalCenter: parent.verticalCenter; icon: "plus"; tip: "Powiększ (Ctrl +)"; onClicked: stage.zoomBy(1.25) }
                     }
                 }
-                ToolBtn {
+                // Widok
+                Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    icon: "ruler"
-                    tip: "Linijki i prowadnice (Ctrl+R)"
-                    baseColor: stage.rulers ? Theme.accentSoft : "transparent"
-                    onClicked: stage.rulers = !stage.rulers
+                    width: viewRow.implicitWidth + 8; height: 40; radius: 20
+                    color: Theme.surface
+                    Row {
+                        id: viewRow
+                        anchors.centerIn: parent
+                        ToolBtn {
+                            width: 36; height: 32; radius: 16
+                            icon: "ruler"
+                            tip: "Linijki i prowadnice (Ctrl+R)"
+                            baseColor: stage.rulers ? Theme.accentSoft : "transparent"
+                            onClicked: stage.rulers = !stage.rulers
+                        }
+                        ToolBtn { width: 36; height: 32; radius: 16; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
+                    }
                 }
-                ToolBtn { anchors.verticalCenter: parent.verticalCenter; icon: "keyboard"; tip: "Skróty klawiszowe (Ctrl+/)"; onClicked: shortcutsSheet.open = true }
-                Item { width: 6; height: 1 }
                 Btn {
                     id: exportBtn
                     anchors.verticalCenter: parent.verticalCenter
                     primary: true
-                    height: 34
+                    height: 40
                     icon: "download"
                     text: "Eksportuj"
                     onClicked: exportPop.openAt(exportBtn)
                 }
-                Item { width: 6; height: 1 }
+                Item { width: 2; height: 1 }
                 WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: ed.app }
             }
         }
@@ -1052,9 +1074,10 @@ Item {
             id: pane
             y: bar.height
             width: parent.width - ed.toolsWidth
-            height: parent.height - y
-            color: Theme.dark ? "transparent" : Theme.windowGlass      // biała strona musi odcinać się od płótna także w jasnym motywie
-            Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.line; z: 2 }
+            height: parent.height - y - 16
+            radius: 24
+            clip: true
+            color: Theme.dark ? Theme.surface : Theme.fill        // biała strona musi odcinać się od płótna
 
         Stage {
             id: stage
@@ -1068,7 +1091,7 @@ Item {
             drawColor: side.drawColor
             drawWidth: side.drawWidth
             paintTool: side.tab === "paint" ? side.paintTool : ""
-            selTool: side.tab === "pixels" ? side.selTool : side.tab === "magic" && Magic.element === "" ? "object" : ""
+            selTool: side.tab === "pixels" ? side.selTool : side.tab === "magic" && Magic.element === "" && ed.aiLayer !== "" ? "object" : ""
             selHint: side.tab === "magic" ? "Kliknij rzecz na zdjęciu · Shift dodaje kolejną" : "Shift dodaje · Alt odejmuje · Esc odznacza"
             onSelAction: (a) => a === "adjust" ? ed.addAdjustment() : ed.selAction(a)
             onGenerate: (t) => Magic.generate(ed.project, t)
@@ -1087,6 +1110,8 @@ Item {
             onQuickAction: (a) => ed.runMenu(a)
         }
 
+        CardCorners { anchors.fill: parent; radius: pane.radius; background: Theme.windowGlass; z: 10 }
+
         // Pasek stron: podglądy, kliknięcie przechodzi na stronę, prawy przycisk — menu strony
         Item {
             id: pageBar
@@ -1098,8 +1123,7 @@ Item {
             readonly property real thumbW: Math.max(32, Math.min(110, thumbH * ed.project.pageWidth / ed.project.pageHeight))
             property int dragFrom: -1           // przeciąganie strony na inne miejsce
             property int dragTo: -1
-            Rectangle { anchors.fill: parent; color: Theme.paneGlass }
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            Rectangle { width: parent.width; height: 1; color: Theme.dark ? Theme.line : Qt.rgba(0, 0, 0, 0.05) }
             Flickable {
                 id: pageFlick
                 anchors.fill: parent
@@ -1124,7 +1148,7 @@ Item {
                                 id: pgFrame
                                 x: 0; y: 10
                                 width: pageBar.thumbW + 8; height: pageBar.thumbH + 8
-                                radius: 8
+                                radius: 10
                                 color: "transparent"
                                 border.width: pg.current ? 2 : 1
                                 border.color: pg.current ? Theme.accent : pgMa.containsMouse ? Theme.text2 : Theme.line
@@ -1183,8 +1207,8 @@ Item {
                     HoverButton {
                         y: 10
                         width: Math.max(pageBar.thumbW + 8, addPageRow.implicitWidth + 20); height: pageBar.thumbH + 8
-                        radius: 8
-                        baseColor: Theme.fill
+                        radius: 10
+                        baseColor: Theme.dark ? Theme.fill : Theme.surface
                         onClicked: { stage.clearSelection(); ed.project.addPage(); pageFlick.contentX = Math.max(0, pageFlick.contentWidth - pageFlick.width); }
                         Column {
                             id: addPageRow
@@ -1210,13 +1234,13 @@ Item {
             x: parent.width - width
             y: bar.height
             width: ed.toolsWidth
-            height: parent.height - y
+            height: parent.height - y - 16
             Rectangle {
                 id: toolStrip
-                x: 12; y: 10
-                width: parent.width - 24; height: 40
-                radius: 11
-                color: Theme.fill
+                x: 12; y: 0
+                width: parent.width - 28; height: 48
+                radius: 24
+                color: Theme.surface
                 Row {
                     anchors.centerIn: parent
                     spacing: 1
@@ -1226,7 +1250,7 @@ Item {
                             id: toolBtn
                             required property var modelData
                             readonly property bool on: Magic.element !== "" ? modelData.id === "magic" : side.tab === modelData.id
-                            width: (toolStrip.width - 8 - (ed.tools.length - 1)) / ed.tools.length; height: 32; radius: 8
+                            width: Math.min(36, (toolStrip.width - 12 - (ed.tools.length - 1)) / ed.tools.length); height: width; radius: width / 2
                             baseColor: on ? Theme.accent : "transparent"
                             color: on ? baseColor : hovered ? Theme.hover : baseColor
                             tip: modelData.label + (modelData.key !== "" ? " (" + modelData.key + ")" : "")
@@ -1236,11 +1260,15 @@ Item {
                     }
                 }
             }
-            Item {
+            Rectangle {
                 id: toolBody
-                y: toolStrip.y + toolStrip.height + 2
-                width: parent.width
+                x: 12
+                y: toolStrip.y + toolStrip.height + 10
+                width: parent.width - 28
                 height: parent.height - y
+                radius: 24
+                color: Theme.surface
+                clip: true
                 Inspector {
                     id: inspector
                     anchors.fill: parent

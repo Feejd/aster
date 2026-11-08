@@ -8,7 +8,7 @@ HoverButton {
     property string label
     width: label !== "" ? 36 + labelText.implicitWidth + 10 : 34
     height: 34
-    radius: 8
+    radius: height / 2
     baseColor: label !== "" ? Theme.fill : "transparent"
 
     Rectangle {

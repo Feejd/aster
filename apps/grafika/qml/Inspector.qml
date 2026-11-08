@@ -78,18 +78,18 @@ Item {
     }
 
     Text {
-        x: 16; y: 12
+        x: 18; y: 18
         text: ins.type === "many" ? "Zaznaczono: " + ins.count : ins.type === "locked" ? "Zablokowany"
             : ins.type === "code" ? (ins.el.kind === "qr" ? "Kod QR" : "Kod kreskowy") : ins.type === "chart" ? "Wykres"
             : ins.type === "adjust" ? "Warstwa korekcyjna" : ins.type === "draw" ? "Rysunek" : ins.type === "table" ? "Tabela" : ins.type === "text" ? "Tekst" : ins.type === "image" ? "Zdjęcie" : ins.type === "vector" ? (ins.recolor ? "Ikona" : "Naklejka") : ins.line ? "Linia" : ins.type === "shape" ? "Kształt" : "Strona"
         color: Theme.text
-        font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold; font.letterSpacing: -0.1
+        font.family: Theme.font; font.pixelSize: 19; font.weight: Font.Bold; font.letterSpacing: -0.5
     }
 
     Flickable {
         id: scroll
-        x: 16; y: 36
-        width: parent.width - 32
+        x: 18; y: 54
+        width: parent.width - 36
         height: parent.height - y
         contentHeight: col.height + 24
         clip: true

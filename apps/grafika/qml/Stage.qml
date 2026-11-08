@@ -1127,10 +1127,11 @@ Item {
                 visible: stage.project.count === 0 && stage.editing === ""
                 anchors.centerIn: parent
                 width: emptyCol.implicitWidth + 48; height: emptyCol.implicitHeight + 40
-                radius: 12
+                radius: 24
                 color: Theme.surface
-                border.width: 1; border.color: Theme.line
+                border.width: 0
                 opacity: 0.97
+                layer.enabled: false
                 Column {
                     id: emptyCol
                     anchors.centerIn: parent

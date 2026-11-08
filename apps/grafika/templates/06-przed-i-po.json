@@ -1,0 +1,152 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Przed i po",
+ "category": "Instagram",
+ "width": 1080,
+ "height": 1080,
+ "background": {
+  "type": "color",
+  "color": "#F2F3F5"
+ },
+ "elements": [
+  {
+   "type": "image",
+   "src": "",
+   "x": 40,
+   "y": 140,
+   "w": 490,
+   "h": 760,
+   "radius": 32,
+   "id": "e1"
+  },
+  {
+   "type": "image",
+   "src": "",
+   "x": 550,
+   "y": 140,
+   "w": 490,
+   "h": 760,
+   "radius": 32,
+   "id": "e2"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 70,
+   "y": 170,
+   "w": 160,
+   "h": 64,
+   "fill": "#FFFFFF",
+   "radius": 32,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "PRZED",
+   "x": 70,
+   "y": 186,
+   "w": 160,
+   "size": 30,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#141518",
+   "align": "center",
+   "lineHeight": 1.1,
+   "spacing": 0.1,
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 850,
+   "y": 170,
+   "w": 160,
+   "h": 64,
+   "fill": "#141518",
+   "radius": 32,
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "PO",
+   "x": 850,
+   "y": 186,
+   "w": 160,
+   "size": 30,
+   "font": "Inter",
+   "weight": 700,
+   "color": "#FFFFFF",
+   "align": "center",
+   "lineHeight": 1.1,
+   "spacing": 0.1,
+   "id": "e6"
+  },
+  {
+   "type": "text",
+   "text": "Metamorfoza salonu",
+   "x": 40,
+   "y": 40,
+   "w": 1000,
+   "size": 64,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#141518",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e7"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#FF5A36",
+   "strokeWidth": 12,
+   "points": [
+    0.0312,
+    0.2549,
+    0.5,
+    0.8431,
+    0.9688,
+    0.1569
+   ],
+   "x": 412.0,
+   "y": 967.0,
+   "w": 256.0,
+   "h": 51.0,
+   "id": "e8"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#FF5A36",
+   "strokeWidth": 12,
+   "points": [
+    0.1739,
+    0.125,
+    0.8261,
+    0.4375,
+    0.2174,
+    0.875
+   ],
+   "x": 622.0,
+   "y": 947.0,
+   "w": 46.0,
+   "h": 64.0,
+   "id": "e9"
+  },
+  {
+   "type": "text",
+   "text": "3 dni pracy · 2 400 zł",
+   "x": 40,
+   "y": 955,
+   "w": 460,
+   "size": 36,
+   "font": "Inter",
+   "weight": 600,
+   "color": "#5B6270",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e10"
+  }
+ ]
+}

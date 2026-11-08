@@ -1,0 +1,203 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Wizytówka",
+ "category": "Wizytówka",
+ "width": 1063,
+ "height": 591,
+ "print": {
+  "width": 90,
+  "height": 50
+ },
+ "background": {
+  "type": "color",
+  "color": "#0E0F12"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 510.0,
+   "y": -270.0,
+   "w": 700,
+   "h": 700,
+   "fill": "#6C5CE7",
+   "fill2": "#006C5CE7",
+   "gradient": "radial",
+   "opacity": 0.9,
+   "blend": "screen",
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 720.0,
+   "y": 240.0,
+   "w": 560,
+   "h": 560,
+   "fill": "#00CEC9",
+   "fill2": "#0000CEC9",
+   "gradient": "radial",
+   "opacity": 0.7,
+   "blend": "screen",
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "Marta Lis",
+   "x": 70,
+   "y": 230,
+   "w": 700,
+   "size": 76,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#FFFFFF",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": -0.02,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "fotografka",
+   "x": 74,
+   "y": 320,
+   "w": 700,
+   "size": 34,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#B7B9C4",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": 0.08,
+   "id": "e4"
+  }
+ ],
+ "pages": [
+  {
+   "background": {
+    "type": "color",
+    "color": "#0E0F12"
+   },
+   "elements": [
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 510.0,
+     "y": -270.0,
+     "w": 700,
+     "h": 700,
+     "fill": "#6C5CE7",
+     "fill2": "#006C5CE7",
+     "gradient": "radial",
+     "opacity": 0.9,
+     "blend": "screen",
+     "id": "e1"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 720.0,
+     "y": 240.0,
+     "w": 560,
+     "h": 560,
+     "fill": "#00CEC9",
+     "fill2": "#0000CEC9",
+     "gradient": "radial",
+     "opacity": 0.7,
+     "blend": "screen",
+     "id": "e2"
+    },
+    {
+     "type": "text",
+     "text": "Marta Lis",
+     "x": 70,
+     "y": 230,
+     "w": 700,
+     "size": 76,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#FFFFFF",
+     "align": "left",
+     "lineHeight": 1.1,
+     "spacing": -0.02,
+     "id": "e3"
+    },
+    {
+     "type": "text",
+     "text": "fotografka",
+     "x": 74,
+     "y": 320,
+     "w": 700,
+     "size": 34,
+     "font": "Inter",
+     "weight": 500,
+     "color": "#B7B9C4",
+     "align": "left",
+     "lineHeight": 1.1,
+     "spacing": 0.08,
+     "id": "e4"
+    }
+   ]
+  },
+  {
+   "background": {
+    "type": "color",
+    "color": "#FFFFFF"
+   },
+   "elements": [
+    {
+     "type": "text",
+     "text": "Marta Lis",
+     "x": 70,
+     "y": 90,
+     "w": 600,
+     "size": 52,
+     "font": "Inter",
+     "weight": 800,
+     "color": "#0E0F12",
+     "align": "left",
+     "lineHeight": 1.1,
+     "id": "e5"
+    },
+    {
+     "type": "text",
+     "text": "+48 600 700 800\nmarta@lisfoto.pl\nlisfoto.pl",
+     "x": 70,
+     "y": 190,
+     "w": 600,
+     "size": 34,
+     "font": "Inter",
+     "weight": 400,
+     "color": "#3D4048",
+     "align": "left",
+     "lineHeight": 1.6,
+     "id": "e6"
+    },
+    {
+     "type": "shape",
+     "shape": "rect",
+     "x": 760,
+     "y": 160,
+     "w": 240,
+     "h": 240,
+     "fill": "#F2F3F5",
+     "radius": 28,
+     "id": "e7"
+    },
+    {
+     "type": "code",
+     "kind": "qr",
+     "data": "https://lisfoto.pl",
+     "color": "#141518",
+     "bg": "#FFFFFF",
+     "x": 780,
+     "y": 180,
+     "w": 200,
+     "h": 200,
+     "id": "e8"
+    }
+   ]
+  }
+ ]
+}

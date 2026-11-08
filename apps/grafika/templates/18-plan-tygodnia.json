@@ -1,0 +1,127 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Plan tygodnia",
+ "category": "Plan",
+ "width": 3508,
+ "height": 2480,
+ "print": {
+  "width": 297,
+  "height": 210
+ },
+ "background": {
+  "type": "color",
+  "color": "#F7F7F5"
+ },
+ "elements": [
+  {
+   "type": "text",
+   "text": "Mój tydzień",
+   "x": 200,
+   "y": 160,
+   "w": 2000,
+   "size": 190,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#141518",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": -0.02,
+   "id": "e1"
+  },
+  {
+   "type": "draw",
+   "pen": "highlighter",
+   "stroke": "#B8F2E6",
+   "strokeWidth": 70,
+   "points": [
+    0.0436,
+    0.5488,
+    0.9564,
+    0.4512
+   ],
+   "x": 168.0,
+   "y": 335.0,
+   "w": 849.0,
+   "h": 82.0,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "planuj spokojnie, po jednym kroku",
+   "x": 210,
+   "y": 360,
+   "w": 2000,
+   "size": 64,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#3D4048",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e3"
+  },
+  {
+   "type": "table",
+   "cells": [
+    [
+     "",
+     "Pon",
+     "Wt",
+     "Śr",
+     "Czw",
+     "Pt"
+    ],
+    [
+     "Rano",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "Południe",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "Popołudnie",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "Wieczór",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "x": 200,
+   "y": 600,
+   "w": 3108,
+   "h": 1700,
+   "header": true,
+   "headerFill": "#141518",
+   "headerColor": "#FFFFFF",
+   "fill": "#FFFFFF",
+   "stripe": "#EEF6F4",
+   "lines": "grid",
+   "stroke": "#E6E7EA",
+   "strokeWidth": 4,
+   "color": "#141518",
+   "size": 64,
+   "font": "Inter",
+   "align": "center",
+   "radius": 48,
+   "id": "e4"
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Okładka studia",
+ "category": "Facebook",
+ "width": 1640,
+ "height": 624,
+ "background": {
+  "type": "color",
+  "color": "#F7F7F5"
+ },
+ "elements": [
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 800.0,
+   "y": -330.0,
+   "w": 900,
+   "h": 900,
+   "fill": "#FF8A65",
+   "fill2": "#00FF8A65",
+   "gradient": "radial",
+   "opacity": 0.85,
+   "blend": "multiply",
+   "id": "e1"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 1120.0,
+   "y": 160.0,
+   "w": 800,
+   "h": 800,
+   "fill": "#7C9CFF",
+   "fill2": "#007C9CFF",
+   "gradient": "radial",
+   "opacity": 0.85,
+   "blend": "multiply",
+   "id": "e2"
+  },
+  {
+   "type": "shape",
+   "shape": "ellipse",
+   "x": 750.0,
+   "y": 300.0,
+   "w": 600,
+   "h": 600,
+   "fill": "#FFD54F",
+   "fill2": "#00FFD54F",
+   "gradient": "radial",
+   "opacity": 0.7,
+   "blend": "multiply",
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "Studio Forma",
+   "x": 120,
+   "y": 200,
+   "w": 900,
+   "size": 120,
+   "font": "Inter",
+   "weight": 800,
+   "color": "#141518",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": -0.02,
+   "id": "e4"
+  },
+  {
+   "type": "text",
+   "text": "projektowanie wnętrz · Kraków",
+   "x": 124,
+   "y": 350,
+   "w": 900,
+   "size": 42,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#5B6270",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e5"
+  }
+ ]
+}

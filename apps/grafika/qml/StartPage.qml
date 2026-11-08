@@ -39,12 +39,6 @@ Item {
         onAccepted: sp.app.openProject(Library.toPath(String(selectedFile)))
     }
 
-    GlassPane {
-        anchors.fill: parent
-        topLeftRadius: sp.radius; topRightRadius: sp.radius
-        bottomLeftRadius: sp.radius; bottomRightRadius: sp.radius
-        leftLine: false
-    }
 
     // ——— Pasek tytułu ———
     Item {
@@ -60,7 +54,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Aster Pixel"
                 color: Theme.text
-                font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.4
+                font.family: Theme.font; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: -0.4
             }
         }
         Row {
@@ -69,6 +63,7 @@ Item {
             spacing: 14
             SearchField {
                 id: search
+                color: Theme.surface
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(340, sp.width - 520)
                 visible: width > 160
@@ -76,7 +71,7 @@ Item {
                 placeholder: "Szukaj szablonów i projektów"
                 onSearch: (t) => sp.query = t
             }
-            Btn { anchors.verticalCenter: parent.verticalCenter; text: "Otwórz plik…"; icon: "folder"; onClicked: openDialog.open() }
+            Btn { anchors.verticalCenter: parent.verticalCenter; height: 40; baseColor: Theme.surface; text: "Otwórz plik…"; icon: "folder"; onClicked: openDialog.open() }
             WindowButtons { anchors.verticalCenter: parent.verticalCenter; window: sp.app }
         }
     }
@@ -101,7 +96,8 @@ Item {
                 Text {
                     text: "Co dziś tworzysz?"
                     color: Theme.text
-                    font.family: Theme.font; font.pixelSize: 30; font.weight: Font.Bold; font.letterSpacing: -0.6
+                    font.family: Theme.font; font.pixelSize: 36; font.weight: Font.Bold; font.letterSpacing: -1.2
+                    font.variableAxes: { "opsz": 32 }
                 }
                 Text {
                     text: "Wybierz rozmiar albo gotowy szablon. Projekty zapisują się same — możesz w każdej chwili wrócić."
@@ -117,7 +113,7 @@ Item {
                 spacing: 6
                 Repeater {
                     model: sp.groups
-                    delegate: Chip {
+                    delegate: GChip {
                         required property var modelData
                         height: 30
                         text: modelData.label
@@ -214,10 +210,10 @@ Item {
                 visible: sp.query === ""
                 width: parent.width
                 spacing: 6
-                Chip { text: "Wszystkie"; on: sp.category === ""; onClicked: sp.category = "" }
+                GChip { text: "Wszystkie"; on: sp.category === ""; onClicked: sp.category = "" }
                 Repeater {
                     model: sp.categories
-                    delegate: Chip {
+                    delegate: GChip {
                         required property string modelData
                         text: modelData
                         on: sp.category === modelData
@@ -283,6 +279,9 @@ Item {
     }
 
     // ——— Elementy ———
+    // Pigułka na tle okna: biała, jak w Plikach
+    component GChip: Chip { baseColor: on ? Theme.accent : Theme.surface }
+
     // Kafelek rozmiaru: prostokąt w proporcjach strony, nazwa i wymiary
     component SizeCard: HoverButton {
         id: sc
@@ -293,9 +292,10 @@ Item {
         property var colors: ["#9AA3B5", "#5B6478"]
         property real pw
         property real ph
-        width: 162; height: 164
-        radius: 12
-        baseColor: Theme.fill
+        width: 162; height: 168
+        radius: 22
+        baseColor: Theme.surface
+        color: hovered ? (Theme.dark ? Theme.fill : "#FAFAFB") : baseColor
         Item {
             id: shapeBox
             x: 16; y: 14
@@ -305,7 +305,7 @@ Item {
                 anchors.centerIn: parent
                 width: sc.pw > 0 ? Math.max(18, sc.pw * shapeBox.k) : 50
                 height: sc.pw > 0 ? Math.max(18, sc.ph * shapeBox.k) : 50
-                radius: 7
+                radius: 10
                 gradient: Gradient {
                     orientation: Gradient.Vertical
                     GradientStop { position: 0; color: sc.pw > 0 ? sc.colors[0] : Theme.accentSoft }
@@ -345,13 +345,15 @@ Item {
         property string source
         property bool hasMenu: false
         signal menu(real x, real y)
-        width: 196; height: 236
-        radius: 12
+        width: 196; height: 244
+        radius: 22
+        baseColor: Theme.surface
+        color: hovered ? (Theme.dark ? Theme.fill : "#FAFAFB") : baseColor
         Rectangle {
-            x: 0; y: 0
-            width: parent.width; height: 184
-            radius: 10
-            color: Theme.fill
+            x: 8; y: 8
+            width: parent.width - 16; height: 176
+            radius: 16
+            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : "#F4F5F7"
             Image {
                 anchors.fill: parent
                 anchors.margins: 12
@@ -362,8 +364,8 @@ Item {
             }
         }
         Column {
-            x: 6; y: 192
-            width: parent.width - 12
+            x: 16; y: 194
+            width: parent.width - 32
             spacing: 2
             Text { width: parent.width; elide: Text.ElideRight; text: card.title; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
             Text { width: parent.width; elide: Text.ElideRight; text: card.subtitle; color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }

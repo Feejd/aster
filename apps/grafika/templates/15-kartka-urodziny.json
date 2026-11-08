@@ -1,0 +1,175 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Sto lat!",
+ "category": "Kartka",
+ "width": 1748,
+ "height": 1240,
+ "print": {
+  "width": 148,
+  "height": 105
+ },
+ "background": {
+  "type": "gradient",
+  "color": "#FFE0EC",
+  "color2": "#D8F3FF",
+  "angle": 135
+ },
+ "elements": [
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#FF3D6E",
+   "strokeWidth": 16,
+   "points": [
+    0.1111,
+    0.8,
+    0.8889,
+    0.2
+   ],
+   "x": 150.0,
+   "y": 140.0,
+   "w": 90.0,
+   "h": 50.0,
+   "id": "e1"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#7F5AF0",
+   "strokeWidth": 16,
+   "points": [
+    0.125,
+    0.125,
+    0.875,
+    0.875
+   ],
+   "x": 1490.0,
+   "y": 190.0,
+   "w": 80.0,
+   "h": 80.0,
+   "id": "e2"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#FFB300",
+   "strokeWidth": 16,
+   "points": [
+    0.1111,
+    0.1429,
+    0.8889,
+    0.8571
+   ],
+   "x": 250.0,
+   "y": 990.0,
+   "w": 90.0,
+   "h": 70.0,
+   "id": "e3"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#00B3A4",
+   "strokeWidth": 16,
+   "points": [
+    0.125,
+    0.8333,
+    0.875,
+    0.1667
+   ],
+   "x": 1410.0,
+   "y": 930.0,
+   "w": 80.0,
+   "h": 60.0,
+   "id": "e4"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#FFB300",
+   "strokeWidth": 16,
+   "points": [
+    0.1429,
+    0.75,
+    0.8571,
+    0.25
+   ],
+   "x": 1240.0,
+   "y": 110.0,
+   "w": 70.0,
+   "h": 40.0,
+   "id": "e5"
+  },
+  {
+   "type": "draw",
+   "pen": "marker",
+   "stroke": "#00B3A4",
+   "strokeWidth": 16,
+   "points": [
+    0.1429,
+    0.1429,
+    0.8571,
+    0.8571
+   ],
+   "x": 410.0,
+   "y": 110.0,
+   "w": 70.0,
+   "h": 70.0,
+   "id": "e6"
+  },
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 1500,
+   "y": 760,
+   "w": 120,
+   "h": 120,
+   "fill": "#FFB300",
+   "rotation": 14,
+   "id": "e7"
+  },
+  {
+   "type": "shape",
+   "shape": "star",
+   "x": 170,
+   "y": 600,
+   "w": 90,
+   "h": 90,
+   "fill": "#7F5AF0",
+   "rotation": -10,
+   "id": "e8"
+  },
+  {
+   "type": "text",
+   "text": "Sto lat!",
+   "x": 200,
+   "y": 330,
+   "w": 1348,
+   "size": 300,
+   "font": "Pacifico",
+   "weight": 400,
+   "color": "#FF3D6E",
+   "align": "center",
+   "lineHeight": 1.1,
+   "color2": "#7F5AF0",
+   "gradientAngle": 90,
+   "curve": 0.22,
+   "id": "e9"
+  },
+  {
+   "type": "text",
+   "text": "Wszystkiego najlepszego, dużo uśmiechu\ni samych dobrych dni!",
+   "x": 250,
+   "y": 800,
+   "w": 1248,
+   "size": 60,
+   "font": "Inter",
+   "weight": 500,
+   "color": "#3D3A4B",
+   "align": "center",
+   "lineHeight": 1.4,
+   "id": "e10"
+  }
+ ]
+}

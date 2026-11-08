@@ -1,0 +1,141 @@
+{
+ "format": "aster-grafika",
+ "version": 1,
+ "name": "Nowa kolekcja",
+ "category": "Relacja",
+ "width": 1080,
+ "height": 1920,
+ "background": {
+  "type": "gradient",
+  "color": "#F4EAE1",
+  "color2": "#E6D3C3",
+  "angle": 180
+ },
+ "elements": [
+  {
+   "type": "image",
+   "src": "",
+   "x": 0,
+   "y": 0,
+   "w": 1080,
+   "h": 1300,
+   "layerMask": "fade:180:0.55:1",
+   "id": "e1"
+  },
+  {
+   "type": "text",
+   "text": "Nowa",
+   "x": 80,
+   "y": 1080,
+   "w": 920,
+   "size": 190,
+   "font": "Playfair Display",
+   "weight": 400,
+   "color": "#2B1E16",
+   "align": "left",
+   "lineHeight": 1.1,
+   "id": "e2"
+  },
+  {
+   "type": "text",
+   "text": "kolekcja",
+   "x": 80,
+   "y": 1270,
+   "w": 920,
+   "size": 190,
+   "font": "Playfair Display",
+   "weight": 400,
+   "color": "#2B1E16",
+   "align": "left",
+   "lineHeight": 1.1,
+   "italic": true,
+   "id": "e3"
+  },
+  {
+   "type": "text",
+   "text": "JESIEŃ / ZIMA 2026",
+   "x": 86,
+   "y": 1520,
+   "w": 800,
+   "size": 40,
+   "font": "Inter",
+   "weight": 600,
+   "color": "#7B6252",
+   "align": "left",
+   "lineHeight": 1.1,
+   "spacing": 0.18,
+   "id": "e4"
+  },
+  {
+   "type": "shape",
+   "shape": "rect",
+   "x": 80,
+   "y": 1640,
+   "w": 440,
+   "h": 116,
+   "fill": "#2B1E16",
+   "radius": 58,
+   "shadow": true,
+   "shadowBlur": 30,
+   "shadowDist": 14,
+   "shadowAngle": 180,
+   "shadowOpacity": 0.25,
+   "shadowColor": "#000000",
+   "id": "e5"
+  },
+  {
+   "type": "text",
+   "text": "Zobacz w sklepie",
+   "x": 80,
+   "y": 1673,
+   "w": 440,
+   "size": 44,
+   "font": "Inter",
+   "weight": 600,
+   "color": "#F4EAE1",
+   "align": "center",
+   "lineHeight": 1.1,
+   "id": "e6"
+  },
+  {
+   "type": "draw",
+   "pen": "pen",
+   "stroke": "#2B1E16",
+   "strokeWidth": 7,
+   "points": [
+    0.0203,
+    0.9545,
+    0.3155,
+    0.376,
+    0.7214,
+    0.4587,
+    0.9797,
+    0.0455
+   ],
+   "x": 564.5,
+   "y": 1644.5,
+   "w": 271.0,
+   "h": 121.0,
+   "id": "e7"
+  },
+  {
+   "type": "draw",
+   "pen": "pen",
+   "stroke": "#2B1E16",
+   "strokeWidth": 7,
+   "points": [
+    0.1078,
+    0.0902,
+    0.8922,
+    0.2541,
+    0.5392,
+    0.9098
+   ],
+   "x": 784.5,
+   "y": 1634.5,
+   "w": 51.0,
+   "h": 61.0,
+   "id": "e8"
+  }
+ ]
+}

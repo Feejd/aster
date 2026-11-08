@@ -395,7 +395,7 @@ void Selection::maskLayer(Project *project, const QString &id, bool hide)
     const QTransform toFrame = whole ? QTransform() : Art::pageToFrame(el);
     const qreal w = whole ? m_page.width() : el.value(QStringLiteral("w")).toDouble(), h = whole ? m_page.height() : el.value(QStringLiteral("h")).toDouble();
     QImage in = mapped(toFrame * QTransform::fromScale(size.width() / w, size.height() / h), size);
-    const QImage old = project->fullImage(el.value(QStringLiteral("layerMask")).toString());
+    const QImage old = Art::maskSource(el.value(QStringLiteral("layerMask")).toString(), project);
     const QImage oldGray = old.isNull() ? QImage() : old.convertToFormat(QImage::Format_Grayscale8).scaled(size);
     QImage gray(size, QImage::Format_Grayscale8);
     for (int y = 0; y < size.height(); ++y) {

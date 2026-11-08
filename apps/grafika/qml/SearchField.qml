@@ -12,7 +12,7 @@ Rectangle {
     function set(t) { input.text = t; later.stop(); sf.search(t); }
 
     width: parent ? parent.width : 200
-    height: 38; radius: 10
+    height: 40; radius: 20
     color: Theme.fill
     border.width: input.activeFocus ? 1.5 : 0
     border.color: Theme.accent

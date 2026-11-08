@@ -53,7 +53,10 @@ Każdy element to warstwa. Oprócz `opacity` i `hidden` może mieć:
   na obrazie, więc w PDF jest wtedy jednym obrazem (ok. 300 dpi, najwyżej 60 Mpx), a nie wektorami.
 - `layerMask` — plik maski z `images/` (PNG w skali szarości, najczęściej dłuższy bok 1024 px): jasność to widoczność
   warstwy, białe widać, czarne ukryte. Maska pokrywa pole elementu i obraca się razem z nim. Oryginał warstwy się nie
-  zmienia. `layerMaskOff: true` wyłącza maskę bez jej usuwania.
+  zmienia. `layerMaskOff: true` wyłącza maskę bez jej usuwania. Zamiast pliku maska może być opisana słowami (szablony):
+  `fade:KĄT[:OD:DO]` — wygaszanie liniowe (kąt jak przy przejściach, 180 — widać u góry, znika ku dołowi), `radial[:OD:DO]` —
+  okrągłe od środka; OD i DO (0–1) mówią, gdzie zanik się zaczyna i kończy.
+- `warpN` (tylko w szablonach) — jak `warp`, ale w częściach pola (0–1); program zamienia je na `warp` przy wczytaniu.
 
 `adjust` to warstwa korekcyjna: nic nie rysuje, tylko zmienia wszystko, co leży pod nią na stronie (cała strona, `x`, `y`,
 `w`, `h` bez znaczenia). Obowiązują `opacity`, `hidden`, `layerMask` oraz pola korekcji: `brightness`, `contrast`,

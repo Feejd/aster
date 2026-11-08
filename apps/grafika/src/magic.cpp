@@ -825,7 +825,7 @@ void Magic::regenerate(Project *project, const QString &id, const QString &promp
         return;
     const QVariantMap el = project->get(id);
     const QRectF area(num(el, "x"), num(el, "y"), num(el, "w"), num(el, "h"));
-    const QImage mask = project->fullImage(el.value(QStringLiteral("layerMask")).toString());
+    const QImage mask = Art::maskSource(el.value(QStringLiteral("layerMask")).toString(), project);
     if (!mask.isNull())
         startGenerate(project, area, mask, prompt, id);
 }

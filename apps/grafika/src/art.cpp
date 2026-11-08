@@ -282,9 +282,20 @@ QBrush gradientBrush(const QColor &a, const QColor &b, qreal angle, const QRectF
 QBrush fillBrush(const QVariantMap &el, const QRectF &r)
 {
     const QColor a = color(el, "fill");
-    const QColor b = color(el, "fill2");
-    if (a.alpha() > 0 && b.isValid() && b.alpha() > 0)
-        return gradientBrush(a, b, num(el, "gradientAngle", 180), r, el.value(QStringLiteral("gradient")).toString() == QLatin1String("radial"));
+    const QColor b = color(el, "fill2", QColor());
+    const bool radial = el.value(QStringLiteral("gradient")).toString() == QLatin1String("radial");
+    // Przejście do przezroczystości (miękka plama światła): okrągłe kończy się dokładnie na brzegu kształtu
+    if (a.alpha() > 0 && b.isValid() && b.alpha() == 0 && radial) {
+        QRadialGradient g(r.center(), qMax(r.width(), r.height()) / 2);
+        g.setColorAt(0, a);
+        QColor mid = a;
+        mid.setAlphaF(a.alphaF() * 0.45);
+        g.setColorAt(0.45, mid);
+        g.setColorAt(1, b);
+        return QBrush(g);
+    }
+    if (a.alpha() > 0 && b.isValid() && (b.alpha() > 0 || el.contains(QStringLiteral("fill2"))))
+        return gradientBrush(a, b, num(el, "gradientAngle", 180), r, radial);
     return a.alpha() > 0 ? QBrush(a) : QBrush(Qt::NoBrush);
 }
 
@@ -782,13 +793,69 @@ void correct(QImage &img, const QVariantMap &el, bool full)
 
 // ——— Maski i tryby mieszania ———
 
+} // namespace
+
+namespace Art {
+
+// Maska opisana słowami (szablony): fade:KĄT[:OD:DO] — wygaszanie liniowe (kąt jak przy przejściach kolorów,
+// 180 — widać u góry, znika ku dołowi), radial[:OD:DO] — okrągłe od środka. OD/DO: gdzie zaczyna się i kończy zanik (0..1).
+QImage proceduralMask(const QString &key)
+{
+    const QStringList p = key.split(QLatin1Char(':'));
+    const bool radial = p.value(0) == QLatin1String("radial");
+    if (!radial && p.value(0) != QLatin1String("fade"))
+        return {};
+    const int base = radial ? 1 : 2;
+    const qreal from = p.size() > base ? p.value(base).toDouble() : 0, to = p.size() > base + 1 ? p.value(base + 1).toDouble() : 1;
+    QImage m(512, 512, QImage::Format_ARGB32);
+    QGradient *g;
+    QLinearGradient lin;
+    QRadialGradient rad(256, 256, 256);
+    if (radial) {
+        g = &rad;
+    } else {
+        const qreal a = qDegreesToRadians(p.value(1).toDouble());
+        const QPointF dir(qSin(a) * 256, -qCos(a) * 256);
+        lin = QLinearGradient(QPointF(256, 256) - dir, QPointF(256, 256) + dir);
+        g = &lin;
+    }
+    g->setColorAt(0, Qt::white);
+    g->setColorAt(qBound(0.0, from, 1.0), Qt::white);
+    g->setColorAt(qBound(qBound(0.0, from, 1.0) + 0.001, to, 1.0), Qt::black);
+    g->setColorAt(1, Qt::black);
+    QPainter(&m).fillRect(m.rect(), *g);
+    return m.convertToFormat(QImage::Format_Grayscale8);
+}
+
+QImage maskSource(const QString &key, const ImageSource *images)
+{
+    const QImage proc = proceduralMask(key);
+    if (!proc.isNull())
+        return proc;
+    return images ? images->image(key, 4096) : QImage();
+}
+
+} // namespace Art
+
+namespace {
+
 // Maska warstwy: alfa = jasność obrazu (białe widać, czarne ukryte)
 QImage layerMask(const QVariantMap &el, const ImageSource *images)
 {
     const QString key = el.value(QStringLiteral("layerMask")).toString();
-    if (key.isEmpty() || !images || el.value(QStringLiteral("layerMaskOff")).toBool())
+    if (key.isEmpty() || el.value(QStringLiteral("layerMaskOff")).toBool())
         return {};
-    const QImage src = images->image(key, 4096);
+    static QHash<QString, QImage> procedural;
+    static QMutex proceduralLock;
+    QImage src;
+    if (key.startsWith(QLatin1String("fade:")) || key.startsWith(QLatin1String("radial"))) {
+        QMutexLocker l(&proceduralLock);
+        if (!procedural.contains(key))
+            procedural.insert(key, Art::proceduralMask(key));
+        src = procedural.value(key);
+    } else if (images) {
+        src = images->image(key, 4096);
+    }
     if (src.isNull())
         return {};
     static QMutex lock;
