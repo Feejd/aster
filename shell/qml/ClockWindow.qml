@@ -61,7 +61,7 @@ Window {
             color: cw.ink
             font.family: Theme.font
             font.pixelSize: 150
-            font.weight: Font.Light
+            font.weight: Font.DemiBold
             font.letterSpacing: -6
             font.features: { "tnum": 1 }
             font.variableAxes: { "opsz": 32 }   // wersja „Display”: ciaśniej i smuklej przy dużych rozmiarach
