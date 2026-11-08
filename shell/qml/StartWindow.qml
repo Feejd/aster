@@ -7,7 +7,8 @@ import org.kde.milou as Milou
 import Aster.Shell
 import Aster.Ui
 
-// Start: jeden spokojny panel nad dokiem. U góry wyszukiwarka, niżej przypięte programy i ostatnie pliki,
+// Start: jeden panel nad dokiem. U góry powitanie z kontem i zasilaniem, duża wyszukiwarka,
+// niżej przypięte programy i polecane pliki jako karty,
 // a „Wszystkie programy” pokazują całą listę z filtrami kategorii. Na dole konto, blokada i zasilanie.
 // Po wpisaniu tekstu panel pokazuje wyniki z KRunnera (programy, pliki, ustawienia, kalkulator…).
 // Okno-warstwa przykrywa cały ekran nad dokiem: klik obok panelu zamyka Start.
@@ -114,8 +115,8 @@ Window {
         id: panel
         x: Math.round((start.width - width) / 2)
         y: start.height - height - 94           // warstwa zajmuje cały ekran, a panel stoi nad dokiem
-        width: Math.min(720, start.width - 36)
-        height: Math.min(590, start.height - 140)
+        width: Math.min(760, start.width - 36)
+        height: Math.min(575, start.height - 120)
 
         // Wejście: sprężyste wyrośnięcie znad środka doku (spod przycisku Start), wyjście: szybkie zgaśnięcie
         property real s: 0.92
@@ -158,14 +159,15 @@ Window {
 
         Item {
             id: main
+            y: footer.height
             width: parent.width; height: parent.height - footer.height
 
             // Pole wyszukiwania
             Rectangle {
                 id: searchBox
-                x: 20; y: 18
-                width: main.width - 40; height: 46
-                radius: 23
+                x: 20; y: 14
+                width: main.width - 40; height: 52
+                radius: 26
                 color: field.activeFocus ? Theme.surface : Theme.fill
                 border.width: 1
                 border.color: field.activeFocus ? Theme.accent : "transparent"
@@ -237,7 +239,7 @@ Window {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: start.category === "ulubione" ? "Przypięte" : "Wszystkie programy"
                                 color: Theme.text
-                                font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                                font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
                             }
                             Rectangle {
                                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
@@ -298,12 +300,12 @@ Window {
                                     required property var modelData
                                     required property int index
                                     readonly property real k: panel.stagger(3 + Math.min(index, 14))
-                                    width: catColumn.width / 6; height: 88
+                                    width: catColumn.width / 6; height: 104
                                     opacity: k
                                     transform: Translate { y: (1 - tile.k) * 10 }
                                     Rectangle {
                                         anchors.fill: parent; anchors.margins: 2
-                                        radius: 18
+                                        radius: 20
                                         color: Theme.hover
                                         opacity: tileArea.containsMouse ? 1 : 0
                                         Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -311,7 +313,7 @@ Window {
                                     AppIcon {
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         y: 9
-                                        size: 46
+                                        size: 56
                                         desktopId: tile.modelData.id
                                         source: tile.modelData.icon
                                         scale: tileArea.pressed ? 0.92 : 1
@@ -319,12 +321,12 @@ Window {
                                     }
                                     Text {
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        y: 62
+                                        y: 74
                                         width: parent.width - 8
                                         horizontalAlignment: Text.AlignHCenter
                                         text: tile.modelData.name
                                         color: Theme.text
-                                        font.family: Theme.font; font.pixelSize: 12
+                                        font.family: Theme.font; font.pixelSize: 13
                                         elide: Text.ElideRight
                                     }
                                     MouseArea { id: tileArea; anchors.fill: parent; hoverEnabled: true; onClicked: start.launch(tile.modelData.id) }
@@ -332,46 +334,38 @@ Window {
                             }
                         }
 
-                        // Ostatnie pliki
-                        Rectangle { width: parent.width; height: 1; color: Theme.line; visible: recentsTitle.visible }
+                        // Polecane: ostatnio otwierane pliki jako karty
+                        Item { width: 1; height: 4; visible: recentsTitle.visible }
                         Text {
                             id: recentsTitle
-                            topPadding: 4
                             visible: start.category === "ulubione" && start.recents.length > 0
-                            text: "Ostatnie"
-                            color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                            text: "Polecane"
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 16; font.weight: Font.DemiBold
                         }
-                        Column {
-                            width: parent.width
+                        Grid {
+                            columns: 2
+                            spacing: 10
                             visible: recentsTitle.visible
                             Repeater {
                                 model: start.category === "ulubione" ? start.recents : []
                                 delegate: Rectangle {
                                     id: rec
                                     required property var modelData
-                                    width: catColumn.width; height: 40
-                                    radius: 8
-                                    color: recArea.containsMouse ? Theme.hover : "transparent"
+                                    width: (catColumn.width - 10) / 2; height: 64
+                                    radius: 20
+                                    color: recArea.containsMouse ? Theme.hover : Theme.fill
+                                    Behavior on color { ColorAnimation { duration: 120 } }
                                     Kirigami.Icon {
-                                        x: 8; anchors.verticalCenter: parent.verticalCenter
-                                        width: 24; height: 24
+                                        x: 14; anchors.verticalCenter: parent.verticalCenter
+                                        width: 32; height: 32
                                         source: rec.modelData.icon
                                     }
-                                    Text {
-                                        x: 42; anchors.verticalCenter: parent.verticalCenter
-                                        width: parent.width - x - dateLabel.implicitWidth - 20
-                                        text: rec.modelData.name
-                                        elide: Text.ElideMiddle
-                                        color: Theme.text
-                                        font.family: Theme.font; font.pixelSize: 13
-                                    }
-                                    Text {
-                                        id: dateLabel
-                                        anchors.right: parent.right; anchors.rightMargin: 10
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: start.when(rec.modelData.modified)
-                                        color: Theme.text2
-                                        font.family: Theme.font; font.pixelSize: 12
+                                    Column {
+                                        x: 58; anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - 72
+                                        spacing: 2
+                                        Text { width: parent.width; text: rec.modelData.name; elide: Text.ElideMiddle; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.Medium }
+                                        Text { width: parent.width; text: start.when(rec.modelData.modified); color: Theme.text2; font.family: Theme.font; font.pixelSize: 12 }
                                     }
                                     MouseArea {
                                         id: recArea; anchors.fill: parent; hoverEnabled: true
@@ -440,39 +434,40 @@ Window {
             }
         }
 
-        // Konto, blokada, wyłączanie
-        Rectangle {
+        // Nagłówek: powitanie z kontem, blokada i wyłączanie
+        Item {
             id: footer
-            anchors.bottom: parent.bottom
-            width: parent.width; height: 54
-            bottomLeftRadius: 30; bottomRightRadius: 30
-            color: Theme.windowGlass
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            width: parent.width; height: 72
             Rectangle {
                 id: avatar
-                x: 20; anchors.verticalCenter: parent.verticalCenter
-                width: 30; height: 30; radius: 15
+                x: 24; anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: 6
+                width: 40; height: 40; radius: 20
                 color: Theme.accent
                 Text {
                     anchors.centerIn: parent
                     text: Platform.userName.charAt(0).toUpperCase()
                     color: "white"
-                    font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold
                 }
             }
-            Text {
-                anchors.left: avatar.right; anchors.leftMargin: 10
+            Column {
+                anchors.left: avatar.right; anchors.leftMargin: 12
                 anchors.right: footerButtons.left; anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: Platform.userName
-                elide: Text.ElideRight
-                color: Theme.text
-                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+                anchors.verticalCenter: avatar.verticalCenter
+                Text {
+                    width: parent.width
+                    text: (new Date().getHours() < 18 && new Date().getHours() >= 5 ? "Dzień dobry, " : "Dobry wieczór, ") + Platform.userName.split(" ")[0]
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.family: Theme.font; font.pixelSize: 19; font.weight: Font.DemiBold
+                    font.letterSpacing: -0.2
+                }
             }
             Row {
                 id: footerButtons
-                anchors.right: parent.right; anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right; anchors.rightMargin: 20
+                anchors.verticalCenter: avatar.verticalCenter
                 spacing: 4
                 FooterButton { icon: "lock"; tip: "Zablokuj"; onClicked: { start.close(); Platform.lockScreen(); } }
                 FooterButton { icon: "power"; tip: "Wyłącz"; onClicked: { start.close(); Platform.shutdownPrompt(); } }
