@@ -14,7 +14,7 @@ Rectangle {
     height: 900
     color: "black"
 
-    readonly property string font: "Outfit"
+    readonly property string font: "Manrope"
     readonly property color accent: config.accent || "#7C8CFF"
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     readonly property real u: Math.max(0.75, Math.min(width / 1440, height / 900))

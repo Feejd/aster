@@ -106,7 +106,7 @@ const QStringList &recommendedFonts()
         QStringLiteral("Nunito"), QStringLiteral("Quicksand"), QStringLiteral("Comfortaa"), QStringLiteral("Rubik"),
         QStringLiteral("Work Sans"), QStringLiteral("Josefin Sans"), QStringLiteral("Cormorant Garamond"), QStringLiteral("EB Garamond"),
         QStringLiteral("Libre Baskerville"), QStringLiteral("Cinzel"), QStringLiteral("Marcellus"), QStringLiteral("Prata"),
-        QStringLiteral("Space Grotesk"), QStringLiteral("Outfit"), QStringLiteral("Manrope"), QStringLiteral("Plus Jakarta Sans"),
+        QStringLiteral("Space Grotesk"), QStringLiteral("Manrope"), QStringLiteral("Manrope"), QStringLiteral("Plus Jakarta Sans"),
         QStringLiteral("Sora"), QStringLiteral("Syne"), QStringLiteral("Unbounded"), QStringLiteral("Righteous"),
         QStringLiteral("Bungee"), QStringLiteral("Permanent Marker"), QStringLiteral("Kaushan Script"), QStringLiteral("Courgette"),
         QStringLiteral("Satisfy"), QStringLiteral("Sacramento"), QStringLiteral("Allura"), QStringLiteral("Parisienne"),

@@ -319,7 +319,7 @@ static QImage letterIcon(const QString &name, const QColor &color)
     QPainterPath tile;
     tile.addRoundedRect(QRectF(0, 0, S, S), S * 0.225, S * 0.225);
     p.fillPath(tile, color.isValid() ? color : QColor(0x34, 0x56, 0xE8));
-    QFont f(QStringLiteral("Outfit"));
+    QFont f(QStringLiteral("Manrope"));
     f.setPixelSize(132);
     f.setWeight(QFont::DemiBold);
     p.setFont(f);

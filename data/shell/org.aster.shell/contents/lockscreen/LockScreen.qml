@@ -20,7 +20,7 @@ Item {
     implicitWidth: 1440
     implicitHeight: 900
 
-    readonly property string font: "Outfit"
+    readonly property string font: "Manrope"
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     readonly property real u: Math.max(0.75, Math.min(width / 1440, height / 900))
     property string error: ""

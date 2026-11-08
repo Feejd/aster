@@ -5,7 +5,7 @@ import QtQuick
 QtObject {
     readonly property bool dark: WindowEffects.forceDark || Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
     readonly property color accent: Config.accent        // wybierany w Ustawieniach → Wygląd
-    readonly property string font: "Outfit"     // data/fonts/outfit (OFL): szeroka, lekka, jak w OxygenOS
+    readonly property string font: "Manrope"     // data/fonts/manrope (OFL): okrągła i spokojna, z polskimi znakami
 
     // Matowe, pełne powierzchnie: głębię daje odcień i cień, nie przezroczystość
     readonly property color bar: "transparent"   // pasek stanu leży wprost na tapecie

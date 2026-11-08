@@ -57,8 +57,8 @@ Window {
             color: cw.ink
             font.family: Theme.font
             font.pixelSize: 148
-            font.weight: Font.Thin
-            font.letterSpacing: -6
+            font.weight: Font.ExtraLight
+            font.letterSpacing: -7
             font.features: { "tnum": 1 }
         }
 
