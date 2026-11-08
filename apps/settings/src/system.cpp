@@ -805,7 +805,8 @@ void System::setNightLight(bool on)
         return;
     // Ciepłe światło na stałe (włącz/wyłącz ręcznie, jak „Night Shift do jutra”)
     const auto write = [](const QString &key, const QString &value) {
-        QProcess::execute(QStringLiteral("kwriteconfig6"), {QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"),
+        // --notify: KWin czyta nocne światło tylko po powiadomieniu o zmianie, samo „reconfigure” go nie przeładowuje
+        QProcess::execute(QStringLiteral("kwriteconfig6"), {QStringLiteral("--notify"), QStringLiteral("--file"), QStringLiteral("kwinrc"), QStringLiteral("--group"), QStringLiteral("NightColor"),
                                                             QStringLiteral("--key"), key, value});
     };
     write(QStringLiteral("Active"), on ? QStringLiteral("true") : QStringLiteral("false"));
