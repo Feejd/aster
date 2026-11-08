@@ -300,7 +300,7 @@ Window {
 
             Item {
                 id: toolbar
-                width: parent.width; height: 54
+                width: parent.width; height: 62
 
                 DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
                 TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
@@ -309,7 +309,7 @@ Window {
                     id: nav
                     x: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
+                    spacing: 4
                     Rectangle {
                         visible: win.privateMode
                         anchors.verticalCenter: parent.verticalCenter
@@ -319,9 +319,11 @@ Window {
                         Text { id: privText; x: 31; anchors.verticalCenter: parent.verticalCenter; text: "Prywatne"; color: Theme.dark ? "white" : "#4B33B5"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
                     }
                     Item { width: win.privateMode ? 6 : 0; height: 1 }
-                    ToolBtn { icon: "back"; enabled: !!win.cur && win.cur.canGoBack; onClicked: win.cur.goBack() }
-                    ToolBtn { icon: "forward"; enabled: !!win.cur && !win.cur.internal && win.cur.view.canGoForward; onClicked: win.cur.view.goForward() }
+                    ToolBtn { width: 40; height: 40; radius: 20; tip: "Wstecz"; icon: "back"; enabled: !!win.cur && win.cur.canGoBack; onClicked: win.cur.goBack() }
+                    ToolBtn { width: 40; height: 40; radius: 20; tip: "Dalej"; icon: "forward"; enabled: !!win.cur && !win.cur.internal && win.cur.view.canGoForward; onClicked: win.cur.view.goForward() }
                     ToolBtn {
+                        width: 40; height: 40; radius: 20
+                        tip: win.cur && win.cur.loading ? "Zatrzymaj" : "Odśwież"
                         icon: win.cur && win.cur.loading ? "close" : "reload"
                         enabled: !!win.cur && !win.cur.blank
                         onClicked: if (win.cur.loading) win.cur.view.stop(); else win.cur.reload()
@@ -332,11 +334,11 @@ Window {
                 Rectangle {
                     id: address
                     readonly property real room: toolbar.width - 2 * Math.max(nav.x + nav.width, toolbar.width - rightGroup.x) - 24
-                    width: Math.max(220, Math.min(720, room))
-                    height: 38
+                    width: Math.max(220, Math.min(760, room))
+                    height: 44
                     anchors.centerIn: parent
-                    radius: 19
-                    color: field.activeFocus ? Theme.paneGlass : Theme.fill
+                    radius: 22
+                    color: Theme.surface
                     border.width: field.activeFocus ? 1.5 : 0
                     border.color: Theme.accent
                     Behavior on color { ColorAnimation { duration: 120 } }
@@ -356,8 +358,8 @@ Window {
                     // Kłódka / tarcza: informacje o witrynie
                     HoverButton {
                         id: siteButton
-                        x: 5; anchors.verticalCenter: parent.verticalCenter
-                        width: siteRow.implicitWidth + 16; height: 30; radius: 15
+                        x: 7; anchors.verticalCenter: parent.verticalCenter
+                        width: siteRow.implicitWidth + 18; height: 32; radius: 16
                         enabled: !!win.cur && !win.cur.blank && !win.cur.internal && !field.activeFocus
                         onClicked: siteInfo.shown = !siteInfo.shown
                         Row {
@@ -408,7 +410,7 @@ Window {
 
                     TextInput {
                         id: field
-                        anchors.left: parent.left; anchors.leftMargin: 38
+                        anchors.left: parent.left; anchors.leftMargin: 42
                         anchors.right: addrButtons.left; anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         opacity: activeFocus ? 1 : 0
@@ -501,11 +503,12 @@ Window {
                     id: rightGroup
                     anchors.right: winButtons.left; anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
+                    spacing: 4
                     // Pobrane (z kółkiem postępu, gdy coś się pobiera)
                     HoverButton {
                         id: dlButton
-                        width: 34; height: 32
+                        width: 40; height: 40; radius: 20
+                        tip: "Pobrane"
                         visible: Browser.downloads.length > 0
                         onClicked: downloadsPopup.open(!downloadsPopup.shown)
                         readonly property real progress: {
@@ -525,8 +528,8 @@ Window {
                             }
                         }
                     }
-                    ToolBtn { icon: "plus"; onClicked: win.newTab("") }
-                    ToolBtn { id: menuButton; icon: "more"; onClicked: win.showMainMenu() }
+                    ToolBtn { width: 40; height: 40; radius: 20; tip: "Nowa karta"; icon: "plus"; onClicked: win.newTab("") }
+                    ToolBtn { id: menuButton; width: 40; height: 40; radius: 20; tip: "Menu"; icon: "more"; onClicked: win.showMainMenu() }
                 }
 
                 WindowButtons {
@@ -542,14 +545,14 @@ Window {
                 id: tabStrip
                 y: toolbar.height
                 width: parent.width
-                height: tabs.count > 1 ? 38 : 0
+                height: tabs.count > 1 ? 44 : 0
                 visible: height > 0
                 clip: true
                 Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutQuint } }
 
                 Flickable {
                     id: tabFlick
-                    x: 10; width: parent.width - 20 - 40
+                    x: 12; width: parent.width - 24 - 44
                     height: parent.height
                     contentWidth: tabRow.width
                     flickableDirection: Flickable.HorizontalFlick
@@ -560,8 +563,8 @@ Window {
                     Row {
                         id: tabRow
                         height: parent.height
-                        spacing: 2
-                        readonly property real tabWidth: Math.max(130, Math.min(232, (tabFlick.width - (tabs.count - 1) * 2) / Math.max(1, tabs.count)))
+                        spacing: 4
+                        readonly property real tabWidth: Math.max(130, Math.min(232, (tabFlick.width - (tabs.count - 1) * 4) / Math.max(1, tabs.count)))
                         Repeater {
                             model: tabs
                             delegate: TabButton {}
@@ -569,7 +572,7 @@ Window {
                     }
                     // Aktywna karta zawsze widoczna
                     function reveal() {
-                        const x = win.current * (tabRow.tabWidth + 2);
+                        const x = win.current * (tabRow.tabWidth + 4);
                         if (x < contentX) contentX = x;
                         else if (x + tabRow.tabWidth > contentX + width) contentX = x + tabRow.tabWidth - width;
                     }
@@ -577,7 +580,8 @@ Window {
                 }
                 ToolBtn {
                     anchors.right: parent.right; anchors.rightMargin: 10
-                    y: 4; width: 30; height: 30
+                    y: 4; width: 36; height: 36; radius: 18
+                    tip: "Nowa karta"
                     icon: "plus"
                     onClicked: win.newTab("")
                 }
@@ -600,7 +604,7 @@ Window {
                             id: favChip
                             required property var modelData
                             anchors.verticalCenter: parent.verticalCenter
-                            width: Math.min(180, favLabel.implicitWidth + 40); height: 28; radius: 9
+                            width: Math.min(180, favLabel.implicitWidth + 40); height: 28; radius: 14
                             Image { x: 9; anchors.verticalCenter: parent.verticalCenter; width: 16; height: 16; source: Urls.favicon(favChip.modelData.url); sourceSize: Qt.size(32, 32); asynchronous: true }
                             Text {
                                 id: favLabel
@@ -627,8 +631,8 @@ Window {
         // ——— Prośba strony o uprawnienie ———
         Rectangle {
             id: permBar
-            x: 10; y: chrome.height + 2
-            width: parent.width - 20
+            x: 12; y: chrome.height + 2
+            width: parent.width - 24
             height: win.pendingPermission ? 50 : 0
             radius: 14
             visible: height > 0
@@ -669,24 +673,25 @@ Window {
         }
 
         // ——— Strony ———
-        GlassPane {
+        Rectangle {
             visible: !win.pageFullScreen
             x: content.x; y: content.y
             width: content.width; height: content.height
-            bottomLeftRadius: win.r; bottomRightRadius: win.r
-            leftLine: false
-            // Górna krawędź panelu (pod paskiem okna)
-            Rectangle { width: parent.width; height: 1; color: Theme.line; visible: tabs.count <= 1 }
+            radius: content.cardRadius
+            color: Theme.surface
         }
         Item {
             id: content
+            readonly property int inset: win.pageFullScreen ? 0 : 12
+            readonly property real cardRadius: win.pageFullScreen ? 0 : 20
+            x: inset
             y: chrome.height + (permBar.height ? permBar.height + 6 : 0)
-            width: parent.width
-            height: parent.height - y
+            width: parent.width - 2 * inset
+            height: parent.height - y - inset
             clip: true
 
-            // Zaokrąglone dolne rogi strony (maska), gdy okno nie jest zmaksymalizowane
-            layer.enabled: !win.maxed && !win.pageFullScreen && GraphicsInfo.api !== GraphicsInfo.Software
+            // Strona leży na karcie z zaokrąglonymi rogami (maska)
+            layer.enabled: !win.pageFullScreen && GraphicsInfo.api !== GraphicsInfo.Software
             layer.effect: MultiEffect {
                 maskEnabled: true
                 maskSource: contentMask
@@ -855,7 +860,7 @@ Window {
             visible: false
             layer.enabled: true
             width: content.width; height: content.height
-            bottomLeftRadius: win.r; bottomRightRadius: win.r
+            radius: content.cardRadius
             color: "black"
         }
 
@@ -1144,20 +1149,14 @@ Window {
         // Aktywna karta ma kolor panelu strony i łączy się z nim od dołu
         Rectangle {
             id: tabBg
-            y: 4; width: parent.width; height: parent.height - 4
-            topLeftRadius: 11; topRightRadius: 11
-            color: tb.active ? Theme.paneGlass : (tabArea.containsMouse ? Theme.hover : "transparent")
+            y: 2; width: parent.width; height: parent.height - 8
+            radius: height / 2
+            color: tb.active ? Theme.surface : (tabArea.containsMouse ? Theme.hover : "transparent")
             Behavior on color { ColorAnimation { duration: 120 } }
-            // separator między nieaktywnymi kartami
-            Rectangle {
-                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                width: 1; height: 16; color: Theme.line
-                visible: !tb.active && tb.index + 1 !== win.current && tb.index < tabs.count - 1 && !tabArea.containsMouse
-            }
         }
         Item {
             id: favicon
-            x: 12; y: 4 + (tabBg.height - height) / 2
+            x: 13; y: tabBg.y + (tabBg.height - height) / 2
             width: 16; height: 16
             Image {
                 anchors.fill: parent
@@ -1186,7 +1185,7 @@ Window {
         HoverButton {
             id: soundBtn
             anchors.left: favicon.right; anchors.leftMargin: 4
-            y: 4 + (tabBg.height - height) / 2
+            y: tabBg.y + (tabBg.height - height) / 2
             width: visible ? 22 : 0; height: 22; radius: 6
             visible: tb.audible || tb.muted
             onClicked: { const p = win.tabAt(tb.index); if (p) p.view.audioMuted = !p.view.audioMuted; }
@@ -1195,12 +1194,12 @@ Window {
         Text {
             anchors.left: soundBtn.visible ? soundBtn.right : favicon.right; anchors.leftMargin: 8
             anchors.right: closeBtn.left; anchors.rightMargin: 4
-            y: 4 + (tabBg.height - height) / 2
+            y: tabBg.y + (tabBg.height - height) / 2
             text: tb.title
             elide: Text.ElideRight
             color: tb.active ? Theme.text : Theme.text2
-            font.family: Theme.font; font.pixelSize: 12
-            font.weight: tb.active ? Font.Medium : Font.Normal
+            font.family: Theme.font; font.pixelSize: 13
+            font.weight: tb.active ? Font.DemiBold : Font.Normal
         }
         MouseArea {
             id: tabArea
@@ -1219,7 +1218,7 @@ Window {
                 moved = true;
                 // Przeciąganie: karta zmienia miejsce, gdy kursor wejdzie na sąsiednią
                 const px = tb.mapToItem(tabRow, m.x, 0).x;
-                const to = Math.max(0, Math.min(tabs.count - 1, Math.floor(px / (tabRow.tabWidth + 2))));
+                const to = Math.max(0, Math.min(tabs.count - 1, Math.floor(px / (tabRow.tabWidth + 4))));
                 if (to !== tb.index) win.moveTab(tb.index, to);
             }
             onClicked: (m) => {
@@ -1230,8 +1229,8 @@ Window {
         }
         Rectangle {
             id: closeBtn
-            anchors.right: parent.right; anchors.rightMargin: 7
-            y: 4 + (tabBg.height - height) / 2
+            anchors.right: parent.right; anchors.rightMargin: 9
+            y: tabBg.y + (tabBg.height - height) / 2
             width: 22; height: 22; radius: 11
             visible: tb.active || tabArea.containsMouse || closeArea.containsMouse
             color: closeArea.containsMouse ? Theme.hover : "transparent"

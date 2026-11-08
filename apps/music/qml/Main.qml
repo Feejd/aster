@@ -180,34 +180,40 @@ Window {
         // ——— Pasek boczny ———
         Item {
             id: side
-            width: 220; height: parent.height - bar.height
+            width: 232; height: parent.height - bar.height - 12
             DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
 
             Column {
-                x: 10; y: 58
-                width: parent.width - 20
-                spacing: 2
+                x: 14; y: 18
+                width: parent.width - 24
+                spacing: 3
+                Text {
+                    leftPadding: 14; topPadding: 4; bottomPadding: 14
+                    text: "Muzyka"
+                    color: Theme.text
+                    font.family: Theme.font; font.pixelSize: 24; font.weight: Font.Bold; font.letterSpacing: -0.6
+                }
                 NavItem { key: "albums"; label: "Albumy"; icon: "disc"; colors: ["#FFA394", "#E2283E"] }
                 NavItem { key: "artists"; label: "Wykonawcy"; icon: "user"; colors: ["#FFC48A", "#EA6A12"] }
                 NavItem { key: "songs"; label: "Utwory"; icon: "music"; colors: ["#E6A4FF", "#7330E0"] }
                 NavItem { key: "queue"; label: "Kolejka"; icon: "playlist"; colors: ["#74CCFF", "#2457E6"]; badge: pb.queue.length > 0 ? String(pb.queue.length) : "" }
 
                 Text {
-                    topPadding: 22; bottomPadding: 6; leftPadding: 10
-                    text: "FOLDERY"
+                    topPadding: 20; bottomPadding: 6; leftPadding: 16
+                    text: "Foldery"
                     color: Theme.text2
-                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.letterSpacing: 0.6
+                    font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
                 }
                 Repeater {
                     model: Library.folders
                     delegate: HoverButton {
                         id: folderItem
                         required property var modelData
-                        width: parent.width; height: 32; radius: 9
+                        width: parent.width; height: 38; radius: 19
                         onClicked: Qt.openUrlExternally("file://" + modelData.path)
-                        Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.folder; size: 15; color: Theme.text2 }
+                        Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; d: Icons.folder; size: 16; color: Theme.text2 }
                         Text {
-                            x: 38; width: parent.width - 46 - (removeBtn.visible ? 26 : 0)
+                            x: 44; width: parent.width - 52 - (removeBtn.visible ? 26 : 0)
                             anchors.verticalCenter: parent.verticalCenter
                             text: folderItem.modelData.name
                             elide: Text.ElideRight
@@ -219,52 +225,53 @@ Window {
                             visible: folderItem.modelData.removable && folderItem.hovered || hovered
                             anchors.right: parent.right; anchors.rightMargin: 4
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 24; height: 24; radius: 6
+                            width: 28; height: 28; radius: 14
                             onClicked: Library.removeFolder(folderItem.modelData.path)
                             Icon { anchors.centerIn: parent; d: Icons.close; size: 12; stroke: 2; color: Theme.text2 }
                         }
                     }
                 }
                 HoverButton {
-                    width: parent.width; height: 32; radius: 9
+                    width: parent.width; height: 38; radius: 19
                     onClicked: folderDialog.open()
-                    Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.plus; size: 15; stroke: 2; color: Theme.text2 }
-                    Text { x: 38; anchors.verticalCenter: parent.verticalCenter; text: "Dodaj folder…"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
+                    Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; d: Icons.plus; size: 16; stroke: 2; color: Theme.text2 }
+                    Text { x: 44; anchors.verticalCenter: parent.verticalCenter; text: "Dodaj folder…"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13 }
                 }
             }
         }
 
         // ——— Treść ———
-        GlassPane {
+        Item {
             id: main
             x: side.width
             width: parent.width - side.width
-            height: parent.height - bar.height
-            topRightRadius: win.r
+            height: parent.height - bar.height - 12
 
             Item {
                 id: topBar
-                width: parent.width; height: 68
+                width: parent.width; height: 76
                 z: 5
                 DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
                 TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
                 HoverButton {
                     id: backBtn
                     visible: win.stack.length > 0
-                    x: 16; anchors.verticalCenter: parent.verticalCenter
-                    width: 34; height: 34; radius: 17
+                    x: 6; anchors.verticalCenter: parent.verticalCenter
+                    width: 40; height: 40; radius: 20
+                    baseColor: Theme.surface
                     onClicked: win.back()
                     Icon { anchors.centerIn: parent; d: Icons.back; size: 17; stroke: 2; color: Theme.text }
                 }
                 Column {
-                    x: backBtn.visible ? 60 : 28
+                    x: backBtn.visible ? 62 : 8
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 1
                     visible: !win.detail
                     Text {
                         text: ({ albums: "Albumy", artists: "Wykonawcy", songs: "Utwory", queue: "Kolejka" })[win.section]
                         color: Theme.text
-                        font.family: Theme.font; font.pixelSize: 22; font.weight: Font.Bold; font.letterSpacing: -0.4
+                        font.family: Theme.font; font.pixelSize: 30; font.weight: Font.Bold; font.letterSpacing: -0.9
+                        font.variableAxes: { "opsz": 32 }
                     }
                     Text {
                         text: Library.loading && Library.tracks.length === 0 ? "Szukam muzyki…"
@@ -273,7 +280,7 @@ Window {
                             : win.section === "songs" ? Library.songs(win.shownTracks.length)
                             : (pb.queue.length ? Library.songs(pb.queue.length) : "Pusta")
                         color: Theme.text2
-                        font.family: Theme.font; font.pixelSize: 12
+                        font.family: Theme.font; font.pixelSize: 13
                     }
                 }
                 Row {
@@ -283,25 +290,25 @@ Window {
                     // Szukaj (Ctrl+E)
                     Rectangle {
                         visible: !win.detail && win.section !== "queue"
-                        width: 220; height: 34; radius: 17
-                        color: Theme.fill
+                        width: 260; height: 42; radius: 21
+                        color: Theme.surface
                         border.width: searchInput.activeFocus ? 2 : 0
                         border.color: Theme.accent
-                        Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 15; color: Theme.text2 }
+                        Icon { x: 15; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 16; color: Theme.text2 }
                         TextInput {
                             id: searchInput
-                            x: 36; width: parent.width - 48
+                            x: 40; width: parent.width - 54
                             anchors.verticalCenter: parent.verticalCenter
                             color: Theme.text
                             selectionColor: Theme.accentSoft
                             selectedTextColor: Theme.text
-                            font.family: Theme.font; font.pixelSize: 13
+                            font.family: Theme.font; font.pixelSize: 14
                             clip: true
                             onTextChanged: win.search = text
                             Keys.onEscapePressed: { text = ""; focus = false; }
                             Text {
                                 visible: !parent.text
-                                text: "Szukaj"
+                                text: "Szukaj utworów i wykonawców"
                                 color: Theme.text2
                                 font: parent.font
                             }
@@ -335,12 +342,13 @@ Window {
                 GridView {
                     id: albumGrid
                     visible: win.section === "albums" && !win.detail
-                    x: 18; width: parent.width - 36; height: parent.height
+                    x: 4; width: parent.width - 18; height: parent.height
                     readonly property int cols: Math.max(2, Math.floor(width / 196))
                     cellWidth: Math.floor(width / cols); cellHeight: cellWidth + 52
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
                     model: win.shownAlbums
+                    header: NowPlayingCard { width: albumGrid.width }
                     delegate: AlbumTile {
                         required property var modelData
                         album: modelData
@@ -623,9 +631,9 @@ Window {
         // ——— Pasek odtwarzania ———
         Item {
             id: bar
-            anchors.bottom: parent.bottom
-            width: parent.width; height: 88
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
+            anchors.bottom: parent.bottom; anchors.bottomMargin: 12
+            x: 12; width: parent.width - 24; height: 84
+            Rectangle { anchors.fill: parent; radius: 22; color: Theme.surface }
 
             // Co gra
             Item {
@@ -633,7 +641,7 @@ Window {
                 Cover {
                     id: barCover
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 56; height: 56; radius: 9
+                    width: 56; height: 56; radius: 14
                     source: pb.current ? pb.current.cover : ""
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: win.go("queue") }
                 }
@@ -682,7 +690,7 @@ Window {
                     BarBtn { icon: "shuffle"; active: pb.shuffle; tip: pb.shuffle ? "Losowo: wł. (Ctrl+H)" : "Losowo: wył. (Ctrl+H)"; onClicked: pb.setShuffle(!pb.shuffle) }
                     BarBtn { icon: "prev"; enabled: !!pb.current; tip: "Poprzedni (Ctrl+B)"; onClicked: pb.prev() }
                     HoverButton {
-                        width: 42; height: 42; radius: 21
+                        width: 46; height: 46; radius: 23
                         anchors.verticalCenter: parent.verticalCenter
                         baseColor: Theme.text
                         color: hovered ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.82) : baseColor
@@ -785,6 +793,77 @@ Window {
     }
 
     // ——— Elementy ———
+    // „Teraz gra”: duża karta nad albumami, widoczna, gdy coś jest w odtwarzaczu
+    component NowPlayingCard: Item {
+        id: np
+        readonly property bool shown: !!pb.current && !win.search
+        height: shown ? 244 : 0
+        visible: shown
+        Rectangle {
+            x: 10; y: 0
+            width: parent.width - 20; height: 220
+            radius: 26
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0; color: "#2A1B4D" }
+                GradientStop { position: 0.5; color: "#5B2E8C" }
+                GradientStop { position: 1; color: "#C1407A" }
+            }
+            Cover {
+                id: npCover
+                x: 28; anchors.verticalCenter: parent.verticalCenter
+                width: 164; height: 164; radius: 22
+                color: Qt.rgba(1, 1, 1, 0.14)
+                source: pb.current ? pb.current.cover : ""
+            }
+            Column {
+                x: npCover.x + npCover.width + 28
+                width: parent.width - x - 28
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                Text { text: pb.playing ? "TERAZ GRA" : "WSTRZYMANO"; color: Qt.rgba(1, 1, 1, 0.8); font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; font.letterSpacing: 0.4 }
+                Text {
+                    width: parent.width
+                    topPadding: 4
+                    text: pb.current ? pb.current.title : ""
+                    elide: Text.ElideRight
+                    color: "white"; font.family: Theme.font; font.pixelSize: 36; font.weight: Font.Bold; font.letterSpacing: -1
+                    font.variableAxes: { "opsz": 32 }
+                }
+                Text {
+                    width: parent.width
+                    text: pb.current ? pb.current.artist + ((pb.current.albumTitle || pb.current.album) ? " · " + (pb.current.albumTitle || pb.current.album) : "") : ""
+                    elide: Text.ElideRight
+                    color: Qt.rgba(1, 1, 1, 0.85); font.family: Theme.font; font.pixelSize: 17
+                }
+                Item { width: 1; height: 14 }
+                Row {
+                    spacing: 10
+                    HoverButton {
+                        width: npPlay.implicitWidth + 40; height: 42; radius: 21
+                        baseColor: "white"
+                        color: hovered ? Qt.rgba(1, 1, 1, 0.88) : baseColor
+                        onClicked: pb.toggle()
+                        Row {
+                            id: npPlay
+                            anchors.centerIn: parent
+                            spacing: 8
+                            Icon { anchors.verticalCenter: parent.verticalCenter; d: pb.playing ? Icons.pause : Icons.play; size: 15; stroke: 2.2; color: "#2A1B4D"; fill: pb.playing ? "transparent" : "#2A1B4D" }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: pb.playing ? "Wstrzymaj" : "Odtwarzaj"; color: "#2A1B4D"; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                        }
+                    }
+                    HoverButton {
+                        width: npQueue.implicitWidth + 36; height: 42; radius: 21
+                        baseColor: Qt.rgba(1, 1, 1, 0.18)
+                        color: hovered ? Qt.rgba(1, 1, 1, 0.28) : baseColor
+                        onClicked: win.go("queue")
+                        Text { id: npQueue; anchors.centerIn: parent; text: "Kolejka"; color: "white"; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    }
+                }
+            }
+        }
+    }
+
     component NavItem: Rectangle {
         id: nav
         property string key
@@ -793,26 +872,19 @@ Window {
         property var colors
         property string badge
         readonly property bool active: win.section === key
-        width: parent ? parent.width : 0; height: 34
-        radius: 9
+        width: parent ? parent.width : 0; height: 42
+        radius: 21
         color: active ? Theme.accent : (navArea.containsMouse ? Theme.hover : "transparent")
-        Rectangle {
-            x: 8; anchors.verticalCenter: parent.verticalCenter
-            width: 24; height: 24; radius: 7
-            gradient: Gradient {
-                GradientStop { position: 0; color: nav.colors[0] }
-                GradientStop { position: 1; color: nav.colors[1] }
-            }
-            Icon { anchors.centerIn: parent; d: Icons[nav.icon] || ""; size: 14; stroke: 2; color: "white" }
-        }
+        Behavior on color { ColorAnimation { duration: 90 } }
+        Icon { x: 15; anchors.verticalCenter: parent.verticalCenter; d: Icons[nav.icon] || ""; size: 18; stroke: 1.9; color: nav.active ? "white" : Theme.text }
         Text {
-            x: 42; anchors.verticalCenter: parent.verticalCenter
+            x: 44; anchors.verticalCenter: parent.verticalCenter
             text: nav.label
             color: nav.active ? "white" : Theme.text
-            font.family: Theme.font; font.pixelSize: 13; font.weight: nav.active ? Font.Medium : Font.Normal
+            font.family: Theme.font; font.pixelSize: 14; font.weight: nav.active ? Font.DemiBold : Font.Normal
         }
         Text {
-            anchors.right: parent.right; anchors.rightMargin: 12
+            anchors.right: parent.right; anchors.rightMargin: 16
             anchors.verticalCenter: parent.verticalCenter
             text: nav.badge
             color: nav.active ? Qt.rgba(1, 1, 1, 0.8) : Theme.text2
@@ -856,7 +928,7 @@ Window {
         Cover {
             id: tileCover
             x: 10; y: 4
-            width: parent.width - 20; height: width; radius: 12
+            width: parent.width - 20; height: width; radius: 20
             source: tile.album.cover
             icon: "disc"
             scale: tileArea.pressed ? 0.98 : 1
@@ -907,8 +979,8 @@ Window {
         property string text
         property string icon
         property bool primary: false
-        width: pillRow.implicitWidth + (text ? 30 : 20); height: 34; radius: 17
-        baseColor: primary ? Theme.accent : Theme.fill
+        width: pillRow.implicitWidth + (text ? 32 : 22); height: 42; radius: 21
+        baseColor: primary ? Theme.accent : Theme.surface
         color: primary ? (hovered ? Qt.lighter(Theme.accent, 1.12) : baseColor) : (hovered ? Theme.hover : baseColor)
         Row {
             id: pillRow

@@ -50,7 +50,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         anchors.margins: fi.listMode ? 0 : 4
-        radius: fi.listMode ? 7 : 10
+        radius: fi.listMode ? 14 : 18
         color: fi.dropTarget ? Theme.accentSoft
              : fi.selected ? Theme.accentSoft
              : (area.containsMouse ? Theme.hover : "transparent")

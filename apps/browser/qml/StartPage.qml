@@ -31,16 +31,17 @@ Item {
                 text: sp.privateMode ? "Okno prywatne"
                       : sp.hour < 5 ? "Dobranoc" : sp.hour < 12 ? "Dzień dobry" : sp.hour < 18 ? "Miłego popołudnia" : "Dobry wieczór"
                 color: Theme.text
-                font.family: Theme.font; font.pixelSize: 34; font.weight: Font.DemiBold; font.letterSpacing: -1
+                font.family: Theme.font; font.pixelSize: 38; font.weight: Font.Bold; font.letterSpacing: -1.2
+                font.variableAxes: { "opsz": 32 }
             }
 
             // Duże pole wyszukiwania
             Rectangle {
                 width: parent.width; height: 54
                 radius: 27
-                color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.045)
+                color: Theme.windowGlass
                 border.width: query.activeFocus ? 2 : 1
-                border.color: query.activeFocus ? Theme.accent : Theme.line
+                border.color: query.activeFocus ? Theme.accent : "transparent"
                 Behavior on border.color { ColorAnimation { duration: 120 } }
                 Icon { x: 20; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 19; color: Theme.text2 }
                 TextInput {
@@ -103,8 +104,7 @@ Item {
                 width: parent.width
                 height: privCol.implicitHeight + 40
                 radius: 20
-                color: Theme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(16 / 255, 24 / 255, 40 / 255, 0.04)
-                border.width: 1; border.color: Theme.line
+                color: Theme.windowGlass
                 Column {
                     id: privCol
                     x: 22; y: 20
@@ -146,8 +146,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: 12
             width: 58; height: 58; radius: 18
-            color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : "white"
-            border.width: 1; border.color: Theme.line
+            color: Theme.windowGlass
             scale: area.pressed ? 0.94 : 1
             Behavior on scale { NumberAnimation { duration: 100 } }
             Image {

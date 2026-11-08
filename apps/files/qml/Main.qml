@@ -619,7 +619,7 @@ Window {
         Item {
             id: titlebar
             z: 1                        // pasek tytułu biegnie nad całym oknem, także nad panelem treści
-            width: parent.width; height: 52
+            width: parent.width; height: 64
 
             DragHandler {
                 target: null
@@ -631,12 +631,27 @@ Window {
 
             Row {
                 id: navButtons
-                x: 12
+                x: sidebar.width + 2
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
-                ToolBtn { icon: "back"; enabled: win.backStack.length > 0; onClicked: win.goBack() }
-                ToolBtn { icon: "forward"; enabled: win.fwdStack.length > 0; onClicked: win.goForward() }
-                ToolBtn { icon: "up"; enabled: Files.parentUrl(win.currentUrl) !== ""; onClicked: win.goUp() }
+                spacing: 8
+                Repeater {
+                    model: [
+                        { icon: "back", tip: "Wstecz", on: () => win.backStack.length > 0, run: () => win.goBack() },
+                        { icon: "forward", tip: "Dalej", on: () => win.fwdStack.length > 0, run: () => win.goForward() },
+                        { icon: "up", tip: "Do góry", on: () => Files.parentUrl(win.currentUrl) !== "", run: () => win.goUp() }
+                    ]
+                    delegate: HoverButton {
+                        id: nb
+                        required property var modelData
+                        width: 40; height: 40; radius: 20
+                        baseColor: Theme.surface
+                        color: hovered && enabled ? Theme.fill : baseColor
+                        tip: modelData.tip
+                        enabled: { win.backStack; win.fwdStack; win.currentUrl; return modelData.on(); }
+                        onClicked: modelData.run()
+                        Icon { anchors.centerIn: parent; d: Icons[nb.modelData.icon]; size: 18; color: Theme.text; opacity: nb.enabled ? 1 : 0.35 }
+                    }
+                }
             }
 
             // Ścieżka — każdy segment klikalny i przyjmuje upuszczone pliki
@@ -644,12 +659,12 @@ Window {
                 anchors.left: navButtons.right; anchors.leftMargin: 8
                 anchors.right: searchBox.left; anchors.rightMargin: 8
                 anchors.verticalCenter: parent.verticalCenter
-                height: 34
-                radius: 9
-                color: Theme.fill
+                height: 40
+                radius: 20
+                color: Theme.surface
                 clip: true
                 Row {
-                    x: 6
+                    x: 10
                     anchors.verticalCenter: parent.verticalCenter
                     Repeater {
                         model: win.crumbs
@@ -660,10 +675,10 @@ Window {
                             readonly property bool last: index === win.crumbs.length - 1
                             Text { visible: seg.index > 0; anchors.verticalCenter: parent.verticalCenter; text: "›"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13; leftPadding: 2; rightPadding: 2 }
                             Rectangle {
-                                width: segText.implicitWidth + 12; height: 26; radius: 6
+                                width: segText.implicitWidth + 16; height: 30; radius: 15
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: segDrop.containsDrag ? Theme.accentSoft : (segArea.containsMouse && !seg.last ? Theme.hover : "transparent")
-                                Text { id: segText; anchors.centerIn: parent; text: seg.modelData.name; color: seg.last ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 13; font.weight: seg.last ? Font.Medium : Font.Normal }
+                                Text { id: segText; anchors.centerIn: parent; text: seg.modelData.name; color: seg.last ? Theme.text : Theme.text2; font.family: Theme.font; font.pixelSize: 14; font.weight: seg.last ? Font.DemiBold : Font.Normal }
                                 MouseArea { id: segArea; anchors.fill: parent; hoverEnabled: true; onClicked: win.navigate(seg.modelData.url) }
                                 DropArea { id: segDrop; anchors.fill: parent; keys: ["aster-files", "text/uri-list"]; onDropped: (d) => win.handleDrop(d, seg.modelData.url) }
                             }
@@ -676,16 +691,16 @@ Window {
                 id: searchBox
                 anchors.right: controls.left; anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
-                width: 220; height: 34; radius: 9
-                color: Theme.fill
+                width: 240; height: 40; radius: 20
+                color: Theme.surface
                 border.width: searchField.activeFocus ? 1.5 : 0
                 border.color: Theme.accent
-                Icon { x: 10; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 16; color: Theme.text2 }
+                Icon { x: 15; anchors.verticalCenter: parent.verticalCenter; d: Icons.search; size: 16; color: Theme.text2 }
                 TextInput {
                     id: searchField
-                    x: 34; width: parent.width - 44
+                    x: 40; width: parent.width - 54
                     anchors.verticalCenter: parent.verticalCenter
-                    color: Theme.text; font.family: Theme.font; font.pixelSize: 13; clip: true
+                    color: Theme.text; font.family: Theme.font; font.pixelSize: 14; clip: true
                     selectionColor: Theme.accentSoft
                     selectedTextColor: Theme.text
                     onTextChanged: { win.clearSel(); folder.search = text; }
@@ -706,14 +721,22 @@ Window {
         // ——— Pasek boczny ———
         Item {
             id: sidebar
-            y: titlebar.height
-            width: 210; height: parent.height - titlebar.height
+            z: 2
+            y: 0
+            width: 236; height: parent.height
+
+            // Górna część paska bocznego też przesuwa okno
+            Item {
+                width: parent.width; height: titlebar.height
+                DragHandler { target: null; onActiveChanged: if (active) win.startSystemMove() }
+                TapHandler { onDoubleTapped: if (win.maxed) win.showNormal(); else win.showMaximized() }
+            }
 
             Column {
-                x: 10; y: 14
-                width: parent.width - 20
-                spacing: 2
-                Text { text: "ULUBIONE"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 4 }
+                x: 14; y: 18
+                width: parent.width - 24
+                spacing: 3
+                Text { text: "Pliki"; color: Theme.text; font.family: Theme.font; font.pixelSize: 24; font.weight: Font.Bold; font.letterSpacing: -0.6; leftPadding: 14; bottomPadding: 14; topPadding: 4 }
                 Repeater {
                     model: Files.places()
                     delegate: SidebarPlace {
@@ -726,7 +749,7 @@ Window {
                         onDropped: (d) => win.handleDrop(d, modelData.url)
                     }
                 }
-                Text { text: "TEN KOMPUTER"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; font.letterSpacing: 0.4; leftPadding: 10; bottomPadding: 6; topPadding: 16 }
+                Text { text: "Ten komputer"; color: Theme.text2; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; leftPadding: 16; bottomPadding: 6; topPadding: 18 }
                 SidebarPlace {
                     id: drivePlace
                     readonly property var info: Files.systemDrive()
@@ -737,12 +760,12 @@ Window {
                     onDropped: (d) => win.handleDrop(d, "file:///")
                 }
                 Item {
-                    width: parent.width; height: 24
+                    width: parent.width; height: 34
                     Rectangle {
-                        x: 38; y: 2; width: parent.width - 48; height: 4; radius: 2; color: Theme.line
-                        Rectangle { width: parent.width * drivePlace.info.usedRatio; height: 4; radius: 2; color: Theme.accent }
+                        x: 44; y: 4; width: parent.width - 60; height: 6; radius: 3; color: Theme.fill
+                        Rectangle { width: parent.width * drivePlace.info.usedRatio; height: 6; radius: 3; color: Theme.accent }
                     }
-                    Text { x: 38; y: 9; text: drivePlace.info.freeText; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
+                    Text { x: 44; y: 14; text: drivePlace.info.freeText; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
                 }
                 // Pendrive’y, karty, dodatkowe dyski
                 Repeater {
@@ -765,12 +788,12 @@ Window {
                         }
                         Item {
                             visible: driveItem.modelData.mounted && !!driveItem.modelData.freeText
-                            width: parent.width; height: visible ? 24 : 0
+                            width: parent.width; height: visible ? 34 : 0
                             Rectangle {
-                                x: 38; y: 2; width: parent.width - 48; height: 4; radius: 2; color: Theme.line
-                                Rectangle { width: parent.width * (driveItem.modelData.usedRatio || 0); height: 4; radius: 2; color: Theme.accent }
+                                x: 44; y: 4; width: parent.width - 60; height: 6; radius: 3; color: Theme.fill
+                                Rectangle { width: parent.width * (driveItem.modelData.usedRatio || 0); height: 6; radius: 3; color: Theme.accent }
                             }
-                            Text { x: 38; y: 9; text: driveItem.modelData.freeText || ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
+                            Text { x: 44; y: 14; text: driveItem.modelData.freeText || ""; color: Theme.text2; font.family: Theme.font; font.pixelSize: 11; font.letterSpacing: 0.1 }
                         }
                     }
                 }
@@ -787,29 +810,28 @@ Window {
         }
 
         // ——— Panel treści (prawa część okna: pasek narzędzi, folder, pasek stanu) ———
-        GlassPane {
+        Item {
             id: pane
             x: sidebar.width
-            width: parent.width - sidebar.width
-            height: parent.height
-            topRightRadius: win.r; bottomRightRadius: win.r
+            width: parent.width - sidebar.width - 14
+            height: parent.height - 14
         }
 
         // ——— Pasek narzędzi ———
         Item {
             id: toolbar
-            x: pane.x; y: titlebar.height
-            width: pane.width; height: 48
+            x: pane.x; y: titlebar.height + 76
+            width: pane.width; height: 44
 
             Row {
-                x: 14
+                x: 2
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                spacing: 8
                 visible: !win.inTrash
 
                 Rectangle {
                     id: newBtn
-                    width: newRow.implicitWidth + 22; height: 32; radius: 8
+                    width: newRow.implicitWidth + 32; height: 40; radius: 20
                     opacity: win.query || win.inArchive ? 0.4 : 1
                     color: newArea.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
                     Row {
@@ -817,7 +839,7 @@ Window {
                         anchors.centerIn: parent
                         spacing: 6
                         Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.plus; size: 16; color: "white" }
-                        Text { anchors.verticalCenter: parent.verticalCenter; text: "Nowy"; color: "white"; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: "Nowy"; color: "white"; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
                         Icon { anchors.verticalCenter: parent.verticalCenter; d: Icons.chevronDown; size: 14; color: "white" }
                     }
                     MouseArea {
@@ -828,22 +850,30 @@ Window {
                         onClicked: { const p = newBtn.mapToItem(frame, 0, newBtn.height + 4); win.showNewMenu(p.x, p.y); }
                     }
                 }
-                Item { width: 8; height: 1 }
-                ToolBtn { icon: "scissors"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.doCut() }
-                ToolBtn { icon: "copy"; enabled: win.selection.length > 0; onClicked: win.doCopy() }
-                ToolBtn { icon: "paste"; enabled: Files.clipboardCount > 0 && !win.query && !win.inArchive; onClicked: win.doPaste() }
-                ToolBtn { icon: "pencil"; enabled: win.selection.length === 1 && !win.inArchive; onClicked: win.startRename() }
-                ToolBtn { icon: "trash"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.trashSelected() }
+                Rectangle {
+                    width: editRow.implicitWidth + 8; height: 40; radius: 20
+                    color: Theme.surface
+                    Row {
+                        id: editRow
+                        anchors.centerIn: parent
+                        spacing: 0
+                        ToolBtn { width: 38; height: 34; radius: 17; icon: "scissors"; tip: "Wytnij"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.doCut() }
+                        ToolBtn { width: 38; height: 34; radius: 17; icon: "copy"; tip: "Kopiuj"; enabled: win.selection.length > 0; onClicked: win.doCopy() }
+                        ToolBtn { width: 38; height: 34; radius: 17; icon: "paste"; tip: "Wklej"; enabled: Files.clipboardCount > 0 && !win.query && !win.inArchive; onClicked: win.doPaste() }
+                        ToolBtn { width: 38; height: 34; radius: 17; icon: "pencil"; tip: "Zmień nazwę"; enabled: win.selection.length === 1 && !win.inArchive; onClicked: win.startRename() }
+                        ToolBtn { width: 38; height: 34; radius: 17; icon: "trash"; tip: "Do Kosza"; enabled: win.selection.length > 0 && !win.inArchive; onClicked: win.trashSelected() }
+                    }
+                }
             }
 
             Row {
-                x: 14
+                x: 2
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
+                spacing: 8
                 visible: win.inTrash
                 HoverButton {
-                    width: restoreRow.implicitWidth + 22; height: 32
-                    baseColor: Theme.fill
+                    width: restoreRow.implicitWidth + 32; height: 40; radius: 20
+                    baseColor: Theme.surface
                     enabled: win.selection.length > 0
                     opacity: enabled ? 1 : 0.4
                     onClicked: win.restoreSelected()
@@ -856,8 +886,8 @@ Window {
                     }
                 }
                 HoverButton {
-                    width: emptyText.implicitWidth + 24; height: 32
-                    baseColor: Theme.fill
+                    width: emptyText.implicitWidth + 34; height: 40; radius: 20
+                    baseColor: Theme.surface
                     enabled: Files.trashCount > 0
                     opacity: enabled ? 1 : 0.4
                     onClicked: win.askEmptyTrash()
@@ -866,12 +896,13 @@ Window {
             }
 
             Row {
-                anchors.right: parent.right; anchors.rightMargin: 14
+                anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 HoverButton {
                     id: sortBtn
-                    width: sortRow.implicitWidth + 20; height: 32
+                    width: sortRow.implicitWidth + 32; height: 40; radius: 20
+                    baseColor: Theme.surface
                     onClicked: { const p = sortBtn.mapToItem(frame, 0, sortBtn.height + 4); win.showSortMenu(p.x, p.y); }
                     Row {
                         id: sortRow
@@ -882,8 +913,8 @@ Window {
                     }
                 }
                 Rectangle {
-                    width: 70; height: 32; radius: 9
-                    color: Theme.fill
+                    width: 82; height: 40; radius: 20
+                    color: Theme.surface
                     Row {
                         anchors.centerIn: parent
                         spacing: 2
@@ -892,8 +923,8 @@ Window {
                             delegate: Rectangle {
                                 id: vm
                                 required property string modelData
-                                width: 32; height: 26; radius: 7
-                                color: win.viewMode === modelData ? Theme.surface : "transparent"
+                                width: 38; height: 32; radius: 16
+                                color: win.viewMode === modelData ? Theme.fill : "transparent"
                                 Icon { anchors.centerIn: parent; d: Icons[vm.modelData]; size: 15; color: win.viewMode === vm.modelData ? Theme.text : Theme.text2 }
                                 MouseArea { anchors.fill: parent; onClicked: { win.viewMode = vm.modelData; keys.forceActiveFocus(); } }
                             }
@@ -901,16 +932,35 @@ Window {
                     }
                 }
             }
-            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
+        }
+
+        // ——— Nagłówek folderu: duża nazwa i liczba elementów ———
+        Column {
+            id: heading
+            x: pane.x + 4; y: titlebar.height + 2
+            width: pane.width - 8
+            spacing: 2
+            Text {
+                width: parent.width
+                text: win.query ? "Wyniki: „" + win.query + "”" : Files.displayName(win.currentUrl)
+                elide: Text.ElideRight
+                color: Theme.text; font.family: Theme.font; font.pixelSize: 32; font.weight: Font.Bold; font.letterSpacing: -1
+                font.variableAxes: { "opsz": 32 }
+            }
+            Text {
+                text: status.summary
+                color: Theme.text2; font.family: Theme.font; font.pixelSize: 14
+            }
         }
 
         // ——— Zawartość folderu ———
         Rectangle {
             id: content
-            x: pane.x; y: toolbar.y + toolbar.height
+            x: pane.x; y: toolbar.y + toolbar.height + 12
             width: pane.width
-            height: pane.y + pane.height - y - status.height
-            color: "transparent"
+            height: pane.y + pane.height - y
+            radius: 22
+            color: Theme.surface
             clip: true
 
             // Upuszczenie na puste miejsce = do bieżącego folderu
@@ -925,7 +975,7 @@ Window {
             Item {
                 id: listHeader
                 visible: win.viewMode === "list"
-                width: parent.width; height: visible ? 34 : 0
+                width: parent.width; height: visible ? 42 : 0
                 readonly property string arrow: folder.ascending ? " ↑" : " ↓"
                 Repeater {
                     model: [
@@ -951,8 +1001,8 @@ Window {
             GridView {
                 id: gridView
                 visible: win.viewMode === "grid"
-                x: 16; y: 12
-                width: parent.width - 32
+                x: 12; y: 12
+                width: parent.width - 24
                 height: parent.height - 12
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
@@ -996,8 +1046,8 @@ Window {
             ListView {
                 id: listView
                 visible: win.viewMode === "list"
-                x: 12; y: listHeader.height + 4
-                width: parent.width - 24
+                x: 8; y: listHeader.height + 4
+                width: parent.width - 16
                 height: parent.height - y
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
@@ -1006,7 +1056,7 @@ Window {
                     id: lItem
                     required property var model
                     required property int index
-                    width: listView.width; height: 38
+                    width: listView.width; height: 46
                     listMode: true
                     file: model
                     dateText: win.when(model.modified)
@@ -1061,29 +1111,15 @@ Window {
             }
         }
 
-        // ——— Pasek stanu ———
-        Rectangle {
+        // ——— Podsumowanie (pokazywane pod nazwą folderu) ———
+        QtObject {
             id: status
-            x: pane.x; anchors.bottom: pane.bottom
-            width: pane.width; height: 32
-            color: "transparent"
-            Rectangle { width: parent.width; height: 1; color: Theme.line }
-            Text {
-                x: 16; anchors.verticalCenter: parent.verticalCenter
-                text: {
-                    const n = folder.count;
-                    let s = folder.loading && win.query ? "Szukam…" : (win.query ? n + (n === 1 ? " wynik" : " wyników") : win.countText(n));
-                    const k = win.selection.length;
-                    if (k) s += " · zaznaczono " + k + " (" + folder.sizeText(win.selection) + ")";
-                    return s;
-                }
-                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
-            }
-            Text {
-                anchors.right: parent.right; anchors.rightMargin: 16
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Spacja — podgląd · F2 — nazwa · Ctrl+Z — cofnij"
-                color: Theme.text2; font.family: Theme.font; font.pixelSize: 12
+            readonly property string summary: {
+                const n = folder.count;
+                let s = folder.loading && win.query ? "Szukam…" : (win.query ? n + (n === 1 ? " wynik" : " wyników") : win.countText(n));
+                const k = win.selection.length;
+                if (k) s += " · zaznaczono " + k + " (" + folder.sizeText(win.selection) + ")";
+                return s;
             }
         }
 
@@ -1553,7 +1589,7 @@ Window {
         // ——— Komunikat z „Cofnij” ———
         Rectangle {
             anchors.horizontalCenter: content.horizontalCenter
-            y: parent.height - status.height - height - (toastTimer.running ? 16 : -8)
+            y: parent.height - height - (toastTimer.running ? 16 : -8)
             width: Math.min(content.width - 40, toastRow.implicitWidth + 32); height: 42; radius: 21
             color: Theme.text
             opacity: toastTimer.running ? 1 : 0
