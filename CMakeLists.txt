@@ -21,7 +21,7 @@ if(ASTER_APPS)
     endforeach()
     # Czcionka interfejsu — w systemie Aster instaluje ją powłoka
     install(DIRECTORY data/fonts/geist DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
-    install(DIRECTORY data/fonts/outfit DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
+    install(DIRECTORY data/fonts/inter DESTINATION ${CMAKE_INSTALL_DATADIR}/fonts)
     return()
 endif()
 
